@@ -1,0 +1,44 @@
+-- DESCIDA de 0000_glamorous_absorbing_man.sql — GERADO por scripts/gerar-down.mjs, não editar à mão.
+
+DROP TABLE IF EXISTS "saude_provedor" CASCADE;
+DROP TABLE IF EXISTS "log_falhas" CASCADE;
+DROP TABLE IF EXISTS "usuarios" CASCADE;
+DROP TABLE IF EXISTS "sessoes" CASCADE;
+DROP TABLE IF EXISTS "push_inscricoes" CASCADE;
+DROP TABLE IF EXISTS "preferencias_notificacao" CASCADE;
+DROP TABLE IF EXISTS "dispositivos" CASCADE;
+DROP TABLE IF EXISTS "assinaturas" CASCADE;
+DROP TABLE IF EXISTS "rulesets" CASCADE;
+DROP TABLE IF EXISTS "feed_snapshot" CASCADE;
+DROP TABLE IF EXISTS "apitos" CASCADE;
+DROP TABLE IF EXISTS "odds_snapshot" CASCADE;
+DROP TABLE IF EXISTS "odds_agregada" CASCADE;
+DROP TABLE IF EXISTS "mapa_mercados" CASCADE;
+DROP TABLE IF EXISTS "casas" CASCADE;
+DROP TABLE IF EXISTS "niveis_versao" CASCADE;
+DROP TABLE IF EXISTS "niveis" CASCADE;
+DROP TABLE IF EXISTS "times" CASCADE;
+DROP TABLE IF EXISTS "medias_jogador" CASCADE;
+DROP TABLE IF EXISTS "mapa_jogadores" CASCADE;
+DROP TABLE IF EXISTS "lesoes_escalacao" CASCADE;
+DROP TABLE IF EXISTS "jogos" CASCADE;
+DROP TABLE IF EXISTS "jogadores" CASCADE;
+DROP TABLE IF EXISTS "estatisticas_time_jogo" CASCADE;
+DROP TABLE IF EXISTS "estatisticas_quarto" CASCADE;
+DROP TABLE IF EXISTS "estatisticas_jogo" CASCADE;
+DROP TABLE IF EXISTS "classificacao" CASCADE;
+
+DROP TYPE IF EXISTS "public"."tipo_provedor" CASCADE;
+DROP TYPE IF EXISTS "public"."tipo_dispositivo" CASCADE;
+DROP TYPE IF EXISTS "public"."status_usuario" CASCADE;
+DROP TYPE IF EXISTS "public"."status_ruleset" CASCADE;
+DROP TYPE IF EXISTS "public"."status_jogo" CASCADE;
+DROP TYPE IF EXISTS "public"."status_escalacao" CASCADE;
+DROP TYPE IF EXISTS "public"."severidade" CASCADE;
+DROP TYPE IF EXISTS "public"."origem_odds" CASCADE;
+DROP TYPE IF EXISTS "public"."nivel_jogador" CASCADE;
+DROP TYPE IF EXISTS "public"."metodo" CASCADE;
+DROP TYPE IF EXISTS "public"."janela_media" CASCADE;
+DROP TYPE IF EXISTS "public"."estrategia" CASCADE;
+DROP TYPE IF EXISTS "public"."canal_notificacao" CASCADE;
+DROP TYPE IF EXISTS "public"."atributo" CASCADE;

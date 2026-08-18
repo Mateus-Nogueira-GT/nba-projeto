@@ -1,0 +1,49 @@
+import { readFileSync, readdirSync } from 'node:fs'
+import { join } from 'node:path'
+import { PGlite } from '@electric-sql/pglite'
+import { drizzle } from 'drizzle-orm/pglite'
+import * as schema from '../db/schema'
+
+const DIR = 'drizzle'
+
+function arquivosSql(dir: string): string[] {
+  return readdirSync(dir)
+    .filter((f) => f.endsWith('.sql'))
+    .sort()
+    .map((f) => readFileSync(join(dir, f), 'utf8'))
+}
+
+async function executar(pg: PGlite, sql: string) {
+  for (const comando of sql.split('--> statement-breakpoint')) {
+    const limpo = comando.trim()
+    if (limpo.length > 0) await pg.exec(limpo)
+  }
+}
+
+/**
+ * Banco de teste em PGlite — Postgres 17 real, compilado para WASM.
+ *
+ * Não é mock: é o mesmo motor. `UNIQUE NULLS NOT DISTINCT` e índice único
+ * parcial se comportam aqui exatamente como no Neon. As migrations aplicadas
+ * são as MESMAS que vão para produção, sem tradução no meio.
+ */
+export async function bancoDeTeste() {
+  const pg = new PGlite()
+  const db = drizzle(pg, { schema })
+
+  const subir = async () => {
+    for (const sql of arquivosSql(DIR)) await executar(pg, sql)
+  }
+  const descer = async () => {
+    for (const sql of arquivosSql(join(DIR, 'down'))) await executar(pg, sql)
+  }
+  const contarTabelas = async () => {
+    const r = await pg.query<{ n: number }>(
+      `SELECT count(*)::int AS n FROM information_schema.tables WHERE table_schema = 'public'`,
+    )
+    return r.rows[0]?.n ?? 0
+  }
+
+  await subir()
+  return { pg, db, subir, descer, contarTabelas, fechar: () => pg.close() }
+}
