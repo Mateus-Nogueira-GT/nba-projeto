@@ -1,0 +1,12 @@
+.next
+node_modules
+coverage
+
+# Documentos e ruleset são escritos à mão e revisados por humano.
+# Prettier reformata tabela markdown, bloco CSS de exemplo e comentário YAML
+# de formas que quebram a legibilidade — e no ruleset, a legibilidade é o produto.
+docs/
+config/
+*.md
+*.yaml
+*.yml

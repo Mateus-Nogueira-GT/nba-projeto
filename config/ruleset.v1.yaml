@@ -1,0 +1,196 @@
+# =============================================================================
+# RULESET v1 — IA da NBA
+# =============================================================================
+# Este arquivo É a estratégia do CJ. O motor não contém nenhuma regra hardcoded.
+#
+# HOMOLOGADO em 18/08/2026 — as 12 pendências foram respondidas pelo cliente.
+# Rastreabilidade das respostas: docs/05-perguntas-abertas.md
+#
+# REGRA DE OURO: trocar qualquer valor aqui NÃO pode exigir mudança de código.
+# Se exigir, o motor está errado, não o ruleset.
+# =============================================================================
+
+version: 1
+status: homologado
+homologado_em: 2026-08-18
+
+# -----------------------------------------------------------------------------
+# MÉDIA — base de comparação de toda a Lista Secreta e de todo o Fire Live
+# -----------------------------------------------------------------------------
+media:
+  janela: temporada # [P1] temporada inteira
+  modo: movel # [P1] recalcula sozinha a cada jogo novo
+
+# -----------------------------------------------------------------------------
+# ARREDONDAMENTO
+# Validado contra os 4 exemplos numéricos do documento do CJ:
+#   24 ppg -> alvo 9  |  5,4 ppg -> alvo 4  |  5 apg -> alvo 2  |  11 rpg -> alvo 6
+# Só esta política satisfaz os quatro simultaneamente.
+# -----------------------------------------------------------------------------
+arredondamento:
+  politica: precisao_cheia_arredonda_no_fim
+  regra: meio_para_cima
+
+# -----------------------------------------------------------------------------
+# NÍVEIS
+# -----------------------------------------------------------------------------
+niveis:
+  ordem: [MVP, ALL_STAR, SUPORTE, RANDOLA]
+  atributos: [PONTOS, REBOTES, ASSISTENCIAS]
+  # ATENÇÃO: hoje só existe classificação de PONTOS.
+  # REBOTES e ASSISTENCIAS ainda serão enviados pelo Mestre da NBA.
+
+# -----------------------------------------------------------------------------
+# LISTA SECRETA — MÉTODO 1: OSCILAÇÃO
+# apitado  <=>  pontos_no_jogo <= (media - delta[nivel])
+# -----------------------------------------------------------------------------
+oscilacao:
+  delta:
+    MVP: 6
+    ALL_STAR: 5
+    SUPORTE: 5
+    RANDOLA: 4
+
+  excecoes_por_jogador:
+    luka-doncic: 7 # única exceção nominal do documento
+
+  criterio_sequencia: limiar # [P3] jogo só conta se <= (media - delta)
+
+  # [P2] jogo não disputado NÃO quebra a sequência; é como se a data não existisse.
+  # Ver docs/05-perguntas-abertas.md > "Consequências"
+  dnp: ignora
+
+  nivel_minimo_apito: # nível a partir do qual cada classe aparece na lista
+    MVP: 1
+    ALL_STAR: 1
+    SUPORTE: 2
+    RANDOLA: 2
+
+  turbo:
+    aplica_a: [MVP]
+    exige_nivel: 3
+    acumula_bonus: true # [P9] turbo (azul) E os +4% ao mesmo tempo
+
+# -----------------------------------------------------------------------------
+# LISTA SECRETA — MÉTODO 2: OPD (Oportunidade Por Desfalque)
+# Escala INVERTIDA em relação à oscilação: mais perto da vaga = nível mais alto.
+# -----------------------------------------------------------------------------
+opd:
+  janela: 3 # 3 jogadores abaixo do bloco de desfalque
+  exige_prefixo_hierarquia: true # desfalque obrigatoriamente de cima pra baixo
+
+  mapa_nivel: # distância do desfalque -> nível do apito
+    1: 3 # próximo imediato  -> nível 3 (verde)
+    2: 2 # segundo depois    -> nível 2 (laranja)
+    3: 1 # terceiro depois   -> nível 1 (amarelo)
+
+  turbo:
+    exige_opd_nivel: 3
+    exige_oscilacao_nivel: 2
+
+# -----------------------------------------------------------------------------
+# FIRE LIVE — exclusivamente 1º quarto
+# -----------------------------------------------------------------------------
+fire_live:
+  quarto: 1
+
+  multiplicadores:
+    pontos_classificado: 1.5
+    pontos_randola: 2.5
+    pontos_nao_classificado: 3.0
+    rebotes: 2.0
+
+  assistencias:
+    operacao: soma
+    valor: 1
+    media_minima: 5 # só entra jogador com apg >= 5
+
+  travas:
+    pontos_alvo_minimo: 4 # alvo só vale se >= 4
+    rebotes_alvo_minimo: 2 # alvo só vale se > 2
+
+  modo_fire:
+    aplica_a: [MVP, ALL_STAR]
+    percentual_media: 0.75 # [P4] 75% — resolvido a favor da observação
+
+  # Suporte e Randola só apitam em pontos quando o BLOCO DE TOPO do time
+  # está inteiramente fora da partida.
+  presenca_topo:
+    # [P5] fora da partida. NÃO exige rastrear substituição em tempo real.
+    criterio: dnp
+    bloqueia_niveis: [SUPORTE, RANDOLA]
+    times_isentos: [UTA, DET, DEN]
+
+    bloco_topo: # [P6] + [P7] unificados — ver ADR-0006
+      com_mvp: todos_os_mvps # todos os MVPs precisam estar fora (Philadelphia: os 2)
+      sem_mvp: jogador_1 # time sem MVP -> olha o nº 1 da hierarquia
+
+# -----------------------------------------------------------------------------
+# CONFIANÇA (nota da análise do CJ — NÃO é probabilidade de aposta) [P12]
+# Ver ADR-0005 e docs/04-design-system.md
+# -----------------------------------------------------------------------------
+confianca:
+  base: # corresponde ao nível de apito 1
+    MVP: { 20: 95, 25: 90, 30: 85, 35: 80 }
+    ALL_STAR: { 15: 90, 20: 85, 25: 80 }
+    SUPORTE: { 10: 90, 15: 85, 20: 80 }
+    RANDOLA: { 5: 85, 10: 80 }
+
+  bonus_por_nivel_apito:
+    MVP: { 2: 2.0, 3: 4.0 }
+    ALL_STAR: { 2: 1.0, 3: 2.0 }
+    SUPORTE: { 2: 0.5, 3: 1.0 }
+    # [P8] Randola nunca ganha bônus, em nenhum método. Sempre tabela base.
+    RANDOLA: { 2: 0.0, 3: 0.0 }
+
+  # Nível 1 só é alcançável por OPD para SUPORTE e RANDOLA — consequência
+  # automática de oscilacao.nivel_minimo_apito, não é regra separada.
+
+# -----------------------------------------------------------------------------
+# ODDS — leitura das casas, agregação em faixa. Nunca envio de aposta. ADR-0004.
+# -----------------------------------------------------------------------------
+odds:
+  fonte: casas
+  agregacao: mediana # mediana resiste a outlier de uma casa
+  casas_minimas: 2 # abaixo disso, cai no fallback
+  exibicao: faixa # sempre faixa (min-max), nunca odd única
+  fallback: tabela_estatica
+
+  tabela_estatica: # usada quando não há cobertura das casas
+    MVP: { 20: [1.07, 1.25], 25: [1.30, 1.70], 30: [2.00, 2.50], 35: [3.00, 5.00] }
+    ALL_STAR: { 15: [1.30, 1.70], 20: [2.00, 2.50], 25: [3.00, 5.00] }
+    SUPORTE: { 10: [1.39, 1.70], 15: [2.00, 2.50], 20: [3.00, 5.00] }
+    RANDOLA: { 5: [1.80, 2.20], 10: [2.30, 3.50] }
+
+# -----------------------------------------------------------------------------
+# PUSH
+# -----------------------------------------------------------------------------
+push:
+  marcos_green:
+    # [P11] começa em 25 de propósito: a odd de 20 é baixa demais pra notificar
+    MVP: [25, 30, 35, 40, 45, 50]
+    ALL_STAR: [20, 25, 30, 35, 40, 45, 50]
+    SUPORTE: [20, 25, 30, 35, 40, 45]
+    RANDOLA: [15, 20, 25, 30, 35]
+
+  canais_independentes: # usuário liga/desliga cada um separadamente
+    - FIRE_LIVE_APITO
+    - GREEN
+    - LISTA_SECRETA
+
+# -----------------------------------------------------------------------------
+# AVISOS
+# -----------------------------------------------------------------------------
+avisos:
+  blowout:
+    quarto: 4
+    diferenca_pontos: 25
+    aplica_a: TITULARES
+    local: introducao_das_estrategias # lembrete fixo, não dentro do card
+
+# -----------------------------------------------------------------------------
+# MATCHUP — programado, desligado. Liberar 20 dias após início da competição.
+# -----------------------------------------------------------------------------
+matchup:
+  habilitado: false
+  liberar_apos_dias_de_competicao: 20
