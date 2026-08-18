@@ -92,7 +92,10 @@ opd:
 # FIRE LIVE — exclusivamente 1º quarto
 # -----------------------------------------------------------------------------
 fire_live:
-  quarto: 1
+  quarto: 1 # o Fire Live observa exclusivamente o 1º quarto
+  # Fato do basquete, não parâmetro de estratégia — mas vive aqui para que
+  # nenhum número de regra precise existir dentro do código do motor.
+  quartos_por_jogo: 4
 
   multiplicadores:
     pontos_classificado: 1.5

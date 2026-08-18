@@ -1,0 +1,137 @@
+import { z } from 'zod'
+import { NIVEIS, ATRIBUTOS } from '../tipos'
+
+/**
+ * Schema do config/ruleset.v1.yaml.
+ *
+ * O ruleset É a estratégia do CJ. Se um valor existe aqui, ele NÃO pode existir
+ * também no código — ver CLAUDE.md, regra 1.
+ */
+
+const nivel = z.enum(NIVEIS)
+const atributo = z.enum(ATRIBUTOS)
+
+/** YAML converte chave numérica em string. `{ 20: 95 }` vira `{ "20": 95 }`. */
+const porLinha = z.record(z.string(), z.number())
+const porLinhaFaixa = z.record(z.string(), z.tuple([z.number(), z.number()]))
+const porNivel = <T extends z.ZodTypeAny>(valor: T) => z.record(nivel, valor)
+
+export const rulesetSchema = z.object({
+  version: z.number().int().positive(),
+  status: z.enum(['provisorio', 'homologado']),
+  homologado_em: z.union([z.string(), z.date()]).optional(),
+
+  media: z.object({
+    janela: z.enum(['temporada', 'ultimos_5', 'ultimos_10']),
+    modo: z.enum(['movel', 'congelada_na_rodada']),
+  }),
+
+  arredondamento: z.object({
+    politica: z.literal('precisao_cheia_arredonda_no_fim'),
+    regra: z.literal('meio_para_cima'),
+  }),
+
+  niveis: z.object({
+    ordem: z.array(nivel),
+    atributos: z.array(atributo),
+  }),
+
+  oscilacao: z.object({
+    delta: porNivel(z.number()),
+    excecoes_por_jogador: z.record(z.string(), z.number()).default({}),
+    criterio_sequencia: z.enum(['limiar', 'media_pura']),
+    dnp: z.enum(['quebra', 'ignora']),
+    nivel_minimo_apito: porNivel(z.number().int().min(1).max(3)),
+    turbo: z.object({
+      aplica_a: z.array(nivel),
+      exige_nivel: z.number().int().min(1).max(3),
+      acumula_bonus: z.boolean(),
+    }),
+  }),
+
+  opd: z.object({
+    janela: z.number().int().positive(),
+    /**
+     * Não é opção: o documento do CJ estabelece isso como regra absoluta
+     * ("obrigatoriamente o desfalque tem que ser de cima pra baixo").
+     * z.literal(true) impede que o YAML sugira uma alternativa inexistente.
+     */
+    exige_prefixo_hierarquia: z.literal(true),
+    /** distância do desfalque -> nível do apito */
+    mapa_nivel: z.record(z.string(), z.number().int().min(1).max(3)),
+    turbo: z.object({
+      exige_opd_nivel: z.number().int().min(1).max(3),
+      exige_oscilacao_nivel: z.number().int().min(1).max(3),
+    }),
+  }),
+
+  fire_live: z.object({
+    quarto: z.number().int().positive(),
+    quartos_por_jogo: z.number().int().positive(),
+    multiplicadores: z.object({
+      pontos_classificado: z.number(),
+      pontos_randola: z.number(),
+      pontos_nao_classificado: z.number(),
+      rebotes: z.number(),
+    }),
+    assistencias: z.object({
+      operacao: z.literal('soma'),
+      valor: z.number(),
+      media_minima: z.number(),
+    }),
+    travas: z.object({
+      /** alvo válido se >= este valor */
+      pontos_alvo_minimo: z.number(),
+      /** alvo válido se > este valor (note a assimetria com pontos) */
+      rebotes_alvo_minimo: z.number(),
+    }),
+    modo_fire: z.object({
+      aplica_a: z.array(nivel),
+      percentual_media: z.number().min(0).max(1),
+    }),
+    presenca_topo: z.object({
+      criterio: z.enum(['dnp', 'em_quadra']),
+      bloqueia_niveis: z.array(nivel),
+      times_isentos: z.array(z.string()),
+      bloco_topo: z.object({
+        com_mvp: z.literal('todos_os_mvps'),
+        sem_mvp: z.literal('jogador_1'),
+      }),
+    }),
+  }),
+
+  confianca: z.object({
+    base: porNivel(porLinha),
+    bonus_por_nivel_apito: porNivel(porLinha),
+  }),
+
+  odds: z.object({
+    fonte: z.literal('casas'),
+    agregacao: z.enum(['mediana', 'media']),
+    casas_minimas: z.number().int().positive(),
+    exibicao: z.literal('faixa'),
+    fallback: z.literal('tabela_estatica'),
+    tabela_estatica: porNivel(porLinhaFaixa),
+  }),
+
+  push: z.object({
+    marcos_green: porNivel(z.array(z.number())),
+    canais_independentes: z.array(z.string()),
+  }),
+
+  avisos: z.object({
+    blowout: z.object({
+      quarto: z.number().int().positive(),
+      diferenca_pontos: z.number(),
+      aplica_a: z.string(),
+      local: z.string(),
+    }),
+  }),
+
+  matchup: z.object({
+    habilitado: z.boolean(),
+    liberar_apos_dias_de_competicao: z.number().int().nonnegative(),
+  }),
+})
+
+export type Ruleset = z.infer<typeof rulesetSchema>
