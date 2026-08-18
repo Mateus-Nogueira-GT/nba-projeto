@@ -38,6 +38,10 @@ export const jogadores = pgTable('jogadores', {
   alturaCm: smallint('altura_cm'),
   numeroCamisa: smallint('numero_camisa'),
   timeId: uuid('time_id').references(() => times.id),
+  // Falso quando o provedor indica que o jogador saiu da liga. A tela de
+  // mapeamento precisa MOSTRAR esse estado — Schröder foi dispensado durante
+  // a elaboração da lista e continua aparecendo nela.
+  ativo: boolean('ativo').notNull().default(true),
 })
 
 /**

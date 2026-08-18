@@ -1,0 +1,1 @@
+ALTER TABLE "jogadores" ADD COLUMN "ativo" boolean DEFAULT true NOT NULL;

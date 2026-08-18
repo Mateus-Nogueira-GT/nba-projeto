@@ -35,7 +35,8 @@ export async function bancoDeTeste() {
     for (const sql of arquivosSql(DIR)) await executar(pg, sql)
   }
   const descer = async () => {
-    for (const sql of arquivosSql(join(DIR, 'down'))) await executar(pg, sql)
+    // Ordem inversa da subida: a última migration desce primeiro.
+    for (const sql of arquivosSql(join(DIR, 'down')).reverse()) await executar(pg, sql)
   }
   const contarTabelas = async () => {
     const r = await pg.query<{ n: number }>(

@@ -27,7 +27,6 @@ DROP TABLE IF EXISTS "estatisticas_time_jogo" CASCADE;
 DROP TABLE IF EXISTS "estatisticas_quarto" CASCADE;
 DROP TABLE IF EXISTS "estatisticas_jogo" CASCADE;
 DROP TABLE IF EXISTS "classificacao" CASCADE;
-
 DROP TYPE IF EXISTS "public"."tipo_provedor" CASCADE;
 DROP TYPE IF EXISTS "public"."tipo_dispositivo" CASCADE;
 DROP TYPE IF EXISTS "public"."status_usuario" CASCADE;
