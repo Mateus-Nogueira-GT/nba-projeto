@@ -99,6 +99,29 @@ oportunidade.
 
 ---
 
+## Surgiu na implementação: combinação de métodos
+
+O documento trata oscilação e OPD como métodos paralelos, e a única regra sobre os dois
+juntos é o **turbo da OPD** (OPD nível 3 + oscilação nível 2). Ou seja: o próprio CJ
+prevê que os dois apitem o mesmo jogador ao mesmo tempo.
+
+O que ele **não** diz é qual nível prevalece nesse caso — e a chave de deduplicação
+`(jogo, jogador, atributo, estratégia, linha)` não inclui o método, então o par não pode
+virar dois apitos separados sem colidir.
+
+**Decidi assim, e é revisável:** um único apito de Lista Secreta por jogador/atributo/linha,
+com `nivelApito = max(OPD, oscilação)`, `metodo = OPD` quando a OPD disparou, e turbo
+ligado se qualquer uma das duas regras de turbo se satisfizer. O nível de origem da OPD
+fica registrado à parte, porque o Fire Live precisa dele para o cruzamento.
+
+Alternativa, se o CJ preferir: incluir `metodo` na chave e emitir dois apitos, deixando o
+usuário ver os dois motivos separados. Custa uma linha no ruleset e uma migration.
+
+**Pergunta de uma frase para a próxima conversa:** *quando o mesmo jogador apita por
+oscilação e por OPD ao mesmo tempo, ele aparece uma vez ou duas na lista?*
+
+---
+
 ## Fora das 12 — escopo novo, ainda não contratado
 
 Apareceu nos documentos e **não está na proposta comercial**:

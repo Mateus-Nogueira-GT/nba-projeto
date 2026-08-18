@@ -337,11 +337,14 @@ describe('A15 · P9 — MVP no nível 3 vai pro turbo E acumula os +4%', () => {
 // ===========================================================================
 
 describe('PROVA FINAL · Modo Fire lê o percentual do ruleset', () => {
-  it('MVP com média 30 e 18 pontos no 1Q NÃO entra em modo fire com o limiar homologado', () => {
+  it('MVP com média 30 e 18 pontos no 1Q NÃO entra em modo fire', () => {
     // 18 >= 30 x 0,75 (=22,5)? não.
     // Trocando percentual_media para 0,50 no YAML: 18 >= 15? sim -> este teste falha.
-    expect(ruleset.fire_live.modo_fire.percentual_media).toBe(0.75)
     expect(emModoFire(18, 30, 'MVP', ruleset)).toBe(false)
+  })
+
+  it('o limiar homologado é 0,75', () => {
+    expect(ruleset.fire_live.modo_fire.percentual_media).toBe(0.75)
   })
 
   it('com 23 pontos no 1Q, entra', () => {
