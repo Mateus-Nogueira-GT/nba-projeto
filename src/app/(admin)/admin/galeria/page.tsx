@@ -4,6 +4,7 @@ import { semantico } from '@/design-system/tokens/semantico'
 import { NIVEL_JOGADOR, APITO, TURBO, MODO_FIRE } from '@/design-system/tokens/css'
 import { razaoDeContraste } from '@/design-system/tokens/contraste'
 import '@/design-system/tokens/tokens.css'
+import { negarSeNaoForAdmin } from '../guarda'
 
 export const metadata = { title: 'Galeria · Design System' }
 
@@ -37,7 +38,11 @@ function Secao({ titulo, nota, children }: { titulo: string; nota?: string; chil
   )
 }
 
-export default function PaginaGaleria() {
+export default async function PaginaGaleria() {
+  // A galeria é interna: expõe a paleta e o vocabulário visual do produto.
+  const negado = await negarSeNaoForAdmin()
+  if (negado) return negado
+
   return (
     <main
       style={{

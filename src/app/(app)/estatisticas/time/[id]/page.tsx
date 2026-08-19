@@ -16,6 +16,11 @@ function pct(v: number | null): string {
   return v === null ? '—' : `${v.toFixed(1).replace('.', ',')}%`
 }
 
+/** Ausência é '—', nunca zero: zero é um número, ausência não é. */
+function n(v: number | null | undefined): string {
+  return v === null || v === undefined ? '—' : String(v)
+}
+
 function dataCurta(d: Date): string {
   return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })
 }
@@ -57,10 +62,10 @@ function colunas(temProrrogacao: boolean): Coluna<BoxScoreDoJogo>[] {
           </span>
         ),
     },
-    { chave: 'q1', rotulo: '1º', descricao: 'Pontos no 1º quarto', alinhamento: 'direita', celula: (l) => l.nosso.q1 },
-    { chave: 'q2', rotulo: '2º', descricao: 'Pontos no 2º quarto', alinhamento: 'direita', celula: (l) => l.nosso.q2 },
-    { chave: 'q3', rotulo: '3º', descricao: 'Pontos no 3º quarto', alinhamento: 'direita', celula: (l) => l.nosso.q3 },
-    { chave: 'q4', rotulo: '4º', descricao: 'Pontos no 4º quarto', alinhamento: 'direita', celula: (l) => l.nosso.q4 },
+    { chave: 'q1', rotulo: '1º', descricao: 'Pontos no 1º quarto', alinhamento: 'direita', celula: (l) => n(l.nosso?.q1) },
+    { chave: 'q2', rotulo: '2º', descricao: 'Pontos no 2º quarto', alinhamento: 'direita', celula: (l) => n(l.nosso?.q2) },
+    { chave: 'q3', rotulo: '3º', descricao: 'Pontos no 3º quarto', alinhamento: 'direita', celula: (l) => n(l.nosso?.q3) },
+    { chave: 'q4', rotulo: '4º', descricao: 'Pontos no 4º quarto', alinhamento: 'direita', celula: (l) => n(l.nosso?.q4) },
   ]
 
   if (temProrrogacao) {
@@ -69,16 +74,16 @@ function colunas(temProrrogacao: boolean): Coluna<BoxScoreDoJogo>[] {
       rotulo: 'PR',
       descricao: 'Prorrogação',
       alinhamento: 'direita',
-      celula: (l) => l.nosso.prorrogacao,
+      celula: (l) => n(l.nosso?.prorrogacao),
     })
   }
 
   return [
     ...base,
-    { chave: 'tot', rotulo: 'TOT', descricao: 'Total de pontos', alinhamento: 'direita', celula: (l) => l.nosso.total },
-    { chave: 'reb', rotulo: 'REB', descricao: 'Rebotes', alinhamento: 'direita', celula: (l) => l.rebotesTotal },
-    { chave: 'ast', rotulo: 'AST', descricao: 'Assistências', alinhamento: 'direita', celula: (l) => l.assistencias },
-    { chave: 'to', rotulo: 'TO', descricao: 'Turnovers', alinhamento: 'direita', celula: (l) => l.turnovers },
+    { chave: 'tot', rotulo: 'TOT', descricao: 'Total de pontos', alinhamento: 'direita', celula: (l) => n(l.nosso?.total) },
+    { chave: 'reb', rotulo: 'REB', descricao: 'Rebotes', alinhamento: 'direita', celula: (l) => n(l.rebotesTotal) },
+    { chave: 'ast', rotulo: 'AST', descricao: 'Assistências', alinhamento: 'direita', celula: (l) => n(l.assistencias) },
+    { chave: 'to', rotulo: 'TO', descricao: 'Turnovers', alinhamento: 'direita', celula: (l) => n(l.turnovers) },
     { chave: 'fg', rotulo: 'FG%', descricao: 'Aproveitamento de quadra', alinhamento: 'direita', celula: (l) => pct(l.fgPercentual) },
     { chave: 'tres', rotulo: '3P%', descricao: 'Aproveitamento de três', alinhamento: 'direita', celula: (l) => pct(l.tresPercentual) },
   ]
@@ -110,7 +115,7 @@ export default async function PaginaTime({ params }: { params: Promise<{ id: str
   if (tela === null) notFound()
 
   const { time, campanha } = tela
-  const temProrrogacao = tela.jogosDoTime.some((j) => j.nosso.prorrogacao > 0)
+  const temProrrogacao = tela.jogosDoTime.some((j) => (j.nosso?.prorrogacao ?? 0) > 0)
 
   return (
     <Moldura

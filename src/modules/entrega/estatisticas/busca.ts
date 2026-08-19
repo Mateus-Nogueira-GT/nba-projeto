@@ -38,6 +38,16 @@ const SCORE_MINIMO = 0.45
 /** Acima disso o resultado é bom o bastante para dispensar os aproximados. */
 const SCORE_EXATO = 0.999
 
+/**
+ * Tamanho mínimo para o casamento por TRECHO valer.
+ *
+ * Com 1 ou 2 letras, "contém" casa com quase todo mundo — "a" devolvia o
+ * elenco inteiro, que é ruído com cara de resultado. Abaixo deste tamanho só
+ * a grafia aproximada responde, e ela naturalmente não casa com fragmento.
+ * Três letras é o menor termo que ainda discrimina, e cobre sigla de time.
+ */
+const MINIMO_PARA_TRECHO = 3
+
 export type OpcoesBusca = {
   limite?: number
   /** Restringe a um tipo. Ausente = jogadores e times juntos. */
@@ -135,7 +145,11 @@ export async function buscar(
 function pontuarNome(consulta: string, alvo: string): number {
   const aproximado = pontuar(consulta, alvo)
   if (aproximado >= SCORE_EXATO) return aproximado
-  return Math.max(aproximado, contemTrecho(consulta, alvo) ? 0.9 : 0)
+
+  const porTrecho =
+    consulta.trim().length >= MINIMO_PARA_TRECHO && contemTrecho(consulta, alvo) ? 0.9 : 0
+
+  return Math.max(aproximado, porTrecho)
 }
 
 export type TimeNoMenu = {

@@ -1,4 +1,5 @@
 import { execSync } from 'node:child_process'
+import { readFileSync } from 'node:fs'
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import { and, eq, isNull } from 'drizzle-orm'
 
@@ -498,5 +499,49 @@ describe('credenciais fora do código', () => {
     const gitignore = execSync('cat .gitignore', { encoding: 'utf8' })
     expect(gitignore).toMatch(/^\.env$/m)
     expect(gitignore).toMatch(/^\.env\.\*$/m)
+  })
+})
+
+// ===========================================================================
+// GUARDA DO PAINEL
+// ===========================================================================
+
+describe('toda rota do painel exige ADMIN', () => {
+  const paginas = [
+    'src/app/(admin)/admin/usuarios/page.tsx',
+    'src/app/(admin)/admin/mapeamento/page.tsx',
+    'src/app/(admin)/admin/galeria/page.tsx',
+  ]
+
+  const acoes = [
+    'src/app/(admin)/admin/usuarios/acoes.ts',
+    'src/app/(admin)/admin/mapeamento/acoes.ts',
+  ]
+
+  // Procura a CHAMADA, não o identificador: a linha de import sozinha
+  // satisfazia a versão anterior deste teste, e uma mutação que trocava a
+  // guarda por um objeto falso passava batida.
+  const CHAMADA = /await (exigirAdmin|negarSeNaoForAdmin)\(\)/
+
+  it('toda página do painel confere o papel', () => {
+    for (const caminho of paginas) {
+      expect(readFileSync(caminho, 'utf8'), `${caminho} não confere ADMIN`).toMatch(CHAMADA)
+    }
+  })
+
+  it('toda server action do painel confere o papel', () => {
+    // No App Router a server action é um endpoint POST chamável direto:
+    // proteger a página NÃO protege a ação. /admin/mapeamento escrevia em
+    // mapa_jogadores sem checagem nenhuma — a Lista Secreta inteira depende
+    // dessa tabela.
+    for (const caminho of acoes) {
+      expect(readFileSync(caminho, 'utf8'), `${caminho} não confere ADMIN`).toMatch(CHAMADA)
+    }
+  })
+
+  it('a confirmação de vínculo registra QUEM confirmou, não a string "admin"', () => {
+    const fonte = readFileSync('src/app/(admin)/admin/mapeamento/acoes.ts', 'utf8')
+    expect(fonte).not.toMatch(/confirmadoPor:\s*'admin'/)
+    expect(fonte).toContain('sessao.email')
   })
 })

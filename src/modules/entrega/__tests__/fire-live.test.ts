@@ -531,3 +531,60 @@ describe('preferencias_notificacao por canal', () => {
     expect(await destinatariosDoCanal(banco.db, 'GREEN')).toEqual([])
   })
 })
+
+// ===========================================================================
+// BORDAS DO CICLO
+// ===========================================================================
+
+describe('bordas do ciclo', () => {
+  it('duas invocações SIMULTÂNEAS do cron reservam o jogo uma vez só', async () => {
+    await banco.db.delete(fireLiveExecucoes)
+
+    // O teste sequencial não cobre isto: dois crons concorrentes passariam
+    // ambos por um SELECT prévio. Quem decide é a UNIQUE.
+    const [a, b] = await Promise.all([
+      reservarJogosParaObservar(banco.db, ruleset, TIPOFF),
+      reservarJogosParaObservar(banco.db, ruleset, TIPOFF),
+    ])
+
+    expect(a.length + b.length, 'o mesmo jogo foi reservado duas vezes').toBe(1)
+  })
+
+  it('jogador sem média cadastrada não apita e não derruba o ciclo', async () => {
+    const [semMedia] = await banco.db
+      .insert(jogadores)
+      .values({ nomeCompleto: 'Sem Media' })
+      .returning()
+
+    const [versao] = await banco.db
+      .select()
+      .from(niveisVersao)
+      .where(eq(niveisVersao.ativa, true))
+      .limit(1)
+
+    const [lal] = await banco.db.select().from(times).where(eq(times.sigla, 'LAL')).limit(1)
+
+    await banco.db.insert(niveis).values({
+      niveisVersaoId: versao!.id,
+      jogadorId: semMedia!.id,
+      timeId: lal!.id,
+      atributo: 'PONTOS',
+      nivel: 'MVP',
+      posicaoHierarquia: 9,
+    })
+    await banco.db
+      .insert(estatisticasQuarto)
+      .values({ jogoId, jogadorId: semMedia!.id, quarto: 1, pontos: 50 })
+
+    const r = await executarCiclo(banco.db, ruleset, fila, {
+      jogoId,
+      estadoAnterior: null,
+      iniciadoEm: TIPOFF,
+      agora: DURANTE,
+    })
+
+    expect(r.encerrar).toBe(false)
+    // 50 pontos, mas sem média não existe alvo — silêncio é o correto.
+    expect(fila.enviadas.filter((m) => m.titulo.includes('Sem Media'))).toHaveLength(0)
+  })
+})

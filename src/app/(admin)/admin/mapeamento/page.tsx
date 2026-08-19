@@ -3,6 +3,7 @@ import { and, eq, isNull } from 'drizzle-orm'
 import { getDb } from '@/modules/dominio/db/cliente'
 import { jogadores, mapaJogadores } from '@/modules/dominio/db/schema'
 import { sugerir, type Sugestao } from '@/modules/ingestao/niveis/similaridade'
+import { negarSeNaoForAdmin } from '../guarda'
 import { confirmarVinculo } from './acoes'
 
 // Lê banco a cada requisição — nunca prerenderiza no build.
@@ -60,6 +61,11 @@ const ROTULO: Record<Pendente['estado'], string> = {
 }
 
 export default async function PaginaMapeamento() {
+  // A checagem vem ANTES de qualquer leitura: sem ela, a tela de curadoria
+  // do mapa_jogadores ficava aberta a quem soubesse a URL.
+  const negado = await negarSeNaoForAdmin()
+  if (negado) return negado
+
   const dados = await carregar()
 
   if (dados === null) {

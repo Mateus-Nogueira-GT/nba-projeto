@@ -198,10 +198,18 @@ export async function telaDoJogador(
   // duas telas não podem discordar sobre quantos pontos um jogador faz.
   const media = medias[0]
   const n = linhasBox.length
+  /**
+   * Média sobre os jogos em que o número EXISTE.
+   *
+   * Tratar ausência como zero afunda a média: um jogo sem minutos registrados
+   * (falha de ingestão, não jogo sem minutos) transformava 36 e 34 em 23,3.
+   * O jogador passaria a parecer reserva por causa de um buraco no dado.
+   */
   const somar = (f: (b: (typeof linhasBox)[number]['box']) => number | null): number | null => {
-    if (n === 0) return null
-    const total = linhasBox.reduce((acc, l) => acc + (f(l.box) ?? 0), 0)
-    return Math.round((total / n) * 10) / 10
+    const valores = linhasBox.map((l) => f(l.box)).filter((v): v is number => v !== null)
+    if (valores.length === 0) return null
+    const total = valores.reduce((acc, v) => acc + v, 0)
+    return Math.round((total / valores.length) * 10) / 10
   }
 
   const perfilNumeros: Numeros = {

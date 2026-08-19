@@ -38,15 +38,22 @@ export type BoxScoreDoJogo = {
   emCasa: boolean
   resultado: 'V' | 'D' | null
   placar: string | null
-  /** Quebra por quarto do time consultado. */
-  nosso: QuebraPorQuarto
+  /**
+   * Quebra por quarto do time consultado.
+   *
+   * NULL quando o box score do time ainda não chegou. Antes isto era um objeto
+   * com quartos zerados e o total real do placar — a tela mostrava
+   * "0 0 0 0 | 112", números que não fecham e que o usuário lê como dado, não
+   * como ausência. Ingestão parcial é rotina; anunciá-la é obrigação.
+   */
+  nosso: QuebraPorQuarto | null
   /** Quebra por quarto do adversário, para leitura lado a lado. */
   deles: QuebraPorQuarto | null
   fgPercentual: number | null
   tresPercentual: number | null
-  rebotesTotal: number
-  assistencias: number
-  turnovers: number
+  rebotesTotal: number | null
+  assistencias: number | null
+  turnovers: number | null
 }
 
 export type TelaTime = ComAtualizacao & {
@@ -144,15 +151,13 @@ export async function telaDoTime(
       emCasa,
       resultado: temPlacar ? (meus! > outros! ? 'V' : 'D') : null,
       placar: temPlacar ? `${jogo.placarCasa}–${jogo.placarVisitante}` : null,
-      nosso: nosso
-        ? quebra(nosso)
-        : { q1: 0, q2: 0, q3: 0, q4: 0, prorrogacao: 0, total: meus ?? 0 },
+      nosso: nosso ? quebra(nosso) : null,
       deles: deles ? quebra(deles) : null,
       fgPercentual: nosso ? percentual(nosso.cestasC, nosso.cestasT) : null,
       tresPercentual: nosso ? percentual(nosso.tresC, nosso.tresT) : null,
-      rebotesTotal: nosso?.rebotesTotal ?? 0,
-      assistencias: nosso?.assistencias ?? 0,
-      turnovers: nosso?.turnovers ?? 0,
+      rebotesTotal: nosso?.rebotesTotal ?? null,
+      assistencias: nosso?.assistencias ?? null,
+      turnovers: nosso?.turnovers ?? null,
     }
   })
 

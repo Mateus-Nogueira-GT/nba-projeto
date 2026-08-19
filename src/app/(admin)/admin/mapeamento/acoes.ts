@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 import { getDb } from '@/modules/dominio/db/cliente'
+import { exigirAdmin } from '@/modules/plataforma/auth/cookies'
 import { confirmarMapeamento } from '@/modules/ingestao/niveis/importar'
 
 export async function confirmarVinculo(formulario: FormData): Promise<void> {
@@ -12,14 +13,19 @@ export async function confirmarVinculo(formulario: FormData): Promise<void> {
 
   if (!nomeNaLista || !jogadorId || !provedor) return
 
+  // Server action é endpoint POST chamável direto — proteger a página não
+  // protege a ação. A checagem tem que estar aqui também.
+  const sessao = await exigirAdmin()
+  if (!sessao) return
+
   await confirmarMapeamento(getDb(), {
     nomeNaLista,
     provedor,
     jogadorId,
     provedorPlayerId: jogadorId,
     score,
-    // Substituir pelo usuário autenticado quando o prompt 6 entregar auth.
-    confirmadoPor: 'admin',
+    // Trilha de auditoria real: quem confirmou o vínculo, não a string 'admin'.
+    confirmadoPor: sessao.email,
     agora: new Date(),
   })
 

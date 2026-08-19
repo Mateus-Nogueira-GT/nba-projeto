@@ -442,9 +442,10 @@ describe('tela do time', () => {
     const tela = await telaDoTime(banco.db, lalId, { temporada: TEMPORADA })
     const jogo = tela!.jogosDoTime.find((j) => j.jogoId === jogoDeOntemId)!
 
-    const soma =
-      jogo.nosso.q1 + jogo.nosso.q2 + jogo.nosso.q3 + jogo.nosso.q4 + jogo.nosso.prorrogacao
-    expect(soma).toBe(jogo.nosso.total)
+    expect(jogo.nosso).not.toBeNull()
+    const q = jogo.nosso!
+    const soma = q.q1 + q.q2 + q.q3 + q.q4 + q.prorrogacao
+    expect(soma).toBe(q.total)
   })
 
   it('o adversário vê o mesmo jogo pelo lado dele', async () => {
@@ -628,5 +629,94 @@ describe('menu de times', () => {
     // LAL é 2º; BOS não tem linha de classificação e cai para o fim.
     expect(lista[0]!.sigla).toBe('LAL')
     expect(lista.find((t) => t.sigla === 'BOS')!.posicao).toBeNull()
+  })
+})
+
+// ===========================================================================
+// AUSÊNCIA DE DADO — o que a tela faz quando a ingestão veio pela metade
+// ===========================================================================
+
+describe('ingestão parcial', () => {
+  it('sem box score do time, a quebra por quarto é AUSENTE, não zerada', async () => {
+    const [j] = await banco.db
+      .insert(jogos)
+      .values({
+        dataHoraUtc: new Date('2026-08-17T23:00:00.000Z'),
+        timeCasaId: lalId,
+        timeVisitanteId: bosId,
+        status: 'ENCERRADO',
+        placarCasa: 112,
+        placarVisitante: 105,
+      })
+      .returning()
+
+    const tela = await telaDoTime(banco.db, lalId, { temporada: TEMPORADA })
+    const jogo = tela!.jogosDoTime.find((x) => x.jogoId === j!.id)!
+
+    // Zerar os quartos ao lado do total real mostrava "0 0 0 0 | 112" —
+    // números que não fecham e que o usuário lê como dado, não como buraco.
+    expect(jogo.nosso).toBeNull()
+    expect(jogo.rebotesTotal).toBeNull()
+    expect(jogo.placar).toBe('112–105')
+  })
+
+  it('média ignora o jogo sem o número, em vez de contá-lo como zero', async () => {
+    const [p] = await banco.db
+      .insert(jogadores)
+      .values({ nomeCompleto: 'Minutos Faltantes', timeId: lalId })
+      .returning()
+
+    const MINUTOS: (string | null)[] = ['36.00', null, '34.00']
+    for (const [i, minutos] of MINUTOS.entries()) {
+      const [j] = await banco.db
+        .insert(jogos)
+        .values({
+          dataHoraUtc: new Date(`2026-08-${10 + i}T23:00:00.000Z`),
+          timeCasaId: lalId,
+          timeVisitanteId: bosId,
+          status: 'ENCERRADO',
+          placarCasa: 100,
+          placarVisitante: 90,
+        })
+        .returning()
+      await banco.db
+        .insert(estatisticasJogo)
+        .values({ jogoId: j!.id, jogadorId: p!.id, minutos, pontos: 10 })
+    }
+
+    const tela = await telaDoJogador(banco.db, p!.id, { temporada: TEMPORADA })
+    // Jogou 36 e 34: a média de quem jogou é 35. Contar o nulo como 0 daria
+    // 23,3 e faria o titular parecer reserva por causa de um buraco no dado.
+    expect(tela!.perfilNumeros.posse.minutos).toBe(35)
+  })
+})
+
+// ===========================================================================
+// BUSCA SOB ENTRADA HOSTIL
+// ===========================================================================
+
+describe('busca resiste a entrada hostil', () => {
+  it('caractere especial de regex não estoura', async () => {
+    for (const termo of ['(', '[a-z]+', '.*', '\\', '$^', '((((']) {
+      await expect(buscar(banco.db, termo), `termo ${termo}`).resolves.toBeDefined()
+    }
+  })
+
+  it('consulta gigante não trava a tela', async () => {
+    const inicio = Date.now()
+    await buscar(banco.db, 'a'.repeat(5000))
+    expect(Date.now() - inicio).toBeLessThan(3000)
+  })
+
+  it('uma letra não devolve o elenco inteiro', async () => {
+    // "a" está contido em quase todo nome. Devolver todos é ruído com cara de
+    // resultado — abaixo de 3 letras só a grafia aproximada responde.
+    const r = await buscar(banco.db, 'a', { apenas: 'JOGADOR' })
+    expect(r.length, `"a" devolveu ${r.length} jogadores`).toBeLessThan(3)
+  })
+
+  it('três letras já discriminam e continuam achando', async () => {
+    const r = await buscar(banco.db, 'bru', { apenas: 'JOGADOR' })
+    expect(r.map((x) => x.nome)).toContain('Jalen Brunson')
   })
 })
