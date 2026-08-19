@@ -39,6 +39,16 @@ module.exports = {
       },
     },
     {
+      name: 'componente-nao-usa-token-primitivo',
+      severity: 'error',
+      comment:
+        'Componente que importa a paleta crua pulou duas camadas de token. ' +
+        'Use semantico/componente — trocar a marca tem que ser um diff só no primitivo. ' +
+        'Ver docs/04-design-system.md > Camadas de token.',
+      from: { path: '^src/(design-system/componentes|app)' },
+      to: { path: '^src/design-system/tokens/primitivo' },
+    },
+    {
       name: 'sem-dependencia-circular',
       severity: 'error',
       comment: 'Ciclo de importação indica fronteira mal desenhada.',

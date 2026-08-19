@@ -113,6 +113,21 @@ assinantes literalmente não consegue ler o produto que está pagando.
 Contraste mínimo WCAG AA (4.5:1 texto, 3:1 elementos gráficos). O amarelo do nível 1 é o
 risco maior: **exige fundo escuro ou texto escuro dentro do anel**, nunca branco sobre amarelo.
 
+### O que a implementação apurou
+
+Ao calcular as razões de verdade (`tokens/contraste.ts`), duas coisas mudaram:
+
+**O texto escuro dentro do anel não é exceção do amarelo — é regra dos quatro.** Sobre o
+branco, os anéis dão 1,54 · 2,14 · 1,94 · 2,63; sobre o tom escuro, 12,67 · 9,08 · 10,02 ·
+7,41. Uma regra única em vez de um caso especial.
+
+**O "preto" do nível Randola virou grafite.** Borda preta sobre superfície escura tem razão
+~1,3 e desaparece. Borda invisível não é canal — o grafite entrega 4,88:1. É desvio
+consciente do documento de origem, pela razão que o próprio documento estabelece.
+
+Todas as combinações da galeria são verificadas em `__tests__/tokens.test.ts`, e a própria
+galeria imprime as razões calculadas em tempo de renderização.
+
 ---
 
 ## Escrita da interface

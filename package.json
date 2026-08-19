@@ -12,7 +12,8 @@
     "test": "vitest run",
     "db:generate": "drizzle-kit generate && node scripts/gerar-down.mjs",
     "db:migrate": "dotenv -e .env.local -- drizzle-kit migrate",
-    "db:studio": "dotenv -e .env.local -- drizzle-kit studio"
+    "db:studio": "dotenv -e .env.local -- drizzle-kit studio",
+    "tokens": "vite-node scripts/gerar-tokens-css.mts"
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.1.0",
@@ -36,6 +37,7 @@
     "eslint-config-prettier": "^10.1.8",
     "prettier": "^3.9.6",
     "typescript": "^6.0.3",
+    "vite-node": "^6.0.0",
     "vitest": "^4.1.11"
   }
 }

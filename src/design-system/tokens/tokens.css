@@ -1,0 +1,38 @@
+/* GERADO por scripts/gerar-tokens-css.mts a partir de src/design-system/tokens/.
+   Não editar à mão: `npm run tokens` regenera e o teste compara. */
+
+:root {
+  /* semântico */
+  --fundo: #0B1220;
+  --superficie: #131C2E;
+  --superficie-elevada: #1B2740;
+  --divisor: #2A3852;
+  --texto-primario: #F5F8FC;
+  --texto-secundario: #8D9AB0;
+  --texto-sobre-cor: #080D16;
+  --nivel-mvp: #E0B24A;
+  --nivel-all-star: #C3CCDA;
+  --nivel-suporte: #C8823C;
+  --nivel-randola: #7C8AA3;
+  --apito-nivel1: #FFC93D;
+  --apito-nivel2: #FF9838;
+  --apito-nivel3: #3DD37E;
+  --apito-turbo: #4DA3FF;
+  --apito-modo-fire: #FF9838;
+  --alerta: #FF6B6B;
+
+  /* componente */
+  --card-fundo: #131C2E;
+  --card-texto: #F5F8FC;
+  --card-texto-apoio: #8D9AB0;
+  --card-divisor: #2A3852;
+  --card-borda-largura: 2px;
+  --anel-texto: #080D16;
+  --anel-diametro: 56px;
+  --anel-espessura: 4px;
+  --historico-ativo: #F5F8FC;
+  --historico-inativo: #2A3852;
+  --marcador-opd-fundo: #1B2740;
+  --marcador-opd-texto: #8D9AB0;
+  --odd-texto: #8D9AB0;
+}
