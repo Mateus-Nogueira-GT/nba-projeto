@@ -2,7 +2,6 @@ import { readFileSync } from 'node:fs'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { createElement } from 'react'
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
-import { and, eq } from 'drizzle-orm'
 
 import { bancoDeTeste } from '../../dominio/__tests__/ajuda-banco'
 import {
@@ -340,7 +339,7 @@ describe('fronteira da tela', () => {
     const rotas = [
       'src/app/(app)/page.tsx',
       'src/app/api/cron/lista-secreta/route.ts',
-      'src/app/(admin)/mapeamento/page.tsx',
+      'src/app/(admin)/admin/mapeamento/page.tsx',
     ]
 
     for (const rota of rotas) {

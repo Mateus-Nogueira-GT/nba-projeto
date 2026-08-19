@@ -31,8 +31,8 @@ afterAll(async () => {
 // ---------------------------------------------------------------------------
 
 describe('migrations sobem e descem limpas', () => {
-  it('a subida cria as 27 tabelas dos 6 grupos', async () => {
-    expect(await banco.contarTabelas()).toBe(27)
+  it('a subida cria as 30 tabelas dos 6 grupos', async () => {
+    expect(await banco.contarTabelas()).toBe(30)
   })
 
   it('desce zerando o schema e sobe de novo sem resíduo', async () => {
@@ -40,7 +40,7 @@ describe('migrations sobem e descem limpas', () => {
     expect(await banco.contarTabelas()).toBe(0)
 
     await banco.subir()
-    expect(await banco.contarTabelas()).toBe(27)
+    expect(await banco.contarTabelas()).toBe(30)
   })
 })
 

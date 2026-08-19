@@ -23,5 +23,5 @@ export async function confirmarVinculo(formulario: FormData): Promise<void> {
     agora: new Date(),
   })
 
-  revalidatePath('/mapeamento')
+  revalidatePath('/admin/mapeamento')
 }

@@ -15,6 +15,13 @@
       "when": 1787091922773,
       "tag": "0001_dashing_victor_mancha",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1787143790400,
+      "tag": "0002_medical_overlord",
+      "breakpoints": true
     }
   ]
 }
