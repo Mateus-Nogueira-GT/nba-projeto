@@ -11,6 +11,7 @@ Ordem de leitura:
 | [04-design-system.md](04-design-system.md)         | tokens, card, acessibilidade, escrita             |
 | [05-perguntas-abertas.md](05-perguntas-abertas.md) | as 12 pendências e o que está destravado          |
 | [adr/](adr/)                                       | decisões e seus custos                            |
+| [specs/](specs/)                                   | o que falta construir, em ordem de dependência    |
 
 O arquivo mais importante do repositório não está aqui: é
 [`../config/ruleset.v1.yaml`](../config/ruleset.v1.yaml). Ele **é** a estratégia.
