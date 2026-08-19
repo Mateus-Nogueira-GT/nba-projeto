@@ -114,6 +114,10 @@ de mock, a regra 2 foi violada.
 - **Os elencos da lista não são a NBA real.** São projetados (Giannis no Miami, LeBron no
   Philadelphia, Harden no Cleveland). O vínculo jogador↔time vem da curadoria do CJ, nunca
   da API. Reconciliação via `mapa_jogadores`, com confirmação humana.
+  **Exceção única — a aba de estatísticas.** Ela exibe dado canônico, não estratégia, e por
+  isso usa `jogadores.time_id` (o time REAL do provedor). Usar a lista do CJ ali diria que
+  o LeBron venceu um jogo do Philadelphia do qual ele não participou. A regra acima vale
+  para tudo que alimenta o motor; a aba de consulta é o outro lado da fronteira.
 - **Só existe classificação de PONTOS.** Rebotes e assistências virão depois. O modelo já
   é `(jogador, atributo)` — não assuma pontos em lugar nenhum.
 - **Fire Live é só 1º quarto.** Nada além disso, em nenhuma hipótese.

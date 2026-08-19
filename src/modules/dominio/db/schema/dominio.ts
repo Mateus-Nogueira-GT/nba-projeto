@@ -81,6 +81,15 @@ export const jogos = pgTable(
     tempoRestante: text('tempo_restante'),
     placarCasa: smallint('placar_casa'),
     placarVisitante: smallint('placar_visitante'),
+    /**
+     * Quando a ingestão tocou esta linha pela última vez.
+     *
+     * Requisito de produto, não conveniência: TODA tela da aba de estatísticas
+     * informa o horário do dado que está mostrando (docs/00-visao.md). Sem uma
+     * coluna por tabela, a tela teria que inventar um horário — e um número
+     * velho apresentado como atual é pior do que número nenhum.
+     */
+    atualizadoEm: timestamp('atualizado_em', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index('jogos_data_idx').on(t.dataHoraUtc, t.status)],
 )
@@ -115,6 +124,8 @@ export const estatisticasJogo = pgTable(
     turnovers: smallint('turnovers').notNull().default(0),
     faltas: smallint('faltas').notNull().default(0),
     saldoQuadra: smallint('saldo_quadra'),
+    /** Ver a nota em `jogos.atualizadoEm`. */
+    atualizadoEm: timestamp('atualizado_em', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
     unique('estatisticas_jogo_unica').on(t.jogoId, t.jogadorId),
@@ -184,6 +195,8 @@ export const estatisticasTimeJogo = pgTable(
     bloqueios: smallint('bloqueios').notNull().default(0),
     turnovers: smallint('turnovers').notNull().default(0),
     faltas: smallint('faltas').notNull().default(0),
+    /** Ver a nota em `jogos.atualizadoEm`. */
+    atualizadoEm: timestamp('atualizado_em', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [unique('estatisticas_time_jogo_unica').on(t.jogoId, t.timeId)],
 )

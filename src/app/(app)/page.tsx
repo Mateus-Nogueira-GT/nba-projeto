@@ -1,5 +1,6 @@
 import { getDb } from '@/modules/dominio/db/cliente'
 import { lerFeed, ordenarPorConfianca, type ItemFeed } from '@/modules/entrega/lista-secreta'
+import { rotaDoJogador, BASE_ESTATISTICAS } from '@/modules/entrega/estatisticas/rotas'
 import { CardEntrada } from '@/design-system/componentes'
 import { semantico } from '@/design-system/tokens/semantico'
 import '@/design-system/tokens/tokens.css'
@@ -120,11 +121,21 @@ export default async function PaginaListaSecreta({
 
       <Filtros atual={quantidade} base="/" />
 
+      <p style={{ margin: '0 0 12px', fontSize: 13 }}>
+        <a href={BASE_ESTATISTICAS} style={{ color: semantico.textoSecundario }}>
+          Estatísticas · jogos do dia, jogadores e times →
+        </a>
+      </p>
+
       <div style={{ display: 'grid', gap: 10 }}>
         {visiveis.map((item) => (
           <CardEntrada
             key={item.chave}
             nome={item.nome}
+            // Segundo caminho de entrada da aba de estatísticas: o nome do
+            // jogador dentro de qualquer card leva à MESMA tela que a busca
+            // do menu — a URL sai da mesma função nos dois lugares.
+            jogadorHref={rotaDoJogador(item.jogadorId)}
             timeSigla={item.timeSigla}
             timeNome={item.timeNome}
             posicao={null}

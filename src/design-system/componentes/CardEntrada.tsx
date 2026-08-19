@@ -13,6 +13,14 @@ const ATRIBUTO_ROTULO: Record<Atributo, string> = {
 
 export type CardEntradaProps = {
   nome: string
+  /**
+   * Destino da tela de estatísticas do jogador.
+   *
+   * É o SEGUNDO caminho de entrada da aba (docs/00-visao.md): pelo menu, ou
+   * pelo nome do jogador dentro de qualquer card. Opcional porque o card é
+   * usado também na galeria do design system, onde não há rota para navegar.
+   */
+  jogadorHref?: string | null
   fotoUrl?: string | null
   timeSigla: string
   timeNome: string
@@ -86,7 +94,18 @@ export function CardEntrada(props: CardEntradaProps) {
 
       <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 6 }}>
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
-          <strong style={{ fontSize: 16, lineHeight: 1.2 }}>{props.nome}</strong>
+          <strong style={{ fontSize: 16, lineHeight: 1.2 }}>
+            {props.jogadorHref ? (
+              <a
+                href={props.jogadorHref}
+                style={{ color: 'inherit', textDecorationThickness: 1, textUnderlineOffset: 3 }}
+              >
+                {props.nome}
+              </a>
+            ) : (
+              props.nome
+            )}
+          </strong>
           {/* Redundância do canal 1: o nível também vem escrito. */}
           <span style={{ fontSize: 11, fontWeight: 600, color: nivel.cor, letterSpacing: 0.4 }}>
             {nivel.rotulo}
