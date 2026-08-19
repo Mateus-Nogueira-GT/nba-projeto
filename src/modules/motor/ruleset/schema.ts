@@ -85,6 +85,11 @@ export const rulesetSchema = z.object({
       /** alvo válido se > este valor (note a assimetria com pontos) */
       rebotes_alvo_minimo: z.number(),
     }),
+    /** Cadência do loop do 1Q. Operacional, não estratégico — ver ADR-0003. */
+    observacao: z.object({
+      intervalo_segundos: z.number().int().positive(),
+      limite_minutos: z.number().int().positive(),
+    }),
     modo_fire: z.object({
       aplica_a: z.array(nivel),
       percentual_media: z.number().min(0).max(1),

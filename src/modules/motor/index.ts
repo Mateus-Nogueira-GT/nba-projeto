@@ -1,11 +1,9 @@
 import { calcularConfianca, linhasDoNivel } from './confianca'
-import { alvoFireLive } from './fire-live/alvo'
-import { topoLiberado } from './fire-live/bloco-topo'
-import { emModoFire } from './fire-live/modo-fire'
+import { avaliarFireLive } from './fire-live/avaliar'
 import { avaliarOpd } from './lista-secreta/opd'
 import { avaliarOscilacao } from './lista-secreta/oscilacao'
 import type { Ruleset } from './ruleset/schema'
-import { montarChave, valorDoAtributo } from './tipos'
+import { montarChave } from './tipos'
 import type {
   Apito,
   Atributo,
@@ -20,6 +18,9 @@ import type {
 } from './tipos'
 
 export * from './tipos'
+export { avaliarFireLive } from './fire-live/avaliar'
+export type { Green, OpcoesFireLive, ResultadoFireLive } from './fire-live/avaliar'
+export { marcosAtingidos } from './fire-live/green'
 export { carregarRuleset } from './ruleset/carregar'
 export type { Ruleset } from './ruleset/schema'
 
@@ -41,7 +42,13 @@ export function avaliar(fatos: Fatos, ruleset: Ruleset): Apito[] {
 
     for (const time of times) {
       apitos.push(...avaliarListaSecreta(time, jogo, ruleset))
-      apitos.push(...avaliarFireLive(time, jogo, ruleset))
+
+      // No caminho pré-live/backtest a OPD é recalculada dos mesmos fatos.
+      // Ao vivo, o ciclo passa a OPD COMO PUBLICADA — ver OpcoesFireLive.
+      const opdPreLive = new Map(
+        avaliarOpd(time, jogo, ruleset).map((o) => [o.jogadorId, o.nivelApito] as const),
+      )
+      apitos.push(...avaliarFireLive(time, jogo, ruleset, { opdPreLive }).apitos)
     }
   }
 
@@ -91,69 +98,6 @@ function avaliarListaSecreta(time: TimeFato, jogo: JogoFato, ruleset: Ruleset): 
           ruleset,
         }),
       )
-    }
-  }
-
-  return apitos
-}
-
-// ---------------------------------------------------------------------------
-// FIRE LIVE — exclusivamente no quarto definido pelo ruleset
-// ---------------------------------------------------------------------------
-
-function avaliarFireLive(time: TimeFato, jogo: JogoFato, ruleset: Ruleset): Apito[] {
-  if (jogo.quartoAtual !== ruleset.fire_live.quarto) return []
-
-  const apitos: Apito[] = []
-  const porOpd = new Map(avaliarOpd(time, jogo, ruleset).map((o) => [o.jogadorId, o.nivelApito]))
-
-  for (const jogador of time.jogadores) {
-    if (jogo.escalacao[jogador.id] === 'FORA') continue
-
-    const estatistica = jogo.estatisticasQuarto.find(
-      (e) => e.jogadorId === jogador.id && e.quarto === ruleset.fire_live.quarto,
-    )
-    if (estatistica === undefined) continue
-
-    for (const atributo of ruleset.niveis.atributos) {
-      const nivel = jogador.classificacoes[atributo] ?? null
-      const media = jogador.medias[atributo]
-      if (media === undefined) continue
-
-      // Suporte e Randola só apitam em pontos com o bloco de topo inteiro fora.
-      if (
-        atributo === 'PONTOS' &&
-        nivel !== null &&
-        ruleset.fire_live.presenca_topo.bloqueia_niveis.includes(nivel) &&
-        !topoLiberado(time, jogo, atributo, ruleset)
-      ) {
-        continue
-      }
-
-      const alvo = alvoFireLive({ mediaPorJogo: media, atributo, nivel }, ruleset)
-      if (alvo === null) continue
-
-      const valor = valorDoAtributo(estatistica, atributo)
-      if (valor < alvo) continue
-
-      apitos.push({
-        chaveDeduplicacao: montarChave(jogo.id, jogador.id, atributo, 'FIRE_LIVE', null),
-        jogoId: jogo.id,
-        jogadorId: jogador.id,
-        atributo,
-        estrategia: 'FIRE_LIVE',
-        metodo: null,
-        // Jogador fora da lista não tem nível; usa-se o piso da hierarquia de níveis.
-        nivelJogador: nivel ?? 'RANDOLA',
-        nivelApito: 1,
-        turbo: false,
-        modoFire: nivel !== null && emModoFire(valor, media, nivel, ruleset),
-        // Cruzamento: se já estava apitado em OPD pré-live, o card mostra isso.
-        opdOrigemNivel: porOpd.get(jogador.id) ?? null,
-        linha: null,
-        confianca: null,
-        alvo1Q: alvo,
-      })
     }
   }
 

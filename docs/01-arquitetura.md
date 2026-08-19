@@ -184,3 +184,4 @@ está desenhada — quando um dia precisar separar de verdade, ela rompe no luga
 | [0004](adr/0004-odds-somente-leitura.md)  | Odds somente leitura, agregadas; nunca envio de aposta                     |
 | [0005](adr/0005-fusao-badge-confianca.md) | Fusão da badge de confiança com o anel de apito                            |
 | [0006](adr/0006-bloco-de-topo.md)         | Bloco de topo unifica a restrição de presença; dispensa rastreio em quadra |
+| [0007](adr/0007-outbox-de-push.md)        | Outbox de push: a UNIQUE impede duplicata, o outbox impede perda silenciosa |

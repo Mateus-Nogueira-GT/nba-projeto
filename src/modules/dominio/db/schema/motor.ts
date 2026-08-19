@@ -52,6 +52,16 @@ export const apitos = pgTable(
     oddMax: numeric('odd_max', { precision: 7, scale: 3 }),
     alvo1q: smallint('alvo_1q'),
     geradoEm: timestamp('gerado_em', { withTimezone: true }).notNull().defaultNow(),
+    /**
+     * OUTBOX. Null = gravado mas ainda não enfileirado para push.
+     *
+     * Sem esta coluna existe uma perda silenciosa: se o INSERT commita e o
+     * envio à fila falha logo depois, o retry reencontra o apito já gravado,
+     * conclui que "não é novo" e o push nunca sai. Com ela, o ciclo seguinte
+     * varre os pendentes e reenvia — a UNIQUE segue impedindo duplicata na
+     * gravação, e a idempotencyKey da fila cobre o reenvio.
+     */
+    pushEnfileiradoEm: timestamp('push_enfileirado_em', { withTimezone: true }),
   },
   (t) => [
     /**

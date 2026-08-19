@@ -112,6 +112,17 @@ fire_live:
     pontos_alvo_minimo: 4 # alvo só vale se >= 4
     rebotes_alvo_minimo: 2 # alvo só vale se > 2
 
+  # Cadência do loop de observação do 1Q. NÃO é parâmetro de estratégia — é
+  # operação. Vive aqui pela mesma razão que quartos_por_jogo: para que nenhum
+  # número precise existir solto dentro do código. Ver ADR-0003.
+  observacao:
+    intervalo_segundos: 20
+    # Trava dura de encerramento. O 1Q tem 12 min de relógio, mas relógio
+    # parado, revisão de arbitragem e intervalo comercial esticam o tempo real.
+    # Passado este limite o workflow encerra mesmo que o provedor ainda diga
+    # "1º quarto" — o requisito é encerrar em QUALQUER hipótese.
+    limite_minutos: 45
+
   modo_fire:
     aplica_a: [MVP, ALL_STAR]
     percentual_media: 0.75 # [P4] 75% — resolvido a favor da observação

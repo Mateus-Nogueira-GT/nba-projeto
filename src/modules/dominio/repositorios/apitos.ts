@@ -1,6 +1,16 @@
-import type { Apito } from '../../motor/tipos'
+import type { Apito, Atributo, Estrategia } from '../../motor/tipos'
 import { apitos } from '../db/schema'
 import type { Db } from '../db/tipos'
+
+/** Linha efetivamente inserida, com a chave natural que a identifica. */
+export type ApitoGravado = {
+  id: string
+  jogoId: string
+  jogadorId: string
+  atributo: Atributo
+  estrategia: Estrategia
+  linha: number | null
+}
 
 /**
  * Grava apitos de forma IDEMPOTENTE.
@@ -10,12 +20,16 @@ import type { Db } from '../db/tipos'
  * Conflito aqui é caminho esperado, não erro (CLAUDE.md, regra 5).
  *
  * Devolve apenas os apitos EFETIVAMENTE inseridos — é essa lista que vira push.
+ *
+ * O RETURNING traz as COLUNAS DA CHAVE NATURAL, não só o id. Quem chama
+ * precisa saber QUAIS apitos entraram para notificar o jogador certo; parear
+ * por posição no array seria errado, porque o conflito remove linhas do meio.
  */
 export async function gravarApitos(
   db: Db,
   rulesetVersao: string,
   lista: Apito[],
-): Promise<{ id: string }[]> {
+): Promise<ApitoGravado[]> {
   if (lista.length === 0) return []
 
   return db
@@ -44,5 +58,12 @@ export async function gravarApitos(
       // outra constraint estoura em vez de ser engolido em silêncio.
       target: [apitos.jogoId, apitos.jogadorId, apitos.atributo, apitos.estrategia, apitos.linha],
     })
-    .returning({ id: apitos.id })
+    .returning({
+      id: apitos.id,
+      jogoId: apitos.jogoId,
+      jogadorId: apitos.jogadorId,
+      atributo: apitos.atributo,
+      estrategia: apitos.estrategia,
+      linha: apitos.linha,
+    })
 }
