@@ -39,6 +39,20 @@ module.exports = {
       },
     },
     {
+      name: 'tela-nao-chama-o-motor',
+      severity: 'error',
+      comment:
+        'A tela lê feed_snapshot materializado, NUNCA executa o motor. Avaliação ' +
+        'acontece uma vez por evento, não uma vez por usuário — é isso que separa ' +
+        '10k usuários de ser trivial ou impossível. Ver docs/01-arquitetura.md. ' +
+        'Importar TIPOS do motor é permitido: vocabulário de domínio não é execução.',
+      from: { path: '^src/app' },
+      to: {
+        path: '^src/modules/motor',
+        dependencyTypesNot: ['type-only'],
+      },
+    },
+    {
       name: 'componente-nao-usa-token-primitivo',
       severity: 'error',
       comment:

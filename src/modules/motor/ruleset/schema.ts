@@ -119,6 +119,12 @@ export const rulesetSchema = z.object({
     canais_independentes: z.array(z.string()),
   }),
 
+  publicacao: z.object({
+    lista_secreta: z.object({
+      antecedencia_minutos: z.number().int().positive(),
+    }),
+  }),
+
   avisos: z.object({
     blowout: z.object({
       quarto: z.number().int().positive(),

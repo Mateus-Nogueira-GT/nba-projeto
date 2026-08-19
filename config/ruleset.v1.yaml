@@ -182,6 +182,15 @@ push:
     - LISTA_SECRETA
 
 # -----------------------------------------------------------------------------
+# PUBLICAÇÃO — cadência operacional (proposta comercial, p.9)
+# -----------------------------------------------------------------------------
+publicacao:
+  lista_secreta:
+    # A lista sai 1h antes do primeiro jogo do dia, para dar tempo de o usuário
+    # se organizar antes da rodada começar.
+    antecedencia_minutos: 60
+
+# -----------------------------------------------------------------------------
 # AVISOS
 # -----------------------------------------------------------------------------
 avisos:
