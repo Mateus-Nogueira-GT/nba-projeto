@@ -26,6 +26,12 @@ export const rulesetSchema = z.object({
     modo: z.enum(['movel', 'congelada_na_rodada']),
   }),
 
+  /** Rótulo da temporada. Calendário da liga, não estratégia — ver o YAML. */
+  temporada: z.object({
+    mes_inicio: z.number().int().min(1).max(12),
+    formato: z.enum(['dois_anos', 'ano_inicial']),
+  }),
+
   arredondamento: z.object({
     politica: z.literal('precisao_cheia_arredonda_no_fim'),
     regra: z.literal('meio_para_cima'),

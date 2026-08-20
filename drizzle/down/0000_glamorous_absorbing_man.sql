@@ -1,5 +1,12 @@
 -- DESCIDA de 0000_glamorous_absorbing_man.sql — GERADO por scripts/gerar-down.mjs, não editar à mão.
 
+DROP INDEX IF EXISTS "sessoes_usuario_idx";
+DROP INDEX IF EXISTS "apitos_feed_idx";
+DROP INDEX IF EXISTS "niveis_versao_unica_ativa";
+DROP INDEX IF EXISTS "lesoes_escalacao_jogo_status_idx";
+DROP INDEX IF EXISTS "jogos_data_idx";
+DROP INDEX IF EXISTS "estatisticas_quarto_1q_idx";
+DROP INDEX IF EXISTS "estatisticas_jogo_jogador_idx";
 DROP TABLE IF EXISTS "saude_provedor" CASCADE;
 DROP TABLE IF EXISTS "log_falhas" CASCADE;
 DROP TABLE IF EXISTS "usuarios" CASCADE;

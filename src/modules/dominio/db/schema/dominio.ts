@@ -1,6 +1,7 @@
 import { sql } from 'drizzle-orm'
 import {
   boolean,
+  date,
   index,
   integer,
   numeric,
@@ -45,6 +46,32 @@ export const jogadores = pgTable('jogadores', {
 })
 
 /**
+ * IDENTIDADE DO JOGADOR NO PROVEDOR — id externo → jogador canônico.
+ *
+ * Não confundir com `mapa_jogadores`, que resolve outro problema: aquele liga o
+ * NOME ESCRITO PELO CJ ("chmaphagnie") ao jogador, é curadoria humana e cobre
+ * só os ~150 nomes da lista. Este liga o ID do provedor ao jogador, é mecânico
+ * e cobre os ~500 da liga inteira — porque a busca da aba de estatísticas e o
+ * box score precisam de todo mundo, não só de quem o CJ classificou.
+ *
+ * Uma linha por provedor: são DUAS fontes com failover, e o mesmo jogador tem
+ * ids diferentes em cada uma. Uma coluna só em `jogadores` seria sobrescrita
+ * toda vez que o failover trocasse de fonte.
+ */
+export const identidadesJogador = pgTable(
+  'identidades_jogador',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    jogadorId: uuid('jogador_id')
+      .notNull()
+      .references(() => jogadores.id, { onDelete: 'cascade' }),
+    provedor: text('provedor').notNull(),
+    idExterno: text('id_externo').notNull(),
+  },
+  (t) => [unique('identidades_jogador_unica').on(t.provedor, t.idExterno)],
+)
+
+/**
  * Ponte entre a lista do CJ e o provedor. Curadoria HUMANA.
  *
  * Necessária porque os elencos da lista são PROJETADOS: não correspondem à NBA
@@ -70,6 +97,16 @@ export const jogos = pgTable(
   {
     id: uuid('id').primaryKey().defaultRandom(),
     dataHoraUtc: timestamp('data_hora_utc', { withTimezone: true }).notNull(),
+    /**
+     * Data do jogo em UTC, derivada pelo banco.
+     *
+     * Existe como COLUNA GERADA, e não como índice por expressão, para que a
+     * chave natural seja alvo de `ON CONFLICT` — upsert por expressão exige SQL
+     * cru e perde a checagem de tipo do drizzle.
+     */
+    dataJogo: date('data_jogo')
+      .notNull()
+      .generatedAlwaysAs(sql`((data_hora_utc AT TIME ZONE 'UTC')::date)`),
     timeCasaId: uuid('time_casa_id')
       .notNull()
       .references(() => times.id),
@@ -91,7 +128,25 @@ export const jogos = pgTable(
      */
     atualizadoEm: timestamp('atualizado_em', { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [index('jogos_data_idx').on(t.dataHoraUtc, t.status)],
+  (t) => [
+    index('jogos_data_idx').on(t.dataHoraUtc, t.status),
+    /**
+     * CHAVE NATURAL DO JOGO — o que torna a ingestão reexecutável.
+     *
+     * Nenhuma tabela canônica guarda id de provedor, e são DUAS fontes com
+     * failover: os ids delas são diferentes entre si, então indexar por id
+     * externo criaria dois jogos para a mesma partida assim que o failover
+     * trocasse de fonte.
+     *
+     * A data é truncada porque o horário do tipoff MUDA — remarcação é rotina,
+     * e o mesmo confronto reagendado em duas horas não é um jogo novo.
+     *
+     * Assume um confronto por par de times por dia. Verdadeiro na NBA; se um
+     * dia deixar de ser, esta constraint falha alto, que é o comportamento
+     * correto.
+     */
+    unique('jogos_chave_natural').on(t.dataJogo, t.timeCasaId, t.timeVisitanteId),
+  ],
 )
 
 /** Box score fechado, por jogo. */

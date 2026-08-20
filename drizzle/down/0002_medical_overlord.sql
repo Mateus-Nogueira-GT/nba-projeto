@@ -1,5 +1,8 @@
 -- DESCIDA de 0002_medical_overlord.sql — GERADO por scripts/gerar-down.mjs, não editar à mão.
 
+DROP INDEX IF EXISTS "sessoes_antiguidade_idx";
+DROP INDEX IF EXISTS "tentativas_login_janela_idx";
+DROP INDEX IF EXISTS "eventos_conta_usuario_idx";
 ALTER TABLE "usuarios" DROP COLUMN IF EXISTS "papel";
 ALTER TABLE "sessoes" DROP COLUMN IF EXISTS "ip";
 ALTER TABLE "sessoes" DROP COLUMN IF EXISTS "criada_em";

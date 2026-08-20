@@ -29,8 +29,19 @@ const INVERSORES = [
     reconhece: /^ALTER TABLE "([a-z_]+)" ADD COLUMN "([a-z_]+)"/i,
     inverte: (m) => `ALTER TABLE "${m[1]}" DROP COLUMN IF EXISTS "${m[2]}";`,
   },
-  // Índices e constraints caem junto com a tabela; nada a inverter.
-  { reconhece: /^CREATE (UNIQUE )?INDEX/i, inverte: () => null },
+  /**
+   * Índice ganha DROP explícito.
+   *
+   * Até a 0005 todo índice nascia na mesma migration da sua tabela, e cair
+   * junto com ela bastava. A 0006 adiciona um índice a uma tabela criada na
+   * 0000 — descer só a 0006 deixaria o índice para trás, e subir de novo
+   * falharia com "already exists". `IF EXISTS` mantém seguro o caso antigo,
+   * em que a tabela já foi derrubada.
+   */
+  {
+    reconhece: /^CREATE (?:UNIQUE )?INDEX (?:IF NOT EXISTS )?"([a-z_0-9]+)"/i,
+    inverte: (m) => `DROP INDEX IF EXISTS "${m[1]}";`,
+  },
   { reconhece: /^ALTER TABLE .* ADD CONSTRAINT/i, inverte: () => null },
   { reconhece: /^DO \$\$/i, inverte: () => null },
 ]

@@ -22,6 +22,22 @@ media:
   modo: movel # [P1] recalcula sozinha a cada jogo novo
 
 # -----------------------------------------------------------------------------
+# TEMPORADA — como o rótulo é montado
+#
+# A NBA atravessa o ano civil: a temporada 2025-26 começa em outubro de 2025.
+# Fato do calendário da liga, não parâmetro de estratégia — vive aqui pela mesma
+# razão que quartos_por_jogo: para que nenhum número precise existir solto no
+# código, e para que a resposta do provedor seja um diff de YAML.
+#
+# ATENÇÃO: `formato` precisa bater com o que o provedor devolve em
+# /standings?season=... Se ele responder "2025", trocar para `ano_inicial`.
+# Enquanto a fonte não estiver contratada, isto é uma suposição declarada.
+# -----------------------------------------------------------------------------
+temporada:
+  mes_inicio: 10 # outubro
+  formato: dois_anos # 2025-26   (alternativa: ano_inicial -> 2025)
+
+# -----------------------------------------------------------------------------
 # ARREDONDAMENTO
 # Validado contra os 4 exemplos numéricos do documento do CJ:
 #   24 ppg -> alvo 9  |  5,4 ppg -> alvo 4  |  5 apg -> alvo 2  |  11 rpg -> alvo 6

@@ -51,6 +51,7 @@ export type JogoExterno = {
 
 export type LinhaBoxScore = {
   jogadorIdExterno: string
+  /** null = linha do jogo inteiro; 1..4+ = split por quarto. */
   quarto: number | null
   minutos: number | null
   pontos: number
@@ -62,6 +63,67 @@ export type LinhaBoxScore = {
   bloqueios: number
   turnovers: number
   faltas: number
+  /**
+   * ARREMESSOS — convertidos e tentados.
+   *
+   * Sem eles as colunas FG% e 3P% da tela do jogador nunca saem de "—":
+   * `estatisticas_jogo` tem as colunas e nada as preencheria. Percentual sem
+   * tentativa continua sendo null, nunca 0% — a tela já trata assim.
+   */
+  cestasC: number
+  cestasT: number
+  doisC: number
+  doisT: number
+  tresC: number
+  tresT: number
+  lanceC: number
+  lanceT: number
+  /** Saldo em quadra (+/-). Null quando o provedor não calcula. */
+  saldoQuadra: number | null
+}
+
+/**
+ * Box score do TIME, com pontos por quarto.
+ *
+ * Não sai da soma das linhas de jogador: a lista do CJ não cobre o elenco
+ * inteiro, então somar os classificados daria um total menor que o placar.
+ * Precisa vir do provedor.
+ */
+export type LinhaBoxScoreTimeExterna = {
+  timeSigla: string
+  pontos: number
+  pontosQ1: number
+  pontosQ2: number
+  pontosQ3: number
+  pontosQ4: number
+  pontosProrrogacao: number
+  rebotesTotal: number
+  rebotesOf: number
+  rebotesDef: number
+  assistencias: number
+  cestasC: number
+  cestasT: number
+  tresC: number
+  tresT: number
+  lanceC: number
+  lanceT: number
+  roubos: number
+  bloqueios: number
+  turnovers: number
+  faltas: number
+}
+
+/** Campanha do time na temporada — alimenta a tela do time e o menu. */
+export type LinhaClassificacaoExterna = {
+  timeSigla: string
+  conferencia: string | null
+  vitorias: number
+  derrotas: number
+  posicao: number | null
+  /** 0..1. O provedor costuma mandar como "win percentage". */
+  aproveitamento: number | null
+  /** Ex.: "V3", "D2". Texto do provedor, exibido como veio. */
+  sequencia: string | null
 }
 
 export type EscalacaoExterna = {
@@ -76,5 +138,7 @@ export interface FonteNBA {
   listarJogadores(): Promise<JogadorExterno[]>
   listarJogos(dataIso: string): Promise<JogoExterno[]>
   boxScore(jogoIdExterno: string): Promise<LinhaBoxScore[]>
+  boxScoreDoTime(jogoIdExterno: string): Promise<LinhaBoxScoreTimeExterna[]>
   escalacao(jogoIdExterno: string): Promise<EscalacaoExterna[]>
+  classificacao(temporada: string): Promise<LinhaClassificacaoExterna[]>
 }

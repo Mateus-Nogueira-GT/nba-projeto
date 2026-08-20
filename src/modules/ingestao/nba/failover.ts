@@ -4,6 +4,8 @@ import type {
   JogadorExterno,
   JogoExterno,
   LinhaBoxScore,
+  LinhaBoxScoreTimeExterna,
+  LinhaClassificacaoExterna,
   TimeExterno,
 } from './porta'
 
@@ -123,7 +125,13 @@ export class FonteComFailover implements FonteNBA {
   boxScore(jogoIdExterno: string): Promise<LinhaBoxScore[]> {
     return this.executar((f) => f.boxScore(jogoIdExterno))
   }
+  boxScoreDoTime(jogoIdExterno: string): Promise<LinhaBoxScoreTimeExterna[]> {
+    return this.executar((f) => f.boxScoreDoTime(jogoIdExterno))
+  }
   escalacao(jogoIdExterno: string): Promise<EscalacaoExterna[]> {
     return this.executar((f) => f.escalacao(jogoIdExterno))
+  }
+  classificacao(temporada: string): Promise<LinhaClassificacaoExterna[]> {
+    return this.executar((f) => f.classificacao(temporada))
   }
 }
