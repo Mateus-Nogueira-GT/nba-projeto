@@ -21,6 +21,7 @@ export * from './tipos'
 export { avaliarFireLive } from './fire-live/avaliar'
 export type { Green, OpcoesFireLive, ResultadoFireLive } from './fire-live/avaliar'
 export { marcosAtingidos } from './fire-live/green'
+export { emBlowout } from './avisos/blowout'
 export { carregarRuleset } from './ruleset/carregar'
 export type { Ruleset } from './ruleset/schema'
 
