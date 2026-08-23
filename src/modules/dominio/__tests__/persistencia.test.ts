@@ -392,17 +392,23 @@ describe('feed_snapshot por jogo (spec 05, fatia 1)', () => {
 
   it('mesmo (data, estrategia, jogo) conflita — chave de upsert', async () => {
     await banco.db.insert(feedSnapshot).values({ ...base, estrategia: 'FIRE_LIVE', jogoId: jogoIdA })
-    await expect(
-      banco.db.insert(feedSnapshot).values({ ...base, estrategia: 'FIRE_LIVE', jogoId: jogoIdA }),
-    ).rejects.toThrow(/feed_snapshot_unico|duplicate/)
+    const erro = await banco.db
+      .insert(feedSnapshot)
+      .values({ ...base, estrategia: 'FIRE_LIVE', jogoId: jogoIdA })
+      .then(() => null)
+      .catch((e: unknown) => e)
+    expect(cadeiaDeMensagens(erro)).toMatch(/feed_snapshot_unico/)
     await banco.db.delete(feedSnapshot)
   })
 
   it('Lista Secreta continua uma linha por dia: NULL colide com NULL', async () => {
     await banco.db.insert(feedSnapshot).values({ ...base, estrategia: 'LISTA_SECRETA' })
-    await expect(
-      banco.db.insert(feedSnapshot).values({ ...base, estrategia: 'LISTA_SECRETA' }),
-    ).rejects.toThrow(/feed_snapshot_unico|duplicate/)
+    const erro = await banco.db
+      .insert(feedSnapshot)
+      .values({ ...base, estrategia: 'LISTA_SECRETA' })
+      .then(() => null)
+      .catch((e: unknown) => e)
+    expect(cadeiaDeMensagens(erro)).toMatch(/feed_snapshot_unico/)
     await banco.db.delete(feedSnapshot)
   })
 })
