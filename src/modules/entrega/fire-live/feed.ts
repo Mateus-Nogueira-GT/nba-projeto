@@ -19,6 +19,8 @@ export type ItemFireLive = ItemFeed & {
   /** O 1Q acabou. O item permanece até o fim do jogo, marcado. (G2 — proposta enviada ao CJ) */
   encerrado: boolean
   valorNoQuarto: number
+  /** Instante em que a marca foi cruzada (geradoEm do apito). ISO. */
+  apitadoEm: string
 }
 
 export type ConteudoFeedFireLive = {
@@ -116,6 +118,7 @@ export async function materializarFeedFireLive(
       quartoAtual: partida.quartoAtual,
       encerrado,
       valorNoQuarto: valorPorJogador.get(a.jogadorId)?.[a.atributo] ?? 0,
+      apitadoEm: a.geradoEm.toISOString(),
     }
   })
   // Ordem estável pela chave: snapshot determinístico independente do banco.

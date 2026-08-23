@@ -21,6 +21,7 @@ import { carregarRuleset } from '../../motor/ruleset/carregar'
 import type { Nivel } from '../../motor/tipos'
 import { executarCiclo } from '../fire-live/ciclo'
 import type { ConteudoFeedFireLive } from '../fire-live/feed'
+import { lerFeedFireLive } from '../fire-live/leitura'
 import type { EstadoObservado } from '../fire-live/ciclo'
 import { reservarJogosParaObservar } from '../fire-live/inicio'
 import { FilaEmMemoria } from '../fila/memoria'
@@ -668,5 +669,62 @@ describe('materialização do feed do Fire Live', () => {
     const conteudo = (await lerSnapshot())!.conteudoJson as ConteudoFeedFireLive
     expect(conteudo.itens.length).toBeGreaterThan(0)
     expect(conteudo.itens.every((i) => i.encerrado)).toBe(true)
+  })
+})
+
+// ===========================================================================
+// LEITURA DA TELA (spec 05, fatia 3) — a tela lê snapshot, nunca o motor
+// ===========================================================================
+
+describe('leitura do feed do Fire Live', () => {
+  const QUARTO = ruleset.fire_live.quarto
+  const DIA = '2026-08-19'
+
+  it('devolve os itens do dia, mais recente primeiro', async () => {
+    await reproduzir()
+
+    const feed = await lerFeedFireLive(banco.db, DIA, QUARTO)
+
+    expect(feed.estadoVazio).toBeNull()
+    expect(feed.geradoEm).not.toBeNull()
+    expect(feed.itens.map((i) => i.nome).sort()).toEqual(['Austin Reaves', 'Luka Doncic'])
+    // PROPOSTA aguardando CJ — spec 05, pergunta 3: mais recente primeiro.
+    for (let i = 1; i < feed.itens.length; i++) {
+      expect(feed.itens[i - 1]!.apitadoEm >= feed.itens[i]!.apitadoEm).toBe(true)
+    }
+  })
+
+  it('sem jogo hoje', async () => {
+    await banco.db.delete(jogos)
+    const feed = await lerFeedFireLive(banco.db, DIA, QUARTO)
+    expect(feed).toMatchObject({ itens: [], estadoVazio: 'SEM_JOGO_HOJE' })
+  })
+
+  it('há jogos, nenhum começou: aguardando o primeiro', async () => {
+    await banco.db.update(jogos).set({ status: 'AGENDADO', quartoAtual: null })
+    const feed = await lerFeedFireLive(banco.db, DIA, QUARTO)
+    expect(feed.estadoVazio).toBe('AGUARDANDO_PRIMEIRO_JOGO')
+    expect(feed.primeiroJogoUtc).toEqual(TIPOFF)
+  })
+
+  it('jogos em andamento, nenhum no 1º quarto', async () => {
+    await banco.db.update(jogos).set({ status: 'AO_VIVO', quartoAtual: 3 })
+    const feed = await lerFeedFireLive(banco.db, DIA, QUARTO)
+    expect(feed.estadoVazio).toBe('NENHUM_EM_1Q')
+  })
+
+  it('jogo no 1º quarto, ninguém cruzou alvo ainda', async () => {
+    await banco.db.update(jogos).set({ status: 'AO_VIVO', quartoAtual: QUARTO })
+    const feed = await lerFeedFireLive(banco.db, DIA, QUARTO)
+    expect(feed.estadoVazio).toBe('SEM_APITO_AINDA')
+  })
+
+  it('apito de jogo encerrado sai do feed ao vivo', async () => {
+    await reproduzir()
+    await banco.db.update(jogos).set({ status: 'ENCERRADO', quartoAtual: null })
+
+    const feed = await lerFeedFireLive(banco.db, DIA, QUARTO)
+    expect(feed.itens).toEqual([])
+    expect(feed.estadoVazio).toBe('NENHUM_EM_1Q')
   })
 })
