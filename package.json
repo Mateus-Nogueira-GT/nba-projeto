@@ -7,6 +7,8 @@
   },
   "scripts": {
     "dev": "next dev",
+    "deploy": "CRON_SOMENTE_DIARIO=true vercel deploy --yes",
+    "deploy:prod": "CRON_SOMENTE_DIARIO=true vercel deploy --prod --yes",
     "build": "next build",
     "start": "next start",
     "typecheck": "tsc --noEmit",
