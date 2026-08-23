@@ -221,6 +221,16 @@ publicacao:
 # AVISOS
 # -----------------------------------------------------------------------------
 avisos:
+  # Alerta de dado parado. Números OPERACIONAIS, não estratégia — vivem aqui
+  # pela mesma razão de fire_live.observacao: nenhum limiar solto no código.
+  # Assimétrico de propósito: fora da janela dos jogos, dado de 30 min é
+  # normal; com a bola rolando, 90 s já é o Fire Live perdendo a janela.
+  dado_parado:
+    fora_de_jogo_minutos: 30
+    em_janela_segundos: 90
+    janela_antecedencia_minutos: 30 # jogo prestes a começar já conta como janela
+    realerta_minutos: 30 # provedor parado há 1h não pode virar 60 alertas
+
   blowout:
     quarto: 4
     diferenca_pontos: 25

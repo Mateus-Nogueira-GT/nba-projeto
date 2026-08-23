@@ -1,7 +1,9 @@
 import { readFileSync } from 'node:fs'
+import yamlBruto from '../../../../config/ruleset.v1.yaml?raw'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { eq } from 'drizzle-orm'
 
+import { carregarRuleset } from '../../motor'
 import { bancoDeTeste } from '../../dominio/__tests__/ajuda-banco'
 import { jogadores, mapaJogadores, niveis, niveisVersao } from '../../dominio/db/schema'
 import { ativarVersaoNiveis } from '../../dominio/repositorios/niveis'
@@ -9,6 +11,7 @@ import { ativarVersaoNiveis } from '../../dominio/repositorios/niveis'
 import { FonteFake } from '../nba/adaptadores/fake'
 import { consultarComOrigem, FonteComFailover, type EventoSaude } from '../nba/failover'
 import { avaliarFrescor, registrarBatimento } from '../health/heartbeat'
+import type { LimitesFrescor } from '../health/heartbeat'
 import { lerListaDeNiveis } from '../niveis/parser'
 import { pontuar, sugerir } from '../niveis/similaridade'
 import {
@@ -173,14 +176,20 @@ describe('heartbeat e alerta de dado parado', () => {
     expect(linha?.dadoMaisRecenteEm).toBeNull()
   })
 
+  const ruleset = carregarRuleset(yamlBruto)
+  const limitesDoRuleset: LimitesFrescor = {
+    foraDeJogoMs: ruleset.avisos.dado_parado.fora_de_jogo_minutos * 60_000,
+    emJanelaDeJogoMs: ruleset.avisos.dado_parado.em_janela_segundos * 1_000,
+  }
+
   it('o limite é mais rígido dentro da janela dos jogos', async () => {
     const agora = new Date('2026-08-18T23:00:00Z')
     const linhas = [
       { provedor: 'p', dadoMaisRecenteEm: new Date('2026-08-18T22:55:00Z') }, // 5 min atrás
     ]
 
-    expect(avaliarFrescor(linhas, agora, false)).toEqual([]) // fora de jogo: tolerável
-    expect(avaliarFrescor(linhas, agora, true)).toHaveLength(1) // em jogo: alerta
+    expect(avaliarFrescor(linhas, agora, false, limitesDoRuleset)).toEqual([]) // fora de jogo: tolerável
+    expect(avaliarFrescor(linhas, agora, true, limitesDoRuleset)).toHaveLength(1) // em jogo: alerta
   })
 
   it('provedor que nunca respondeu conta como parado', () => {
@@ -188,6 +197,7 @@ describe('heartbeat e alerta de dado parado', () => {
       [{ provedor: 'novo', dadoMaisRecenteEm: null }],
       new Date(),
       false,
+      limitesDoRuleset,
     )
     expect(alertas[0]?.paradoHaMs).toBe(Infinity)
   })

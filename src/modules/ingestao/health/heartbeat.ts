@@ -6,18 +6,13 @@ import type { EventoSaude } from '../nba/failover'
 /**
  * Limites do "alerta de dado parado".
  *
- * Mais rígido durante a janela dos jogos: fora dela, dado de 30 min atrás é
- * normal; com a bola rolando, 90 s já significa que o Fire Live perdeu a
- * janela de aposta.
+ * Os NÚMEROS vivem em `ruleset.avisos.dado_parado` (regra 1) — aqui só o
+ * formato. Mais rígido durante a janela dos jogos: fora dela, dado de 30 min
+ * atrás é normal; com a bola rolando, o Fire Live já perdeu a janela.
  */
 export type LimitesFrescor = {
   foraDeJogoMs: number
   emJanelaDeJogoMs: number
-}
-
-export const LIMITES_PADRAO: LimitesFrescor = {
-  foraDeJogoMs: 30 * 60_000,
-  emJanelaDeJogoMs: 90_000,
 }
 
 /** Grava o batimento. Upsert por provedor: interessa o estado atual, não o log. */
@@ -67,7 +62,7 @@ export function avaliarFrescor(
   linhas: { provedor: string; dadoMaisRecenteEm: Date | null }[],
   agora: Date,
   emJanelaDeJogo: boolean,
-  limites: LimitesFrescor = LIMITES_PADRAO,
+  limites: LimitesFrescor,
 ): Alerta[] {
   const limiteMs = emJanelaDeJogo ? limites.emJanelaDeJogoMs : limites.foraDeJogoMs
 

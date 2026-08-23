@@ -137,6 +137,13 @@ export const rulesetSchema = z.object({
   }),
 
   avisos: z.object({
+    /** Alerta de dado parado — operação, não estratégia. Ver o YAML. */
+    dado_parado: z.object({
+      fora_de_jogo_minutos: z.number().positive(),
+      em_janela_segundos: z.number().positive(),
+      janela_antecedencia_minutos: z.number().positive(),
+      realerta_minutos: z.number().positive(),
+    }),
     blowout: z.object({
       quarto: z.number().int().positive(),
       diferenca_pontos: z.number(),
