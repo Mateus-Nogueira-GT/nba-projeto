@@ -1,6 +1,6 @@
 import { and, eq, inArray, isNull } from 'drizzle-orm'
 
-import { apitos, fireLiveExecucoes, greens, jogadores, niveis, times } from '../../dominio/db/schema'
+import { apitos, fireLiveExecucoes, greens, jogadores, times } from '../../dominio/db/schema'
 import type { Db } from '../../dominio/db/tipos'
 import { montarFatosDoJogo } from '../../dominio/fatos-ao-vivo'
 import { gravarApitos } from '../../dominio/repositorios/apitos'
@@ -24,9 +24,7 @@ import { mensagemDeApito, mensagemDeGreen } from './push'
 export type EstadoObservado = Record<string, number>
 
 export type MotivoEncerramento =
-  | 'fim-do-primeiro-quarto'
-  | 'jogo-nao-encontrado'
-  | 'limite-de-tempo'
+  'fim-do-primeiro-quarto' | 'jogo-encerrado' | 'jogo-nao-encontrado' | 'limite-de-tempo'
 
 export type ResultadoCiclo =
   | { encerrar: true; motivo: MotivoEncerramento; ciclou: false }
@@ -116,7 +114,10 @@ export async function executarCiclo(
     return { encerrar: true, motivo: 'limite-de-tempo', ciclou: false }
   }
 
-  const fatos = await montarFatosDoJogo(db, opcoes.jogoId)
+  const fatos = await montarFatosDoJogo(db, opcoes.jogoId, {
+    mesInicio: ruleset.temporada.mes_inicio,
+    formato: ruleset.temporada.formato,
+  })
   if (fatos === null) return { encerrar: true, motivo: 'jogo-nao-encontrado', ciclou: false }
 
   // A GUARDA DO QUARTO. Vale para os dois lados: o jogo ainda não começou
@@ -211,6 +212,11 @@ async function drenarOutbox(
     ...greensPendentes.map((g) => g.jogadorId),
   ])
 
+  const apitoSemAlvo = apitosPendentes.find((apito) => apito.alvo1q === null)
+  if (apitoSemAlvo) {
+    throw new Error(`apito Fire Live ${apitoSemAlvo.id} sem alvo do primeiro quarto`)
+  }
+
   const mensagens: MensagemPush[] = [
     ...apitosPendentes.map((a) =>
       mensagemDeApito(
@@ -228,9 +234,10 @@ async function drenarOutbox(
           opdOrigemNivel: (a.opdOrigemNivel ?? null) as Apito['opdOrigemNivel'],
           linha: null,
           confianca: null,
-          alvo1Q: a.alvo1q,
+          alvo1Q: a.alvo1q!,
         },
         exibicao(a.jogadorId),
+        a.geradoEm,
       ),
     ),
     ...greensPendentes.map((g) =>
@@ -244,6 +251,7 @@ async function drenarOutbox(
           valor: g.valor,
         },
         exibicao(g.jogadorId),
+        g.detectadoEm,
       ),
     ),
   ]
@@ -288,16 +296,14 @@ async function dadosDeExibicao(
   const ids = [...new Set(idsJogador)]
   if (ids.length === 0) return (id) => ({ nome: id, timeSigla: '—' })
 
-  const [elenco, vinculos, listaTimes] = await Promise.all([
+  const [elenco, listaTimes] = await Promise.all([
     db.select().from(jogadores).where(inArray(jogadores.id, ids)),
-    // O time vem da LISTA do CJ, nunca de jogadores.time_id.
-    db.select().from(niveis).where(inArray(niveis.jogadorId, ids)),
     db.select().from(times),
   ])
 
   const nomePorId = new Map(elenco.map((j) => [j.id, j.nomeCompleto] as const))
   const siglaPorTime = new Map(listaTimes.map((t) => [t.id, t.sigla] as const))
-  const timeDoJogador = new Map(vinculos.map((v) => [v.jogadorId, v.timeId] as const))
+  const timeDoJogador = new Map(elenco.map((j) => [j.id, j.timeId] as const))
 
   return (jogadorId) => ({
     nome: nomePorId.get(jogadorId) ?? jogadorId,
@@ -314,7 +320,7 @@ export async function registrarCiclo(
 ): Promise<void> {
   await db
     .update(fireLiveExecucoes)
-    .set({ ultimoEstado: estado, ciclos })
+    .set({ ultimoEstado: estado, ciclos, atualizadoEm: new Date() })
     .where(eq(fireLiveExecucoes.jogoId, jogoId))
 }
 
@@ -326,6 +332,12 @@ export async function encerrarExecucao(
 ): Promise<void> {
   await db
     .update(fireLiveExecucoes)
-    .set({ encerradoEm: agora, motivoEncerramento: motivo })
+    .set({
+      estado: 'ENCERRADA',
+      encerradoEm: agora,
+      motivoEncerramento: motivo,
+      leaseExpiraEm: null,
+      atualizadoEm: agora,
+    })
     .where(eq(fireLiveExecucoes.jogoId, jogoId))
 }

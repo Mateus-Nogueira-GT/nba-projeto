@@ -12,12 +12,7 @@ import {
   unique,
   uuid,
 } from 'drizzle-orm/pg-core'
-import {
-  atributoEnum,
-  janelaMediaEnum,
-  statusEscalacaoEnum,
-  statusJogoEnum,
-} from './enums'
+import { atributoEnum, janelaMediaEnum, statusEscalacaoEnum, statusJogoEnum } from './enums'
 
 // ============================================================================
 // GRUPO 1 · DOMÍNIO CANÔNICO — alimentado pela ingestão
@@ -107,6 +102,8 @@ export const jogos = pgTable(
     dataJogo: date('data_jogo')
       .notNull()
       .generatedAlwaysAs(sql`((data_hora_utc AT TIME ZONE 'UTC')::date)`),
+    /** Rodada oficial da NBA, independente da virada de dia em UTC. */
+    dataReferencia: date('data_referencia').notNull(),
     timeCasaId: uuid('time_casa_id')
       .notNull()
       .references(() => times.id),
@@ -118,6 +115,10 @@ export const jogos = pgTable(
     tempoRestante: text('tempo_restante'),
     placarCasa: smallint('placar_casa'),
     placarVisitante: smallint('placar_visitante'),
+    /** Quando o payload validado foi capturado pela aplicação. */
+    capturadoEm: timestamp('capturado_em', { withTimezone: true }),
+    /** Timestamp informado pela origem; null quando a fonte não o fornece. */
+    origemAtualizadaEm: timestamp('origem_atualizada_em', { withTimezone: true }),
     /**
      * Quando a ingestão tocou esta linha pela última vez.
      *
@@ -130,6 +131,7 @@ export const jogos = pgTable(
   },
   (t) => [
     index('jogos_data_idx').on(t.dataHoraUtc, t.status),
+    index('jogos_referencia_status_idx').on(t.dataReferencia, t.status, t.dataHoraUtc),
     /**
      * CHAVE NATURAL DO JOGO — o que torna a ingestão reexecutável.
      *
@@ -146,6 +148,34 @@ export const jogos = pgTable(
      * correto.
      */
     unique('jogos_chave_natural').on(t.dataJogo, t.timeCasaId, t.timeVisitanteId),
+    unique('jogos_chave_referencia').on(t.dataReferencia, t.timeCasaId, t.timeVisitanteId),
+  ],
+)
+
+/**
+ * IDENTIDADE DO JOGO NO PROVEDOR — id externo → jogo canônico.
+ *
+ * A chave natural do confronto protege a cardinalidade canônica; esta tabela
+ * preserva o namespace necessário para toda chamada posterior por id. Um id
+ * emitido por uma fonte nunca pode ser enviado a outra.
+ */
+export const identidadesJogo = pgTable(
+  'identidades_jogo',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    jogoId: uuid('jogo_id')
+      .notNull()
+      .references(() => jogos.id, { onDelete: 'cascade' }),
+    provedor: text('provedor').notNull(),
+    idExterno: text('id_externo').notNull(),
+    capturadoEm: timestamp('capturado_em', { withTimezone: true }),
+    origemAtualizadaEm: timestamp('origem_atualizada_em', { withTimezone: true }),
+    criadoEm: timestamp('criado_em', { withTimezone: true }).notNull().defaultNow(),
+    atualizadoEm: timestamp('atualizado_em', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    unique('identidades_jogo_externa_unica').on(t.provedor, t.idExterno),
+    unique('identidades_jogo_provedor_unico').on(t.jogoId, t.provedor),
   ],
 )
 
@@ -179,6 +209,8 @@ export const estatisticasJogo = pgTable(
     turnovers: smallint('turnovers').notNull().default(0),
     faltas: smallint('faltas').notNull().default(0),
     saldoQuadra: smallint('saldo_quadra'),
+    capturadoEm: timestamp('capturado_em', { withTimezone: true }),
+    origemAtualizadaEm: timestamp('origem_atualizada_em', { withTimezone: true }),
     /** Ver a nota em `jogos.atualizadoEm`. */
     atualizadoEm: timestamp('atualizado_em', { withTimezone: true }).notNull().defaultNow(),
   },
@@ -205,9 +237,9 @@ export const estatisticasQuarto = pgTable(
     rebotes: smallint('rebotes').notNull().default(0),
     assistencias: smallint('assistencias').notNull().default(0),
     minutos: numeric('minutos', { precision: 5, scale: 2 }),
-    atualizadoEm: timestamp('atualizado_em', { withTimezone: true })
-      .notNull()
-      .defaultNow(),
+    capturadoEm: timestamp('capturado_em', { withTimezone: true }),
+    origemAtualizadaEm: timestamp('origem_atualizada_em', { withTimezone: true }),
+    atualizadoEm: timestamp('atualizado_em', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
     unique('estatisticas_quarto_unica').on(t.jogoId, t.jogadorId, t.quarto),
@@ -250,6 +282,8 @@ export const estatisticasTimeJogo = pgTable(
     bloqueios: smallint('bloqueios').notNull().default(0),
     turnovers: smallint('turnovers').notNull().default(0),
     faltas: smallint('faltas').notNull().default(0),
+    capturadoEm: timestamp('capturado_em', { withTimezone: true }),
+    origemAtualizadaEm: timestamp('origem_atualizada_em', { withTimezone: true }),
     /** Ver a nota em `jogos.atualizadoEm`. */
     atualizadoEm: timestamp('atualizado_em', { withTimezone: true }).notNull().defaultNow(),
   },
@@ -270,6 +304,8 @@ export const classificacao = pgTable(
     posicao: smallint('posicao'),
     aproveitamento: numeric('aproveitamento', { precision: 5, scale: 3 }),
     sequencia: text('sequencia'),
+    capturadoEm: timestamp('capturado_em', { withTimezone: true }),
+    origemAtualizadaEm: timestamp('origem_atualizada_em', { withTimezone: true }),
     atualizadoEm: timestamp('atualizado_em', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [unique('classificacao_unica').on(t.temporada, t.timeId)],
@@ -288,6 +324,8 @@ export const lesoesEscalacao = pgTable(
     status: statusEscalacaoEnum('status').notNull(),
     motivo: text('motivo'),
     confirmado: boolean('confirmado').notNull().default(false),
+    capturadoEm: timestamp('capturado_em', { withTimezone: true }),
+    origemAtualizadaEm: timestamp('origem_atualizada_em', { withTimezone: true }),
     atualizadoEm: timestamp('atualizado_em', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [

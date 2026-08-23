@@ -30,7 +30,7 @@ export async function registrarBatimento(db: Db, evento: EventoSaude): Promise<v
       ultimaRespostaOk: evento.ok ? evento.em : null,
       latenciaMs: evento.latenciaMs,
       status: evento.ok ? 'OK' : 'FALHA',
-      dadoMaisRecenteEm: evento.ok ? evento.em : null,
+      dadoMaisRecenteEm: evento.ok ? (evento.dadoAtualizadoEm ?? null) : null,
     })
     .onConflictDoUpdate({
       target: saudeProvedor.provedor,
@@ -41,7 +41,12 @@ export async function registrarBatimento(db: Db, evento: EventoSaude): Promise<v
         // Numa falha, PRESERVA o último sucesso: é a distância até ele que
         // mede há quanto tempo o dado está parado.
         ultimaRespostaOk: evento.ok ? evento.em : sql`${saudeProvedor.ultimaRespostaOk}`,
-        dadoMaisRecenteEm: evento.ok ? evento.em : sql`${saudeProvedor.dadoMaisRecenteEm}`,
+        // Resposta recebida não prova frescor esportivo. Se a fonte não
+        // fornece updated_at, preservamos null/valor anterior honestamente.
+        dadoMaisRecenteEm:
+          evento.ok && evento.dadoAtualizadoEm
+            ? evento.dadoAtualizadoEm
+            : sql`${saudeProvedor.dadoMaisRecenteEm}`,
       },
     })
 }

@@ -1,8 +1,9 @@
 import { send } from '@vercel/queue'
 import type { MensagemPush, PortaFila } from './porta'
+import { chaveFanout, expansaoInicial, TOPICO_PUSH_EVENTOS } from '../push/fanout'
 
-/** Tópico do fan-out de push. Ver ADR-0003. */
-export const TOPICO_PUSH = 'push-apitos'
+/** Compatibilidade nominal para consumidores internos antigos. */
+export const TOPICO_PUSH = TOPICO_PUSH_EVENTOS
 
 /**
  * Adapter do Vercel Queues.
@@ -15,10 +16,10 @@ export class FilaVercel implements PortaFila {
   async enfileirar(mensagens: MensagemPush[]): Promise<void> {
     await Promise.all(
       mensagens.map((m) =>
-        send(TOPICO_PUSH, m, {
+        send(TOPICO_PUSH, expansaoInicial(m), {
           // Segunda barreira de deduplicação, do lado da fila. A primeira e
           // decisiva é a UNIQUE no banco.
-          idempotencyKey: m.chave,
+          idempotencyKey: chaveFanout('evento', m.chave),
         }),
       ),
     )

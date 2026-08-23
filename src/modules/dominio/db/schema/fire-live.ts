@@ -1,10 +1,24 @@
-import { index, integer, jsonb, pgTable, smallint, text, timestamp, unique, uuid } from 'drizzle-orm/pg-core'
+import { sql } from 'drizzle-orm'
+import {
+  check,
+  index,
+  integer,
+  jsonb,
+  pgTable,
+  smallint,
+  text,
+  timestamp,
+  unique,
+  uuid,
+} from 'drizzle-orm/pg-core'
 import { atributoEnum, nivelJogadorEnum } from './enums'
 import { jogadores, jogos } from './dominio'
 
 // ============================================================================
 // GRUPO 7 · FIRE LIVE — estado do loop do 1º quarto
 // ============================================================================
+
+export type EstadoExecucaoFireLive = 'RESERVADA' | 'INICIADA' | 'ENCERRADA' | 'FALHOU_AO_INICIAR'
 
 /**
  * GREENS — "o jogador bateu a marca".
@@ -58,6 +72,24 @@ export const fireLiveExecucoes = pgTable(
       .references(() => jogos.id, { onDelete: 'cascade' }),
     /** Id do run no Vercel Workflow — ponte para `npx workflow inspect`. */
     runId: text('run_id'),
+    /**
+     * Estado explícito do handshake banco ↔ Workflow.
+     *
+     * `RESERVADA` é um lease temporário, não uma confirmação de que o
+     * workflow iniciou. A execução só vira `INICIADA` quando um `runId` vence
+     * o fencing token da tentativa atual.
+     */
+    estado: text('estado').$type<EstadoExecucaoFireLive>().notNull().default('RESERVADA'),
+    /** Token de fencing trocado a cada nova tentativa de início. */
+    leaseToken: uuid('lease_token'),
+    /** Enquanto este instante não passa, outro cron não pode retomar a reserva. */
+    leaseExpiraEm: timestamp('lease_expira_em', { withTimezone: true }),
+    tentativasInicio: integer('tentativas_inicio').notNull().default(0),
+    ultimaTentativaEm: timestamp('ultima_tentativa_em', { withTimezone: true }),
+    /** Instante em que o run vencedor confirmou o início. */
+    workflowIniciadoEm: timestamp('workflow_iniciado_em', { withTimezone: true }),
+    /** Erro sanitizado; nunca contém token, header ou URL do provedor. */
+    erroInicio: text('erro_inicio'),
     iniciadoEm: timestamp('iniciado_em', { withTimezone: true }).notNull().defaultNow(),
     encerradoEm: timestamp('encerrado_em', { withTimezone: true }),
     /** Por que o loop parou. Sempre preenchido no encerramento. */
@@ -72,9 +104,15 @@ export const fireLiveExecucoes = pgTable(
      * cair, o assinante recebe push repetido.
      */
     ultimoEstado: jsonb('ultimo_estado'),
+    atualizadoEm: timestamp('atualizado_em', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
     unique('fire_live_execucoes_jogo').on(t.jogoId),
     index('fire_live_execucoes_abertas_idx').on(t.encerradoEm),
+    index('fire_live_execucoes_lease_idx').on(t.estado, t.leaseExpiraEm),
+    check(
+      'fire_live_execucoes_estado_valido',
+      sql`${t.estado} in ('RESERVADA', 'INICIADA', 'ENCERRADA', 'FALHOU_AO_INICIAR')`,
+    ),
   ],
 )

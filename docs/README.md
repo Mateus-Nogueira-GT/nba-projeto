@@ -12,6 +12,9 @@ Ordem de leitura:
 | [05-perguntas-abertas.md](05-perguntas-abertas.md) | as 12 pendências e o que está destravado          |
 | [adr/](adr/)                                       | decisões e seus custos                            |
 | [specs/](specs/)                                   | o que falta construir, em ordem de dependência    |
+| [runbooks/](runbooks/)                             | operações manuais seguras                         |
+
+Runbook da Spec 04: [cobrança e controle de acesso](runbooks/cobranca-e-acesso.md).
 
 O arquivo mais importante do repositório não está aqui: é
 [`../config/ruleset.v1.yaml`](../config/ruleset.v1.yaml). Ele **é** a estratégia.

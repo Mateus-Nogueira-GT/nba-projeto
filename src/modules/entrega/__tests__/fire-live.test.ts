@@ -14,16 +14,12 @@ import {
   mediasJogador,
   niveis,
   niveisVersao,
-  preferenciasNotificacao,
-  pushInscricoes,
   times,
-  usuarios,
 } from '../../dominio/db/schema'
 import { carregarRuleset } from '../../motor/ruleset/carregar'
 import type { Nivel } from '../../motor/tipos'
 import { executarCiclo } from '../fire-live/ciclo'
 import type { EstadoObservado } from '../fire-live/ciclo'
-import { APRESENTACAO, destinatariosDoCanal } from '../fire-live/push'
 import { reservarJogosParaObservar } from '../fire-live/inicio'
 import { FilaEmMemoria } from '../fila/memoria'
 
@@ -87,7 +83,10 @@ async function semear() {
 
   idPorNome = new Map()
   for (const [indice, { nome, nivel, ppg }] of ELENCO.entries()) {
-    const [j] = await db.insert(jogadores).values({ nomeCompleto: nome }).returning()
+    const [j] = await db
+      .insert(jogadores)
+      .values({ nomeCompleto: nome, timeId: lal!.id })
+      .returning()
     idPorNome.set(nome, j!.id)
 
     await db.insert(niveis).values({
@@ -100,7 +99,7 @@ async function semear() {
     })
     await db.insert(mediasJogador).values({
       jogadorId: j!.id,
-      temporada: '2026',
+      temporada: '2025-26',
       janela: 'TEMPORADA',
       jogos: 40,
       ppg,
@@ -109,7 +108,13 @@ async function semear() {
 
   const [jogo] = await db
     .insert(jogos)
-    .values({ dataHoraUtc: TIPOFF, timeCasaId: lal!.id, timeVisitanteId: adv!.id, quartoAtual: 1 })
+    .values({
+      dataHoraUtc: TIPOFF,
+      dataReferencia: '2026-08-19',
+      timeCasaId: lal!.id,
+      timeVisitanteId: adv!.id,
+      quartoAtual: 1,
+    })
     .returning()
   jogoId = jogo!.id
 
@@ -159,7 +164,11 @@ async function aplicarQuadro(quadro: Quadro, quarto = 1) {
       .insert(estatisticasQuarto)
       .values({ jogoId, jogadorId: idPorNome.get(nome)!, quarto, pontos })
       .onConflictDoUpdate({
-        target: [estatisticasQuarto.jogoId, estatisticasQuarto.jogadorId, estatisticasQuarto.quarto],
+        target: [
+          estatisticasQuarto.jogoId,
+          estatisticasQuarto.jogadorId,
+          estatisticasQuarto.quarto,
+        ],
         set: { pontos },
       })
   }
@@ -188,6 +197,61 @@ async function reproduzir(gravacao: Quadro[] = GRAVACAO) {
 // ===========================================================================
 
 describe('replay de um jogo gravado', () => {
+  it('usa somente a média da temporada do jogo', async () => {
+    await banco.db.insert(mediasJogador).values({
+      jogadorId: idPorNome.get('Luka Doncic')!,
+      temporada: '2026-27',
+      janela: 'TEMPORADA',
+      jogos: 82,
+      ppg: '100.0',
+    })
+
+    await reproduzir()
+
+    const [linha] = await banco.db
+      .select()
+      .from(apitos)
+      .where(eq(apitos.jogadorId, idPorNome.get('Luka Doncic')!))
+    expect(linha?.alvo1q).toBe(11)
+  })
+
+  it('apita pontos de jogador do elenco canônico sem classificação editorial', async () => {
+    const [lal] = await banco.db.select().from(times).where(eq(times.sigla, 'LAL')).limit(1)
+    const [jogador] = await banco.db
+      .insert(jogadores)
+      .values({ nomeCompleto: 'Jogador Canônico', timeId: lal!.id })
+      .returning()
+    await banco.db.insert(mediasJogador).values({
+      jogadorId: jogador!.id,
+      temporada: '2025-26',
+      janela: 'TEMPORADA',
+      jogos: 40,
+      ppg: '1.2',
+      rpg: '20.0',
+      apg: '20.0',
+    })
+    await banco.db.insert(estatisticasQuarto).values({
+      jogoId,
+      jogadorId: jogador!.id,
+      quarto: 1,
+      pontos: 1,
+      rebotes: 20,
+      assistencias: 20,
+    })
+
+    const resultado = await executarCiclo(banco.db, ruleset, fila, {
+      jogoId,
+      estadoAnterior: null,
+      iniciadoEm: TIPOFF,
+      agora: DURANTE,
+    })
+
+    expect(resultado).toMatchObject({ encerrar: false, apitosNovos: 1, greensNovos: 0 })
+    const linhas = await banco.db.select().from(apitos).where(eq(apitos.jogadorId, jogador!.id))
+    expect(linhas).toHaveLength(1)
+    expect(linhas[0]).toMatchObject({ atributo: 'PONTOS', alvo1q: 1 })
+  })
+
   it('produz exatamente 3 pushes: 2 apitos e 1 green', async () => {
     await reproduzir()
 
@@ -426,22 +490,17 @@ describe('avaliação direcionada', () => {
   })
 })
 
-describe('formato do push', () => {
-  it('apito e green têm formato E posição de tela diferentes', () => {
-    expect(APRESENTACAO.FIRE_LIVE_APITO.formato).not.toBe(APRESENTACAO.GREEN.formato)
-    expect(APRESENTACAO.FIRE_LIVE_APITO.posicao).not.toBe(APRESENTACAO.GREEN.posicao)
-  })
-
-  it('cada tipo sai pelo seu próprio canal', async () => {
+describe('contrato do evento de push', () => {
+  it('cada tipo sai em V1 pelo seu próprio canal e com validade', async () => {
     await reproduzir()
 
     for (const m of fila.doCanal('FIRE_LIVE_APITO')) {
-      expect(m.formato).toBe(APRESENTACAO.FIRE_LIVE_APITO.formato)
-      expect(m.posicao).toBe(APRESENTACAO.FIRE_LIVE_APITO.posicao)
+      expect(m).toMatchObject({ versao: 1, canal: 'FIRE_LIVE_APITO', url: '/' })
+      expect(Date.parse(m.expiraEm)).toBeGreaterThan(Date.parse(m.ocorridoEm))
     }
     for (const m of fila.doCanal('GREEN')) {
-      expect(m.formato).toBe(APRESENTACAO.GREEN.formato)
-      expect(m.posicao).toBe(APRESENTACAO.GREEN.posicao)
+      expect(m).toMatchObject({ versao: 1, canal: 'GREEN', url: '/' })
+      expect(Date.parse(m.expiraEm)).toBeGreaterThan(Date.parse(m.ocorridoEm))
     }
   })
 
@@ -470,65 +529,6 @@ describe('gatilho do tipoff', () => {
     await banco.db.update(jogos).set({ quartoAtual: 3 }).where(eq(jogos.id, jogoId))
 
     expect(await reservarJogosParaObservar(banco.db, ruleset, TIPOFF)).toHaveLength(0)
-  })
-})
-
-// ===========================================================================
-// PREFERÊNCIAS — o fan-out respeita o que o usuário desligou
-// ===========================================================================
-
-describe('preferencias_notificacao por canal', () => {
-  async function assinante(email: string, status: 'ATIVO' | 'BLOQUEADO' = 'ATIVO') {
-    const [u] = await banco.db
-      .insert(usuarios)
-      .values({ email, senhaHash: 'x', status })
-      .returning()
-    await banco.db.insert(pushInscricoes).values({
-      usuarioId: u!.id,
-      endpoint: `https://push.exemplo/${email}`,
-      chaveP256dh: 'p',
-      chaveAuth: 'a',
-    })
-    return u!.id
-  }
-
-  beforeEach(async () => {
-    await banco.db.delete(preferenciasNotificacao)
-    await banco.db.delete(pushInscricoes)
-    await banco.db.delete(usuarios)
-  })
-
-  it('sem linha de preferência, o usuário RECEBE — o modelo é opt-out', async () => {
-    const id = await assinante('sem-preferencia@teste.com')
-    expect(await destinatariosDoCanal(banco.db, 'FIRE_LIVE_APITO')).toEqual([id])
-  })
-
-  it('quem desligou o canal não recebe daquele canal', async () => {
-    const id = await assinante('desligou@teste.com')
-    await banco.db
-      .insert(preferenciasNotificacao)
-      .values({ usuarioId: id, canal: 'FIRE_LIVE_APITO', habilitado: false })
-
-    expect(await destinatariosDoCanal(banco.db, 'FIRE_LIVE_APITO')).toEqual([])
-    // ...mas segue recebendo os outros canais: eles são independentes.
-    expect(await destinatariosDoCanal(banco.db, 'GREEN')).toEqual([id])
-  })
-
-  it('usuário bloqueado não recebe push de canal nenhum', async () => {
-    await assinante('bloqueado@teste.com', 'BLOQUEADO')
-
-    expect(await destinatariosDoCanal(banco.db, 'FIRE_LIVE_APITO')).toEqual([])
-    expect(await destinatariosDoCanal(banco.db, 'GREEN')).toEqual([])
-  })
-
-  it('sem inscrição de push, não há para onde enviar', async () => {
-    const [u] = await banco.db
-      .insert(usuarios)
-      .values({ email: 'sem-dispositivo@teste.com', senhaHash: 'x' })
-      .returning()
-    expect(u).toBeDefined()
-
-    expect(await destinatariosDoCanal(banco.db, 'GREEN')).toEqual([])
   })
 })
 

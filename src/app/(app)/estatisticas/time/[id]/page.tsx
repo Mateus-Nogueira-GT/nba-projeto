@@ -1,9 +1,12 @@
 import { notFound } from 'next/navigation'
 
 import { getDb } from '@/modules/dominio/db/cliente'
+import { temporadaDe } from '@/modules/dominio/temporada'
+import { exigirAcessoEstatisticasSeConfigurado } from '@/modules/plataforma/assinatura/guarda'
 import { telaDoTime } from '@/modules/entrega/estatisticas/time'
 import type { BoxScoreDoJogo } from '@/modules/entrega/estatisticas/time'
 import { rotaDoJogador } from '@/modules/entrega/estatisticas/rotas'
+import { rulesetAtivo } from '@/modules/entrega/ruleset-ativo'
 import { Tabela, UltimaAtualizacao } from '@/design-system/componentes'
 import type { Coluna } from '@/design-system/componentes'
 import { semantico } from '@/design-system/tokens/semantico'
@@ -62,10 +65,34 @@ function colunas(temProrrogacao: boolean): Coluna<BoxScoreDoJogo>[] {
           </span>
         ),
     },
-    { chave: 'q1', rotulo: '1º', descricao: 'Pontos no 1º quarto', alinhamento: 'direita', celula: (l) => n(l.nosso?.q1) },
-    { chave: 'q2', rotulo: '2º', descricao: 'Pontos no 2º quarto', alinhamento: 'direita', celula: (l) => n(l.nosso?.q2) },
-    { chave: 'q3', rotulo: '3º', descricao: 'Pontos no 3º quarto', alinhamento: 'direita', celula: (l) => n(l.nosso?.q3) },
-    { chave: 'q4', rotulo: '4º', descricao: 'Pontos no 4º quarto', alinhamento: 'direita', celula: (l) => n(l.nosso?.q4) },
+    {
+      chave: 'q1',
+      rotulo: '1º',
+      descricao: 'Pontos no 1º quarto',
+      alinhamento: 'direita',
+      celula: (l) => n(l.nosso?.q1),
+    },
+    {
+      chave: 'q2',
+      rotulo: '2º',
+      descricao: 'Pontos no 2º quarto',
+      alinhamento: 'direita',
+      celula: (l) => n(l.nosso?.q2),
+    },
+    {
+      chave: 'q3',
+      rotulo: '3º',
+      descricao: 'Pontos no 3º quarto',
+      alinhamento: 'direita',
+      celula: (l) => n(l.nosso?.q3),
+    },
+    {
+      chave: 'q4',
+      rotulo: '4º',
+      descricao: 'Pontos no 4º quarto',
+      alinhamento: 'direita',
+      celula: (l) => n(l.nosso?.q4),
+    },
   ]
 
   if (temProrrogacao) {
@@ -80,12 +107,48 @@ function colunas(temProrrogacao: boolean): Coluna<BoxScoreDoJogo>[] {
 
   return [
     ...base,
-    { chave: 'tot', rotulo: 'TOT', descricao: 'Total de pontos', alinhamento: 'direita', celula: (l) => n(l.nosso?.total) },
-    { chave: 'reb', rotulo: 'REB', descricao: 'Rebotes', alinhamento: 'direita', celula: (l) => n(l.rebotesTotal) },
-    { chave: 'ast', rotulo: 'AST', descricao: 'Assistências', alinhamento: 'direita', celula: (l) => n(l.assistencias) },
-    { chave: 'to', rotulo: 'TO', descricao: 'Turnovers', alinhamento: 'direita', celula: (l) => n(l.turnovers) },
-    { chave: 'fg', rotulo: 'FG%', descricao: 'Aproveitamento de quadra', alinhamento: 'direita', celula: (l) => pct(l.fgPercentual) },
-    { chave: 'tres', rotulo: '3P%', descricao: 'Aproveitamento de três', alinhamento: 'direita', celula: (l) => pct(l.tresPercentual) },
+    {
+      chave: 'tot',
+      rotulo: 'TOT',
+      descricao: 'Total de pontos',
+      alinhamento: 'direita',
+      celula: (l) => n(l.nosso?.total),
+    },
+    {
+      chave: 'reb',
+      rotulo: 'REB',
+      descricao: 'Rebotes',
+      alinhamento: 'direita',
+      celula: (l) => n(l.rebotesTotal),
+    },
+    {
+      chave: 'ast',
+      rotulo: 'AST',
+      descricao: 'Assistências',
+      alinhamento: 'direita',
+      celula: (l) => n(l.assistencias),
+    },
+    {
+      chave: 'to',
+      rotulo: 'TO',
+      descricao: 'Turnovers',
+      alinhamento: 'direita',
+      celula: (l) => n(l.turnovers),
+    },
+    {
+      chave: 'fg',
+      rotulo: 'FG%',
+      descricao: 'Aproveitamento de quadra',
+      alinhamento: 'direita',
+      celula: (l) => pct(l.fgPercentual),
+    },
+    {
+      chave: 'tres',
+      rotulo: '3P%',
+      descricao: 'Aproveitamento de três',
+      alinhamento: 'direita',
+      celula: (l) => pct(l.tresPercentual),
+    },
   ]
 }
 
@@ -107,21 +170,25 @@ function Numero({ rotulo, valor }: { rotulo: string; valor: string }) {
 }
 
 export default async function PaginaTime({ params }: { params: Promise<{ id: string }> }) {
+  await exigirAcessoEstatisticasSeConfigurado()
   const { id } = await params
   if (!process.env.DATABASE_URL) return <SemBanco />
 
   const agora = new Date()
-  const tela = await telaDoTime(getDb(), id, { temporada: String(agora.getUTCFullYear()) })
+  const ruleset = await rulesetAtivo()
+  const tela = await telaDoTime(getDb(), id, {
+    temporada: temporadaDe(agora, {
+      mesInicio: ruleset.temporada.mes_inicio,
+      formato: ruleset.temporada.formato,
+    }),
+  })
   if (tela === null) notFound()
 
   const { time, campanha } = tela
   const temProrrogacao = tela.jogosDoTime.some((j) => (j.nosso?.prorrogacao ?? 0) > 0)
 
   return (
-    <Moldura
-      titulo={`${time.sigla} · ${time.nome}`}
-      subtitulo={time.conferencia}
-    >
+    <Moldura titulo={`${time.sigla} · ${time.nome}`} subtitulo={time.conferencia}>
       <Secao titulo="Campanha">
         {campanha === null ? (
           <p style={{ fontSize: 13, color: semantico.textoSecundario }}>

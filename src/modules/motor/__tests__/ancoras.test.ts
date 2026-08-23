@@ -147,6 +147,17 @@ describe('A2..A5 · alvos do Fire Live no 1º quarto', () => {
     expect(alvoFireLive({ mediaPorJogo: 5.4, atributo: PONTOS, nivel: null }, ruleset)).toBe(4)
   })
 
+  it('jogador não classificado não recebe a trava mínima de pontos', () => {
+    expect(alvoFireLive({ mediaPorJogo: 1.2, atributo: PONTOS, nivel: null }, ruleset)).toBe(1)
+  })
+
+  it('jogador não classificado continua inelegível em rebotes e assistências', () => {
+    expect(alvoFireLive({ mediaPorJogo: 20, atributo: 'REBOTES', nivel: null }, ruleset)).toBeNull()
+    expect(
+      alvoFireLive({ mediaPorJogo: 20, atributo: 'ASSISTENCIAS', nivel: null }, ruleset),
+    ).toBeNull()
+  })
+
   it('A4 · 5 apg → alvo 2', () => {
     expect(
       alvoFireLive({ mediaPorJogo: 5, atributo: 'ASSISTENCIAS', nivel: 'ALL_STAR' }, ruleset),
@@ -159,7 +170,9 @@ describe('A2..A5 · alvos do Fire Live no 1º quarto', () => {
 
   it('travas: pontos exige alvo >= 4, rebotes exige alvo > 2 (assimetria proposital)', () => {
     // 8 ppg -> 2 por quarto -> x1,5 = 3 -> abaixo de 4, não vale
-    expect(alvoFireLive({ mediaPorJogo: 8, atributo: PONTOS, nivel: 'ALL_STAR' }, ruleset)).toBeNull()
+    expect(
+      alvoFireLive({ mediaPorJogo: 8, atributo: PONTOS, nivel: 'ALL_STAR' }, ruleset),
+    ).toBeNull()
     // 4 rpg -> 1 por quarto -> x2 = 2 -> não PASSA de 2, não vale
     expect(alvoFireLive({ mediaPorJogo: 4, atributo: 'REBOTES', nivel: 'MVP' }, ruleset)).toBeNull()
     // assistências: só entra quem tem média >= 5

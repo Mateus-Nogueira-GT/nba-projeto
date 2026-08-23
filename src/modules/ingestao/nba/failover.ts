@@ -16,15 +16,64 @@ export type EventoSaude = {
   latenciaMs: number
   erro: string | null
   em: Date
+  /** Timestamp da origem, nunca substituído pelo horário da resposta. */
+  dadoAtualizadoEm?: Date | null
 }
 
 export type OpcoesFailover = {
   /** Acima disso o principal é considerado atrasado e o reserva assume. */
   timeoutMs: number
   /** Recebe o batimento de cada tentativa. É o que alimenta saude_provedor. */
-  aoBater?: (evento: EventoSaude) => void
+  aoBater?: (evento: EventoSaude) => unknown | Promise<unknown>
   /** Injetado para não depender de relógio global em teste. */
   agora?: () => number
+}
+
+export type ResultadoComOrigem<T> = {
+  provedor: string
+  capturadoEm: Date
+  /** Null quando a API não fornece um timestamp de atualização da origem. */
+  dadoAtualizadoEm: Date | null
+  modo: 'SNAPSHOT' | 'DELTA'
+  dados: T
+}
+
+export interface FonteNBAComOrigem extends FonteNBA {
+  executarComOrigem<T>(
+    operacao: (fonte: FonteNBA) => Promise<T>,
+    provedorEsperado?: string,
+  ): Promise<ResultadoComOrigem<T>>
+}
+
+function expoeOrigem(fonte: FonteNBA): fonte is FonteNBAComOrigem {
+  return 'executarComOrigem' in fonte && typeof fonte.executarComOrigem === 'function'
+}
+
+/**
+ * Executa uma operação sem perder o namespace do id externo retornado.
+ *
+ * `provedorEsperado` fixa a fonte quando o argumento da operação é um id que
+ * ela mesma emitiu. Falhar alto é mais seguro que entregar um id do primário
+ * ao reserva e persistir uma identidade incorreta.
+ */
+export async function consultarComOrigem<T>(
+  fonte: FonteNBA,
+  operacao: (fonteEfetiva: FonteNBA) => Promise<T>,
+  provedorEsperado?: string,
+): Promise<ResultadoComOrigem<T>> {
+  if (expoeOrigem(fonte)) return fonte.executarComOrigem(operacao, provedorEsperado)
+  if (provedorEsperado !== undefined && fonte.nome !== provedorEsperado) {
+    throw new Error(
+      `id externo pertence a ${provedorEsperado}, mas a fonte recebida é ${fonte.nome}`,
+    )
+  }
+  return {
+    provedor: fonte.nome,
+    capturadoEm: new Date(),
+    dadoAtualizadoEm: null,
+    modo: 'SNAPSHOT',
+    dados: await operacao(fonte),
+  }
 }
 
 /**
@@ -77,40 +126,87 @@ export class FonteComFailover implements FonteNBA {
 
     try {
       const valor = await this.comTimeout(operacao(fonte))
-      this.opcoes.aoBater?.({
+      await this.opcoes.aoBater?.({
         provedor: fonte.nome,
         tipo,
         ok: true,
         latenciaMs: this.agora() - inicio,
         erro: null,
         em: new Date(this.agora()),
+        dadoAtualizadoEm: null,
       })
       return { ok: true, valor }
     } catch (e) {
       const erro = e instanceof Error ? e : new Error(String(e))
-      this.opcoes.aoBater?.({
+      await this.opcoes.aoBater?.({
         provedor: fonte.nome,
         tipo,
         ok: false,
         latenciaMs: this.agora() - inicio,
         erro: erro.message,
         em: new Date(this.agora()),
+        dadoAtualizadoEm: null,
       })
       return { ok: false, erro }
     }
   }
 
-  private async executar<T>(operacao: (f: FonteNBA) => Promise<T>): Promise<T> {
+  async executarComOrigem<T>(
+    operacao: (f: FonteNBA) => Promise<T>,
+    provedorEsperado?: string,
+  ): Promise<ResultadoComOrigem<T>> {
+    if (provedorEsperado !== undefined) {
+      const candidatas = [this.principal, this.reserva].filter(
+        (fonte) => fonte.nome === provedorEsperado,
+      )
+      if (candidatas.length !== 1) {
+        throw new Error(`provedor esperado não é único no failover: ${provedorEsperado}`)
+      }
+      const fonte = candidatas[0]!
+      const tipo = fonte === this.principal ? 'NBA_PRIMARIO' : 'NBA_RESERVA'
+      const tentativa = await this.tentar(fonte, tipo, operacao)
+      if (tentativa.ok) {
+        return {
+          provedor: fonte.nome,
+          capturadoEm: new Date(this.agora()),
+          dadoAtualizadoEm: null,
+          modo: 'SNAPSHOT',
+          dados: tentativa.valor,
+        }
+      }
+      throw tentativa.erro
+    }
+
     const primeira = await this.tentar(this.principal, 'NBA_PRIMARIO', operacao)
-    if (primeira.ok) return primeira.valor
+    if (primeira.ok) {
+      return {
+        provedor: this.principal.nome,
+        capturadoEm: new Date(this.agora()),
+        dadoAtualizadoEm: null,
+        modo: 'SNAPSHOT',
+        dados: primeira.valor,
+      }
+    }
 
     const segunda = await this.tentar(this.reserva, 'NBA_RESERVA', operacao)
-    if (segunda.ok) return segunda.valor
+    if (segunda.ok) {
+      return {
+        provedor: this.reserva.nome,
+        capturadoEm: new Date(this.agora()),
+        dadoAtualizadoEm: null,
+        modo: 'SNAPSHOT',
+        dados: segunda.valor,
+      }
+    }
 
     throw new Error(
       `as duas fontes NBA falharam — ${this.principal.nome}: ${primeira.erro.message} · ` +
         `${this.reserva.nome}: ${segunda.erro.message}`,
     )
+  }
+
+  private async executar<T>(operacao: (f: FonteNBA) => Promise<T>): Promise<T> {
+    return (await this.executarComOrigem(operacao)).dados
   }
 
   listarTimes(): Promise<TimeExterno[]> {

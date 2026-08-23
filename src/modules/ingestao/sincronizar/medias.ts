@@ -1,4 +1,4 @@
-import { and, eq, gte, lt } from 'drizzle-orm'
+import { and, eq, gt, gte, isNotNull, lt, notInArray } from 'drizzle-orm'
 
 import { estatisticasJogo, jogos, mediasJogador } from '../../dominio/db/schema'
 import type { Db } from '../../dominio/db/tipos'
@@ -77,7 +77,17 @@ export async function recalcularMedias(
     // O JOIN liga a linha ao jogo; o WHERE recorta a temporada. Trocar um pelo
     // outro produz produto cartesiano — e médias silenciosamente erradas.
     .innerJoin(jogos, eq(estatisticasJogo.jogoId, jogos.id))
-    .where(and(gte(jogos.dataHoraUtc, inicio), lt(jogos.dataHoraUtc, fim)))
+    .where(
+      and(
+        gte(jogos.dataHoraUtc, inicio),
+        lt(jogos.dataHoraUtc, fim),
+        eq(jogos.status, 'ENCERRADO'),
+        // Regra conservadora de participação: sem minutos positivos a
+        // linha não entra na média. Nenhum adapter transforma DNP em zero.
+        isNotNull(estatisticasJogo.minutos),
+        gt(estatisticasJogo.minutos, '0'),
+      ),
+    )
 
   const porJogador = new Map<string, typeof linhas>()
   for (const l of linhas) {
@@ -106,7 +116,28 @@ export async function recalcularMedias(
     })
   }
 
-  if (valores.length === 0) return { lidos: linhas.length, gravados: 0 }
+  const janelaBanco = rotuloNoBanco(opcoes.janela)
+  if (valores.length === 0) {
+    await db
+      .delete(mediasJogador)
+      .where(
+        and(eq(mediasJogador.temporada, temporada), eq(mediasJogador.janela, janelaBanco)),
+      )
+    return { lidos: linhas.length, gravados: 0 }
+  }
+
+  await db
+    .delete(mediasJogador)
+    .where(
+      and(
+        eq(mediasJogador.temporada, temporada),
+        eq(mediasJogador.janela, janelaBanco),
+        notInArray(
+          mediasJogador.jogadorId,
+          valores.map((valor) => valor.jogadorId),
+        ),
+      ),
+    )
 
   const gravados = await db
     .insert(mediasJogador)

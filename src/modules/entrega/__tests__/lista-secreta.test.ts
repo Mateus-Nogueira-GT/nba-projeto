@@ -16,6 +16,7 @@ import {
 } from '../../dominio/db/schema'
 import { carregarRuleset } from '../../motor/ruleset/carregar'
 import type { Nivel, StatusEscalacao } from '../../motor/tipos'
+import { montarFatos } from '../../dominio/fatos'
 import { CardEntrada } from '../../../design-system/componentes'
 import {
   lerFeed,
@@ -89,7 +90,7 @@ async function semear() {
 
     await db.insert(mediasJogador).values({
       jogadorId: j!.id,
-      temporada: '2026',
+      temporada: '2025-26',
       janela: 'TEMPORADA',
       jogos: 40,
       ppg: '18.0',
@@ -100,6 +101,7 @@ async function semear() {
     .insert(jogos)
     .values({
       dataHoraUtc: PRIMEIRO_JOGO,
+      dataReferencia: HOJE,
       timeCasaId: lal!.id,
       timeVisitanteId: adv!.id,
     })
@@ -135,6 +137,26 @@ beforeEach(semear)
 // ===========================================================================
 
 describe('job diário da Lista Secreta', () => {
+  it('usa somente a média da temporada derivada da data de referência', async () => {
+    await banco.db.insert(mediasJogador).values({
+      jogadorId: idPorNome.get('Luka Doncic')!,
+      temporada: '2026-27',
+      janela: 'TEMPORADA',
+      jogos: 82,
+      ppg: '99.0',
+    })
+
+    const fatos = await montarFatos(banco.db, HOJE, {
+      mesInicio: ruleset.temporada.mes_inicio,
+      formato: ruleset.temporada.formato,
+    })
+    const luka = fatos.times
+      .flatMap((time) => time.jogadores)
+      .find((j) => j.id === idPorNome.get('Luka Doncic'))
+
+    expect(luka?.medias.PONTOS).toBe(18)
+  })
+
   it('não publica enquanto faltar mais de 1h para o primeiro jogo', async () => {
     const r = await publicarListaSecreta(banco.db, ruleset, {
       dataReferencia: HOJE,
@@ -216,7 +238,10 @@ describe('reprocessamento por mudança de escalação', () => {
   it('nº 1 e nº 2 FORA → a janela anda: Grimes 3, Kessler 2, Mamukelashvili 1', async () => {
     await escalar('Luka Doncic', 'FORA')
     await escalar('Austin Reaves', 'FORA')
-    await reprocessarPorEscalacao(banco.db, ruleset, { dataReferencia: HOJE, agora: UMA_HORA_ANTES })
+    await reprocessarPorEscalacao(banco.db, ruleset, {
+      dataReferencia: HOJE,
+      agora: UMA_HORA_ANTES,
+    })
 
     expect(await apitosDeOpd()).toEqual(
       new Map([
@@ -230,7 +255,10 @@ describe('reprocessamento por mudança de escalação', () => {
   it('nº 2 FORA com o nº 1 jogando → NENHUM apito de OPD', async () => {
     await escalar('Austin Reaves', 'FORA')
     await escalar('Luka Doncic', 'ATIVO')
-    await reprocessarPorEscalacao(banco.db, ruleset, { dataReferencia: HOJE, agora: UMA_HORA_ANTES })
+    await reprocessarPorEscalacao(banco.db, ruleset, {
+      dataReferencia: HOJE,
+      agora: UMA_HORA_ANTES,
+    })
 
     // O desfalque tem que ser PREFIXO da hierarquia.
     expect(await apitosDeOpd()).toEqual(new Map())
@@ -238,7 +266,10 @@ describe('reprocessamento por mudança de escalação', () => {
 
   it('desfazer o desfalque desfaz os apitos e regrava de novo', async () => {
     await escalar('Luka Doncic', 'FORA')
-    await reprocessarPorEscalacao(banco.db, ruleset, { dataReferencia: HOJE, agora: UMA_HORA_ANTES })
+    await reprocessarPorEscalacao(banco.db, ruleset, {
+      dataReferencia: HOJE,
+      agora: UMA_HORA_ANTES,
+    })
     expect((await apitosDeOpd()).size).toBe(3)
 
     await escalar('Luka Doncic', 'ATIVO')

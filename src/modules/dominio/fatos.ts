@@ -22,6 +22,7 @@ import {
   times,
 } from './db/schema'
 import type { Db } from './db/tipos'
+import { temporadaDe, type ConfigTemporada } from './temporada'
 
 /**
  * MONTAGEM DE FATOS — a fronteira entre o mundo com I/O e o motor puro.
@@ -43,22 +44,20 @@ function numero(v: string | null): number | undefined {
   return Number.isFinite(n) ? n : undefined
 }
 
-export async function montarFatos(db: Db, dataReferencia: string): Promise<Fatos> {
+export async function montarFatos(
+  db: Db,
+  dataReferencia: string,
+  configTemporada: ConfigTemporada,
+): Promise<Fatos> {
   const { inicio, fim } = diaDe(dataReferencia)
+  const temporada = temporadaDe(inicio, configTemporada)
 
   // 1 · Versão ATIVA da lista do CJ. Sem ela não há estratégia nenhuma.
-  const [versao] = await db
-    .select()
-    .from(niveisVersao)
-    .where(eq(niveisVersao.ativa, true))
-    .limit(1)
+  const [versao] = await db.select().from(niveisVersao).where(eq(niveisVersao.ativa, true)).limit(1)
 
   if (!versao) return { dataReferencia, times: [], jogos: [] }
 
-  const classificacoes = await db
-    .select()
-    .from(niveis)
-    .where(eq(niveis.niveisVersaoId, versao.id))
+  const classificacoes = await db.select().from(niveis).where(eq(niveis.niveisVersaoId, versao.id))
 
   if (classificacoes.length === 0) return { dataReferencia, times: [], jogos: [] }
 
@@ -84,7 +83,11 @@ export async function montarFatos(db: Db, dataReferencia: string): Promise<Fatos
           .select()
           .from(mediasJogador)
           .where(
-            and(inArray(mediasJogador.jogadorId, idsJogador), eq(mediasJogador.janela, 'TEMPORADA')),
+            and(
+              inArray(mediasJogador.jogadorId, idsJogador),
+              eq(mediasJogador.janela, 'TEMPORADA'),
+              eq(mediasJogador.temporada, temporada),
+            ),
           )
       : Promise.resolve([]),
     idsJogo.length > 0
@@ -105,7 +108,9 @@ export async function montarFatos(db: Db, dataReferencia: string): Promise<Fatos
           })
           .from(estatisticasJogo)
           .innerJoin(jogos, eq(estatisticasJogo.jogoId, jogos.id))
-          .where(and(inArray(estatisticasJogo.jogadorId, idsJogador), lt(jogos.dataHoraUtc, inicio)))
+          .where(
+            and(inArray(estatisticasJogo.jogadorId, idsJogador), lt(jogos.dataHoraUtc, inicio)),
+          )
       : Promise.resolve([]),
   ])
 

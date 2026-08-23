@@ -1,4 +1,4 @@
-import { and, eq, gte, lt } from 'drizzle-orm'
+import { eq } from 'drizzle-orm'
 
 import {
   classificacao,
@@ -6,16 +6,20 @@ import {
   estatisticasQuarto,
   estatisticasTimeJogo,
   jogos,
+  identidadesJogo,
   lesoesEscalacao,
 } from '../../dominio/db/schema'
 import type { Db } from '../../dominio/db/tipos'
-import type { FonteNBA, LinhaBoxScore } from '../nba/porta'
+import type { FonteNBA, LinhaBoxScore, LinhaBoxScoreTimeExterna } from '../nba/porta'
+import { consultarComOrigem, type ResultadoComOrigem } from '../nba/failover'
 import { mapaDeJogadores, mapaDeTimes, type Resumo } from './identidade'
 import { excluded } from './upsert'
 
 export type JogoParaSincronizar = {
   id: string
   idExterno: string
+  provedor: string
+  status: 'AGENDADO' | 'AO_VIVO' | 'ENCERRADO'
 }
 
 /**
@@ -26,35 +30,19 @@ export type JogoParaSincronizar = {
  */
 export async function jogosDaData(
   db: Db,
-  fonte: FonteNBA,
+  _fonte: FonteNBA,
   dataIso: string,
 ): Promise<JogoParaSincronizar[]> {
-  const inicio = new Date(`${dataIso}T00:00:00.000Z`)
-  const fim = new Date(`${dataIso}T23:59:59.999Z`)
-
-  const [partidas, porSigla] = await Promise.all([
-    db
-      .select()
-      .from(jogos)
-      .where(and(gte(jogos.dataHoraUtc, inicio), lt(jogos.dataHoraUtc, fim))),
-    mapaDeTimes(db),
-  ])
-
-  const siglaPorId = new Map([...porSigla].map(([sigla, id]) => [id, sigla] as const))
-  const externos = await fonte.listarJogos(dataIso)
-
-  return partidas.flatMap((p) => {
-    const casa = siglaPorId.get(p.timeCasaId)
-    const visitante = siglaPorId.get(p.timeVisitanteId)
-    if (!casa || !visitante) return []
-
-    const achado = externos.find(
-      (g) =>
-        g.timeCasaSigla.toUpperCase() === casa &&
-        g.timeVisitanteSigla.toUpperCase() === visitante,
-    )
-    return achado ? [{ id: p.id, idExterno: achado.idExterno }] : []
-  })
+  return db
+    .select({
+      id: jogos.id,
+      idExterno: identidadesJogo.idExterno,
+      provedor: identidadesJogo.provedor,
+      status: jogos.status,
+    })
+    .from(jogos)
+    .innerJoin(identidadesJogo, eq(identidadesJogo.jogoId, jogos.id))
+    .where(eq(jogos.dataReferencia, dataIso))
 }
 
 function linhaDeJogador(l: LinhaBoxScore) {
@@ -91,14 +79,34 @@ function linhaDeJogador(l: LinhaBoxScore) {
 export async function sincronizarBoxScore(
   db: Db,
   fonte: FonteNBA,
-  provedor: string,
   jogo: JogoParaSincronizar,
   agora: Date,
 ): Promise<Resumo> {
-  const linhas = await fonte.boxScore(jogo.idExterno)
-  if (linhas.length === 0) return { lidos: 0, gravados: 0 }
+  const resposta = await consultarComOrigem(
+    fonte,
+    (fonteEfetiva) => fonteEfetiva.boxScore(jogo.idExterno),
+    jogo.provedor,
+  )
+  return db.transaction((tx) => persistirBoxScore(tx, jogo, agora, resposta))
+}
+
+export async function persistirBoxScore(
+  db: Db,
+  jogo: JogoParaSincronizar,
+  agora: Date,
+  resposta: ResultadoComOrigem<LinhaBoxScore[]>,
+): Promise<Resumo> {
+  const { provedor, capturadoEm, dadoAtualizadoEm, dados: linhas } = resposta
 
   const porIdExterno = await mapaDeJogadores(db, provedor)
+  const desconhecidos = [...new Set(linhas.map((l) => l.jogadorIdExterno))].filter(
+    (id) => !porIdExterno.has(id),
+  )
+  if (desconhecidos.length > 0) {
+    throw new Error(
+      `snapshot rejeitado: ${desconhecidos.length} jogador(es) sem identidade em ${provedor}`,
+    )
+  }
   const resolvidas = linhas.flatMap((l) => {
     const jogadorId = porIdExterno.get(l.jogadorIdExterno)
     return jogadorId ? [{ ...l, jogadorId }] : []
@@ -108,6 +116,11 @@ export async function sincronizarBoxScore(
   const quartos = resolvidas.filter((l) => l.quarto !== null)
   let gravados = 0
 
+  // O endpoint foi homologado como snapshot completo. Substituir dentro da
+  // mesma transação remove correções/linhas que desapareceram na origem.
+  await db.delete(estatisticasQuarto).where(eq(estatisticasQuarto.jogoId, jogo.id))
+  await db.delete(estatisticasJogo).where(eq(estatisticasJogo.jogoId, jogo.id))
+
   if (totais.length > 0) {
     const r = await db
       .insert(estatisticasJogo)
@@ -116,6 +129,8 @@ export async function sincronizarBoxScore(
           jogoId: jogo.id,
           jogadorId: l.jogadorId,
           ...linhaDeJogador(l),
+          capturadoEm,
+          origemAtualizadaEm: dadoAtualizadoEm,
           atualizadoEm: agora,
         })),
       )
@@ -141,6 +156,8 @@ export async function sincronizarBoxScore(
           turnovers: excluded('turnovers'),
           faltas: excluded('faltas'),
           saldoQuadra: excluded('saldo_quadra'),
+          capturadoEm,
+          origemAtualizadaEm: dadoAtualizadoEm,
           atualizadoEm: agora,
         },
       })
@@ -160,6 +177,8 @@ export async function sincronizarBoxScore(
           rebotes: l.rebotes,
           assistencias: l.assistencias,
           minutos: l.minutos === null ? null : String(l.minutos),
+          capturadoEm,
+          origemAtualizadaEm: dadoAtualizadoEm,
           atualizadoEm: agora,
         })),
       )
@@ -174,6 +193,8 @@ export async function sincronizarBoxScore(
           rebotes: excluded('rebotes'),
           assistencias: excluded('assistencias'),
           minutos: excluded('minutos'),
+          capturadoEm,
+          origemAtualizadaEm: dadoAtualizadoEm,
           atualizadoEm: agora,
         },
       })
@@ -191,7 +212,22 @@ export async function sincronizarBoxScoreDoTime(
   jogo: JogoParaSincronizar,
   agora: Date,
 ): Promise<Resumo> {
-  const linhas = await fonte.boxScoreDoTime(jogo.idExterno)
+  const resposta = await consultarComOrigem(
+    fonte,
+    (fonteEfetiva) => fonteEfetiva.boxScoreDoTime(jogo.idExterno),
+    jogo.provedor,
+  )
+  return db.transaction((tx) => persistirBoxScoreDoTime(tx, jogo, agora, resposta))
+}
+
+export async function persistirBoxScoreDoTime(
+  db: Db,
+  jogo: JogoParaSincronizar,
+  agora: Date,
+  resposta: ResultadoComOrigem<LinhaBoxScoreTimeExterna[]>,
+): Promise<Resumo> {
+  const { capturadoEm, dadoAtualizadoEm, dados: linhas } = resposta
+  await db.delete(estatisticasTimeJogo).where(eq(estatisticasTimeJogo.jogoId, jogo.id))
   if (linhas.length === 0) return { lidos: 0, gravados: 0 }
 
   const porSigla = await mapaDeTimes(db)
@@ -227,6 +263,8 @@ export async function sincronizarBoxScoreDoTime(
         bloqueios: l.bloqueios,
         turnovers: l.turnovers,
         faltas: l.faltas,
+        capturadoEm,
+        origemAtualizadaEm: dadoAtualizadoEm,
         atualizadoEm: agora,
       })),
     )
@@ -253,6 +291,8 @@ export async function sincronizarBoxScoreDoTime(
         bloqueios: excluded('bloqueios'),
         turnovers: excluded('turnovers'),
         faltas: excluded('faltas'),
+        capturadoEm,
+        origemAtualizadaEm: dadoAtualizadoEm,
         atualizadoEm: agora,
       },
     })
@@ -271,11 +311,15 @@ export async function sincronizarBoxScoreDoTime(
 export async function sincronizarEscalacao(
   db: Db,
   fonte: FonteNBA,
-  provedor: string,
   jogo: JogoParaSincronizar,
   agora: Date,
 ): Promise<Resumo> {
-  const linhas = await fonte.escalacao(jogo.idExterno)
+  const resposta = await consultarComOrigem(
+    fonte,
+    (fonteEfetiva) => fonteEfetiva.escalacao(jogo.idExterno),
+    jogo.provedor,
+  )
+  const { provedor, capturadoEm, dadoAtualizadoEm, dados: linhas } = resposta
   if (linhas.length === 0) return { lidos: 0, gravados: 0 }
 
   const porIdExterno = await mapaDeJogadores(db, provedor)
@@ -293,6 +337,8 @@ export async function sincronizarEscalacao(
         jogadorId: l.jogadorId,
         status: l.status,
         motivo: l.motivo,
+        capturadoEm,
+        origemAtualizadaEm: dadoAtualizadoEm,
         atualizadoEm: agora,
       })),
     )
@@ -301,6 +347,8 @@ export async function sincronizarEscalacao(
       set: {
         status: excluded('status'),
         motivo: excluded('motivo'),
+        capturadoEm,
+        origemAtualizadaEm: dadoAtualizadoEm,
         atualizadoEm: agora,
       },
     })
@@ -316,7 +364,11 @@ export async function sincronizarClassificacao(
   temporada: string,
   agora: Date,
 ): Promise<Resumo> {
-  const linhas = await fonte.classificacao(temporada)
+  const {
+    capturadoEm,
+    dadoAtualizadoEm,
+    dados: linhas,
+  } = await consultarComOrigem(fonte, (fonteEfetiva) => fonteEfetiva.classificacao(temporada))
   if (linhas.length === 0) return { lidos: 0, gravados: 0 }
 
   const porSigla = await mapaDeTimes(db)
@@ -338,6 +390,8 @@ export async function sincronizarClassificacao(
         posicao: l.posicao,
         aproveitamento: l.aproveitamento === null ? null : String(l.aproveitamento),
         sequencia: l.sequencia,
+        capturadoEm,
+        origemAtualizadaEm: dadoAtualizadoEm,
         atualizadoEm: agora,
       })),
     )
@@ -350,6 +404,8 @@ export async function sincronizarClassificacao(
         posicao: excluded('posicao'),
         aproveitamento: excluded('aproveitamento'),
         sequencia: excluded('sequencia'),
+        capturadoEm,
+        origemAtualizadaEm: dadoAtualizadoEm,
         atualizadoEm: agora,
       },
     })

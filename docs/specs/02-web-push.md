@@ -1,214 +1,268 @@
 # Spec 02 — Web Push ponta a ponta
 
-**Estado:** proposta · 19/08/2026
-**Depende de:** spec 01 (sem dado não há o que notificar) · compartilha o service
-worker com a spec 03
-**Destrava:** o Fire Live. Sem push, ele não entrega o que promete.
+**Estado:** implementada localmente; rollout público bloqueado pelas Specs 03, 04 e 05 · 21/08/2026
+
+**Depende de:** [Spec 00](00-estabilizacao.md), [Spec 01](01-ingestao-persistente.md)
+e fundação da [Spec 03](03-pwa.md)
+
+**Destrava:** entrega em tempo real do Fire Live
+
+**Rollout público depende também de:** Specs 04 e 05
 
 ---
 
-## Problema
+## Objetivo
 
-A deduplicação está pronta e provada por mutação — três barreiras independentes:
-UNIQUE em `apitos`/`greens`, o outbox `push_enfileirado_em`, e a `idempotencyKey`
-da fila. O ciclo enfileira o evento certo, uma vez só.
+Transformar eventos já enfileirados em notificações Web Push reais, com inscrição
+autenticada, preferências, fan-out escalável, retries e descarte de alertas
+vencidos. O transporte tem semântica **at-least-once**; não promete exatamente
+uma entrega.
 
-**E ninguém entrega.** O consumidor em `/api/fila/push` resolve os destinatários
-e escreve no log:
+Antes desta execução, o produtor e a fila existiam, mas `/api/fila/push` apenas
+resolvia usuários e registrava contagem; não havia inscrição, VAPID, envio real
+nem configuração do consumer da fila.
+
+> Implementação: o contrato V1, APIs, dois consumers, adapter VAPID, revogação,
+> preferências e handlers do worker foram entregues. A certificação em aparelhos
+> reais e os ícones/manifest dependem da Spec 03; o público continua fail-closed.
+
+---
+
+## Divisão com a Spec 03
+
+Existe um único service worker:
+
+- a Spec 03 é dona do manifest, registro, atualização, cache e instalação;
+- esta spec é dona dos handlers `push`/`notificationclick`, inscrição, envio e
+  preferências;
+- alterações no worker são entregues e revisadas juntas;
+- o E2E no iPhone só fecha quando ambas estiverem integradas.
+
+`formato` e `posição` pertencem ao feed do app. O SO controla o layout da
+notificação; Web Push diferencia título, corpo, ícone, `tag` e deep link.
+
+---
+
+## Contrato do evento
+
+O consumidor valida uma versão fechada do payload:
 
 ```ts
-console.info('[push] %s -> %d destinatários', mensagem.chave, destinatarios.length)
-```
-
-Duas tabelas seguem vazias: `push_inscricoes` (não há de onde vir) e
-`preferencias_notificacao` (a leitura respeita, nada escreve).
-
-O ADR-0003 é explícito: **o push notification é o canal de tempo real do
-produto.** Não há WebSocket por decisão de custo. Sem push, o usuário só vê o
-apito se estiver com o app aberto — e a janela de aposta do Fire Live é curta.
-
----
-
-## Escopo
-
-### Entra
-
-- Service worker que recebe e renderiza a notificação
-- Chaves VAPID e envio real no consumidor da fila
-- Tela de permissão e gravação em `push_inscricoes`
-- Tela de preferências por canal
-- Baixa de inscrição morta (410/404 do serviço de push)
-
-### Não entra
-
-- Manifest, ícones e instalação do PWA (spec 03) — mas o **arquivo** do service
-  worker é o mesmo; ver "Costura com a spec 03"
-- Push de Lista Secreta agendado: o canal `LISTA_SECRETA` já existe no enum e no
-  ruleset, mas quem o dispara é o job diário, e isso é fatia à parte
-
----
-
-## Contrato
-
-### O evento que já existe
-
-`MensagemPush` está fechada e testada. O consumidor recebe **um evento**, nunca
-uma mensagem por usuário — o fan-out acontece do lado dele. Isso é o que segura
-10.000 assinantes (docs/01-arquitetura.md).
-
-```ts
-type MensagemPush = {
-  chave: string          // dedup ponta a ponta
-  canal: CanalPush       // FIRE_LIVE_APITO | GREEN | LISTA_SECRETA
-  formato: FormatoPush   // CARD_APITO | FAIXA_GREEN
-  posicao: PosicaoTela   // TOPO | RODAPE
+type MensagemPushV1 = {
+  versao: 1
+  chave: string
+  canal: 'FIRE_LIVE_APITO' | 'GREEN' | 'LISTA_SECRETA'
   titulo: string
   corpo: string
-  dados: Record<string, unknown>
+  url: string
+  ocorridoEm: string
+  expiraEm: string
+  dados: DadosApito | DadosGreen | DadosLista
 }
 ```
 
-Apito e green têm formato **e** posição distintos, com teste travando a diferença.
-Os valores concretos de posição ainda não estão em `docs/04-design-system.md` —
-ver "Perguntas".
+Regras:
 
-### O que falta gravar
+- `url` é caminho relativo de uma allowlist; nunca URL externa ou `javascript:`;
+- Fire Live vencido é descartado antes do fan-out e novamente no worker;
+- `tag = chave` reduz duplicata visível em retry, sem garantir exactly-once;
+- `lang`, ícone e badge são locais;
+- payload inválido gera erro observável e não executa navegação arbitrária;
+- o clique foca/navega uma janela existente ou abre o deep link;
+- até a Spec 05, o deep link temporário é `/`; produção usa `/fire-live`.
 
+---
+
+## Inscrição e preferências
+
+### API autenticada
+
+| Método | Rota | Contrato |
+| --- | --- | --- |
+| POST | `/api/push/inscricoes` | valida subscription e faz upsert idempotente |
+| DELETE | `/api/push/inscricoes` | remove vínculo do dispositivo atual |
+| GET | `/api/push/preferencias` | retorna defaults explícitos por canal |
+| PATCH | `/api/push/preferencias` | valida enum fechado e faz upsert |
+
+Todas exigem sessão, Zod e limite de payload. `usuarioId` e `dispositivoId` vêm da
+sessão, nunca do corpo. Endpoint e chaves não entram em logs.
+
+`push_inscricoes` ganha timestamps de criação/atualização, expiração e
+invalidação. Novas inscrições exigem dispositivo. O endpoint continua único e
+pode ser reassociado de forma auditável ao usuário que autenticar no navegador.
+
+No logout, remove-se o vínculo do servidor; não é obrigatório cancelar a
+`PushSubscription` do navegador. Expulsar ou bloquear dispositivo remove todas
+as inscrições dele na mesma operação.
+
+A permissão só é pedida após gesto e contexto de valor. Estado negado não dispara
+novas solicitações; a UI explica como reativar nas configurações. No iOS, o fluxo
+de instalação da Spec 03 vem antes da solicitação.
+
+---
+
+## Elegibilidade no momento do envio
+
+O fan-out consulta inscrições, não apenas IDs de usuários. Em cada lote revalida:
+
+1. usuário e sessão/dispositivo não bloqueados;
+2. preferência do canal;
+3. validade do evento;
+4. direito comercial ativo da Spec 04.
+
+Antes da Spec 04, `PUSH_ENABLED` permanece desligado para público; uma allowlist
+interna permite homologação sem vazar conteúdo pago.
+
+---
+
+## Fan-out e Vercel Queue
+
+Vercel Queue entrega ao menos uma vez. O consumer deve ser registrado em
+`vercel.ts` com trigger de queue e usar `handleCallback`; sucesso confirma a
+mensagem e exceção permite retry.
+
+O fluxo usa dois tópicos:
+
+```text
+push-eventos
+  -> consumer de expansão por cursor
+  -> push-entregas (lotes delimitados)
+  -> consumer de envio com concorrência limitada
 ```
-push_inscricoes(usuario_id, dispositivo_id, endpoint, chave_p256dh, chave_auth)
-  UNIQUE(endpoint)  ← já existe no schema
-```
 
-A inscrição amarra ao **dispositivo**, não só ao usuário. A conta tem limite de 2
-dispositivos ativos e o 3º encerra a sessão mais antiga; a inscrição de um
-dispositivo desligado precisa morrer junto.
+A paginação é keyset por `(criadoEm, id)` e captura um limite superior no começo.
+Inscrições criadas depois não recebem evento antigo. Cada continuação possui
+chave determinística; reentrega continua possível e é parte do contrato.
 
-### Envio
+O tamanho do lote, paralelismo, timeout de visibilidade e backoff são configuração
+operacional medida, não números escondidos no handler. O SDK pode estender a
+visibilidade durante processamento; handlers continuam curtos e retomáveis.
+
+Tratamento de resposta:
+
+| Resultado | Ação |
+| --- | --- |
+| `2xx` | sucesso |
+| `404/410` | invalidar/remover inscrição |
+| `429` | retry respeitando `Retry-After` |
+| rede/`5xx` | retry com backoff e jitter |
+| `401/403` | parar lote e alertar erro global de VAPID |
+| outro `4xx` | erro permanente da mensagem; não apagar inscrição |
+
+---
+
+## Porta de envio e configuração
 
 ```ts
 interface PortaEnvioPush {
-  enviar(inscricao: Inscricao, mensagem: MensagemPush): Promise<ResultadoEnvio>
+  enviar(
+    inscricao: InscricaoPush,
+    mensagem: MensagemPushV1,
+  ): Promise<ResultadoEnvioPush>
 }
-type ResultadoEnvio = { ok: true } | { ok: false; morta: boolean; erro: string }
 ```
 
-Porta, como a de pagamento e a de fila. Adapter real com `web-push`; adapter em
-memória para o teste contar entregas.
+Há adapter fake para todos os resultados e adapter Web Push real. Variáveis:
 
-**`morta: true`** quando o serviço devolve 404 ou 410 — a inscrição não existe
-mais e a linha tem que sair da tabela. Sem isso, `push_inscricoes` acumula
-endpoints mortos e o fan-out fica mais caro a cada mês.
-
----
-
-## Fan-out sem derrubar a função
-
-10.000 assinantes × 1 evento = 10.000 requisições HTTP ao serviço de push.
-
-Isso **não cabe** numa invocação. O consumidor precisa paginar: lê inscrições em
-lotes, envia em paralelo limitado, e reenfileira a continuação quando o lote
-acaba. A `idempotencyKey` já cobre a repetição de um lote reprocessado.
-
-```
-evento chega -> lote de N inscrições -> envia -> sobrou? reenfileira com cursor
+```dotenv
+NEXT_PUBLIC_VAPID_PUBLIC_KEY=
+VAPID_PRIVATE_KEY=
+VAPID_SUBJECT=
+PUSH_ENABLED=false
 ```
 
-O tamanho do lote e o paralelismo são operacionais, não estratégicos — mas são
-números. Pela regra 1, vão para o ruleset numa seção marcada como operação,
-seguindo o precedente de `fire_live.observacao`.
+As chaves são estáveis por ambiente. Ausência de configuração torna inscrição
+indisponível e o envio falha fechado. Rotacionar chave pública exige renovação de
+inscrições e plano explícito.
 
 ---
 
-## Regras que isto toca
+## Observabilidade e privacidade
 
-- **Regra 5 (idempotência)** — o reenvio de um lote é caminho esperado. A chave da
-  mensagem é a mesma do apito; o serviço de push não deduplica, então o
-  **usuário pode receber duas vezes** se um lote for reprocessado. Ver "Riscos".
-- **ADR-0003** — o push é o canal de tempo real; latência importa mais que
-  completude. Melhor entregar a 9.900 rápido e reenfileirar 100 do que segurar
-  tudo.
-- **Privacidade** — endpoint e chaves de push são dados do dispositivo do
-  assinante. Não vão para log nem para telemetria.
+Métricas mínimas: atraso da fila, eventos expirados, lotes, tentativas, `2xx`,
+`404/410`, `429`, `5xx`, erro VAPID e duração. Logs usam IDs opacos e chave do
+evento; endpoint, `p256dh`, `auth` e segredo VAPID nunca são registrados.
+
+Alertas vencidos não são reenviados ao religar o sistema. O endpoint é dado do
+dispositivo e deve respeitar a política de retenção da conta.
 
 ---
 
-## Perguntas antes de codar
+## Harness de validação
 
-1. **As chaves VAPID são de quem?** Assim como a conta do Mercado Pago, o par
-   VAPID identifica o remetente. Se for do cliente, entra em `vercel env` como as
-   credenciais de pagamento e nunca no código.
-2. **Posição de tela do apito e do green.** Hoje `APRESENTACAO` fixa TOPO e RODAPÉ
-   por escolha minha, com o teste travando apenas que **diferem**. Precisa entrar
-   em `docs/04-design-system.md` com o CJ.
-3. **Push de green fora do 1º quarto.** O workflow encerra no 1Q por
-   especificação. Um jogador que bate 30 pontos no 3º quarto **não gera green
-   hoje**. Isso exige um observador que ninguém definiu — decisão do CJ, não minha.
+### Automatizado
 
----
+1. schema, expiração e allowlist de deep link;
+2. adapter fake cobrindo `2xx`, `404`, `410`, `429`, `5xx`, timeout e VAPID;
+3. inscrição idempotente, reassociação, preferências e revogação de dispositivo;
+4. rotas rejeitando sessão ausente e IDs fornecidos pelo cliente;
+5. paginação de 10 mil inscrições com cursor estável;
+6. falha no meio do lote e retry sem perda, aceitando duplicata at-least-once;
+7. elegibilidade reavaliada por lote;
+8. worker com push válido, expirado/inválido, `tag` e clique seguro;
+9. consumer realmente registrado no config da Vercel;
+10. endpoint e chaves ausentes de logs.
 
-## Pronto quando
+### Aparelhos reais
 
-- Um assinante permite notificação e a linha aparece em `push_inscricoes`
-- Um apito do Fire Live chega ao celular com o formato de apito
-- Um green chega com formato **e** posição diferentes do apito
-- Quem desligou `FIRE_LIVE_APITO` não recebe apito e **continua recebendo** green
-- Endpoint revogado é removido na primeira tentativa que devolve 410
-- Fan-out de 10.000 inscrições completa sem estourar o tempo da função
-- Reprocessar o mesmo evento não grava inscrição duplicada nem estoura
+- iPhone/iPad no menor iOS suportado e no atual;
+- Chrome Android, Chrome desktop e Safari macOS;
+- foreground, background e app encerrado;
+- permissão aceita, negada e revogada;
+- endpoint morto, toque no deep link e atualização do worker.
 
----
+### Pronto quando
 
-# Plano
-
-### Fatia 1 · Porta e adapter fake
-
-1. `entrega/push/porta.ts` — `PortaEnvioPush`, `Inscricao`, `ResultadoEnvio`
-2. `entrega/push/memoria.ts` — conta entregas, simula endpoint morto
-3. Teste: um evento com 3 inscrições produz 3 entregas; a morta some da tabela
-
-Sem rede ainda. É o que torna o resto verificável.
-
-### Fatia 2 · Fan-out paginado
-
-1. `entrega/push/fanout.ts` — lê em lotes, envia, devolve cursor
-2. Parâmetros de lote no ruleset, seção operacional
-3. Teste com 10.000 inscrições em memória: completa e não repete nenhuma
-
-### Fatia 3 · Service worker
-
-1. `public/sw.js` — `push` e `notificationclick`
-2. Renderiza conforme `formato`; o clique leva à rota de `dados.jogoId`
-3. **Costura com a spec 03:** este é o mesmo arquivo que o PWA registra. Fazer
-   agora e a spec 03 só acrescenta cache e instalação.
-
-### Fatia 4 · Inscrição e preferências
-
-1. `entrega/push/inscrever.ts` — grava, amarra ao dispositivo, remove na saída
-2. Tela de permissão: pede no momento certo, nunca no primeiro carregamento
-3. Tela de preferências, um interruptor por canal do ruleset
-4. Encerrar sessão de dispositivo remove a inscrição dele
-
-### Fatia 5 · Adapter real
-
-1. `web-push` com VAPID do ambiente
-2. Sem chave configurada, o consumidor responde 503 — mesmo padrão do webhook do
-   Mercado Pago, que não finge ter processado
-3. Mapear 404/410 para `morta: true`
+- inscrição/preferência funcionam por dispositivo/conta;
+- apito válido chega a um aparelho permitido dentro do SLO definido;
+- evento vencido nunca aparece;
+- endpoint morto deixa o fan-out;
+- 10 mil inscrições completam sem timeout monolítico;
+- retries não perdem evento e duplicata está documentada/colapsada por `tag`;
+- usuário sem direito ativo não recebe conteúdo pago;
+- iOS real fecha o fluxo em conjunto com a Spec 03.
 
 ---
 
-## Riscos
+# Plano integrado
 
-**Duplicata no celular é possível, apesar das três barreiras.** Elas garantem um
-*evento* por apito; se a função cair no meio de um lote, o reprocessamento
-reenvia para quem já recebeu. Mitigação: `tag` na notificação, que faz o próprio
-navegador colapsar duplicatas. Não é garantia, é redução — e vale registrar em
-ADR, porque contraria a promessa de "nunca duas vezes".
+### Fatia 1 — Contrato e migration
 
-**Permissão negada é definitiva.** O navegador não deixa pedir de novo. Pedir no
-carregamento queima a única chance com quem ainda não entendeu o produto. Pedir
-depois do primeiro apito visto converte muito mais.
+Fechar `MensagemPushV1`, timestamps das inscrições, preferências e porta fake.
 
-**iOS exige o app instalado.** Safari só entrega Web Push para PWA adicionado à
-tela inicial. Isso amarra esta spec à 03 mais forte do que parece: **no iPhone,
-sem instalação não há push.**
+### Fatia 2 — API de inscrição
+
+Implementar rotas autenticadas, vínculo com dispositivo, defaults e revogação.
+
+### Fatia 3 — Fan-out durável
+
+Adicionar os dois tópicos, triggers, paginação keyset, expiração, retries e
+métricas. Validar 10 mil inscrições no harness.
+
+### Fatia 4 — Adapter real
+
+Adicionar VAPID, envio real e classificação de resposta, inicialmente desligado.
+
+### Fatia 5 — Worker compartilhado
+
+Integrar handlers ao worker da Spec 03 e validar atualização compatível.
+
+### Fatia 6 — Rollout
+
+Preview → allowlist interna → canary iOS/Android → ativação gradual após Specs 04
+e 05. Rollback desliga inscrição/envio e publica worker corretivo ou no-op; não
+se remove simplesmente um worker já instalado.
+
+---
+
+## Decisões pendentes
+
+1. conta responsável pelas chaves VAPID;
+2. SLO de entrega e validade de cada canal;
+3. tamanho/paralelismo após teste de carga;
+4. conteúdo final e ícones por canal;
+5. retenção de inscrições invalidadas para auditoria.
+
+Referências: [Vercel Queues](https://vercel.com/docs/queues/concepts),
+[Push API](https://www.w3.org/TR/push-api/) e
+[Web Push no iOS/iPadOS](https://webkit.org/blog/13878/web-push-for-web-apps-on-ios-and-ipados/).

@@ -1,6 +1,13 @@
 import { and, eq, inArray } from 'drizzle-orm'
 
-import type { Atributo, JogadorFato, JogoFato, Nivel, StatusEscalacao, TimeFato } from '../motor/tipos'
+import type {
+  Atributo,
+  JogadorFato,
+  JogoFato,
+  Nivel,
+  StatusEscalacao,
+  TimeFato,
+} from '../motor/tipos'
 import {
   apitos,
   estatisticasQuarto,
@@ -14,6 +21,7 @@ import {
 } from './db/schema'
 import type { Db } from './db/tipos'
 import type { NivelApito } from '../motor/tipos'
+import { temporadaDe, type ConfigTemporada } from './temporada'
 
 /**
  * Fatos de UM jogo ao vivo — a entrada do ciclo do Fire Live.
@@ -40,35 +48,66 @@ function numero(v: string | null): number | undefined {
   return Number.isFinite(n) ? n : undefined
 }
 
-export async function montarFatosDoJogo(db: Db, jogoId: string): Promise<FatosDoJogo | null> {
+export async function montarFatosDoJogo(
+  db: Db,
+  jogoId: string,
+  configTemporada: ConfigTemporada,
+): Promise<FatosDoJogo | null> {
   const [partida] = await db.select().from(jogos).where(eq(jogos.id, jogoId)).limit(1)
   if (!partida) return null
+  const temporada = temporadaDe(partida.dataHoraUtc, configTemporada)
 
   const [versao] = await db.select().from(niveisVersao).where(eq(niveisVersao.ativa, true)).limit(1)
   if (!versao) return null
 
   const idsTime = [partida.timeCasaId, partida.timeVisitanteId]
 
-  // O vínculo jogador↔time vem da LISTA do CJ (niveis.time_id), nunca de
-  // jogadores.time_id — os elencos da lista são projetados.
-  const classificacoes = await db
-    .select()
-    .from(niveis)
-    .where(and(eq(niveis.niveisVersaoId, versao.id), inArray(niveis.timeId, idsTime)))
-
-  if (classificacoes.length === 0) return null
-
-  const idsJogador = [...new Set(classificacoes.map((c) => c.jogadorId))]
-
-  const [elenco, listaTimes, medias, escalacoes, quartos, opdPublicada] = await Promise.all([
-    db.select().from(jogadores).where(inArray(jogadores.id, idsJogador)),
-    db.select().from(times).where(inArray(times.id, idsTime)),
+  // São dois vínculos diferentes e ambos precisam sobreviver até o motor:
+  // `jogadores.time_id` diz quem pertence ao elenco canônico observado;
+  // `niveis.time_id` preserva a hierarquia editorial usada pela OPD/topo.
+  const [elencoCanonico, classificacoesEditoriais] = await Promise.all([
     db
       .select()
-      .from(mediasJogador)
-      .where(
-        and(inArray(mediasJogador.jogadorId, idsJogador), eq(mediasJogador.janela, 'TEMPORADA')),
-      ),
+      .from(jogadores)
+      .where(and(inArray(jogadores.timeId, idsTime), eq(jogadores.ativo, true))),
+    db
+      .select()
+      .from(niveis)
+      .where(and(eq(niveis.niveisVersaoId, versao.id), inArray(niveis.timeId, idsTime))),
+  ])
+
+  const idsCanonicos = elencoCanonico.map((j) => j.id)
+  const classificacoesCanonicas =
+    idsCanonicos.length > 0
+      ? await db
+          .select()
+          .from(niveis)
+          .where(and(eq(niveis.niveisVersaoId, versao.id), inArray(niveis.jogadorId, idsCanonicos)))
+      : []
+  const classificacoes = [
+    ...new Map(
+      [...classificacoesEditoriais, ...classificacoesCanonicas].map((c) => [c.id, c] as const),
+    ).values(),
+  ]
+  const idsJogador = [...new Set([...idsCanonicos, ...classificacoes.map((c) => c.jogadorId)])]
+
+  const [elenco, listaTimes, medias, escalacoes, quartos, opdPublicada] = await Promise.all([
+    idsJogador.length > 0
+      ? db.select().from(jogadores).where(inArray(jogadores.id, idsJogador))
+      : Promise.resolve([]),
+    db.select().from(times).where(inArray(times.id, idsTime)),
+    idsJogador.length > 0
+      ? db
+          .select()
+          .from(mediasJogador)
+          .where(
+            and(
+              inArray(mediasJogador.jogadorId, idsJogador),
+              eq(mediasJogador.janela, 'TEMPORADA'),
+              eq(mediasJogador.temporada, temporada),
+            ),
+          )
+      : Promise.resolve([]),
     db.select().from(lesoesEscalacao).where(eq(lesoesEscalacao.jogoId, jogoId)),
     db.select().from(estatisticasQuarto).where(eq(estatisticasQuarto.jogoId, jogoId)),
     // Cruzamento (requisito 6): o card exibe a OPD QUE FOI PUBLICADA, lida da
@@ -112,30 +151,53 @@ export async function montarFatosDoJogo(db: Db, jogoId: string): Promise<FatosDo
   const dadosJogador = new Map(elenco.map((j) => [j.id, j] as const))
 
   const jogadoresPorTime = new Map<string, JogadorFato[]>()
-  for (const [jogadorId, dados] of classesPorJogador) {
-    const lista = jogadoresPorTime.get(dados.timeId) ?? []
+  for (const c of classificacoesEditoriais) {
+    const jogadorId = c.jogadorId
+    const dados = classesPorJogador.get(jogadorId)!
+    if ((jogadoresPorTime.get(c.timeId) ?? []).some((j) => j.id === jogadorId)) continue
+    const lista = jogadoresPorTime.get(c.timeId) ?? []
     lista.push({
       id: jogadorId,
       nome: dadosJogador.get(jogadorId)?.nomeCompleto ?? jogadorId,
-      timeId: dados.timeId,
+      timeId: c.timeId,
       posicaoHierarquia: dados.posicao,
       classificacoes: dados.classificacoes,
       medias: mediasPorJogador.get(jogadorId) ?? {},
       // Vazio de propósito: nenhuma regra do Fire Live lê histórico.
       historico: [],
     })
-    jogadoresPorTime.set(dados.timeId, lista)
+    jogadoresPorTime.set(c.timeId, lista)
   }
 
-  const timesFato: TimeFato[] = listaTimes
-    .filter((t) => jogadoresPorTime.has(t.id))
-    .map((t) => ({
-      id: t.id,
-      sigla: t.sigla,
-      jogadores: (jogadoresPorTime.get(t.id) ?? []).sort(
-        (a, b) => a.posicaoHierarquia - b.posicaoHierarquia,
-      ),
-    }))
+  const canonicosPorTime = new Map<string, JogadorFato[]>()
+  for (const jogador of elencoCanonico) {
+    if (jogador.timeId === null) continue
+    const editorial = classesPorJogador.get(jogador.id)
+    const lista = canonicosPorTime.get(jogador.timeId) ?? []
+    lista.push({
+      id: jogador.id,
+      nome: jogador.nomeCompleto,
+      timeId: jogador.timeId,
+      // Não classificados não ganham uma posição editorial inventada.
+      // Este campo não participa da avaliação do elenco canônico.
+      posicaoHierarquia: editorial?.posicao ?? Number.MAX_SAFE_INTEGER,
+      classificacoes: editorial?.classificacoes ?? {},
+      medias: mediasPorJogador.get(jogador.id) ?? {},
+      historico: [],
+    })
+    canonicosPorTime.set(jogador.timeId, lista)
+  }
+
+  const timesFato: TimeFato[] = listaTimes.map((t) => ({
+    id: t.id,
+    sigla: t.sigla,
+    jogadores: (jogadoresPorTime.get(t.id) ?? []).sort(
+      (a, b) => a.posicaoHierarquia - b.posicaoHierarquia,
+    ),
+    elencoCanonico: (canonicosPorTime.get(t.id) ?? []).sort(
+      (a, b) => a.posicaoHierarquia - b.posicaoHierarquia || a.nome.localeCompare(b.nome),
+    ),
+  }))
 
   const escalacao: Record<string, StatusEscalacao> = {}
   for (const e of escalacoes) escalacao[e.jogadorId] = e.status
@@ -174,8 +236,5 @@ export async function montarFatosDoJogo(db: Db, jogoId: string): Promise<FatosDo
  * `quarto_atual` que a ingestão escreveu.
  */
 export async function jogosNoQuarto(db: Db, quarto: number): Promise<{ id: string }[]> {
-  return db
-    .select({ id: jogos.id })
-    .from(jogos)
-    .where(eq(jogos.quartoAtual, quarto))
+  return db.select({ id: jogos.id }).from(jogos).where(eq(jogos.quartoAtual, quarto))
 }

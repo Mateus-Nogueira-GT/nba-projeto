@@ -59,8 +59,14 @@ async function semear() {
   await db.delete(jogadores)
   await db.delete(times)
 
-  const [lal] = await db.insert(times).values({ sigla: 'LAL', nome: 'Lakers', conferencia: 'Oeste' }).returning()
-  const [bos] = await db.insert(times).values({ sigla: 'BOS', nome: 'Celtics', conferencia: 'Leste' }).returning()
+  const [lal] = await db
+    .insert(times)
+    .values({ sigla: 'LAL', nome: 'Lakers', conferencia: 'Oeste' })
+    .returning()
+  const [bos] = await db
+    .insert(times)
+    .values({ sigla: 'BOS', nome: 'Celtics', conferencia: 'Leste' })
+    .returning()
   lalId = lal!.id
   bosId = bos!.id
 
@@ -99,6 +105,7 @@ async function semear() {
     .insert(jogos)
     .values({
       dataHoraUtc: new Date('2026-08-18T23:00:00.000Z'),
+      dataReferencia: '2026-08-18',
       timeCasaId: lal!.id,
       timeVisitanteId: bos!.id,
       status: 'ENCERRADO',
@@ -163,6 +170,7 @@ async function semear() {
     .insert(jogos)
     .values({
       dataHoraUtc: new Date(`${HOJE}T23:00:00.000Z`),
+      dataReferencia: HOJE,
       timeCasaId: lal!.id,
       timeVisitanteId: bos!.id,
       status: 'AO_VIVO',
@@ -175,8 +183,22 @@ async function semear() {
   jogoDeHojeId = hoje!.id
 
   await db.insert(estatisticasQuarto).values([
-    { jogoId: hoje!.id, jogadorId: idPorNome.get('Luka Dončić')!, quarto: 1, pontos: 12, rebotes: 3, assistencias: 4 },
-    { jogoId: hoje!.id, jogadorId: idPorNome.get('Luka Dončić')!, quarto: 2, pontos: 7, rebotes: 1, assistencias: 2 },
+    {
+      jogoId: hoje!.id,
+      jogadorId: idPorNome.get('Luka Dončić')!,
+      quarto: 1,
+      pontos: 12,
+      rebotes: 3,
+      assistencias: 4,
+    },
+    {
+      jogoId: hoje!.id,
+      jogadorId: idPorNome.get('Luka Dončić')!,
+      quarto: 2,
+      pontos: 7,
+      rebotes: 1,
+      assistencias: 2,
+    },
   ])
 }
 
@@ -262,8 +284,12 @@ describe('busca por nome parcial', () => {
   })
 
   it('acha time pela sigla e pelo nome', async () => {
-    expect((await buscar(banco.db, 'LAL', { apenas: 'TIME' })).map((t) => t.nome)).toContain('Lakers')
-    expect((await buscar(banco.db, 'celt', { apenas: 'TIME' })).map((t) => t.nome)).toContain('Celtics')
+    expect((await buscar(banco.db, 'LAL', { apenas: 'TIME' })).map((t) => t.nome)).toContain(
+      'Lakers',
+    )
+    expect((await buscar(banco.db, 'celt', { apenas: 'TIME' })).map((t) => t.nome)).toContain(
+      'Celtics',
+    )
   })
 
   it('consulta vazia não devolve nada', async () => {
@@ -341,10 +367,7 @@ describe('tela do jogador', () => {
 
   it('não há bloco ao vivo para jogador de time que não está em quadra', async () => {
     // Um time sem jogo ao vivo nenhum.
-    const [phi] = await banco.db
-      .insert(times)
-      .values({ sigla: 'PHI', nome: 'Sixers' })
-      .returning()
+    const [phi] = await banco.db.insert(times).values({ sigla: 'PHI', nome: 'Sixers' }).returning()
     const [j] = await banco.db
       .insert(jogadores)
       .values({ nomeCompleto: 'Fora da Rodada', timeId: phi!.id })
@@ -642,6 +665,7 @@ describe('ingestão parcial', () => {
       .insert(jogos)
       .values({
         dataHoraUtc: new Date('2026-08-17T23:00:00.000Z'),
+        dataReferencia: '2026-08-17',
         timeCasaId: lalId,
         timeVisitanteId: bosId,
         status: 'ENCERRADO',
@@ -672,6 +696,7 @@ describe('ingestão parcial', () => {
         .insert(jogos)
         .values({
           dataHoraUtc: new Date(`2026-08-${10 + i}T23:00:00.000Z`),
+          dataReferencia: `2026-08-${10 + i}`,
           timeCasaId: lalId,
           timeVisitanteId: bosId,
           status: 'ENCERRADO',

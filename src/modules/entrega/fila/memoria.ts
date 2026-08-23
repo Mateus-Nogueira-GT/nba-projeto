@@ -25,7 +25,9 @@ export class FilaEmMemoria implements PortaFila {
     this.enviadas.length = 0
   }
 
-  doCanal(canal: MensagemPush['canal']): MensagemPush[] {
-    return this.enviadas.filter((m) => m.canal === canal)
+  doCanal<C extends MensagemPush['canal']>(canal: C): Extract<MensagemPush, { canal: C }>[] {
+    return this.enviadas.filter(
+      (mensagem): mensagem is Extract<MensagemPush, { canal: C }> => mensagem.canal === canal,
+    )
   }
 }

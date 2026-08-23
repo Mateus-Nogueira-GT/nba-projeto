@@ -1,6 +1,7 @@
 import { cookies } from 'next/headers'
 import { getDb } from '../../dominio/db/cliente'
 import { validarSessao, type Sessao } from './sessao'
+import { ipDaRequisicao } from './requisicao'
 
 export const NOME_COOKIE = 'ia_nba_sessao'
 
@@ -20,6 +21,10 @@ export async function limparCookieDeSessao(): Promise<void> {
   armario.delete(NOME_COOKIE)
 }
 
+export async function tokenDaSessaoAtual(): Promise<string | null> {
+  return (await cookies()).get(NOME_COOKIE)?.value ?? null
+}
+
 /**
  * Sessão da requisição atual.
  *
@@ -29,10 +34,10 @@ export async function limparCookieDeSessao(): Promise<void> {
 export async function sessaoAtual(): Promise<Sessao | null> {
   if (!process.env.DATABASE_URL) return null
 
-  const token = (await cookies()).get(NOME_COOKIE)?.value
+  const token = await tokenDaSessaoAtual()
   if (!token) return null
 
-  const r = await validarSessao(getDb(), token, new Date())
+  const r = await validarSessao(getDb(), token, new Date(), { ip: await ipDaRequisicao() })
   return r.ok ? r.sessao : null
 }
 

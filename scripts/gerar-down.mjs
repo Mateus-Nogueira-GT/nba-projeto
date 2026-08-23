@@ -42,7 +42,19 @@ const INVERSORES = [
     reconhece: /^CREATE (?:UNIQUE )?INDEX (?:IF NOT EXISTS )?"([a-z_0-9]+)"/i,
     inverte: (m) => `DROP INDEX IF EXISTS "${m[1]}";`,
   },
-  { reconhece: /^ALTER TABLE .* ADD CONSTRAINT/i, inverte: () => null },
+  {
+    reconhece: /^ALTER TABLE "([a-z_]+)" ADD CONSTRAINT "([a-z_0-9]+)"/i,
+    inverte: (m) => `ALTER TABLE "${m[1]}" DROP CONSTRAINT IF EXISTS "${m[2]}";`,
+  },
+  // A coluna adicionada na mesma migration será removida na descida; desfazer
+  // o NOT NULL separadamente seria redundante.
+  {
+    reconhece: /^ALTER TABLE "[a-z_]+" ALTER COLUMN "[a-z_]+" SET NOT NULL/i,
+    inverte: () => null,
+  },
+  // Backfills usam apenas colunas adicionadas pela mesma migration. Ao descer,
+  // essas colunas caem; não existe dado anterior a restaurar.
+  { reconhece: /^UPDATE "[a-z_]+"/i, inverte: () => null },
   { reconhece: /^DO \$\$/i, inverte: () => null },
 ]
 
@@ -72,7 +84,12 @@ for (const arquivo of readdirSync(DIR).filter((f) => f.endsWith('.sql'))) {
 
   writeFileSync(
     join(DIR_DOWN, arquivo),
-    [`-- DESCIDA de ${arquivo} — GERADO por scripts/gerar-down.mjs, não editar à mão.`, '', ...inversoes.reverse(), ''].join('\n'),
+    [
+      `-- DESCIDA de ${arquivo} — GERADO por scripts/gerar-down.mjs, não editar à mão.`,
+      '',
+      ...inversoes.reverse(),
+      '',
+    ].join('\n'),
   )
   console.log(`${arquivo}: ${inversoes.length} comandos de descida`)
 }

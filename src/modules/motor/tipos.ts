@@ -60,7 +60,10 @@ export type JogadorFato = {
 export type TimeFato = {
   id: string
   sigla: string
+  /** Hierarquia editorial projetada. Governa Lista Secreta, OPD e bloco de topo. */
   jogadores: JogadorFato[]
+  /** Elenco canônico observado no jogo. Governa exclusivamente o Fire Live. */
+  elencoCanonico?: JogadorFato[]
 }
 
 export type EstatisticaQuarto = {
@@ -127,7 +130,10 @@ export function montarChave(
   return [jogoId, jogadorId, atributo, estrategia, linha ?? ''].join('|')
 }
 
-export function valorDoAtributo(jogo: JogoHistorico | EstatisticaQuarto, atributo: Atributo): number {
+export function valorDoAtributo(
+  jogo: JogoHistorico | EstatisticaQuarto,
+  atributo: Atributo,
+): number {
   switch (atributo) {
     case 'PONTOS':
       return jogo.pontos

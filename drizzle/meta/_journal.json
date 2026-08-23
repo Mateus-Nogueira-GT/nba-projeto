@@ -50,6 +50,41 @@
       "when": 1787172760194,
       "tag": "0006_fair_screwball",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1787302545045,
+      "tag": "0007_equal_doctor_doom",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1787311119601,
+      "tag": "0008_amusing_silk_fever",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1787313448726,
+      "tag": "0009_flat_captain_universe",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1787313857266,
+      "tag": "0010_melted_arclight",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1787317273809,
+      "tag": "0011_demonic_fat_cobra",
+      "breakpoints": true
     }
   ]
 }

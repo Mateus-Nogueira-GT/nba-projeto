@@ -77,16 +77,15 @@ export async function publicarListaSecreta(
     }
   }
 
-  const fatos = await montarFatos(db, opcoes.dataReferencia)
+  const fatos = await montarFatos(db, opcoes.dataReferencia, {
+    mesInicio: ruleset.temporada.mes_inicio,
+    formato: ruleset.temporada.formato,
+  })
   if (fatos.times.length === 0) return { publicou: false, motivo: 'sem-lista-ativa' }
 
   const apitos = avaliar(fatos, ruleset).filter((a) => a.estrategia === 'LISTA_SECRETA')
 
-  const [versao] = await db
-    .select()
-    .from(niveisVersao)
-    .where(eq(niveisVersao.ativa, true))
-    .limit(1)
+  const [versao] = await db.select().from(niveisVersao).where(eq(niveisVersao.ativa, true)).limit(1)
   const rulesetVersao = `v${ruleset.version}`
 
   const gravados = await gravarApitos(db, rulesetVersao, apitos)

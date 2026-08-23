@@ -80,7 +80,11 @@ export function avaliarFireLive(
   const greens: Green[] = []
   let examinados = 0
 
-  for (const jogador of time.jogadores) {
+  // O Fire Live observa quem realmente pertence ao time canônico. A
+  // hierarquia editorial permanece em `time.jogadores` para a OPD e para o
+  // bloco de topo, sem excluir quem não recebeu classificação do CJ.
+  const observados = time.elencoCanonico ?? time.jogadores
+  for (const jogador of observados) {
     if (opcoes.apenasJogadores !== undefined && !opcoes.apenasJogadores.has(jogador.id)) continue
     examinados += 1
     if (jogo.escalacao[jogador.id] === 'FORA') continue

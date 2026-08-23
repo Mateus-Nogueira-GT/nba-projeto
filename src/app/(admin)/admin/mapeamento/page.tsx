@@ -1,7 +1,7 @@
 import { and, eq, isNull } from 'drizzle-orm'
 
 import { getDb } from '@/modules/dominio/db/cliente'
-import { jogadores, mapaJogadores } from '@/modules/dominio/db/schema'
+import { identidadesJogador, jogadores, mapaJogadores } from '@/modules/dominio/db/schema'
 import { sugerir, type Sugestao } from '@/modules/ingestao/niveis/similaridade'
 import { negarSeNaoForAdmin } from '../guarda'
 import { confirmarVinculo } from './acoes'
@@ -9,11 +9,15 @@ import { confirmarVinculo } from './acoes'
 // Lê banco a cada requisição — nunca prerenderiza no build.
 export const dynamic = 'force-dynamic'
 
-const PROVEDOR = process.env.PROVEDOR_NBA ?? 'provedor-a'
+const PROVEDOR = process.env.NBA_PRIMARIO_NOME ?? 'balldontlie'
 
 type Pendente = { sugestao: Sugestao; estado: 'SEM_CANDIDATO' | 'AMBIGUO' | 'INEQUIVOCO' }
 
-async function carregar(): Promise<{ pendentes: Pendente[]; totalElenco: number } | null> {
+async function carregar(): Promise<{
+  pendentes: Pendente[]
+  totalElenco: number
+  jogadorPorIdExterno: Record<string, string>
+} | null> {
   if (!process.env.DATABASE_URL) return null
 
   const db = getDb()
@@ -23,11 +27,20 @@ async function carregar(): Promise<{ pendentes: Pendente[]; totalElenco: number 
       .select()
       .from(mapaJogadores)
       .where(and(eq(mapaJogadores.provedor, PROVEDOR), isNull(mapaJogadores.jogadorId))),
-    db.select().from(jogadores),
+    db
+      .select({
+        jogadorId: jogadores.id,
+        idExterno: identidadesJogador.idExterno,
+        nomeCompleto: jogadores.nomeCompleto,
+        ativo: jogadores.ativo,
+      })
+      .from(identidadesJogador)
+      .innerJoin(jogadores, eq(jogadores.id, identidadesJogador.jogadorId))
+      .where(eq(identidadesJogador.provedor, PROVEDOR)),
   ])
 
   const candidatosDoProvedor = elenco.map((j) => ({
-    idExterno: j.id,
+    idExterno: j.idExterno,
     nomeCompleto: j.nomeCompleto,
     timeSiglaProvedor: null,
     ativo: j.ativo,
@@ -47,7 +60,11 @@ async function carregar(): Promise<{ pendentes: Pendente[]; totalElenco: number 
     // Ambíguos primeiro: são os que mais custam se decididos no automático.
     .sort((a, b) => ordem(a.estado) - ordem(b.estado))
 
-  return { pendentes, totalElenco: elenco.length }
+  return {
+    pendentes,
+    totalElenco: elenco.length,
+    jogadorPorIdExterno: Object.fromEntries(elenco.map((j) => [j.idExterno, j.jogadorId])),
+  }
 }
 
 function ordem(estado: Pendente['estado']): number {
@@ -73,23 +90,23 @@ export default async function PaginaMapeamento() {
       <main style={{ padding: 24, fontFamily: 'system-ui', maxWidth: 900 }}>
         <h1>Mapeamento de jogadores</h1>
         <p>
-          Banco não configurado. Rode <code>vercel env pull</code> e{' '}
-          <code>npm run db:migrate</code>.
+          Banco não configurado. Rode <code>vercel env pull</code> e <code>npm run db:migrate</code>
+          .
         </p>
       </main>
     )
   }
 
-  const { pendentes, totalElenco } = dados
+  const { pendentes, totalElenco, jogadorPorIdExterno } = dados
 
   return (
     <main style={{ padding: 24, fontFamily: 'system-ui', maxWidth: 900, lineHeight: 1.5 }}>
       <h1>Mapeamento de jogadores</h1>
 
       <p>
-        Os elencos da lista são <strong>projetados</strong> e não correspondem à NBA real. O
-        vínculo jogador↔time vem da lista; aqui você só liga o <em>nome escrito na lista</em> ao
-        jogador do provedor. Toda ligação exige confirmação humana.
+        Os elencos da lista são <strong>projetados</strong> e não correspondem à NBA real. O vínculo
+        jogador↔time vem da lista; aqui você só liga o <em>nome escrito na lista</em> ao jogador do
+        provedor. Toda ligação exige confirmação humana.
       </p>
 
       <p>
@@ -110,9 +127,9 @@ export default async function PaginaMapeamento() {
 
             {sugestao.candidatos.length === 0 ? (
               <p style={{ fontSize: 13 }}>
-                Nenhum jogador do provedor se parece com este nome. Pode ser grafia muito
-                distante, jogador fora da liga ou nome que ainda não foi ingerido. Continua
-                listado aqui até ser resolvido — não é descartado.
+                Nenhum jogador do provedor se parece com este nome. Pode ser grafia muito distante,
+                jogador fora da liga ou nome que ainda não foi ingerido. Continua listado aqui até
+                ser resolvido — não é descartado.
               </p>
             ) : (
               <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
@@ -142,7 +159,12 @@ export default async function PaginaMapeamento() {
 
                     <form action={confirmarVinculo}>
                       <input type="hidden" name="nomeNaLista" value={sugestao.nomeNaLista} />
-                      <input type="hidden" name="jogadorId" value={c.idExterno} />
+                      <input
+                        type="hidden"
+                        name="jogadorId"
+                        value={jogadorPorIdExterno[c.idExterno] ?? ''}
+                      />
+                      <input type="hidden" name="provedorPlayerId" value={c.idExterno} />
                       <input type="hidden" name="provedor" value={PROVEDOR} />
                       <input type="hidden" name="score" value={c.score} />
                       <button type="submit">Confirmar</button>

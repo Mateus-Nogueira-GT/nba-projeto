@@ -1,65 +1,113 @@
-import { FonteHttp } from '../nba/adaptadores/http'
+import { z } from 'zod'
+
+import type { Db } from '../../dominio/db/tipos'
+import { registrarBatimento } from '../health/heartbeat'
+import { FonteApiSports } from '../nba/adaptadores/api-sports'
+import { FonteBalldontlie } from '../nba/adaptadores/balldontlie'
 import { FonteComFailover } from '../nba/failover'
 import type { FonteNBA } from '../nba/porta'
-import { registrarBatimento } from '../health/heartbeat'
-import type { Db } from '../../dominio/db/tipos'
 
-/**
- * Monta a fonte NBA configurada, com failover e batimento ligados.
- *
- * O batimento é gravado AQUI, e não dentro do failover, porque a classe de
- * failover é pura de I/O de banco por desenho — ela só emite o evento. É esta
- * função que fecha o circuito do "alerta de dado parado": sem ela,
- * `saude_provedor` nunca recebe uma linha e `avaliarFrescor` não tem o que
- * avaliar.
- */
+const schemaAmbiente = z
+  .object({
+    NBA_PRIMARIO_NOME: z.literal('balldontlie').default('balldontlie'),
+    BALLDONTLIE_BASE_URL: z
+      .string()
+      .url()
+      .default('https://api.balldontlie.io/nba/v1'),
+    BALLDONTLIE_API_KEY: z.string().trim().min(1),
+    NBA_RESERVA_NOME: z.literal('api-sports-nba').default('api-sports-nba'),
+    API_SPORTS_NBA_BASE_URL: z
+      .string()
+      .url()
+      .default('https://v2.nba.api-sports.io'),
+    API_SPORTS_NBA_KEY: z.string().trim().min(1).optional(),
+    NBA_TIMEOUT_MS: z.coerce.number().int().min(1_000).max(30_000).default(8_000),
+    NBA_RESERVA_OBRIGATORIA: z.enum(['true', 'false']).default('true'),
+    NBA_INGESTAO_HABILITADA: z.enum(['true', 'false']).default('false'),
+    NBA_RODADA_SOBREPOSICAO_DIAS: z.coerce.number().int().min(0).max(7).default(2),
+  })
+  .superRefine((valor, contexto) => {
+    if (valor.NBA_RESERVA_OBRIGATORIA === 'true' && !valor.API_SPORTS_NBA_KEY) {
+      contexto.addIssue({
+        code: 'custom',
+        path: ['API_SPORTS_NBA_KEY'],
+        message: 'a reserva API-SPORTS é obrigatória',
+      })
+    }
+  })
+
 export type ConfigFontes = {
-  primario: { nome: string; baseUrl: string; chave: string }
-  reserva: { nome: string; baseUrl: string; chave: string }
+  habilitada: boolean
   timeoutMs: number
+  sobreposicaoDias: number
+  primario: { nome: 'balldontlie'; baseUrl: string; chave: string }
+  reserva: { nome: 'api-sports-nba'; baseUrl: string; chave: string } | null
 }
 
-/** Lê a configuração do ambiente. Null quando as credenciais não existem. */
-export function configDoAmbiente(): ConfigFontes | null {
-  const primarioUrl = process.env.NBA_PRIMARIO_URL
-  const primarioChave = process.env.NBA_PRIMARIO_CHAVE
+/** Valida toda configuração antes de qualquer acesso ao banco. */
+export function configDoAmbiente(
+  ambiente: Record<string, string | undefined> = process.env,
+): ConfigFontes | null {
+  if (!ambiente.BALLDONTLIE_API_KEY && !ambiente.API_SPORTS_NBA_KEY) return null
 
-  if (!primarioUrl || !primarioChave) return null
-
-  // Sem reserva configurado, o primário serve de reserva de si mesmo: o
-  // failover continua funcionando (com retry) em vez de exigir dois contratos
-  // para o sistema subir.
-  const reservaUrl = process.env.NBA_RESERVA_URL ?? primarioUrl
-  const reservaChave = process.env.NBA_RESERVA_CHAVE ?? primarioChave
-
+  const resultado = schemaAmbiente.safeParse(ambiente)
+  if (!resultado.success) {
+    const campos = resultado.error.issues.map((i) => i.path.join('.') || 'ambiente').join(', ')
+    throw new Error(`configuração NBA inválida: ${campos}`)
+  }
+  const valor = resultado.data
   return {
+    habilitada: valor.NBA_INGESTAO_HABILITADA === 'true',
+    timeoutMs: valor.NBA_TIMEOUT_MS,
+    sobreposicaoDias: valor.NBA_RODADA_SOBREPOSICAO_DIAS,
     primario: {
-      nome: process.env.NBA_PRIMARIO_NOME ?? 'provedor-a',
-      baseUrl: primarioUrl,
-      chave: primarioChave,
+      nome: valor.NBA_PRIMARIO_NOME,
+      baseUrl: valor.BALLDONTLIE_BASE_URL,
+      chave: valor.BALLDONTLIE_API_KEY,
     },
-    reserva: {
-      nome: process.env.NBA_RESERVA_NOME ?? 'provedor-b',
-      baseUrl: reservaUrl,
-      chave: reservaChave,
-    },
-    timeoutMs: Number(process.env.NBA_TIMEOUT_MS ?? 8000),
+    reserva: valor.API_SPORTS_NBA_KEY
+      ? {
+          nome: valor.NBA_RESERVA_NOME,
+          baseUrl: valor.API_SPORTS_NBA_BASE_URL,
+          chave: valor.API_SPORTS_NBA_KEY,
+        }
+      : null,
   }
 }
 
-export function montarFonte(db: Db, config: ConfigFontes): FonteNBA {
-  const criar = (c: ConfigFontes['primario']) =>
-    new FonteHttp({ ...c, timeoutMs: config.timeoutMs })
+export type FontesConfiguradas = {
+  primaria: FonteBalldontlie
+  reserva: FonteApiSports | null
+  failover: FonteNBA
+}
 
-  return new FonteComFailover(criar(config.primario), criar(config.reserva), {
+export function montarFontes(db: Db, config: ConfigFontes): FontesConfiguradas {
+  const primaria = new FonteBalldontlie({
+    chave: config.primario.chave,
+    baseUrl: config.primario.baseUrl,
     timeoutMs: config.timeoutMs,
-    // Cada tentativa vira batimento, inclusive as que falham — é assim que um
-    // provedor degradado aparece antes de o usuário reclamar.
-    aoBater: (evento) => {
-      void registrarBatimento(db, evento).catch(() => {
-        // Falha ao gravar batimento não pode derrubar a ingestão: o dado da
-        // NBA importa mais que a telemetria sobre ele.
+  })
+  const reserva = config.reserva
+    ? new FonteApiSports({
+        nome: config.reserva.nome,
+        chave: config.reserva.chave,
+        baseUrl: config.reserva.baseUrl,
+        timeoutMs: config.timeoutMs,
       })
+    : null
+
+  if (!reserva) return { primaria, reserva, failover: primaria }
+
+  const failover = new FonteComFailover(primaria, reserva, {
+    timeoutMs: config.timeoutMs,
+    aoBater: async (evento) => {
+      await registrarBatimento(db, evento).catch(() => undefined)
     },
   })
+  return { primaria, reserva, failover }
+}
+
+/** Compatibilidade dos chamadores legados; jobs novos usam a matriz acima. */
+export function montarFonte(db: Db, config: ConfigFontes): FonteNBA {
+  return montarFontes(db, config).failover
 }

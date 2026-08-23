@@ -1,0 +1,42 @@
+{
+  "get": "players/statistics",
+  "parameters": { "game": "10403" },
+  "errors": [],
+  "results": 1,
+  "paging": { "current": 1, "total": 1 },
+  "response": [
+    {
+      "player": { "id": 265, "firstname": "LeBron", "lastname": "James" },
+      "team": {
+        "id": 17,
+        "name": "Los Angeles Lakers",
+        "nickname": "Lakers",
+        "code": "LAL",
+        "logo": "https://media.api-sports.io/basketball/teams/17.png"
+      },
+      "game": { "id": 10403 },
+      "points": 12,
+      "pos": "F",
+      "min": "08:30",
+      "fgm": 5,
+      "fga": 7,
+      "fgp": "71.4",
+      "ftm": 0,
+      "fta": 0,
+      "ftp": "0.0",
+      "tpm": 2,
+      "tpa": 3,
+      "tpp": "66.7",
+      "offReb": 1,
+      "defReb": 2,
+      "totReb": 3,
+      "assists": 4,
+      "pFouls": 1,
+      "steals": 1,
+      "turnovers": 2,
+      "blocks": 0,
+      "plusMinus": "+5",
+      "comment": null
+    }
+  ]
+}

@@ -101,11 +101,14 @@ export class FonteHttp implements FonteNBA {
   async listarJogos(dataIso: string): Promise<JogoExterno[]> {
     return (await this.buscar(`/games?date=${dataIso}`)).map((g) => ({
       idExterno: String(g['id'] ?? ''),
+      dataReferencia: texto(g['date'])?.slice(0, 10) ?? dataIso,
       dataHoraUtc: texto(g['start_time_utc']) ?? texto(g['date']) ?? dataIso,
       timeCasaSigla: texto(g['home_team_abbreviation']) ?? '',
       timeVisitanteSigla: texto(g['visitor_team_abbreviation']) ?? '',
       status: traduzirStatus(texto(g['status'])),
       quartoAtual: numero(g['period']),
+      relogio: texto(g['clock']) ?? texto(g['time']),
+      intervalo: g['halftime'] === true,
       placarCasa: numero(g['home_team_score']),
       placarVisitante: numero(g['visitor_team_score']),
     }))

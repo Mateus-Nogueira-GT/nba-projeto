@@ -2,8 +2,13 @@
 
 import { redirect } from 'next/navigation'
 import { getDb } from '@/modules/dominio/db/cliente'
-import { autenticar } from '@/modules/plataforma/auth/sessao'
-import { gravarCookieDeSessao, limparCookieDeSessao } from '@/modules/plataforma/auth/cookies'
+import { autenticar, encerrarSessaoPorToken } from '@/modules/plataforma/auth/sessao'
+import {
+  gravarCookieDeSessao,
+  limparCookieDeSessao,
+  tokenDaSessaoAtual,
+} from '@/modules/plataforma/auth/cookies'
+import { destinoInternoSeguro, ipDaRequisicao } from '@/modules/plataforma/auth/requisicao'
 
 const DURACAO_MS = 30 * 24 * 3600_000
 
@@ -11,7 +16,7 @@ export async function entrar(_estado: string | null, formulario: FormData): Prom
   const email = String(formulario.get('email') ?? '')
   const senha = String(formulario.get('senha') ?? '')
   const fingerprint = String(formulario.get('dispositivo') ?? 'desconhecido')
-  const destino = String(formulario.get('destino') ?? '/')
+  const destino = destinoInternoSeguro(String(formulario.get('destino') ?? '/'))
 
   const agora = new Date()
   const r = await autenticar(
@@ -19,9 +24,11 @@ export async function entrar(_estado: string | null, formulario: FormData): Prom
     { email, senha },
     {
       fingerprint,
-      tipo: /mobile|android|iphone/i.test(String(formulario.get('ua') ?? '')) ? 'MOBILE' : 'DESKTOP',
+      tipo: /mobile|android|iphone/i.test(String(formulario.get('ua') ?? ''))
+        ? 'MOBILE'
+        : 'DESKTOP',
       userAgent: String(formulario.get('ua') ?? '') || null,
-      ip: null,
+      ip: await ipDaRequisicao(),
     },
     agora,
     { duracaoMs: DURACAO_MS },
@@ -42,6 +49,12 @@ export async function entrar(_estado: string | null, formulario: FormData): Prom
 }
 
 export async function sair(): Promise<void> {
+  const token = await tokenDaSessaoAtual()
+  if (token) {
+    // Revoga primeiro. Se o banco falhar, não fingimos que houve logout apenas
+    // removendo o cookie enquanto o token persistido continua válido.
+    await encerrarSessaoPorToken(getDb(), token, 'logout solicitado pelo usuário', new Date())
+  }
   await limparCookieDeSessao()
   redirect('/entrar')
 }

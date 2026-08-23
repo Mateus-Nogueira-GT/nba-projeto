@@ -1,10 +1,11 @@
 import { createHash, randomBytes } from 'node:crypto'
-import { and, asc, eq, gte, isNull } from 'drizzle-orm'
+import { and, asc, eq, gt, gte, inArray, isNull, sql } from 'drizzle-orm'
 
 import { dispositivos, eventosConta, sessoes, usuarios } from '../../dominio/db/schema'
 import type { Db } from '../../dominio/db/tipos'
 import { conferirSenha } from './senha'
 import { excedeuTentativas, registrarTentativa, type PoliticaRateLimit } from './rate-limit'
+import { invalidarInscricoesDoDispositivoNaTransacao } from '../push/inscricoes'
 
 /** Limite contratado: 2 dispositivos ativos por conta (proposta, p.8). */
 export const MAX_DISPOSITIVOS = 2
@@ -30,7 +31,8 @@ function hashDoToken(token: string): string {
 async function registrar(
   db: Db,
   usuarioId: string | null,
-  tipo: 'LOGIN' | 'LOGIN_FALHOU' | 'SESSAO_ENCERRADA' | 'USO_SIMULTANEO' | 'BLOQUEIO' | 'DESBLOQUEIO',
+  tipo:
+    'LOGIN' | 'LOGIN_FALHOU' | 'SESSAO_ENCERRADA' | 'USO_SIMULTANEO' | 'BLOQUEIO' | 'DESBLOQUEIO',
   detalhe: string,
   ip: string | null,
   agora: Date,
@@ -71,7 +73,14 @@ export async function autenticar(
 
   if (!usuario || !senhaConfere) {
     await registrarTentativa(db, { identificador: email, ip: acesso.ip, sucesso: false, agora })
-    await registrar(db, usuario?.id ?? null, 'LOGIN_FALHOU', 'credenciais inválidas', acesso.ip, agora)
+    await registrar(
+      db,
+      usuario?.id ?? null,
+      'LOGIN_FALHOU',
+      'credenciais inválidas',
+      acesso.ip,
+      agora,
+    )
     return { ok: false, motivo: 'credenciais' }
   }
 
@@ -82,51 +91,65 @@ export async function autenticar(
 
   await registrarTentativa(db, { identificador: email, ip: acesso.ip, sucesso: true, agora })
 
-  // 1 · Dispositivo (upsert por fingerprint).
-  const [dispositivo] = await db
-    .insert(dispositivos)
-    .values({
-      usuarioId: usuario.id,
-      fingerprint: acesso.fingerprint,
-      tipo: acesso.tipo,
-      userAgent: acesso.userAgent,
-      ipUltimo: acesso.ip,
-      ativoDesde: agora,
-      ultimoUso: agora,
-    })
-    .onConflictDoUpdate({
-      target: [dispositivos.usuarioId, dispositivos.fingerprint],
-      set: { ultimoUso: agora, ipUltimo: acesso.ip, userAgent: acesso.userAgent },
-    })
-    .returning()
-
-  // 2 · Sessão nova.
   const token = randomBytes(32).toString('base64url')
-  const [sessao] = await db
-    .insert(sessoes)
-    .values({
-      usuarioId: usuario.id,
-      dispositivoId: dispositivo!.id,
-      tokenHash: hashDoToken(token),
-      criadaEm: agora,
-      ip: acesso.ip,
-      expiraEm: new Date(agora.getTime() + opcoes.duracaoMs),
-    })
-    .returning()
+  const criada = await db.transaction(async (tx) => {
+    // Serializa logins da mesma conta. Sem esse lock, duas invocações podem
+    // contar dois dispositivos e ambas criar o terceiro.
+    await tx.execute(sql`SELECT id FROM ${usuarios} WHERE id = ${usuario.id} FOR UPDATE`)
 
-  // 3 · Regra dos 2 dispositivos.
-  const encerrouSessoes = await aplicarLimiteDeDispositivos(db, usuario.id, sessao!.id, agora)
+    const [dispositivo] = await tx
+      .insert(dispositivos)
+      .values({
+        usuarioId: usuario.id,
+        fingerprint: acesso.fingerprint,
+        tipo: acesso.tipo,
+        userAgent: acesso.userAgent,
+        ipUltimo: acesso.ip,
+        ativoDesde: agora,
+        ultimoUso: agora,
+      })
+      .onConflictDoUpdate({
+        target: [dispositivos.usuarioId, dispositivos.fingerprint],
+        set: { ultimoUso: agora, ipUltimo: acesso.ip, userAgent: acesso.userAgent },
+      })
+      .returning()
+
+    if (!dispositivo) throw new Error('não foi possível registrar o dispositivo')
+
+    const [sessao] = await tx
+      .insert(sessoes)
+      .values({
+        usuarioId: usuario.id,
+        dispositivoId: dispositivo.id,
+        tokenHash: hashDoToken(token),
+        criadaEm: agora,
+        ip: acesso.ip,
+        expiraEm: new Date(agora.getTime() + opcoes.duracaoMs),
+      })
+      .returning()
+
+    if (!sessao) throw new Error('não foi possível criar a sessão')
+
+    const encerrouSessoes = await aplicarLimiteDeDispositivosNaTransacao(
+      tx,
+      usuario.id,
+      sessao.id,
+      agora,
+    )
+
+    return { dispositivoId: dispositivo.id, sessaoId: sessao.id, encerrouSessoes }
+  })
 
   await db.update(usuarios).set({ ultimoAcesso: agora }).where(eq(usuarios.id, usuario.id))
-  await registrar(db, usuario.id, 'LOGIN', `dispositivo ${acesso.fingerprint}`, acesso.ip, agora)
+  await registrar(db, usuario.id, 'LOGIN', `dispositivo ${criada.dispositivoId}`, acesso.ip, agora)
   await detectarUsoSimultaneo(db, usuario.id, agora)
 
   return {
     ok: true,
     token,
-    sessaoId: sessao!.id,
-    dispositivoId: dispositivo!.id,
-    encerrouSessoes,
+    sessaoId: criada.sessaoId,
+    dispositivoId: criada.dispositivoId,
+    encerrouSessoes: criada.encerrouSessoes,
   }
 }
 
@@ -142,38 +165,84 @@ export async function aplicarLimiteDeDispositivos(
   sessaoRecemCriadaId: string,
   agora: Date,
 ): Promise<number> {
+  return db.transaction(async (tx) => {
+    await tx.execute(sql`SELECT id FROM ${usuarios} WHERE id = ${usuarioId} FOR UPDATE`)
+    return aplicarLimiteDeDispositivosNaTransacao(tx, usuarioId, sessaoRecemCriadaId, agora)
+  })
+}
+
+async function aplicarLimiteDeDispositivosNaTransacao(
+  db: Db,
+  usuarioId: string,
+  sessaoRecemCriadaId: string,
+  agora: Date,
+): Promise<number> {
   const ativas = await db
     .select()
     .from(sessoes)
-    .where(and(eq(sessoes.usuarioId, usuarioId), isNull(sessoes.encerradaEm), gte(sessoes.expiraEm, agora)))
+    .where(
+      and(
+        eq(sessoes.usuarioId, usuarioId),
+        isNull(sessoes.encerradaEm),
+        gt(sessoes.expiraEm, agora),
+      ),
+    )
     .orderBy(asc(sessoes.criadaEm))
 
-  const dispositivosAtivos = [...new Set(ativas.map((s) => s.dispositivoId))]
-  if (dispositivosAtivos.length <= MAX_DISPOSITIVOS) return 0
+  const sessaoNova = ativas.find((sessao) => sessao.id === sessaoRecemCriadaId)
+  const dispositivoNovo = sessaoNova?.dispositivoId ?? null
+  const primeiraSessaoPorDispositivo = new Map<string, Date>()
+  for (const sessao of ativas) {
+    if (!sessao.dispositivoId) continue
+    const primeira = primeiraSessaoPorDispositivo.get(sessao.dispositivoId)
+    if (!primeira || sessao.criadaEm < primeira) {
+      primeiraSessaoPorDispositivo.set(sessao.dispositivoId, sessao.criadaEm)
+    }
+  }
 
-  const excedentes = dispositivosAtivos.length - MAX_DISPOSITIVOS
-  // `ativas` está em ordem de criação: os primeiros são os mais antigos.
-  const paraEncerrar = ativas
-    .filter((s) => s.id !== sessaoRecemCriadaId)
+  if (primeiraSessaoPorDispositivo.size <= MAX_DISPOSITIVOS) return 0
+
+  const excedentes = primeiraSessaoPorDispositivo.size - MAX_DISPOSITIVOS
+  const dispositivosParaEncerrar = [...primeiraSessaoPorDispositivo.entries()]
+    .filter(([id]) => id !== dispositivoNovo)
+    .sort((a, b) => a[1].getTime() - b[1].getTime() || a[0].localeCompare(b[0]))
     .slice(0, excedentes)
+    .map(([id]) => id)
 
-  for (const s of paraEncerrar) {
-    await db
-      .update(sessoes)
-      .set({
-        encerradaEm: agora,
-        motivoEncerramento: `limite de ${MAX_DISPOSITIVOS} dispositivos: sessão mais antiga encerrada`,
-      })
-      .where(eq(sessoes.id, s.id))
+  if (dispositivosParaEncerrar.length === 0) return 0
 
+  const paraEncerrar = await db
+    .update(sessoes)
+    .set({
+      encerradaEm: agora,
+      motivoEncerramento: `limite de ${MAX_DISPOSITIVOS} dispositivos: dispositivo mais antigo encerrado`,
+    })
+    .where(
+      and(
+        eq(sessoes.usuarioId, usuarioId),
+        inArray(sessoes.dispositivoId, dispositivosParaEncerrar),
+        isNull(sessoes.encerradaEm),
+      ),
+    )
+    .returning({ id: sessoes.id, dispositivoId: sessoes.dispositivoId, ip: sessoes.ip })
+
+  for (const dispositivoId of dispositivosParaEncerrar) {
+    const encerradas = paraEncerrar.filter((sessao) => sessao.dispositivoId === dispositivoId)
     await registrar(
       db,
       usuarioId,
       'SESSAO_ENCERRADA',
       `limite de ${MAX_DISPOSITIVOS} dispositivos`,
-      s.ip,
+      encerradas[0]?.ip ?? null,
       agora,
-      { sessaoId: s.id, dispositivoId: s.dispositivoId },
+      { dispositivoId, sessoesIds: encerradas.map((sessao) => sessao.id) },
+    )
+    await invalidarInscricoesDoDispositivoNaTransacao(
+      db,
+      usuarioId,
+      dispositivoId,
+      `limite de ${MAX_DISPOSITIVOS} dispositivos`,
+      agora,
     )
   }
 
@@ -223,6 +292,7 @@ export type Sessao = {
   papel: 'USUARIO' | 'ADMIN'
   sessaoId: string
   dispositivoId: string | null
+  criadaEm: Date
 }
 
 export type ResultadoValidacao =
@@ -268,6 +338,7 @@ export async function validarSessao(
       papel: linha.usuario.papel,
       sessaoId: linha.sessao.id,
       dispositivoId: linha.sessao.dispositivoId,
+      criadaEm: linha.sessao.criadaEm,
     },
   }
 }
@@ -284,6 +355,48 @@ export async function encerrarSessao(
     .where(eq(sessoes.id, sessaoId))
 }
 
+/**
+ * Revoga o token apresentado no logout sem persistir ou registrar o token.
+ * Retorna `false` quando ele já não existe ou já estava encerrado, tornando a
+ * operação segura para repetição.
+ */
+export async function encerrarSessaoPorToken(
+  db: Db,
+  token: string,
+  motivo: string,
+  agora: Date,
+): Promise<boolean> {
+  return db.transaction(async (tx) => {
+    const [encerrada] = await tx
+      .update(sessoes)
+      .set({ encerradaEm: agora, motivoEncerramento: motivo })
+      .where(and(eq(sessoes.tokenHash, hashDoToken(token)), isNull(sessoes.encerradaEm)))
+      .returning({
+        id: sessoes.id,
+        usuarioId: sessoes.usuarioId,
+        dispositivoId: sessoes.dispositivoId,
+        ip: sessoes.ip,
+      })
+
+    if (!encerrada) return false
+
+    await registrar(tx, encerrada.usuarioId, 'SESSAO_ENCERRADA', motivo, encerrada.ip, agora, {
+      sessaoId: encerrada.id,
+      dispositivoId: encerrada.dispositivoId,
+    })
+    if (encerrada.dispositivoId) {
+      await invalidarInscricoesDoDispositivoNaTransacao(
+        tx,
+        encerrada.usuarioId,
+        encerrada.dispositivoId,
+        motivo,
+        agora,
+      )
+    }
+    return true
+  })
+}
+
 /** Encerra todas as sessões do usuário — usado ao bloquear pelo painel. */
 export async function encerrarTodasAsSessoes(
   db: Db,
@@ -291,8 +404,27 @@ export async function encerrarTodasAsSessoes(
   motivo: string,
   agora: Date,
 ): Promise<void> {
-  await db
+  await db.transaction((tx) => encerrarTodasAsSessoesNaTransacao(tx, usuarioId, motivo, agora))
+}
+
+export async function encerrarTodasAsSessoesNaTransacao(
+  db: Db,
+  usuarioId: string,
+  motivo: string,
+  agora: Date,
+): Promise<void> {
+  const encerradas = await db
     .update(sessoes)
     .set({ encerradaEm: agora, motivoEncerramento: motivo })
     .where(and(eq(sessoes.usuarioId, usuarioId), isNull(sessoes.encerradaEm)))
+    .returning({ dispositivoId: sessoes.dispositivoId })
+
+  const dispositivosEncerrados = [
+    ...new Set(
+      encerradas.map((sessao) => sessao.dispositivoId).filter((id): id is string => id !== null),
+    ),
+  ]
+  for (const dispositivoId of dispositivosEncerrados) {
+    await invalidarInscricoesDoDispositivoNaTransacao(db, usuarioId, dispositivoId, motivo, agora)
+  }
 }

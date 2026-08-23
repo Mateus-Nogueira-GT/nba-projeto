@@ -1,9 +1,12 @@
 import { notFound } from 'next/navigation'
 
 import { getDb } from '@/modules/dominio/db/cliente'
+import { temporadaDe } from '@/modules/dominio/temporada'
+import { exigirAcessoEstatisticasSeConfigurado } from '@/modules/plataforma/assinatura/guarda'
 import { telaDoJogador } from '@/modules/entrega/estatisticas/jogador'
 import type { LinhaHistorico, Numeros } from '@/modules/entrega/estatisticas/jogador'
 import { rotaDoTime } from '@/modules/entrega/estatisticas/rotas'
+import { rulesetAtivo } from '@/modules/entrega/ruleset-ativo'
 import { Tabela, UltimaAtualizacao } from '@/design-system/componentes'
 import type { Coluna } from '@/design-system/componentes'
 import { semantico } from '@/design-system/tokens/semantico'
@@ -55,10 +58,34 @@ const COLUNAS: Coluna<LinhaHistorico>[] = [
         </span>
       ),
   },
-  { chave: 'min', rotulo: 'MIN', descricao: 'Minutos', alinhamento: 'direita', celula: (l) => num(l.minutos, 0) },
-  { chave: 'pts', rotulo: 'PTS', descricao: 'Pontos', alinhamento: 'direita', celula: (l) => l.pontos },
-  { chave: 'reb', rotulo: 'REB', descricao: 'Rebotes', alinhamento: 'direita', celula: (l) => l.rebotes },
-  { chave: 'ast', rotulo: 'AST', descricao: 'Assistências', alinhamento: 'direita', celula: (l) => l.assistencias },
+  {
+    chave: 'min',
+    rotulo: 'MIN',
+    descricao: 'Minutos',
+    alinhamento: 'direita',
+    celula: (l) => num(l.minutos, 0),
+  },
+  {
+    chave: 'pts',
+    rotulo: 'PTS',
+    descricao: 'Pontos',
+    alinhamento: 'direita',
+    celula: (l) => l.pontos,
+  },
+  {
+    chave: 'reb',
+    rotulo: 'REB',
+    descricao: 'Rebotes',
+    alinhamento: 'direita',
+    celula: (l) => l.rebotes,
+  },
+  {
+    chave: 'ast',
+    rotulo: 'AST',
+    descricao: 'Assistências',
+    alinhamento: 'direita',
+    celula: (l) => l.assistencias,
+  },
   {
     chave: 'fg',
     rotulo: 'FG%',
@@ -90,7 +117,10 @@ function Grupo({ titulo, itens }: { titulo: string; itens: [string, string][] })
       </h3>
       <dl style={{ margin: 0, display: 'grid', gap: 4 }}>
         {itens.map(([rotulo, valor]) => (
-          <div key={rotulo} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
+          <div
+            key={rotulo}
+            style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}
+          >
             <dt style={{ color: semantico.textoSecundario }}>{rotulo}</dt>
             <dd style={{ margin: 0, fontVariantNumeric: 'tabular-nums' }}>{valor}</dd>
           </div>
@@ -143,12 +173,17 @@ function NumerosCompletos({ n }: { n: Numeros }) {
 }
 
 export default async function PaginaJogador({ params }: { params: Promise<{ id: string }> }) {
+  await exigirAcessoEstatisticasSeConfigurado()
   const { id } = await params
   if (!process.env.DATABASE_URL) return <SemBanco />
 
   const agora = new Date()
+  const ruleset = await rulesetAtivo()
   const tela = await telaDoJogador(getDb(), id, {
-    temporada: String(agora.getUTCFullYear()),
+    temporada: temporadaDe(agora, {
+      mesInicio: ruleset.temporada.mes_inicio,
+      formato: ruleset.temporada.formato,
+    }),
   })
   if (tela === null) notFound()
 
@@ -222,7 +257,9 @@ export default async function PaginaJogador({ params }: { params: Promise<{ id: 
         </section>
       )}
 
-      <Secao titulo={`Perfil da temporada · ${tela.jogosDisputados} jogo${tela.jogosDisputados === 1 ? '' : 's'}`}>
+      <Secao
+        titulo={`Perfil da temporada · ${tela.jogosDisputados} jogo${tela.jogosDisputados === 1 ? '' : 's'}`}
+      >
         <NumerosCompletos n={tela.perfilNumeros} />
       </Secao>
 

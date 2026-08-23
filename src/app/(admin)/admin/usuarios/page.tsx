@@ -82,6 +82,9 @@ export default async function PaginaUsuarios({
               <td style={celula}>{u.status}</td>
               <td style={celula}>
                 {u.assinaturaStatus ?? '—'}
+                <div style={{ opacity: 0.6, fontSize: 12 }}>
+                  direito: {u.direitoAtivo ? 'ativo' : 'inativo'}
+                </div>
                 {u.proximaCobranca && (
                   <div style={{ opacity: 0.6, fontSize: 12 }}>
                     próxima: {u.proximaCobranca.toLocaleDateString('pt-BR')}

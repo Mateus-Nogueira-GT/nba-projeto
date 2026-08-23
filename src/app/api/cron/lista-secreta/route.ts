@@ -1,4 +1,5 @@
 import { getDb } from '@/modules/dominio/db/cliente'
+import { executarCronProtegido } from '@/modules/entrega/cron/guarda'
 import { publicarListaSecreta } from '@/modules/entrega/lista-secreta'
 import { rulesetAtivo } from '@/modules/entrega/ruleset-ativo'
 
@@ -17,20 +18,19 @@ export const maxDuration = 60
  * e o snapshot é regravado; se não mudou, nada acontece.
  */
 export async function GET(requisicao: Request): Promise<Response> {
-  const autorizacao = requisicao.headers.get('authorization')
-  const segredo = process.env.CRON_SECRET
+  return executarCronProtegido(requisicao, {
+    rota: '/api/cron/lista-secreta',
+    tarefa: async () => {
+      const agora = new Date()
+      const dataReferencia = agora.toISOString().slice(0, 10)
 
-  if (segredo && autorizacao !== `Bearer ${segredo}`) {
-    return new Response('não autorizado', { status: 401 })
-  }
+      const resultado = await publicarListaSecreta(getDb(), await rulesetAtivo(), {
+        dataReferencia,
+        agora,
+      })
 
-  const agora = new Date()
-  const dataReferencia = agora.toISOString().slice(0, 10)
-
-  const resultado = await publicarListaSecreta(getDb(), await rulesetAtivo(), {
-    dataReferencia,
-    agora,
+      return { dataReferencia, ...resultado }
+    },
+    quantidade: (resultado) => (resultado.publicou ? 1 : 0),
   })
-
-  return Response.json({ dataReferencia, ...resultado })
 }

@@ -1,193 +1,272 @@
-# Spec 04 — Paywall e contratação
+# Spec 04 — Cobrança e controle de acesso
 
-**Estado:** proposta · 19/08/2026
-**Depende de:** spec 01 (não adianta cobrar por feed vazio) · decisão conjunta
-com a spec 03 sobre cache offline
-**Destrava:** receita
+**Estado:** pronta para decisão de negócio · 21/08/2026
 
----
+**Depende de:** [Spec 00](00-estabilizacao.md), [Spec 01](01-ingestao-persistente.md)
+e política de cache da [Spec 03](03-pwa.md)
 
-## Problema
+**Integra com:** elegibilidade de Push da [Spec 02](02-web-push.md)
 
-O webhook do Mercado Pago está pronto: valida assinatura HMAC, é idempotente por
-`(provedor, evento_externo_id)`, libera usuário bloqueado quando o pagamento é
-aprovado, e responde 503 sem credencial em vez de fingir que processou.
-
-**Ele reage a um pagamento que ninguém consegue iniciar.** Não existe nada que
-crie a `preapproval` no Mercado Pago — o `PortaPagamento` só sabe interpretar
-notificação, não abrir cobrança.
-
-E o feed está **aberto**: nenhuma tela de `src/app/(app)` confere sessão ou
-assinatura. Quem souber a URL lê a Lista Secreta inteira sem pagar.
+**Destrava:** contratação self-service e receita
 
 ---
 
-## Escopo
+## Objetivo
 
-### Entra
+Permitir cadastro, contratação no checkout hospedado do Mercado Pago, acesso
+somente após confirmação confiável, consulta da assinatura e cancelamento sem
+intervenção. O mesmo serviço de autorização protege pages, APIs, server actions,
+filas e Push.
 
-- Criação de assinatura (checkout / `preapproval`)
-- Portão de acesso no app do assinante
-- Tela de conta: situação, dispositivos, cancelamento
-- Tratamento de inadimplência
-
-### Não entra
-
-- **Qualquer movimentação relacionada a aposta.** ADR-0004: somente leitura de
-  odds, sem envio de aposta, sem credencial de casa, sem conta vinculada a casa.
-  Esta spec cobra assinatura do produto — e nada mais.
-- Emissão de nota fiscal: fora do v0 por decisão explícita da visão
-- Abertura da conta Mercado Pago: é do cliente
+Esta spec não considera o webhook atual pronto. A Spec 00 corrige consulta do
+recurso oficial, assinatura HMAC, atomicidade, logout e a mistura entre bloqueio
+administrativo e pagamento.
 
 ---
 
-## Contrato
+## Princípios
 
-### A porta cresce
+1. retorno do checkout nunca comprova pagamento;
+2. cartão e dados sensíveis ficam no Mercado Pago;
+3. plano, preço, e-mail e URLs são derivados no servidor;
+4. bloqueio administrativo e direito comercial são independentes;
+5. webhook e reconciliação produzem o mesmo efeito idempotente;
+6. eventos fora de ordem não regridem estado;
+7. conteúdo pago não entra no cache offline do v0;
+8. criação ambígua é reconciliada antes de novo POST.
 
-`PortaPagamento` hoje só interpreta notificação. Precisa de um método:
+---
+
+## Modelo de domínio
+
+Uma fonte de verdade por pergunta:
+
+- `usuarios.status`: somente bloqueio administrativo/segurança;
+- `assinaturas`: espelho do contrato de cobrança;
+- `cobrancas`: pagamentos, recusas, estornos e chargebacks;
+- `direitos_acesso`: fonte consultada pelo portão;
+- `eventos_pagamento`: trilha idempotente do webhook;
+- `tentativas_checkout`: coordenação da criação externa.
+
+Direitos possuem produto, origem (`ASSINATURA`, `CORTESIA`, `MANUAL`), início,
+validade e referência. Pagamento nunca altera `usuarios.status`. Assinatura e
+cobrança são estados diferentes: preapproval `authorized` não significa, por si
+só, pagamento aprovado.
 
 ```ts
-criarAssinatura(dados: {
-  usuarioId: string
-  plano: string
-  emailPagador: string
-  urlRetorno: string
-}): Promise<{ assinaturaExternaId: string; urlCheckout: string }>
+type ResultadoAcesso =
+  | { permitido: true; sessao: Sessao; direitoId: string }
+  | {
+      permitido: false
+      motivo: 'sem-sessao' | 'bloqueio-administrativo' | 'sem-direito-ativo'
+    }
 ```
 
-O adapter fake devolve uma URL falsa e um id determinístico — é o que permite
-testar o fluxo inteiro sem tocar no Mercado Pago.
+---
 
-### O portão
+## Cobertura de autorização
 
-O modelo de acesso **já existe e é simples**: `usuarios.status` é ATIVO ou
-BLOQUEADO, e o webhook o alterna. O portão não precisa reinterpretar a assinatura
-a cada requisição.
+| Superfície | Regra |
+| --- | --- |
+| `/entrar`, cadastro, retorno e webhook | pública conforme função; input validado |
+| `/assinar` | sessão válida; não exige direito ativo |
+| `/conta` | sessão válida, inclusive para inadimplente cancelar |
+| `/` e `/fire-live` | direito ativo |
+| `/estatisticas/*` | decisão comercial pendente |
+| `/admin/*` | autorização administrativa independente |
+| APIs/actions pagas | mesmo portão, ownership e validação |
+| consumidor Push | revalida direito em cada lote |
+
+Proteger apenas pages não basta. Um teste de varredura inventaria pages, Route
+Handlers, server actions, loaders e consumers que entregam conteúdo pago.
+
+---
+
+## Cadastro e contratação
+
+O CTA precisa terminar em identidade autenticada. A entrega inclui cadastro
+self-service ou documenta outro fluxo aprovado; criação manual pelo admin não é
+contratação self-service.
+
+```text
+CTA → entrar/cadastrar → criar tentativa local → criar/recuperar preapproval
+→ checkout hospedado → retorno “processando”
+→ webhook ou reconciliação → assinatura/cobrança/direito → acesso
+```
+
+Idempotência:
+
+- uma tentativa aberta por `(usuario, produto)`;
+- UUID opaco de `external_reference` persistido antes da rede;
+- plano, payer email e back URL resolvidos no servidor;
+- idempotency key externa quando suportada;
+- concorrência coordenada por constraint/lock;
+- após timeout, buscar pela referência antes de criar novamente;
+- ID externo e `init_point` são persistidos sem confiar no navegador.
+
+O retorno mostra `processando`, `ativo` ou erro reconciliável. Query string nunca
+concede acesso.
+
+---
+
+## Porta de cobrança
 
 ```ts
-// entrega/acesso.ts
-type Acesso =
-  | { permitido: true; sessao: Sessao }
-  | { permitido: false; motivo: 'sem-sessao' | 'bloqueado' | 'sem-assinatura' }
-
-async function exigirAssinante(): Promise<Acesso>
+interface PortaCobranca {
+  criarAssinatura(entrada: CriarAssinatura): Promise<CheckoutCriado>
+  consultarAssinatura(id: string): Promise<AssinaturaExterna>
+  buscarPorReferencia(referencia: string): Promise<AssinaturaExterna | null>
+  cancelarAssinatura(id: string): Promise<AssinaturaExterna>
+  validarAviso(aviso: AvisoHttp): AvisoValidado
+  consultarRecursoDoAviso(aviso: AvisoValidado): Promise<RecursoCobranca>
+}
 ```
 
-> **Uma fonte de verdade.** Se o portão consultasse `assinaturas.status` direto,
-> passariam a existir dois lugares decidindo quem entra — e eles divergiriam no
-> primeiro webhook perdido. O webhook decide e escreve em `usuarios.status`; o
-> portão só lê.
-
-### Onde o portão entra
-
-| Rota | Portão | Por quê |
-| --- | --- | --- |
-| `/` (Lista Secreta) | **sim** | é o produto |
-| `/estatisticas/*` | **decidir** — ver Perguntas | dado público em toda parte |
-| `/entrar` | não | é a porta |
-| `/conta` | sessão, sem assinatura | cancelar não pode exigir estar em dia |
-
-Cada page confere por conta própria, como o painel admin. **Não** existe
-middleware para isso, pelo mesmo motivo do painel: no App Router a server action
-é endpoint direto, e proteger só a rota deixa a ação aberta. Foi exatamente assim
-que `/admin/mapeamento` ficou exposto.
-
-### Tela de conta
-
-- Situação da assinatura e próxima cobrança (`situacaoDaAssinatura` já existe)
-- Dispositivos ativos, com encerrar sessão — o limite de 2 já é implementado
-- Preferências de notificação (spec 02)
-- Cancelamento
+Há adapter fake completo e adapter real. A validação usa headers e `data.id` da
+query conforme o contrato oficial; o payload mínimo é um aviso para consultar o
+recurso autenticado. Tópicos de assinatura e cobrança têm fixtures distintas.
 
 ---
 
-## Regras que isto toca
+## Webhook e reconciliação
 
-- **ADR-0004 (odds somente leitura)** — o limite é rígido. Assinatura é do
-  produto; nenhuma tabela, rota ou campo de aposta é criado.
-- **Prompt/segurança** — o sistema **nunca** manipula dado de cartão. O checkout
-  do Mercado Pago é hospedado por eles; o app redireciona e recebe o webhook.
-  Nenhum número de cartão atravessa a aplicação.
-- **Regra 5** — o webhook já é idempotente. A criação de assinatura também precisa
-  ser: dois cliques no botão não podem gerar duas cobranças.
+1. capturar query, headers e corpo bruto;
+2. validar assinatura e tolerância temporal;
+3. consultar o recurso oficial com access token;
+4. correlacionar por referência opaca/ID externo;
+5. numa transação, registrar evento, atualizar assinatura/cobrança e recalcular
+   direito;
+6. confirmar sucesso somente após commit.
 
----
+Duplicata não reaplica efeito. Falha faz rollback para o retry concluir. Eventos
+fora de ordem não regridem estado ou validade.
 
-## Perguntas antes de codar
-
-1. **As estatísticas são pagas?** É a pergunta comercial mais importante desta
-   spec. A aba é a única parte do produto com valor para quem não assina, e
-   costuma ser o que traz gente para dentro. Aberta = isca; fechada = mais
-   conversão imediata. **Decisão do cliente, não minha.**
-2. **Qual é o plano?** Nome, preço, periodicidade e teste grátis não estão em
-   documento nenhum.
-3. **O que acontece no atraso?** Bloqueia no dia? Tem carência? O webhook já sabe
-   bloquear; falta a política.
-4. **Cancelamento vale quando?** Fim do ciclo pago ou imediato?
-
-Sem 2, 3 e 4 a spec não sai do papel — são valores de negócio, e inventá-los seria
-violar a regra 3 no lugar mais caro possível.
+Reconciliação é obrigatória: cron fail-closed consulta tentativas ambíguas,
+pendentes recentes e assinaturas sem evento dentro do SLO. Usa a mesma função de
+aplicação do webhook e registra divergências.
 
 ---
 
-## Pronto quando
+## Cancelamento e conta
 
-- Um visitante sem sessão em `/` vê convite de assinatura, não a lista
-- Assinar leva ao checkout do Mercado Pago e volta com acesso liberado
-- O webhook de aprovação libera o acesso sem intervenção
-- Dois cliques no botão de assinar geram **uma** cobrança
-- Cancelar reflete na tela de conta
-- Bloqueio pelo painel derruba o acesso na requisição seguinte — já é assim, e o
-  teste precisa continuar valendo
-- Nenhuma rota nova toca dado de cartão
+`/conta` exibe plano, estado, validade, próxima cobrança, dispositivos e
+preferências. Cancelar exige sessão recente, ownership e proteção contra CSRF.
+Somente resposta externa confirmada ou reconciliação altera o estado local.
+Retry é idempotente; falha externa não mostra “cancelado”. A política define se
+o direito termina imediatamente ou no fim do período pago.
+
+---
+
+## Segurança
+
+- allowlist de hosts para URLs por ambiente;
+- rate limit em cadastro, criação e cancelamento;
+- nenhum token/payload sensível em log;
+- preço e produto nunca vêm de FormData;
+- ownership em operações por ID;
+- sem redirect arbitrário;
+- conteúdo pago com `no-store` e fora do service worker;
+- logout/cancelamento limpam cache privado legado.
+
+---
+
+## Harness de validação
+
+### Automatizado
+
+1. tabela de verdade: sessão × bloqueio × direito × validade;
+2. pagamento aprovado não remove bloqueio administrativo;
+3. direito vencido bloqueia page, API, action e Push;
+4. aviso oficial mínimo consulta o recurso antes do efeito;
+5. HMAC válida usa `data.id` da query; adulteração falha;
+6. `authorized` da assinatura não vira pagamento aprovado;
+7. duplicata aplica efeito uma vez;
+8. falha entre evento e direito faz rollback e retry conclui;
+9. eventos fora de ordem não regridem estado;
+10. dois checkouts concorrentes geram uma tentativa externa;
+11. timeout após criação busca por referência antes de repetir;
+12. adulteração de plano/e-mail/retorno é ignorada ou recusada;
+13. retorno forjado não libera acesso;
+14. cancelamento alheio é recusado e repetição é idempotente;
+15. falha externa não conclui cancelamento local;
+16. varredura cobre todas as superfícies pagas;
+17. Cache Storage não contém resposta paga.
+
+### Smoke sandbox
+
+Criar conta → checkout → retorno pendente → webhook → direito ativo → acesso e
+Push → cancelamento → reconciliação. Repetir com cobrança recusada, webhook
+duplicado, webhook perdido e estorno conforme a política definida.
+
+### Pronto quando
+
+- visitante não lê conteúdo pago;
+- cadastro e checkout funcionam sem intervenção;
+- acesso só nasce de webhook/reconciliação confirmados;
+- bloqueio administrativo prevalece sem alterar cobrança;
+- concorrência e timeout não duplicam assinatura;
+- cancelamento é confirmado e auditável;
+- usuário sem direito não recebe Push;
+- nenhuma rota manipula cartão ou confia em retorno do navegador.
 
 ---
 
 # Plano
 
-### Fatia 0 · Respostas do cliente
+### Fatia 0 — Decisões de negócio
 
-Bloqueante. Perguntas 2, 3 e 4.
+Fechar plano, cadastro, estatísticas, carência, cancelamento, estorno, cortesia,
+migração da base e domínios. São gates de produto.
 
-### Fatia 1 · Portão
+### Fatia 1 — Modelo e autorização
 
-1. `entrega/acesso.ts` com `exigirAssinante`
-2. Aplicar em `/`
-3. Testes: sem sessão, bloqueado, ativo
-4. **Teste de varredura**, no molde do que hoje protege o painel: toda page de
-   `(app)` que não seja pública chama o portão. É o que impede a próxima tela de
-   nascer aberta.
+Migration aditiva para tentativas, estados financeiros e direitos. Implementar o
+portão e tabela de verdade, inicialmente em shadow mode.
 
-### Fatia 2 · Contratação
+### Fatia 2 — Porta e fake
 
-1. `criarAssinatura` na porta + fake
-2. Fluxo de checkout e retorno
-3. Idempotência: reusar a `preapproval` pendente do usuário em vez de criar outra
+Fechar operações da porta, erros e adapter fake. Testar criação, consulta,
+cancelamento, webhook e reconciliação sem rede.
 
-### Fatia 3 · Tela de conta
+### Fatia 3 — Cadastro e checkout
 
-Situação, dispositivos, preferências, cancelamento.
+Implementar identidade self-service, tentativa idempotente, CTA, retorno
+processando e proteção contra concorrência/adulteração.
 
-### Fatia 4 · Adapter real
+### Fatia 4 — Integração real
 
-1. `criarAssinatura` no `PagamentoMercadoPago`
-2. Sem credencial, 503 — mesmo padrão do webhook
-3. O teste de "nenhuma credencial em arquivo versionado" já cobre a chave nova
+Concluir correções da Spec 00, implementar consulta/criação/cancelamento reais,
+fixtures oficiais, webhook transacional e cron de reconciliação.
+
+### Fatia 5 — Conta e cobertura
+
+Criar `/conta`, cancelamento, estados de erro/loading e aplicar o portão em pages,
+APIs, actions e Push. Confirmar política `no-store` da PWA.
+
+### Fatia 6 — Rollout
+
+Backfill da base → dual-read em sombra → sandbox → webhook/reconciliação em
+produção sem checkout → equipe → piloto → paywall gradual.
+
+Rollback desliga novos checkouts, mantém webhook/reconciliação e não volta a
+usar `usuarios.status` como assinatura. Em incerteza de autorização, falha
+fechado ou exibe manutenção; migrations permanecem aditivas.
 
 ---
 
-## Riscos
+## Decisões bloqueantes
 
-**Webhook perdido deixa quem pagou do lado de fora.** O Mercado Pago reenvia, e o
-endpoint é idempotente, mas a janela existe. Mitigação: um job de reconciliação
-que consulta as assinaturas pendentes — fatia própria, não obrigatória no primeiro
-corte.
+1. plano: nome, preço BRL, frequência, trial e tipo de preapproval;
+2. cadastro self-service e verificação de e-mail;
+3. estatísticas públicas ou pagas;
+4. carência e retries após recusa;
+5. cancelamento imediato ou fim do período;
+6. política para estorno e chargeback;
+7. acesso de admin, cortesia e concessão manual;
+8. migração dos usuários atuais;
+9. acesso restrito à conta sob bloqueio administrativo;
+10. domínios permitidos por ambiente.
 
-**Cache offline e paywall se contradizem.** A spec 03 quer o feed disponível sem
-rede; esta quer o feed fechado. Um assinante que cancela mantém no cache o que já
-baixou. Resolver explicitamente: não cachear conteúdo de assinante fora do shell.
-
-**Bloquear no primeiro dia de atraso queima confiança** numa base pequena.
-Decisão comercial, com consequência técnica mínima — mas precisa ser tomada antes,
-não depois do primeiro caso.
+Referências oficiais: [Webhooks de assinaturas](https://www.mercadopago.com.br/developers/pt/docs/subscriptions/additional-content/your-integrations/notifications/webhooks),
+[criação de preapproval](https://www.mercadopago.com.br/developers/pt/reference/online-payments/subscriptions/create-preapproval/post)
+e [gerenciamento/cancelamento](https://www.mercadopago.com.br/developers/pt/docs/subscriptions/subscription-management).

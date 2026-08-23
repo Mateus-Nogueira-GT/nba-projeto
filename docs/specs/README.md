@@ -1,7 +1,8 @@
 # Specs — o que falta construir
 
-Sete fatias, em ordem de dependência. Derivadas da auditoria de 19/08/2026, que
-encontrou e corrigiu cinco defeitos e mapeou o que falta para o monolito rodar.
+Oito specs, em ordem de dependência. As sete fatias de produto vieram da
+auditoria de 19/08/2026. A auditoria de 21/08/2026 acrescentou a Spec 00 para
+corrigir contratos da fundação antes de ampliar o sistema.
 
 Cada documento tem duas partes: a **spec** (problema, contrato, regras que toca,
 perguntas abertas, critério de pronto) e o **plano** (fatias em ordem, verificação,
@@ -13,23 +14,33 @@ riscos).
 
 | # | Spec | Depende de | Destrava |
 | --- | --- | --- | --- |
-| 01 | [Ingestão persistente e crons](01-ingestao-persistente.md) | — | tudo |
-| 02 | [Web Push ponta a ponta](02-web-push.md) | 01 | o Fire Live |
-| 03 | [PWA instalável](03-pwa.md) | 02 | push no iPhone |
-| 04 | [Paywall e contratação](04-paywall-contratacao.md) | 01 | receita |
+| 00 | [Estabilização da fundação](00-estabilizacao.md) | — | execução segura das demais specs |
+| 01 | [Ingestão real](01-ingestao-persistente.md) | 00 | dados reais |
+| 02 | [Web Push ponta a ponta](02-web-push.md) | 00, 01 + fundação 03 | entrega do Fire Live |
+| 03 | [PWA instalável e segura](03-pwa.md) | 00; integra com 02 | instalação e push no iPhone |
+| 04 | [Cobrança e controle de acesso](04-paywall-contratacao.md) | 00, 01, política de cache 03 | receita |
 | 05 | [Feed e filtros do Fire Live](05-feed-fire-live.md) | 01, 02 | destino do push |
 | 06 | [Odds e aviso de blowout](06-odds-e-blowout.md) | 01 + contrato com as casas | o card completo |
 | 07 | [Backtest e alerta de dado parado](07-backtest-e-alerta.md) | 01 + histórico | a entrega comercial do ADR-0002 |
 
-A 01 vem primeiro porque **nada do que já foi construído roda com dado real** —
-o motor, os feeds e as telas leem tabelas que nenhum job preenche. As 02 e 03
-compartilham o mesmo arquivo de service worker e devem ser feitas juntas.
+A 00 vem primeiro porque as demais specs dependem de contratos hoje quebrados:
+temporada, retry de workflow, sessões, pagamento e identidade de provedor. Depois
+dela, a 01 é a primeira fatia de produto porque os sincronizadores já existem,
+mas nenhum job de produção os orquestra com uma fonte homologada. As 02 e 03
+compartilham um único service worker: a 03 é dona da fundação e a 02 dos handlers
+de Push. A capacidade pode ser construída antes da 04, mas o Push público espera
+o controle de acesso para não entregar conteúdo pago a uma conta inelegível.
+
+**Situação em 21/08/2026:** Specs 00–03 estão implementadas localmente. A base da
+Spec 04 também está implementada em modo fail-closed; o rollout comercial segue
+bloqueado pelas decisões de produto e pelo smoke no sandbox do Mercado Pago.
 
 ---
 
 ## O que dá para começar hoje
 
-Três pedaços não dependem de resposta de ninguém nem da spec 01:
+Enquanto as decisões externas da Spec 01 não chegam, três pedaços puros não
+dependem do provedor NBA:
 
 - **Aviso de blowout** (06, fatia 1) — função pura, ruleset já homologado
 - **Agregação de odds** (06, fatia 2) — função pura, testável sem casa nenhuma
@@ -45,9 +56,11 @@ Nenhuma destas eu posso responder sozinho. Onde o cliente ou o CJ não definiu,
 | Spec | Pergunta | Bloqueia |
 | --- | --- | --- |
 | 01 | Quem é o provedor NBA primário e o reserva? Credenciais? | tudo |
+| 01 | Qual timezone/regra define a data de referência da rodada? | agenda e jobs |
 | 01 | O provedor entrega quebra por quarto **do time**? | tela do time |
 | 02 | As chaves VAPID são da conta de quem? | push |
-| 02 | Posição de tela do apito e do green no design system | push |
+| 03 | Nome comercial, ícones e plataformas mínimas suportadas | instalação |
+| 04 | Cadastro self-service ou criação controlada? | contratação |
 | 04 | **As estatísticas são pagas ou abertas?** | paywall |
 | 04 | Plano: nome, preço, periodicidade, teste grátis | contratação |
 | 04 | Política de inadimplência e de cancelamento | contratação |

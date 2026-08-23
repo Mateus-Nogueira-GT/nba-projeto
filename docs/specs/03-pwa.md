@@ -1,30 +1,28 @@
-# Spec 03 — PWA instalável
+# Spec 03 — PWA instalável e segura
 
-**Estado:** proposta · 19/08/2026
-**Depende de:** spec 02 (mesmo service worker)
-**Destrava:** push no iPhone — Safari só entrega para PWA instalado
+**Estado:** implementada localmente; identidade final e matriz real pendentes · 21/08/2026
+
+**Depende de:** [Spec 00](00-estabilizacao.md)
+
+**Integra com:** [Spec 02 — Web Push](02-web-push.md)
+
+**Destrava:** instalação pelo navegador e Web Push no iPhone/iPad
 
 ---
 
-## Problema
+## Objetivo
 
-A primeira linha de `docs/00-visao.md` define o produto:
+Entregar uma PWA instalável em Android, iOS/iPadOS e desktop, com manifest,
+ícones, metadata, service worker atualizável e fallback offline neutro. O v0 não
+armazena conteúdo autenticado ou pago em Cache Storage.
 
-> PWA (Android, iOS e web — **instalável pelo navegador, sem loja**)
+A fundação PWA pode avançar em paralelo ao backend do Push. O fluxo E2E do Push
+em iOS só fica pronto quando as duas specs estiverem integradas.
 
-Hoje não existe nem o diretório `public/`. Sem manifest, sem ícones, sem service
-worker. `layout.tsx` tem quatro linhas úteis:
-
-```tsx
-export const metadata = { title: 'IA da NBA' }
-```
-
-Sem viewport, sem cor de tema, sem metadata de instalação. O navegador não oferece
-"adicionar à tela inicial" porque não há o que instalar.
-
-**A consequência mais dura é no iOS:** Safari só entrega Web Push para PWA já
-adicionado à tela inicial. Sem esta spec, metade dos assinantes não recebe apito
-nenhum, por mais correta que a spec 02 esteja.
+> Implementação: manifest, metadata, ícones candidatos, offline neutro, cache
+> allowlisted, atualização controlada e experiência de instalação foram
+> entregues no worker único da Spec 02. Produção permanece bloqueada até a
+> aprovação da identidade e a certificação nos aparelhos da matriz.
 
 ---
 
@@ -32,147 +30,209 @@ nenhum, por mais correta que a spec 02 esteja.
 
 ### Entra
 
-- `public/` com manifest, ícones e assets
-- Metadata completa em `layout.tsx`: viewport, tema, Apple
-- Registro do service worker da spec 02
-- Cache offline do feed já baixado
-- Convite de instalação, no momento certo
+- manifest nativo do App Router;
+- ícones aprovados, inclusive Apple e maskable;
+- metadata/viewport/theme;
+- registro e ciclo de atualização de um único service worker;
+- cache apenas de assets públicos explicitamente allowlisted;
+- página offline sem conteúdo do usuário;
+- experiência de instalação progressiva;
+- matriz de testes em aparelhos reais.
 
 ### Não entra
 
-- Push (spec 02) — este documento só **registra** o service worker que ela escreve
-- Loja de aplicativos: fora do v0 por decisão explícita da visão
+- cache offline de Lista Secreta, estatísticas ou Fire Live;
+- loja de aplicativos;
+- sincronização em background de conteúdo;
+- envio Web Push, inscrição e preferências (Spec 02).
 
 ---
 
-## Contrato
+## Manifest e assets
 
-### Manifest
+Usar `src/app/manifest.ts` com `MetadataRoute.Manifest`. Ele importa os tokens do
+design system, evitando hex duplicado e artefato gerado.
 
+```ts
+{
+  id: '/',
+  name: 'IA da NBA',
+  short_name: 'IA da NBA',
+  lang: 'pt-BR',
+  start_url: '/',
+  scope: '/',
+  display: 'standalone',
+  background_color: primitivo.tinta900,
+  theme_color: primitivo.tinta900,
+  icons: [/* 192 any, 512 any, 512 maskable */],
+}
 ```
-public/manifest.webmanifest
-  name             "IA da NBA"
-  short_name       "IA da NBA"
-  display          "standalone"
-  start_url         "/"
-  background_color  #080D16   ← primitivo.tinta900
-  theme_color       #080D16
-  icons             192, 512, e um maskable 512
+
+O `layout.tsx` referencia manifest, theme color, Apple Web App e ícones. Há no
+mínimo 192×192, 512×512, 512×512 maskable e `apple-touch-icon`. Todos são
+verificados no build.
+
+Os assets atuais são candidatos de homologação gerados a partir dos tokens do
+produto, com área segura maskable e dimensões validadas automaticamente. Produção
+continua bloqueada até a aprovação explícita da identidade comercial.
+
+---
+
+## Um único service worker
+
+A Spec 03 é dona da fundação e do arquivo final; a Spec 02 adiciona os handlers
+de Push ao mesmo worker. Não existem registros, escopos ou workers concorrentes.
+
+Regras de ciclo de vida:
+
+- escopo `/` e script servido sem cache longo;
+- nomes de cache possuem versão;
+- `activate` remove somente caches com prefixo desta aplicação;
+- HTML dinâmico não usa cache-first;
+- atualização disponível é sinalizada e aplicada após recarga controlada;
+- `skipWaiting` silencioso não ocorre durante uma sessão ativa;
+- worker novo mantém compatibilidade com o payload Push da versão anterior;
+- rollback publica um worker corretivo/no-op; apagar o arquivo não desregistra
+  clientes já controlados.
+
+---
+
+## Política de cache v0
+
+O cache é uma allowlist, não uma regra abrangente.
+
+| Recurso | Estratégia |
+| --- | --- |
+| ícones e assets públicos imutáveis | cache-first, versionado |
+| página offline neutra | precache |
+| navegação pública | rede; fallback offline neutro |
+| HTML autenticado | nunca armazenar |
+| `/api/*`, `/admin/*`, `/entrar*` | nunca armazenar |
+| Lista Secreta, estatísticas e Fire Live | nunca armazenar |
+
+Assets `_next/static` já possuem hash; o worker não conclui por isso que HTML ou
+Server Components são imutáveis. Fallback diz “Sem conexão” e não reproduz dado
+do assinante.
+
+Cache offline de conteúdo pago só pode entrar em outra decisão de produto, após
+a Spec 04, com modelo de expiração, revogação e ameaça explícito.
+
+---
+
+## Experiência de instalação
+
+O convite surge após valor demonstrado e nunca interrompe o primeiro acesso.
+
+- quando existir, `beforeinstallprompt` é melhoria progressiva;
+- não se presume suporte nem se promete prompt automático;
+- iOS usa feature detection e modo standalone, não detecção rígida de Safari;
+- instruções de “Adicionar à Tela de Início” são curtas e específicas;
+- depois de instalado, o convite desaparece;
+- permissão de notificação permanece um segundo gesto, sob a Spec 02.
+
+Fluxo iOS:
+
+```text
+navegador → Quero receber alertas → instrução de instalação
+→ abrir pela Tela de Início → Ativar alertas → permissão + inscrição
 ```
 
-As cores saem de `src/design-system/tokens/primitivo.ts`, o único arquivo do
-projeto onde hex pode existir. **O manifest é JSON e não importa TypeScript** —
-então ele é a única exceção viável à regra, e por isso precisa ser gerado a
-partir do token, não escrito à mão.
-
-> **Proposta:** um script `npm run manifest` que lê o primitivo e escreve o
-> `.webmanifest`, no mesmo espírito de `npm run tokens`, que já gera o CSS. Um
-> teste confere que o arquivo em disco bate com o token — igual ao que já existe
-> para os tokens CSS.
-
-### Ícones
-
-Não existem. É trabalho de design, não de código, e **bloqueia a instalação** —
-um manifest apontando para ícone inexistente faz o navegador recusar a instalação
-inteira.
-
-Mínimo: 192×192, 512×512 e um 512×512 *maskable* com margem de segurança para o
-recorte circular do Android.
-
-### Cache offline
-
-O feed é snapshot cacheado por desenho (ADR-0003). Isso combina com offline:
-
-| Recurso | Estratégia | Por quê |
-| --- | --- | --- |
-| Shell do app | cache-first | não muda entre deploys |
-| Feed da Lista Secreta | stale-while-revalidate | ver a lista de ontem é melhor que tela branca |
-| Estatísticas | network-first | número velho apresentado como atual é o defeito que a aba existe para evitar |
-| Fire Live | **nunca cachear** | alvo do 1º quarto tem validade de minutos |
-
-> A regra do Fire Live não é otimização: um apito servido do cache 20 minutos
-> depois manda o assinante para uma janela de aposta que já fechou.
-
-A tela de estatísticas já mostra o horário do dado. Offline, esse horário é o que
-impede o cache de mentir — e é por isso que ele foi feito obrigatório por tipo,
-não por convenção.
+A tela trata estados: não suportado, instalável, instrução manual, instalado e
+atualização disponível.
 
 ---
 
-## Regras que isto toca
+## Segurança e privacidade
 
-- **Regra 1** — cor de tema é token, não literal. O manifest é gerado.
-- **ADR-0003** — o feed é snapshot; o cache reforça a decisão, não a contorna
-- **Requisito de frescor** (`docs/00-visao.md`) — toda tela informa o horário do
-  dado. O cache **não pode** apagar isso: a tela servida do cache exibe o horário
-  do dado cacheado, não o da renderização.
-
----
-
-## Perguntas antes de codar
-
-1. **Os ícones existem?** É a única dependência externa desta spec. Sem eles o
-   PWA não instala.
-2. **Nome curto na tela inicial.** "IA da NBA" tem 10 caracteres e cabe; confirmar
-   com o cliente se é o nome comercial.
-3. **O app funciona offline sem sessão?** O paywall da spec 04 muda a resposta:
-   se o feed exige assinatura, o cache offline serve conteúdo pago sem checagem.
-   Decidir junto com a spec 04.
+- somente contexto seguro (HTTPS; localhost no desenvolvimento);
+- deep links do worker são same-origin e allowlisted;
+- logout, cancelamento e troca de conta não deixam resposta privada no cache;
+- o worker não intercepta request não previsto;
+- nenhuma limpeza ampla de storage/caches de terceiros;
+- CSP e headers existentes são preservados;
+- telemetria de instalação usa eventos sem identificador sensível.
 
 ---
 
-## Pronto quando
+## Harness de validação
 
-- Chrome no Android oferece instalar, e o app abre em janela própria
-- Safari no iPhone adiciona à tela inicial e **recebe push** (fecha a spec 02)
-- Lighthouse aponta o app como instalável, sem erro de manifest
-- Sem rede, a Lista Secreta já vista abre e informa o horário do dado cacheado
-- Sem rede, a tela de Fire Live **não** serve conteúdo de cache
-- O manifest em disco bate com `primitivo.ts`, verificado por teste
+### Automatizado
+
+1. manifest contém `id`, `scope`, `start_url`, `lang`, display e ícones;
+2. cores vêm do token e arquivos referenciados existem/dimensões são válidas;
+3. worker registra no escopo esperado e possui versionamento;
+4. atualização entre duas versões não mantém asset obsoleto;
+5. limpeza afeta apenas caches prefixados;
+6. nenhuma resposta de HTML autenticado, API, Lista, estatísticas ou Fire Live
+   aparece no Cache Storage;
+7. offline mostra apenas a página neutra;
+8. nenhum pedido de instalação/notificação ocorre no primeiro carregamento;
+9. integração preserva handlers e contrato de Push da Spec 02.
+
+### Aparelhos reais obrigatórios
+
+- iPhone/iPad no menor iOS suportado e no atual;
+- Chrome Android atual;
+- Chrome desktop e Safari macOS;
+- instalação, abertura standalone e remoção;
+- online → offline → online;
+- atualização entre dois deploys;
+- no iOS, instalar e receber Push real com a Spec 02.
+
+Lighthouse não é critério único de instalação. A prova é manifest/worker válidos
+e instalação real nos aparelhos suportados.
+
+### Pronto quando
+
+- o app instala e abre em modo standalone nos alvos;
+- manifest e ícones não têm erro;
+- uma atualização chega sem servir build incompatível;
+- offline nunca revela conteúdo autenticado;
+- Fire Live nunca é servido de cache;
+- o fluxo iOS orienta instalação antes de ativar alertas;
+- o E2E iOS recebe Push quando a Spec 02 também estiver pronta.
 
 ---
 
 # Plano
 
-### Fatia 1 · Manifest gerado
+### Fatia 1 — Manifest e identidade
 
-1. `scripts/gerar-manifest.mts`, no molde de `gerar-tokens-css.mts`
-2. `npm run manifest`
-3. Teste: o arquivo bate com o token, como o teste de tokens CSS já faz
+Implementar `manifest.ts`, metadata e ícones aprovados; adicionar testes de
+existência, dimensão e tokens.
 
-### Fatia 2 · Metadata
+### Fatia 2 — Fundação do worker
 
-1. `layout.tsx` ganha `viewport`, `themeColor`, `appleWebApp`, `manifest`
-2. `lang="pt-BR"` já está correto
+Criar registro único, fallback offline, allowlist de assets, versionamento e
+limpeza restrita. Validar que conteúdo dinâmico não entra no cache.
 
-### Fatia 3 · Ícones
+### Fatia 3 — Instalação
 
-Depende de design. Enquanto não vierem, um placeholder gerado a partir do token
-mantém a instalação funcionando — **com issue aberta**, nunca silenciosamente.
+Construir estados de instalação Android/desktop/iOS com feature detection e
+telemetria mínima.
 
-### Fatia 4 · Service worker
+### Fatia 4 — Integração Push
 
-1. Estender o `public/sw.js` da spec 02 com as estratégias de cache da tabela
-2. Registrar no cliente, depois do primeiro carregamento
-3. Versionar o cache pelo hash do build; limpar os antigos no `activate`
+Adicionar ao mesmo worker os handlers da Spec 02, com contrato versionado e
+atualização retrocompatível.
 
-### Fatia 5 · Convite de instalação
+### Fatia 5 — Certificação e rollout
 
-1. Capturar `beforeinstallprompt`
-2. Oferecer depois de valor entregue — nunca no primeiro carregamento
-3. iOS não tem esse evento: instrução manual, detectando Safari
+Preview HTTPS → matriz de aparelhos → produção sem Push público → canary integrado
+→ expansão. Monitorar erro de worker, versão ativa, instalação e fallback.
+
+Rollback publica worker compatível que deixa de cachear e limpa apenas caches da
+aplicação. O manifest anterior fica disponível até os clientes migrarem.
 
 ---
 
-## Riscos
+## Decisões pendentes de rollout
 
-**Service worker mal versionado serve build velho para sempre.** É o defeito
-clássico de PWA. Mitigação: cache nomeado pelo hash do build e limpeza no
-`activate`; nunca `cache-first` no HTML.
+1. aprovação do nome comercial e dos ícones candidatos;
+2. menor iOS/iPadOS e Android oficialmente suportados;
+3. momento exato do convite após entrega de valor;
+4. copy e ilustrações das instruções de instalação.
 
-**Cache e paywall se contradizem.** Conteúdo pago em cache continua acessível
-depois do cancelamento. Resolver junto com a spec 04 — provavelmente não cachear
-nada de assinante fora do shell.
-
-**iOS é irregular.** Push em PWA iOS existe desde o 16.4, mas o comportamento
-varia por versão. Testar em aparelho real, não só no simulador.
+Referências: [Web App Manifest](https://www.w3.org/TR/appmanifest/),
+[Service Workers](https://www.w3.org/TR/service-workers/) e
+[guia PWA do Next.js](https://nextjs.org/docs/app/guides/progressive-web-apps).

@@ -7,7 +7,7 @@ import { jogadores, mapaJogadores, niveis, niveisVersao } from '../../dominio/db
 import { ativarVersaoNiveis } from '../../dominio/repositorios/niveis'
 
 import { FonteFake } from '../nba/adaptadores/fake'
-import { FonteComFailover, type EventoSaude } from '../nba/failover'
+import { consultarComOrigem, FonteComFailover, type EventoSaude } from '../nba/failover'
 import { avaliarFrescor, registrarBatimento } from '../health/heartbeat'
 import { lerListaDeNiveis } from '../niveis/parser'
 import { pontuar, sugerir } from '../niveis/similaridade'
@@ -54,6 +54,35 @@ function jogadorExterno(id: string, nome: string, ativo = true): JogadorExterno 
 // ===========================================================================
 
 describe('failover — o chamador não sabe qual provedor respondeu', () => {
+  it('devolve explicitamente a identidade da fonte vencedora', async () => {
+    const fonte = new FonteComFailover(
+      new FonteFake('principal', {}, { falhaCom: new Error('HTTP 503') }),
+      new FonteFake('reserva', { jogadores: [jogadorExterno('res-9', 'Reserva')] }),
+      { timeoutMs: 1000 },
+    )
+
+    const resposta = await consultarComOrigem(fonte, (efetiva) => efetiva.listarJogadores())
+
+    expect(resposta.provedor).toBe('reserva')
+    expect(resposta.dados[0]?.idExterno).toBe('res-9')
+  })
+
+  it('id externo fixa a fonte que o emitiu e nunca cai no outro namespace', async () => {
+    const principal = new FonteFake('principal', { boxScore: [] })
+    const reserva = new FonteFake('reserva', { boxScore: [] })
+    const fonte = new FonteComFailover(principal, reserva, { timeoutMs: 1000 })
+
+    const resposta = await consultarComOrigem(
+      fonte,
+      (efetiva) => efetiva.boxScore('id-da-reserva'),
+      'reserva',
+    )
+
+    expect(resposta.provedor).toBe('reserva')
+    expect(principal.chamadas).toBe(0)
+    expect(reserva.chamadas).toBe(1)
+  })
+
   it('principal CAI → chamador recebe o dado do reserva, sem erro', async () => {
     const principal = new FonteFake('principal', {}, { falhaCom: new Error('HTTP 503') })
     const reserva = new FonteFake('reserva', { times: TIMES })
@@ -140,7 +169,8 @@ describe('heartbeat e alerta de dado parado', () => {
     expect(linha?.status).toBe('FALHA')
     // O último sucesso PRECISA sobreviver: é a distância até ele que mede
     // há quanto tempo o dado está parado.
-    expect(linha?.dadoMaisRecenteEm?.toISOString()).toBe(sucesso.toISOString())
+    expect(linha?.ultimaRespostaOk?.toISOString()).toBe(sucesso.toISOString())
+    expect(linha?.dadoMaisRecenteEm).toBeNull()
   })
 
   it('o limite é mais rígido dentro da janela dos jogos', async () => {
@@ -303,10 +333,7 @@ describe('import da lista — reexecutável e não destrutivo', () => {
 
     await ativarVersaoNiveis(banco.db, versao.id)
 
-    const depois = await banco.db
-      .select()
-      .from(niveisVersao)
-      .where(eq(niveisVersao.id, versao.id))
+    const depois = await banco.db.select().from(niveisVersao).where(eq(niveisVersao.id, versao.id))
     expect(depois[0]?.ativa).toBe(true)
   })
 })

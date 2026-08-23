@@ -1,0 +1,24 @@
+{
+  "data": [
+    {
+      "team": {
+        "id": 6,
+        "conference": "East",
+        "division": "Central",
+        "city": "Cleveland",
+        "name": "Cavaliers",
+        "full_name": "Cleveland Cavaliers",
+        "abbreviation": "CLE"
+      },
+      "conference_record": "41-11",
+      "conference_rank": 1,
+      "division_record": "12-4",
+      "division_rank": 1,
+      "wins": 64,
+      "losses": 18,
+      "home_record": "34-7",
+      "road_record": "30-11",
+      "season": 2024
+    }
+  ]
+}

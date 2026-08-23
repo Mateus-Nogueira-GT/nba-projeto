@@ -4,10 +4,13 @@ import { eq } from 'drizzle-orm'
 import { bancoDeTeste } from '../../dominio/__tests__/ajuda-banco'
 import {
   classificacao,
+  conflitosIdentidadeJogo,
+  conflitosIdentidadeJogador,
   estatisticasJogo,
   estatisticasQuarto,
   estatisticasTimeJogo,
   identidadesJogador,
+  identidadesJogo,
   jogadores,
   jogos,
   lesoesEscalacao,
@@ -15,19 +18,18 @@ import {
   times,
 } from '../../dominio/db/schema'
 import { FonteFake, type Fixture } from '../nba/adaptadores/fake'
-import {
-  sincronizarJogadores,
-  sincronizarJogos,
-  sincronizarTimes,
-} from '../sincronizar/elenco'
+import { consultarComOrigem, FonteComFailover } from '../nba/failover'
+import { sincronizarJogadores, sincronizarJogos, sincronizarTimes } from '../sincronizar/elenco'
 import {
   jogosDaData,
+  persistirBoxScore,
   sincronizarBoxScore,
   sincronizarBoxScoreDoTime,
   sincronizarClassificacao,
   sincronizarEscalacao,
 } from '../sincronizar/partida'
 import { recalcularMedias } from '../sincronizar/medias'
+import { garantirJogadores } from '../sincronizar/identidade'
 
 const PROVEDOR = 'provedor-a'
 const DATA = '2026-08-19'
@@ -83,11 +85,14 @@ const FIXTURE: Fixture = {
   jogos: [
     {
       idExterno: 'g1',
+      dataReferencia: DATA,
       dataHoraUtc: `${DATA}T23:00:00.000Z`,
       timeCasaSigla: 'LAL',
       timeVisitanteSigla: 'BOS',
       status: 'ENCERRADO',
       quartoAtual: null,
+      relogio: null,
+      intervalo: false,
       placarCasa: 112,
       placarVisitante: 105,
     },
@@ -194,14 +199,14 @@ async function ciclo() {
   const db = banco.db
 
   await sincronizarTimes(db, f)
-  await sincronizarJogadores(db, f, PROVEDOR)
+  await sincronizarJogadores(db, f)
   await sincronizarJogos(db, f, DATA, AGORA)
 
   const partidas = await jogosDaData(db, f, DATA)
   for (const p of partidas) {
-    await sincronizarBoxScore(db, f, PROVEDOR, p, AGORA)
+    await sincronizarBoxScore(db, f, p, AGORA)
     await sincronizarBoxScoreDoTime(db, f, p, AGORA)
-    await sincronizarEscalacao(db, f, PROVEDOR, p, AGORA)
+    await sincronizarEscalacao(db, f, p, AGORA)
   }
 
   await sincronizarClassificacao(db, f, '2026-27', AGORA)
@@ -251,6 +256,8 @@ afterAll(async () => {
 
 beforeEach(async () => {
   const db = banco.db
+  await db.delete(conflitosIdentidadeJogador)
+  await db.delete(conflitosIdentidadeJogo)
   await db.delete(estatisticasQuarto)
   await db.delete(estatisticasJogo)
   await db.delete(estatisticasTimeJogo)
@@ -266,6 +273,21 @@ beforeEach(async () => {
 // ===========================================================================
 
 describe('um ciclo completo preenche o canônico', () => {
+  it('failover grava o id no namespace da fonte que realmente respondeu', async () => {
+    const principal = new FonteFake('principal', {}, { falhaCom: new Error('fora') })
+    const reserva = new FonteFake('reserva', {
+      times: FIXTURE.times,
+      jogadores: [{ ...FIXTURE.jogadores![0]!, idExterno: 'reserva-p1' }],
+    })
+    const failover = new FonteComFailover(principal, reserva, { timeoutMs: 1000 })
+
+    await sincronizarTimes(banco.db, failover)
+    await sincronizarJogadores(banco.db, failover)
+
+    const [identidade] = await banco.db.select().from(identidadesJogador)
+    expect(identidade).toMatchObject({ provedor: 'reserva', idExterno: 'reserva-p1' })
+  })
+
   it('grava as tabelas que estavam vazias', async () => {
     await ciclo()
     const c = await contagens()
@@ -338,6 +360,107 @@ describe('um ciclo completo preenche o canônico', () => {
 // ===========================================================================
 
 describe('idempotência — rodar de novo não muda nada', () => {
+  it('rollback do snapshot não deixa estatística de jogador pela metade', async () => {
+    const f = fonte()
+    await sincronizarTimes(banco.db, f)
+    await sincronizarJogadores(banco.db, f)
+    await sincronizarJogos(banco.db, f, DATA, AGORA)
+    const [jogo] = await jogosDaData(banco.db, f, DATA)
+    expect(jogo).toBeDefined()
+    const resposta = await consultarComOrigem(
+      f,
+      (fonteEfetiva) => fonteEfetiva.boxScore(jogo!.idExterno),
+      jogo!.provedor,
+    )
+
+    await expect(
+      banco.db.transaction(async (tx) => {
+        await persistirBoxScore(tx, jogo!, AGORA, resposta)
+        throw new Error('falha induzida antes do commit')
+      }),
+    ).rejects.toThrow('falha induzida')
+
+    expect(await banco.db.select().from(estatisticasJogo)).toHaveLength(0)
+    expect(await banco.db.select().from(estatisticasQuarto)).toHaveLength(0)
+  })
+
+  it('concorrência não deixa jogador canônico órfão', async () => {
+    const entrada = {
+      idExterno: 'concorrente-1',
+      nomeCompleto: 'Jogador Concorrente',
+      timeId: null,
+      posicao: null,
+      alturaCm: null,
+      numeroCamisa: null,
+      fotoUrl: null,
+      ativo: true,
+    }
+
+    await Promise.all([
+      garantirJogadores(banco.db, PROVEDOR, [entrada]),
+      garantirJogadores(banco.db, PROVEDOR, [entrada]),
+    ])
+
+    const identidades = await banco.db.select().from(identidadesJogador)
+    const canonicos = await banco.db.select().from(jogadores)
+    expect(identidades).toHaveLength(1)
+    expect(canonicos).toHaveLength(1)
+    expect(identidades[0]?.jogadorId).toBe(canonicos[0]?.id)
+  })
+
+  it('mesmo nome em duas fontes preserva um canônico e envia o segundo id à curadoria', async () => {
+    const entrada = {
+      idExterno: 'primario-77',
+      nomeCompleto: 'Luka Dončić',
+      timeId: null,
+      posicao: null,
+      alturaCm: null,
+      numeroCamisa: null,
+      fotoUrl: null,
+      ativo: true,
+    }
+    await Promise.all([
+      garantirJogadores(banco.db, 'primario', [entrada]),
+      garantirJogadores(banco.db, 'reserva', [
+        { ...entrada, idExterno: 'reserva-009', nomeCompleto: 'Luka Doncic' },
+      ]),
+    ])
+
+    const identidades = await banco.db.select().from(identidadesJogador)
+    const canonicos = await banco.db.select().from(jogadores)
+    expect(canonicos).toHaveLength(1)
+    expect(identidades).toHaveLength(1)
+    expect(identidades[0]?.jogadorId).toBe(canonicos[0]!.id)
+    const conflitos = await banco.db.select().from(conflitosIdentidadeJogador)
+    expect(conflitos).toHaveLength(1)
+    expect(conflitos[0]).toMatchObject({
+      estado: 'PENDENTE',
+      motivo: 'NOME_COINCIDENTE_REQUER_CURADORIA',
+    })
+  })
+
+  it('nome canônico ambíguo exige curadoria e não cria vínculo automático', async () => {
+    await banco.db
+      .insert(jogadores)
+      .values([{ nomeCompleto: 'José Silva' }, { nomeCompleto: 'Jose Silva' }])
+
+    await garantirJogadores(banco.db, 'reserva', [
+        {
+          idExterno: 'reserva-ambiguo',
+          nomeCompleto: 'Jose Silva',
+          timeId: null,
+          posicao: null,
+          alturaCm: null,
+          numeroCamisa: null,
+          fotoUrl: null,
+          ativo: true,
+        },
+      ])
+
+    expect(await banco.db.select().from(identidadesJogador)).toHaveLength(0)
+    expect(await banco.db.select().from(conflitosIdentidadeJogador)).toHaveLength(1)
+  })
+
   it('dois ciclos seguidos deixam as mesmas contagens', async () => {
     await ciclo()
     const primeiro = await contagens()
@@ -373,6 +496,25 @@ describe('idempotência — rodar de novo não muda nada', () => {
     expect(todos[0]!.dataHoraUtc.toISOString()).toBe(`${DATA}T01:00:00.000Z`)
   })
 
+  it('identidade da reserva não sobrescreve o snapshot escolhido da primária', async () => {
+    await sincronizarTimes(banco.db, fonte())
+    await sincronizarJogos(banco.db, fonte(), DATA, AGORA, PROVEDOR, true)
+    const reserva = new FonteFake('reserva', {
+      jogos: [
+        {
+          ...FIXTURE.jogos![0]!,
+          idExterno: 'reserva-g1',
+          placarCasa: 999,
+        },
+      ],
+    })
+    await sincronizarJogos(banco.db, reserva, DATA, AGORA, 'reserva', false)
+
+    const [jogo] = await banco.db.select().from(jogos)
+    expect(jogo?.placarCasa).toBe(112)
+    expect(await banco.db.select().from(identidadesJogo)).toHaveLength(2)
+  })
+
   it('placar que avança sobrescreve, não acumula', async () => {
     await ciclo()
 
@@ -392,6 +534,27 @@ describe('idempotência — rodar de novo não muda nada', () => {
 // ===========================================================================
 
 describe('médias derivadas', () => {
+  it('exclui jogo ao vivo e linha sem minutos positivos (DNP conservador)', async () => {
+    const f = new FonteFake(PROVEDOR, {
+      ...FIXTURE,
+      jogos: [{ ...FIXTURE.jogos![0]!, status: 'AO_VIVO', quartoAtual: 1 }],
+      boxScore: [{ ...FIXTURE.boxScore![0]!, minutos: 0 }],
+    })
+    await sincronizarTimes(banco.db, f)
+    await sincronizarJogadores(banco.db, f)
+    await sincronizarJogos(banco.db, f, DATA, AGORA)
+    const [jogo] = await jogosDaData(banco.db, f, DATA)
+    await sincronizarBoxScore(banco.db, f, jogo!, AGORA)
+    const resultado = await recalcularMedias(banco.db, {
+      janela: 'temporada',
+      configTemporada: CONFIG_TEMPORADA,
+      agora: AGORA,
+    })
+
+    expect(resultado).toEqual({ lidos: 0, gravados: 0 })
+    expect(await banco.db.select().from(mediasJogador)).toHaveLength(0)
+  })
+
   it('a média sai do box score, não do provedor', async () => {
     await ciclo()
     const [m] = await banco.db.select().from(mediasJogador)
@@ -414,21 +577,55 @@ describe('médias derivadas', () => {
     const todas = await banco.db.select().from(mediasJogador)
     expect(todas).toHaveLength(1)
   })
+
+  it('correção para DNP remove a média antiga', async () => {
+    await ciclo()
+    await banco.db.update(estatisticasJogo).set({ minutos: '0' })
+    await recalcularMedias(banco.db, {
+      janela: 'temporada',
+      configTemporada: CONFIG_TEMPORADA,
+      agora: AGORA,
+    })
+
+    expect(await banco.db.select().from(mediasJogador)).toHaveLength(0)
+  })
 })
 
 // ===========================================================================
 
 describe('dado incompleto não vira dado inventado', () => {
+  it('id externo de jogo apontando para outro confronto vai para curadoria', async () => {
+    await sincronizarTimes(banco.db, fonte())
+    await sincronizarJogos(banco.db, fonte(), DATA, AGORA)
+    const divergente = new FonteFake(PROVEDOR, {
+      jogos: [
+        {
+          ...FIXTURE.jogos![0]!,
+          timeCasaSigla: 'BOS',
+          timeVisitanteSigla: 'LAL',
+        },
+      ],
+    })
+
+    const resultado = await sincronizarJogos(banco.db, divergente, DATA, AGORA)
+    expect(resultado.ignorados).toBe(1)
+    expect(await banco.db.select().from(jogos)).toHaveLength(1)
+    expect(await banco.db.select().from(conflitosIdentidadeJogo)).toHaveLength(1)
+  })
+
   it('jogo com time desconhecido é ignorado, não criado pela metade', async () => {
     const semTimes = new FonteFake(PROVEDOR, {
       jogos: [
         {
           idExterno: 'gX',
+          dataReferencia: DATA,
           dataHoraUtc: `${DATA}T23:00:00.000Z`,
           timeCasaSigla: 'XXX',
           timeVisitanteSigla: 'YYY',
           status: 'AGENDADO',
           quartoAtual: null,
+          relogio: null,
+          intervalo: false,
           placarCasa: null,
           placarVisitante: null,
         },
@@ -442,15 +639,16 @@ describe('dado incompleto não vira dado inventado', () => {
     expect(await banco.db.select().from(jogos)).toHaveLength(0)
   })
 
-  it('box score de jogador sem identidade é descartado', async () => {
+  it('box score de jogador sem identidade aborta o snapshot inteiro', async () => {
     await sincronizarTimes(banco.db, fonte())
     await sincronizarJogos(banco.db, fonte(), DATA, AGORA)
     const partidas = await jogosDaData(banco.db, fonte(), DATA)
 
     // Nenhum jogador foi sincronizado: não há identidade para resolver.
-    const r = await sincronizarBoxScore(banco.db, fonte(), PROVEDOR, partidas[0]!, AGORA)
+    await expect(
+      sincronizarBoxScore(banco.db, fonte(), partidas[0]!, AGORA),
+    ).rejects.toThrow(/snapshot rejeitado.*sem identidade/)
 
-    expect(r.gravados).toBe(0)
     expect(await banco.db.select().from(estatisticasJogo)).toHaveLength(0)
   })
 })

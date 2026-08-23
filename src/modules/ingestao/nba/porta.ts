@@ -40,13 +40,28 @@ export type JogadorExterno = {
 
 export type JogoExterno = {
   idExterno: string
+  /** Rodada declarada pelo provedor (YYYY-MM-DD), distinta do instante UTC. */
+  dataReferencia: string
   dataHoraUtc: string
   timeCasaSigla: string
   timeVisitanteSigla: string
   status: 'AGENDADO' | 'AO_VIVO' | 'ENCERRADO'
   quartoAtual: number | null
+  /** Relógio esportivo como recebido, sem inferir segundos quando ausente. */
+  relogio: string | null
+  intervalo: boolean
   placarCasa: number | null
   placarVisitante: number | null
+}
+
+export class CapacidadeNaoSuportadaError extends Error {
+  constructor(
+    readonly provedor: string,
+    readonly capacidade: string,
+  ) {
+    super(`${provedor} não documenta a capacidade ${capacidade}`)
+    this.name = 'CapacidadeNaoSuportadaError'
+  }
 }
 
 export type LinhaBoxScore = {

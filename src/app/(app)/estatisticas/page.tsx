@@ -1,8 +1,11 @@
 import { getDb } from '@/modules/dominio/db/cliente'
+import { temporadaDe } from '@/modules/dominio/temporada'
+import { exigirAcessoEstatisticasSeConfigurado } from '@/modules/plataforma/assinatura/guarda'
 import { buscar } from '@/modules/entrega/estatisticas/busca'
 import { telaJogosDoDia } from '@/modules/entrega/estatisticas/jogos-do-dia'
 import { telaDaClassificacao } from '@/modules/entrega/estatisticas/time'
 import { rotaDoJogador, rotaDoTime } from '@/modules/entrega/estatisticas/rotas'
+import { rulesetAtivo } from '@/modules/entrega/ruleset-ativo'
 import { UltimaAtualizacao } from '@/design-system/componentes'
 import { semantico } from '@/design-system/tokens/semantico'
 import '@/design-system/tokens/tokens.css'
@@ -10,17 +13,6 @@ import { Moldura, Secao, SemBanco } from './moldura'
 
 export const dynamic = 'force-dynamic'
 export const metadata = { title: 'Estatísticas · IA da NBA' }
-
-/**
- * Temporada corrente.
- *
- * TODO(ingestão): hoje é derivada do ano corrente. Quando a ingestão passar a
- * gravar a temporada oficial, ler dela — a NBA atravessa o ano civil e o
- * rótulo "2025-26" não sai de um `getFullYear()`.
- */
-function temporadaCorrente(agora: Date): string {
-  return String(agora.getUTCFullYear())
-}
 
 function horaDoJogo(d: Date): string {
   return d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
@@ -74,6 +66,7 @@ export default async function PaginaEstatisticas({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>
 }) {
+  await exigirAcessoEstatisticasSeConfigurado()
   const params = await searchParams
   const bruto = Array.isArray(params.q) ? params.q[0] : params.q
   const termo = (bruto ?? '').trim()
@@ -83,7 +76,11 @@ export default async function PaginaEstatisticas({
   const db = getDb()
   const agora = new Date()
   const hoje = agora.toISOString().slice(0, 10)
-  const temporada = temporadaCorrente(agora)
+  const ruleset = await rulesetAtivo()
+  const temporada = temporadaDe(agora, {
+    mesInicio: ruleset.temporada.mes_inicio,
+    formato: ruleset.temporada.formato,
+  })
 
   const [doDia, classificacao, resultados] = await Promise.all([
     telaJogosDoDia(db, hoje),
@@ -154,9 +151,7 @@ export default async function PaginaEstatisticas({
 
       <Secao titulo="Jogos do dia">
         {doDia.jogos.length === 0 ? (
-          <p style={{ fontSize: 13, color: semantico.textoSecundario }}>
-            Nenhum jogo hoje.
-          </p>
+          <p style={{ fontSize: 13, color: semantico.textoSecundario }}>Nenhum jogo hoje.</p>
         ) : (
           <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'grid', gap: 6 }}>
             {doDia.jogos.map((j) => (

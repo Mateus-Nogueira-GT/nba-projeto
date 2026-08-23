@@ -3,6 +3,7 @@ import { PagamentoMercadoPago, configDoAmbiente } from '@/modules/plataforma/ass
 import { processarNotificacao } from '@/modules/plataforma/assinatura/webhook'
 
 export const dynamic = 'force-dynamic'
+const MAX_CORPO_BYTES = 64 * 1024
 
 /**
  * Webhook do Mercado Pago.
@@ -16,24 +17,45 @@ export const dynamic = 'force-dynamic'
 export async function POST(requisicao: Request): Promise<Response> {
   const config = configDoAmbiente()
   if (!config) {
-    return Response.json({ erro: 'integração de pagamento não configurada' }, { status: 503 })
+    return Response.json(
+      { erro: 'integração de pagamento não configurada' },
+      { status: 503, headers: { 'Cache-Control': 'no-store' } },
+    )
   }
 
+  const tamanhoDeclarado = Number(requisicao.headers.get('content-length') ?? '0')
+  if (Number.isFinite(tamanhoDeclarado) && tamanhoDeclarado > MAX_CORPO_BYTES) {
+    return Response.json(
+      { erro: 'payload muito grande' },
+      { status: 413, headers: { 'Cache-Control': 'no-store' } },
+    )
+  }
   const corpoBruto = await requisicao.text()
+  if (Buffer.byteLength(corpoBruto, 'utf8') > MAX_CORPO_BYTES) {
+    return Response.json(
+      { erro: 'payload muito grande' },
+      { status: 413, headers: { 'Cache-Control': 'no-store' } },
+    )
+  }
   const cabecalhos = Object.fromEntries(
     [...requisicao.headers.entries()].map(([k, v]) => [k.toLowerCase(), v]),
   )
+  const parametros = Object.fromEntries(new URL(requisicao.url).searchParams.entries())
 
   const resultado = await processarNotificacao(getDb(), new PagamentoMercadoPago(config), {
     corpoBruto,
     cabecalhos,
+    parametros,
     agora: new Date(),
   })
 
   if (!resultado.aceito) {
     const status = resultado.motivo === 'assinatura-invalida' ? 401 : 400
-    return Response.json({ erro: resultado.motivo }, { status })
+    return Response.json(
+      { erro: resultado.motivo },
+      { status, headers: { 'Cache-Control': 'no-store' } },
+    )
   }
 
-  return Response.json(resultado, { status: 200 })
+  return Response.json(resultado, { status: 200, headers: { 'Cache-Control': 'no-store' } })
 }

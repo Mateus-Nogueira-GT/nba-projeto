@@ -1,7 +1,8 @@
-import { and, desc, eq, ilike, isNull, or, sql } from 'drizzle-orm'
+import { and, desc, eq, gt, ilike, isNull, or, sql } from 'drizzle-orm'
 
 import {
   assinaturas,
+  direitosAcesso,
   dispositivos,
   eventosConta,
   sessoes,
@@ -9,7 +10,7 @@ import {
 } from '../../dominio/db/schema'
 import type { Db } from '../../dominio/db/tipos'
 import { gerarHash } from '../auth/senha'
-import { encerrarTodasAsSessoes } from '../auth/sessao'
+import { encerrarTodasAsSessoesNaTransacao } from '../auth/sessao'
 
 export type FiltroUsuarios = {
   busca?: string
@@ -28,10 +29,15 @@ export type LinhaAdmin = {
   assinaturaStatus: string | null
   assinaturaPlano: string | null
   proximaCobranca: Date | null
+  direitoAtivo: boolean
   dispositivosAtivos: number
 }
 
-export async function listarUsuarios(db: Db, filtro: FiltroUsuarios = {}): Promise<LinhaAdmin[]> {
+export async function listarUsuarios(
+  db: Db,
+  filtro: FiltroUsuarios = {},
+  agora = new Date(),
+): Promise<LinhaAdmin[]> {
   const condicoes = []
 
   if (filtro.busca && filtro.busca.trim() !== '') {
@@ -39,7 +45,14 @@ export async function listarUsuarios(db: Db, filtro: FiltroUsuarios = {}): Promi
     condicoes.push(or(ilike(usuarios.email, alvo), ilike(usuarios.nome, alvo)))
   }
   if (filtro.status) condicoes.push(eq(usuarios.status, filtro.status))
-  if (filtro.situacaoAssinatura) condicoes.push(eq(assinaturas.status, filtro.situacaoAssinatura))
+  if (filtro.situacaoAssinatura) {
+    condicoes.push(
+      sql`exists (
+        select 1 from ${assinaturas} a
+        where a.usuario_id = ${usuarios.id} and a.status = ${filtro.situacaoAssinatura}
+      )`,
+    )
+  }
 
   const linhas = await db
     .select({
@@ -50,17 +63,38 @@ export async function listarUsuarios(db: Db, filtro: FiltroUsuarios = {}): Promi
       papel: usuarios.papel,
       criadoEm: usuarios.criadoEm,
       ultimoAcesso: usuarios.ultimoAcesso,
-      assinaturaStatus: assinaturas.status,
-      assinaturaPlano: assinaturas.plano,
-      proximaCobranca: assinaturas.proximaCobranca,
+      assinaturaStatus: sql<string | null>`(
+        select a.status from ${assinaturas} a
+        where a.usuario_id = ${usuarios.id}
+        order by a.atualizado_em desc limit 1
+      )`,
+      assinaturaPlano: sql<string | null>`(
+        select a.plano from ${assinaturas} a
+        where a.usuario_id = ${usuarios.id}
+        order by a.atualizado_em desc limit 1
+      )`,
+      proximaCobranca: sql<Date | null>`(
+        select a.proxima_cobranca from ${assinaturas} a
+        where a.usuario_id = ${usuarios.id}
+        order by a.atualizado_em desc limit 1
+      )`,
+      direitoAtivo: sql<boolean>`exists (
+        select 1 from ${direitosAcesso} d
+        where d.usuario_id = ${usuarios.id}
+          and d.produto = 'NBA_PRO'
+          and d.revogado_em is null
+          and d.inicio <= ${agora}
+          and (d.fim is null or d.fim > ${agora})
+      )`,
       dispositivosAtivos: sql<number>`(
         SELECT count(DISTINCT ${sessoes.dispositivoId})::int
         FROM ${sessoes}
-        WHERE ${sessoes.usuarioId} = ${usuarios.id} AND ${sessoes.encerradaEm} IS NULL
+        WHERE ${sessoes.usuarioId} = ${usuarios.id}
+          AND ${sessoes.encerradaEm} IS NULL
+          AND ${sessoes.expiraEm} > ${agora}
       )`,
     })
     .from(usuarios)
-    .leftJoin(assinaturas, eq(assinaturas.usuarioId, usuarios.id))
     .where(condicoes.length > 0 ? and(...condicoes) : undefined)
     .orderBy(desc(usuarios.criadoEm))
 
@@ -98,21 +132,24 @@ export async function bloquearUsuario(
   motivo: string,
   agora: Date,
 ): Promise<void> {
-  await db.update(usuarios).set({ status: 'BLOQUEADO' }).where(eq(usuarios.id, usuarioId))
-  await encerrarTodasAsSessoes(db, usuarioId, `bloqueado pelo painel: ${motivo}`, agora)
-  await db.insert(eventosConta).values({
-    usuarioId,
-    tipo: 'BLOQUEIO',
-    detalhe: motivo,
-    ocorridoEm: agora,
+  await db.transaction(async (tx) => {
+    await tx.update(usuarios).set({ status: 'BLOQUEADO' }).where(eq(usuarios.id, usuarioId))
+    await encerrarTodasAsSessoesNaTransacao(
+      tx,
+      usuarioId,
+      `bloqueado pelo painel: ${motivo}`,
+      agora,
+    )
+    await tx.insert(eventosConta).values({
+      usuarioId,
+      tipo: 'BLOQUEIO',
+      detalhe: motivo,
+      ocorridoEm: agora,
+    })
   })
 }
 
-export async function desbloquearUsuario(
-  db: Db,
-  usuarioId: string,
-  agora: Date,
-): Promise<void> {
+export async function desbloquearUsuario(db: Db, usuarioId: string, agora: Date): Promise<void> {
   await db.update(usuarios).set({ status: 'ATIVO' }).where(eq(usuarios.id, usuarioId))
   await db.insert(eventosConta).values({
     usuarioId,
@@ -140,6 +177,7 @@ export type DispositivoDoUsuario = {
 export async function dispositivosDoUsuario(
   db: Db,
   usuarioId: string,
+  agora = new Date(),
 ): Promise<DispositivoDoUsuario[]> {
   const linhas = await db
     .select({
@@ -153,7 +191,11 @@ export async function dispositivosDoUsuario(
     .from(dispositivos)
     .leftJoin(
       sessoes,
-      and(eq(sessoes.dispositivoId, dispositivos.id), isNull(sessoes.encerradaEm)),
+      and(
+        eq(sessoes.dispositivoId, dispositivos.id),
+        isNull(sessoes.encerradaEm),
+        gt(sessoes.expiraEm, agora),
+      ),
     )
     .where(eq(dispositivos.usuarioId, usuarioId))
     .orderBy(desc(dispositivos.ultimoUso))

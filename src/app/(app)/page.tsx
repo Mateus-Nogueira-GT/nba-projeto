@@ -1,8 +1,15 @@
 import { getDb } from '@/modules/dominio/db/cliente'
+import Link from 'next/link'
 import { lerFeed, ordenarPorConfianca, type ItemFeed } from '@/modules/entrega/lista-secreta'
 import { rotaDoJogador, BASE_ESTATISTICAS } from '@/modules/entrega/estatisticas/rotas'
 import { CardEntrada } from '@/design-system/componentes'
 import { semantico } from '@/design-system/tokens/semantico'
+import { AtivarAlertas, PainelPwa } from '@/components/pwa'
+import { sessaoAtual } from '@/modules/plataforma/auth/cookies'
+import { avaliarAcesso } from '@/modules/plataforma/assinatura/direito'
+import { politicaHomologacaoDoAmbiente } from '@/modules/entrega/push/fanout'
+import { lerConfiguracaoPush } from '@/modules/entrega/push/configuracao'
+import { redirect } from 'next/navigation'
 import '@/design-system/tokens/tokens.css'
 
 export const dynamic = 'force-dynamic'
@@ -29,7 +36,7 @@ function Filtros({ atual, base }: { atual: number; base: string }) {
       {QUANTIDADES.map((n) => {
         const ativo = n === atual
         return (
-          <a
+          <Link
             key={n}
             href={`${base}?quantidade=${n}`}
             aria-current={ativo ? 'page' : undefined}
@@ -45,7 +52,7 @@ function Filtros({ atual, base }: { atual: number; base: string }) {
             }}
           >
             {rotuloQuantidade(n)}
-          </a>
+          </Link>
         )
       })}
     </nav>
@@ -82,12 +89,27 @@ export default async function PaginaListaSecreta({
       <Moldura>
         <h1>Lista Secreta</h1>
         <p style={{ color: semantico.textoSecundario }}>
-          Banco não configurado. Rode <code>vercel env pull</code> e{' '}
-          <code>npm run db:migrate</code>.
+          Banco não configurado. Rode <code>vercel env pull</code> e <code>npm run db:migrate</code>
+          .
         </p>
       </Moldura>
     )
   }
+
+  const sessao = await sessaoAtual()
+  if (!sessao) redirect('/entrar?destino=/')
+  const acesso = await avaliarAcesso(getDb(), sessao.usuarioId)
+  if (!acesso.permitido) redirect('/assinar')
+
+  const configuracaoPush = lerConfiguracaoPush()
+  const pushDisponivel = Boolean(
+    configuracaoPush.habilitado &&
+    politicaHomologacaoDoAmbiente().permitido({
+      id: sessao.usuarioId,
+      email: sessao.email,
+      direitoAtivo: true,
+    }),
+  )
 
   const hoje = new Date().toISOString().slice(0, 10)
   // A tela lê o snapshot MATERIALIZADO. Nunca executa o motor: a avaliação
@@ -114,17 +136,27 @@ export default async function PaginaListaSecreta({
         <h1 style={{ margin: 0, fontSize: 22 }}>Lista Secreta</h1>
         <p style={{ margin: '4px 0 0', fontSize: 13, color: semantico.textoSecundario }}>
           {ordenados.length} entrada{ordenados.length === 1 ? '' : 's'} sugerida
-          {ordenados.length === 1 ? '' : 's'} pela estratégia · ordenadas pela escala de
-          confiança
+          {ordenados.length === 1 ? '' : 's'} pela estratégia · ordenadas pela escala de confiança
+        </p>
+        <p style={{ margin: '8px 0 0', fontSize: 12 }}>
+          <Link href="/conta" style={{ color: semantico.textoSecundario }}>
+            Minha conta
+          </Link>
         </p>
       </header>
+
+      {pushDisponivel && (
+        <div style={{ marginBottom: 16 }}>
+          <AtivarAlertas />
+        </div>
+      )}
 
       <Filtros atual={quantidade} base="/" />
 
       <p style={{ margin: '0 0 12px', fontSize: 13 }}>
-        <a href={BASE_ESTATISTICAS} style={{ color: semantico.textoSecundario }}>
+        <Link href={BASE_ESTATISTICAS} style={{ color: semantico.textoSecundario }}>
           Estatísticas · jogos do dia, jogadores e times →
-        </a>
+        </Link>
       </p>
 
       <div style={{ display: 'grid', gap: 10 }}>
@@ -155,6 +187,10 @@ export default async function PaginaListaSecreta({
         <p style={{ color: semantico.textoSecundario }}>Nenhuma entrada para hoje.</p>
       )}
 
+      <div style={{ marginTop: 16 }}>
+        <PainelPwa />
+      </div>
+
       {/* Toda tela informa o quão recente é o número que está sendo visto. */}
       <footer
         style={{
@@ -165,8 +201,7 @@ export default async function PaginaListaSecreta({
           color: semantico.textoSecundario,
         }}
       >
-        Última atualização: {horaLocal(feed.geradoEm)} · ruleset{' '}
-        {feed.conteudo.rulesetVersao}
+        Última atualização: {horaLocal(feed.geradoEm)} · ruleset {feed.conteudo.rulesetVersao}
       </footer>
     </Moldura>
   )

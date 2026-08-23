@@ -1,0 +1,25 @@
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  min-width: 320px;
+  background: var(--fundo);
+  color-scheme: dark;
+}
+
+body {
+  min-width: 320px;
+  min-height: 100dvh;
+  margin: 0;
+  background: var(--fundo);
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
