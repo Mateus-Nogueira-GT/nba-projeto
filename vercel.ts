@@ -42,5 +42,6 @@ export const config: VercelConfig = {
     { path: '/api/cron/ao-vivo', schedule: '* * * * *' },
     { path: '/api/cron/lista-secreta', schedule: '*/15 * * * *' },
     { path: '/api/cron/reconciliar-pagamentos', schedule: '*/10 * * * *' },
+    { path: '/api/cron/saude', schedule: '*/5 * * * *' },
   ],
 }
