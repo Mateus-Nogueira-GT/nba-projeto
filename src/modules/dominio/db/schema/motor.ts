@@ -79,16 +79,27 @@ export const apitos = pgTable(
   ],
 )
 
-/** Feed materializado. É o que os 10k usuários leem — nunca o motor direto. */
+/**
+ * Feed materializado. É o que os 10k usuários leem — nunca o motor direto.
+ *
+ * A Lista Secreta é publicada uma vez por dia: `jogoId` NULL, uma linha por
+ * dia. O Fire Live muda a cada ciclo e por jogo: uma linha por `jogoId`, para
+ * que dois workflows simultâneos nunca disputem a mesma escrita (spec 05).
+ * `nullsNotDistinct` faz o NULL da Lista Secreta colidir consigo mesmo — o
+ * mesmo mecanismo, pela mesma razão, de `apitos_dedup`.
+ */
 export const feedSnapshot = pgTable(
   'feed_snapshot',
   {
     id: uuid('id').primaryKey().defaultRandom(),
     dataReferencia: text('data_referencia').notNull(),
     estrategia: estrategiaEnum('estrategia').notNull(),
+    jogoId: uuid('jogo_id').references(() => jogos.id, { onDelete: 'cascade' }),
     conteudoJson: jsonb('conteudo_json').notNull(),
     geradoEm: timestamp('gerado_em', { withTimezone: true }).notNull().defaultNow(),
     hash: text('hash').notNull(),
   },
-  (t) => [unique('feed_snapshot_unico').on(t.dataReferencia, t.estrategia)],
+  (t) => [
+    unique('feed_snapshot_unico').on(t.dataReferencia, t.estrategia, t.jogoId).nullsNotDistinct(),
+  ],
 )

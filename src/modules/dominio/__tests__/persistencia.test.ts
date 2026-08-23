@@ -3,6 +3,7 @@ import { eq } from 'drizzle-orm'
 
 import { bancoDeTeste } from './ajuda-banco'
 import {
+  feedSnapshot,
   checkpointsIngestao,
   conflitosIdentidadeJogador,
   execucoesIngestao,
@@ -344,5 +345,64 @@ describe('niveis_versao — só uma ativa, garantido pelo banco', () => {
     // Drizzle encapsula o erro do Postgres; o nome do índice está na cadeia
     // de `cause`. Verificar o nome prova QUAL índice barrou, não só que falhou.
     expect(cadeiaDeMensagens(erro)).toMatch(/niveis_versao_unica_ativa/)
+  })
+})
+
+describe('feed_snapshot por jogo (spec 05, fatia 1)', () => {
+  let jogoIdA: string
+  let jogoIdB: string
+
+  beforeAll(async () => {
+    const sufixo = 'FS'
+    const [casa] = await banco.db.insert(times).values({ sigla: `H${sufixo}`, nome: 'Casa' }).returning()
+    const [vis] = await banco.db.insert(times).values({ sigla: `W${sufixo}`, nome: 'Visitante' }).returning()
+    const valores = {
+      dataHoraUtc: new Date('2026-08-22T23:00:00Z'),
+      dataReferencia: '2026-08-22',
+      timeCasaId: casa!.id,
+      timeVisitanteId: vis!.id,
+    }
+    const [a] = await banco.db.insert(jogos).values(valores).returning()
+    const [b] = await banco.db
+      .insert(jogos)
+      .values({ ...valores, timeCasaId: vis!.id, timeVisitanteId: casa!.id })
+      .returning()
+    jogoIdA = a!.id
+    jogoIdB = b!.id
+  })
+
+  const base = {
+    dataReferencia: '2026-08-22',
+    conteudoJson: { itens: [] },
+    hash: 'h1',
+  }
+
+  it('dois jogos gravam duas linhas FIRE_LIVE sem colidir', async () => {
+    const [a] = await banco.db
+      .insert(feedSnapshot)
+      .values({ ...base, estrategia: 'FIRE_LIVE', jogoId: jogoIdA })
+      .returning()
+    const [b] = await banco.db
+      .insert(feedSnapshot)
+      .values({ ...base, estrategia: 'FIRE_LIVE', jogoId: jogoIdB })
+      .returning()
+    expect(a!.id).not.toBe(b!.id)
+    await banco.db.delete(feedSnapshot)
+  })
+
+  it('mesmo (data, estrategia, jogo) conflita — chave de upsert', async () => {
+    await banco.db.insert(feedSnapshot).values({ ...base, estrategia: 'FIRE_LIVE', jogoId: jogoIdA })
+    await expect(
+      banco.db.insert(feedSnapshot).values({ ...base, estrategia: 'FIRE_LIVE', jogoId: jogoIdA }),
+    ).rejects.toThrow(/feed_snapshot_unico|duplicate/)
+    await banco.db.delete(feedSnapshot)
+  })
+
+  it('Lista Secreta continua uma linha por dia: NULL colide com NULL', async () => {
+    await banco.db.insert(feedSnapshot).values({ ...base, estrategia: 'LISTA_SECRETA' })
+    await expect(
+      banco.db.insert(feedSnapshot).values({ ...base, estrategia: 'LISTA_SECRETA' }),
+    ).rejects.toThrow(/feed_snapshot_unico|duplicate/)
+    await banco.db.delete(feedSnapshot)
   })
 })

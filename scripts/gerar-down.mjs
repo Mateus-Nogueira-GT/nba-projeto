@@ -15,8 +15,27 @@ const DIR = 'drizzle'
 const DIR_DOWN = join(DIR, 'down')
 mkdirSync(DIR_DOWN, { recursive: true })
 
+/**
+ * DROP CONSTRAINT só é inversível conhecendo a definição ANTERIOR — que o SQL
+ * da subida não carrega. Dicionário explícito, por nome: quem dropar uma
+ * constraint existente registra aqui como ela era. Nome ausente derruba o
+ * script, como qualquer comando desconhecido.
+ */
+const CONSTRAINTS_ANTERIORES = {
+  // Antes da 0012: uma linha por (dia, estratégia). A 0012 acrescenta jogo_id.
+  feed_snapshot_unico: 'UNIQUE ("data_referencia", "estrategia")',
+}
+
 /** Comandos cuja inversão é conhecida. Qualquer outro derruba o script. */
 const INVERSORES = [
+  {
+    reconhece: /^ALTER TABLE "([a-z_]+)" DROP CONSTRAINT "([a-z_0-9]+)"/i,
+    inverte: (m) => {
+      const definicao = CONSTRAINTS_ANTERIORES[m[2]]
+      if (!definicao) throw new Error(`não sei recriar a constraint "${m[2]}" na descida`)
+      return `ALTER TABLE "${m[1]}" ADD CONSTRAINT "${m[2]}" ${definicao};`
+    },
+  },
   {
     reconhece: /^CREATE TABLE(?: IF NOT EXISTS)? "([a-z_]+)"/i,
     inverte: (m) => `DROP TABLE IF EXISTS "${m[1]}" CASCADE;`,
@@ -78,7 +97,14 @@ for (const arquivo of readdirSync(DIR).filter((f) => f.endsWith('.sql'))) {
       continue
     }
 
-    const invertido = inversor.inverte(comando.match(inversor.reconhece))
+    let invertido
+    try {
+      invertido = inversor.inverte(comando.match(inversor.reconhece))
+    } catch (erro) {
+      console.error(`ERRO em ${arquivo}: ${erro.message}\n  ${comando.split('\n')[0]}`)
+      falhou = true
+      continue
+    }
     if (invertido) inversoes.push(invertido)
   }
 
