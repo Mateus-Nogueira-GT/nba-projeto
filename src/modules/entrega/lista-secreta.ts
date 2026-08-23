@@ -123,7 +123,8 @@ export async function publicarListaSecreta(
         hash,
       })
       .onConflictDoUpdate({
-        target: [feedSnapshot.dataReferencia, feedSnapshot.estrategia],
+        // A UNIQUE passou a incluir jogo_id (spec 05); NULL colide via nullsNotDistinct.
+        target: [feedSnapshot.dataReferencia, feedSnapshot.estrategia, feedSnapshot.jogoId],
         set: { conteudoJson: conteudo, geradoEm: opcoes.agora, hash },
       })
   }

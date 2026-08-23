@@ -4,6 +4,7 @@ import { eq } from 'drizzle-orm'
 
 import { bancoDeTeste } from '../../dominio/__tests__/ajuda-banco'
 import {
+  feedSnapshot,
   apitos,
   estatisticasQuarto,
   fireLiveExecucoes,
@@ -19,6 +20,7 @@ import {
 import { carregarRuleset } from '../../motor/ruleset/carregar'
 import type { Nivel } from '../../motor/tipos'
 import { executarCiclo } from '../fire-live/ciclo'
+import type { ConteudoFeedFireLive } from '../fire-live/feed'
 import type { EstadoObservado } from '../fire-live/ciclo'
 import { reservarJogosParaObservar } from '../fire-live/inicio'
 import { FilaEmMemoria } from '../fila/memoria'
@@ -586,5 +588,85 @@ describe('bordas do ciclo', () => {
     expect(r.encerrar).toBe(false)
     // 50 pontos, mas sem média não existe alvo — silêncio é o correto.
     expect(fila.enviadas.filter((m) => m.titulo.includes('Sem Media'))).toHaveLength(0)
+  })
+})
+
+// ===========================================================================
+// MATERIALIZAÇÃO DO FEED (spec 05, fatia 2)
+// ===========================================================================
+
+describe('materialização do feed do Fire Live', () => {
+  async function lerSnapshot() {
+    const [linha] = await banco.db
+      .select()
+      .from(feedSnapshot)
+      .where(eq(feedSnapshot.estrategia, 'FIRE_LIVE'))
+    return linha ?? null
+  }
+
+  it('o replay gravado produz o snapshot do jogo', async () => {
+    await reproduzir()
+
+    const linha = await lerSnapshot()
+    expect(linha).not.toBeNull()
+    expect(linha!.jogoId).toBe(jogoId)
+
+    const conteudo = linha!.conteudoJson as ConteudoFeedFireLive
+    expect(conteudo.jogoId).toBe(jogoId)
+    expect(conteudo.dataReferencia).toBe('2026-08-19')
+
+    const nomes = conteudo.itens.map((i) => i.nome).sort()
+    expect(nomes).toEqual(['Austin Reaves', 'Luka Doncic'])
+
+    const luka = conteudo.itens.find((i) => i.nome === 'Luka Doncic')!
+    expect(luka).toMatchObject({
+      jogoId,
+      timeSigla: 'LAL',
+      adversarioSigla: 'ADV',
+      atributo: 'PONTOS',
+      nivelJogador: 'MVP',
+      alvo1Q: 11,
+      quartoAtual: 1,
+      encerrado: false,
+      // O apito congela o instante do apito; o progresso é vivo.
+      valorNoQuarto: 23,
+      confianca: null,
+      linha: null,
+    })
+  })
+
+  it('reavaliar sem mudança não regrava o snapshot', async () => {
+    await reproduzir()
+    const antes = await lerSnapshot()
+
+    // Mesmo estado final, reavaliação completa (estadoAnterior null).
+    const r = await executarCiclo(banco.db, ruleset, fila, {
+      jogoId,
+      estadoAnterior: null,
+      iniciadoEm: TIPOFF,
+      agora: new Date(DURANTE.getTime() + 60_000),
+    })
+    expect(r.encerrar).toBe(false)
+
+    const depois = await lerSnapshot()
+    expect(depois!.hash).toBe(antes!.hash)
+    expect(depois!.geradoEm).toEqual(antes!.geradoEm)
+  })
+
+  it('fim do 1º quarto marca os itens como encerrados no snapshot', async () => {
+    await reproduzir()
+    await aplicarQuadro({ quarto: 2, pontos: {} })
+
+    const r = await executarCiclo(banco.db, ruleset, fila, {
+      jogoId,
+      estadoAnterior: null,
+      iniciadoEm: TIPOFF,
+      agora: new Date(DURANTE.getTime() + 60_000),
+    })
+    expect(r).toMatchObject({ encerrar: true, motivo: 'fim-do-primeiro-quarto' })
+
+    const conteudo = (await lerSnapshot())!.conteudoJson as ConteudoFeedFireLive
+    expect(conteudo.itens.length).toBeGreaterThan(0)
+    expect(conteudo.itens.every((i) => i.encerrado)).toBe(true)
   })
 })

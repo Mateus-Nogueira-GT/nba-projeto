@@ -12,6 +12,7 @@ import type { Apito, Nivel } from '../../motor/tipos'
 import type { Ruleset } from '../../motor/ruleset/schema'
 import type { MensagemPush, PortaFila } from '../fila/porta'
 import { mensagemDeApito, mensagemDeGreen } from './push'
+import { materializarFeedFireLive } from './feed'
 
 /**
  * Estado observado no ciclo anterior: valor por (jogador, atributo).
@@ -123,6 +124,9 @@ export async function executarCiclo(
   // A GUARDA DO QUARTO. Vale para os dois lados: o jogo ainda não começou
   // (quartoAtual null) ou já passou do 1Q. Nos dois casos o Fire Live não age.
   if (fatos.jogo.quartoAtual !== quarto) {
+    // Última materialização antes de encerrar: os itens ficam na tela até o
+    // fim do jogo, marcados como encerrados (spec 05 / G2).
+    await materializarFeedFireLive(db, ruleset, opcoes.jogoId, opcoes.agora)
     return { encerrar: true, motivo: 'fim-do-primeiro-quarto', ciclou: false }
   }
 
@@ -159,6 +163,10 @@ export async function executarCiclo(
   ])
 
   const pushes = await drenarOutbox(db, fila, opcoes.jogoId, opcoes.agora)
+
+  // Materializa por último, com os apitos do jogo já persistidos: a tela lê
+  // este snapshot, nunca o motor. Escrita pulada quando o hash não muda.
+  await materializarFeedFireLive(db, ruleset, opcoes.jogoId, opcoes.agora)
 
   return {
     encerrar: false,
