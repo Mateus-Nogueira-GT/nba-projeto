@@ -16,6 +16,9 @@ import {
 import { carregarRuleset } from '../../motor/ruleset/carregar'
 import type { Nivel } from '../../motor/tipos'
 import { comparar, executarBacktest } from '../backtest/executar'
+import { gerarCsv } from '../backtest/csv'
+import { gravarCandidato, listarCandidatos } from '../backtest/candidatos'
+import { rulesets } from '../../dominio/db/schema'
 
 const ruleset = carregarRuleset(readFileSync('config/ruleset.v1.yaml', 'utf8'))
 
@@ -173,5 +176,51 @@ describe('backtest — parte A da spec 07', () => {
     expect(d.sairam).toEqual([])
     // O tamanho da amostra viaja junto do resultado (risco declarado da spec).
     expect(d.amostra).toEqual({ a: 3, b: 0 })
+  })
+})
+
+describe('painel do backtest (spec 07, fatia 6)', () => {
+  it('CSV sai com cabeçalho em português e escapa separador e aspas', async () => {
+    const a = await executarBacktest(banco.db, ruleset, PERIODO)
+    const candidato = structuredClone(ruleset)
+    candidato.oscilacao.delta.ALL_STAR = 9
+    const b = await executarBacktest(banco.db, candidato, PERIODO)
+
+    const csv = gerarCsv(a, b, comparar(a, b))
+
+    expect(csv.startsWith('metrica;ruleset_a;ruleset_b;delta')).toBe(true)
+    expect(csv).toContain('apitos;12;9;-3')
+    expect(csv).toContain('acertos;3;0;-3')
+    expect(csv).toContain('amostra classificavel;3;0')
+    // Rodapé obrigatório: medição, nunca sugestão de aposta (P12)
+    expect(csv).toContain('não é sugestão de aposta')
+    // Valor com o separador dentro é envolto em aspas duplicadas
+    const csvComRotulo = gerarCsv({ ...a, ruleset: 'v1;"x"' }, b, comparar(a, b))
+    expect(csvComRotulo).toContain('"v1;""x"""')
+  })
+
+  it('candidato inválido é recusado pela mesma validação do ruleset ativo', async () => {
+    await expect(
+      gravarCandidato(banco.db, { versao: 'quebrado', conteudoYaml: 'version: -1' }),
+    ).rejects.toThrow(/Ruleset inválido/)
+    expect(await banco.db.select().from(rulesets)).toEqual([])
+  })
+
+  it('candidato válido entra como provisório e aparece na listagem', async () => {
+    const yaml = readFileSync('config/ruleset.v1.yaml', 'utf8').replace('version: 1', 'version: 2')
+    await gravarCandidato(banco.db, { versao: 'candidato-v2', conteudoYaml: yaml })
+
+    const candidatos = await listarCandidatos(banco.db)
+    expect(candidatos).toHaveLength(1)
+    expect(candidatos[0]).toMatchObject({ versao: 'candidato-v2', status: 'provisorio' })
+  })
+})
+
+describe('guarda do painel de backtest', () => {
+  it('página e ações exigem admin', () => {
+    const pagina = readFileSync('src/app/(admin)/admin/backtest/page.tsx', 'utf8')
+    expect(pagina).toContain('negarSeNaoForAdmin')
+    const acoes = readFileSync('src/app/(admin)/admin/backtest/acoes.ts', 'utf8')
+    expect(acoes).toContain('exigirAdmin')
   })
 })
