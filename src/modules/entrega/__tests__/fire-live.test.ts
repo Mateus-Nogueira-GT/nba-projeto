@@ -498,11 +498,11 @@ describe('contrato do evento de push', () => {
     await reproduzir()
 
     for (const m of fila.doCanal('FIRE_LIVE_APITO')) {
-      expect(m).toMatchObject({ versao: 1, canal: 'FIRE_LIVE_APITO', url: '/' })
+      expect(m).toMatchObject({ versao: 1, canal: 'FIRE_LIVE_APITO', url: '/fire-live' })
       expect(Date.parse(m.expiraEm)).toBeGreaterThan(Date.parse(m.ocorridoEm))
     }
     for (const m of fila.doCanal('GREEN')) {
-      expect(m).toMatchObject({ versao: 1, canal: 'GREEN', url: '/' })
+      expect(m).toMatchObject({ versao: 1, canal: 'GREEN', url: '/fire-live' })
       expect(Date.parse(m.expiraEm)).toBeGreaterThan(Date.parse(m.ocorridoEm))
     }
   })

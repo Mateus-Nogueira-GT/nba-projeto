@@ -107,6 +107,7 @@ describe('service worker — Push', () => {
           chave: 'fire:jogo-1:jogador-70:q1',
           url: '/',
           expiraEm: '2099-01-01T00:05:00.000Z',
+          jogoId: 'd9428888-122b-4f80-96f8-4a0ca9dcf202',
         },
       }),
     )
@@ -209,5 +210,52 @@ describe('service worker — Push', () => {
     expect(fechar).toHaveBeenCalledOnce()
     expect(worker.abrir).not.toHaveBeenCalled()
     expect(worker.erro).toHaveBeenCalledWith('Clique de Push descartado: deep link inválido.')
+  })
+})
+
+describe('service worker — deep link do Fire Live (spec 05, fatia 5)', () => {
+  const JOGO = 'd9428888-122b-4f80-96f8-4a0ca9dcf202'
+
+  it('a versão do cache foi incrementada junto com a mudança de política', () => {
+    expect(codigoWorker).toContain("const VERSAO_CACHE = 'v2'")
+  })
+
+  it('push do Fire Live preserva o jogoId na notificação', async () => {
+    const worker = carregarWorker()
+
+    await worker.disparar('push', { data: { json: () => mensagem({ url: '/fire-live' }) } })
+
+    expect(worker.mostrar).toHaveBeenCalledWith(
+      'Apito Fire Live',
+      expect.objectContaining({
+        data: expect.objectContaining({ url: '/fire-live', jogoId: JOGO }),
+      }),
+    )
+  })
+
+  it('o clique abre a tela no jogo certo', async () => {
+    const worker = carregarWorker()
+
+    await worker.disparar('notificationclick', {
+      notification: {
+        close: vi.fn(),
+        data: { url: '/fire-live', jogoId: JOGO, expiraEm: '2099-01-01T00:05:00.000Z' },
+      },
+    })
+
+    expect(worker.abrir).toHaveBeenCalledWith(`${ORIGEM}/fire-live?jogo=${JOGO}`)
+  })
+
+  it('jogoId adulterado é ignorado: navega para o caminho puro', async () => {
+    const worker = carregarWorker()
+
+    await worker.disparar('notificationclick', {
+      notification: {
+        close: vi.fn(),
+        data: { url: '/fire-live', jogoId: '../admin', expiraEm: '2099-01-01T00:05:00.000Z' },
+      },
+    })
+
+    expect(worker.abrir).toHaveBeenCalledWith(`${ORIGEM}/fire-live`)
   })
 })

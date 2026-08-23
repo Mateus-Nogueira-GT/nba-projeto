@@ -109,7 +109,9 @@ describe('service worker — fundação PWA', () => {
     const harness = criarHarness()
     await harness.eventoExtensivel('activate')
 
-    expect(harness.apagar).toHaveBeenCalledExactlyOnceWith('ia-da-nba-pwa-v0')
+    expect(harness.apagar).toHaveBeenCalledWith('ia-da-nba-pwa-v0')
+    expect(harness.apagar).toHaveBeenCalledWith('ia-da-nba-pwa-v1')
+    expect(harness.apagar).toHaveBeenCalledTimes(2)
     expect(harness.apagar).not.toHaveBeenCalledWith('cache-de-terceiro')
     expect(harness.claim).toHaveBeenCalledOnce()
   })

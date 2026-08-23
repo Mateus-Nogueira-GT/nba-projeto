@@ -27,7 +27,7 @@ export function mensagemDeApito(
     canal: 'FIRE_LIVE_APITO',
     titulo: `${exibicao.nome} apitou no 1Q`,
     corpo: `${exibicao.timeSigla} · alvo ${apito.alvo1Q} ${apito.atributo.toLowerCase()}`,
-    url: '/',
+    url: '/fire-live',
     ocorridoEm: ocorridoEm.toISOString(),
     expiraEm: new Date(ocorridoEm.getTime() + VALIDADE_PUSH_MS.FIRE_LIVE_APITO).toISOString(),
     dados: {
@@ -55,7 +55,7 @@ export function mensagemDeGreen(
     canal: 'GREEN',
     titulo: `${exibicao.nome} bateu ${green.marco}`,
     corpo: `${exibicao.timeSigla} · ${green.valor} ${green.atributo.toLowerCase()}`,
-    url: '/',
+    url: '/fire-live',
     ocorridoEm: ocorridoEm.toISOString(),
     expiraEm: new Date(ocorridoEm.getTime() + VALIDADE_PUSH_MS.GREEN).toISOString(),
     dados: {

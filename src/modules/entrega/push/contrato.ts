@@ -3,8 +3,9 @@ import { z } from 'zod'
 const ATRIBUTOS = ['PONTOS', 'REBOTES', 'ASSISTENCIAS'] as const
 const NIVEIS = ['MVP', 'ALL_STAR', 'SUPORTE', 'RANDOLA'] as const
 
-// `/fire-live` só entra quando a Spec 05 publicar e proteger a rota.
-export const URLS_PUSH_PERMITIDAS = ['/'] as const
+// `/fire-live` entrou com a Spec 05: rota publicada e protegida pela mesma
+// guarda de sessão e direito da home.
+export const URLS_PUSH_PERMITIDAS = ['/', '/fire-live'] as const
 
 const comumSchema = z
   .object({

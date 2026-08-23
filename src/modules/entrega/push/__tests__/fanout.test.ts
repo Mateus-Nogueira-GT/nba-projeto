@@ -1,4 +1,3 @@
-import { readFileSync } from 'node:fs'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { eq } from 'drizzle-orm'
 
@@ -225,12 +224,11 @@ describe('fan-out durável', () => {
     expect(inscricao?.invalidadaEm).not.toBeNull()
   })
 
-  it('mantém os dois consumers registrados no config de deploy', () => {
-    const config = JSON.parse(readFileSync('vercel.json', 'utf8')) as {
-      functions: Record<string, { experimentalTriggers: { topic: string }[] }>
-    }
-    const topicos = Object.values(config.functions)
-      .flatMap((funcao) => funcao.experimentalTriggers)
+  it('mantém os dois consumers registrados no config de deploy', async () => {
+    // vercel.ts é a FONTE ÚNICA; vercel.json é artefato gerado no build.
+    const { config } = await import('../../../../../vercel')
+    const topicos = Object.values(config.functions ?? {})
+      .flatMap((funcao) => (funcao as { experimentalTriggers?: { topic: string }[] }).experimentalTriggers ?? [])
       .map((trigger) => trigger.topic)
       .sort()
     expect(topicos).toEqual(['push-entregas', 'push-eventos'])

@@ -21,16 +21,14 @@ describe('superfícies da Spec 04', () => {
     expect(fonte).not.toMatch(/status.*searchParams|payment_id|preference_id/)
   })
 
-  it('webhook usa corpo bruto, headers e query; cron de reconciliação está agendado', () => {
+  it('webhook usa corpo bruto, headers e query; cron de reconciliação está agendado', async () => {
     const webhook = ler('src/app/api/webhook/mercadopago/route.ts')
     expect(webhook).toContain('requisicao.text()')
     expect(webhook).toContain('requisicao.headers.entries()')
     expect(webhook).toContain('new URL(requisicao.url).searchParams.entries()')
 
-    const vercel = JSON.parse(ler('vercel.json')) as {
-      crons: Array<{ path: string; schedule: string }>
-    }
-    expect(vercel.crons).toContainEqual({
+    const { config } = await import('../../../vercel')
+    expect(config.crons).toContainEqual({
       path: '/api/cron/reconciliar-pagamentos',
       schedule: '*/10 * * * *',
     })

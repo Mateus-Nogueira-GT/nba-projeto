@@ -1,7 +1,7 @@
 /* IA da NBA — worker único compartilhado pelas Specs 02 e 03. */
 
 const PREFIXO_CACHE = 'ia-da-nba-pwa-'
-const VERSAO_CACHE = 'v1'
+const VERSAO_CACHE = 'v2'
 const CACHE_PUBLICO = `${PREFIXO_CACHE}${VERSAO_CACHE}`
 const PAGINA_OFFLINE = '/offline'
 const ASSETS_PUBLICOS = new Set([
@@ -16,7 +16,7 @@ const ASSETS_PUBLICOS = new Set([
 
 const VERSAO_PUSH = 1
 const CANAIS_PUSH = new Set(['FIRE_LIVE_APITO', 'GREEN', 'LISTA_SECRETA'])
-const CAMINHOS_PERMITIDOS = new Set(['/'])
+const CAMINHOS_PERMITIDOS = new Set(['/', '/fire-live'])
 const ATRIBUTOS = new Set(['PONTOS', 'REBOTES', 'ASSISTENCIAS'])
 const NIVEIS = new Set(['MVP', 'ALL_STAR', 'SUPORTE', 'RANDOLA'])
 // Assets neutros de homologação. A identidade PNG/maskable final pertence à Spec 03.
@@ -217,6 +217,8 @@ async function receberPush(evento) {
       chave: mensagem.chave,
       url: mensagem.url,
       expiraEm: mensagem.expiraEm,
+      // Só um uuid validado atravessa: é ele que leva o clique ao jogo certo.
+      ...(uuidValido(mensagem.dados?.jogoId) ? { jogoId: mensagem.dados.jogoId } : {}),
     },
   })
 }
@@ -232,6 +234,10 @@ async function abrirNotificacao(evento) {
     console.error('Clique de Push descartado: deep link inválido.')
     return
   }
+
+  // O jogo certo, quando o payload trouxe um. Valor adulterado não passa do
+  // uuid, e a query nunca muda caminho nem origem.
+  if (uuidValido(dados.jogoId)) destino.searchParams.set('jogo', dados.jogoId)
 
   const janelas = await self.clients.matchAll({ type: 'window', includeUncontrolled: true })
   const existente = janelas.find((janela) => {
