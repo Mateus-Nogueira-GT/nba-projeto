@@ -1,0 +1,15 @@
+{
+  "casa-alfa": {
+    "jogo-externo-1": [
+      { "jogadorNomeNaCasa": "L. Doncic", "nomeMercadoNaCasa": "Player Points", "linha": 24.5, "oddOver": 1.85, "oddUnder": 1.95 },
+      { "jogadorNomeNaCasa": "A. Reaves", "nomeMercadoNaCasa": "Player Points", "linha": 17.5, "oddOver": 1.9, "oddUnder": 1.9 },
+      { "jogadorNomeNaCasa": "L. Doncic", "nomeMercadoNaCasa": "Player Assists", "linha": 8.5, "oddOver": 2.05, "oddUnder": null }
+    ]
+  },
+  "casa-beta": {
+    "jogo-externo-1": [
+      { "jogadorNomeNaCasa": "Luka Doncic", "nomeMercadoNaCasa": "Pontos do Jogador", "linha": 24.5, "oddOver": 1.8, "oddUnder": 2.0 },
+      { "jogadorNomeNaCasa": "Austin Reaves", "nomeMercadoNaCasa": "Pontos do Jogador", "linha": 17.5, "oddOver": null, "oddUnder": 1.87 }
+    ]
+  }
+}
