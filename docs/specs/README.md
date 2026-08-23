@@ -22,6 +22,7 @@ riscos).
 | 05 | [Feed e filtros do Fire Live](05-feed-fire-live.md) | 01, 02 | destino do push |
 | 06 | [Odds e aviso de blowout](06-odds-e-blowout.md) | 01 + contrato com as casas | o card completo |
 | 07 | [Backtest e alerta de dado parado](07-backtest-e-alerta.md) | 01 + histórico | a entrega comercial do ADR-0002 |
+| 08 | [Fechamento do v0 — plano de execução](08-fechamento-v0.md) | 05–07 | a sequência executável do que resta do nosso lado |
 
 A 00 vem primeiro porque as demais specs dependem de contratos hoje quebrados:
 temporada, retry de workflow, sessões, pagamento e identidade de provedor. Depois
