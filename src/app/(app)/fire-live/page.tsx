@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation'
 
 import { getDb } from '@/modules/dominio/db/cliente'
 import { lerFeedFireLive } from '@/modules/entrega/fire-live/leitura'
+import type { FiltroFireLive } from '@/modules/entrega/fire-live/leitura'
 import type { EstadoVazio } from '@/modules/entrega/fire-live/leitura'
 import { rulesetAtivo } from '@/modules/entrega/ruleset-ativo'
 import { rotaDoJogador } from '@/modules/entrega/estatisticas/rotas'
@@ -81,7 +82,41 @@ function TextoVazio({ estado, primeiroJogo }: { estado: EstadoVazio; primeiroJog
   )
 }
 
-export default async function PaginaFireLive() {
+function Chip({ href, ativo, children }: { href: string; ativo: boolean; children: React.ReactNode }) {
+  return (
+    <Link
+      href={href}
+      aria-current={ativo ? 'page' : undefined}
+      style={{
+        padding: '6px 14px',
+        borderRadius: 999,
+        fontSize: 13,
+        fontWeight: ativo ? 700 : 500,
+        textDecoration: 'none',
+        color: ativo ? semantico.textoSobreCor : semantico.textoPrimario,
+        background: ativo ? semantico.textoPrimario : semantico.superficie,
+        border: `1px solid ${semantico.divisor}`,
+      }}
+    >
+      {children}
+    </Link>
+  )
+}
+
+function primeiroValor(v: string | string[] | undefined): string | undefined {
+  return Array.isArray(v) ? v[0] : v
+}
+
+export default async function PaginaFireLive({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>
+}) {
+  const params = await searchParams
+  const filtro: FiltroFireLive = {
+    time: primeiroValor(params.time),
+    jogo: primeiroValor(params.jogo),
+  }
   if (!process.env.DATABASE_URL) {
     return (
       <Moldura>
@@ -101,7 +136,15 @@ export default async function PaginaFireLive() {
   const ruleset = await rulesetAtivo()
   const hoje = new Date().toISOString().slice(0, 10)
   // A tela lê o snapshot MATERIALIZADO por jogo — nunca executa o motor.
-  const feed = await lerFeedFireLive(getDb(), hoje, ruleset.fire_live.quarto)
+  const feed = await lerFeedFireLive(getDb(), hoje, ruleset.fire_live.quarto, filtro)
+
+  // Chips construídos do que está NA TELA: times e jogos com apito hoje.
+  const semFiltro =
+    filtro.time !== undefined || filtro.jogo !== undefined
+      ? await lerFeedFireLive(getDb(), hoje, ruleset.fire_live.quarto)
+      : feed
+  const timesComApito = [...new Set(semFiltro.itens.map((i) => i.timeSigla))].sort()
+  const recorteVazio = feed.itens.length === 0 && feed.estadoVazio === null
 
   return (
     <Moldura>
@@ -117,8 +160,43 @@ export default async function PaginaFireLive() {
         </p>
       </header>
 
+      {timesComApito.length > 1 && (
+        <nav
+          aria-label="Filtrar por time"
+          style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}
+        >
+          <Chip href="/fire-live" ativo={filtro.time === undefined && filtro.jogo === undefined}>
+            Todos
+          </Chip>
+          {timesComApito.map((sigla) => (
+            <Chip key={sigla} href={`/fire-live?time=${sigla}`} ativo={filtro.time === sigla}>
+              {sigla}
+            </Chip>
+          ))}
+        </nav>
+      )}
+
       {feed.estadoVazio !== null && (
         <TextoVazio estado={feed.estadoVazio} primeiroJogo={feed.primeiroJogoUtc} />
+      )}
+
+      {recorteVazio && (
+        <div
+          style={{
+            padding: '32px 16px',
+            textAlign: 'center',
+            border: `1px dashed ${semantico.divisor}`,
+            borderRadius: 12,
+          }}
+        >
+          <p style={{ margin: 0, fontWeight: 700 }}>Nada com esse filtro</p>
+          <p style={{ margin: '8px 0 0', fontSize: 14, color: semantico.textoSecundario }}>
+            Há apitos hoje, mas nenhum bate com o recorte escolhido.{' '}
+            <Link href="/fire-live" style={{ color: semantico.textoPrimario }}>
+              Ver todos
+            </Link>
+          </p>
+        </div>
       )}
 
       <div style={{ display: 'grid', gap: 10 }}>

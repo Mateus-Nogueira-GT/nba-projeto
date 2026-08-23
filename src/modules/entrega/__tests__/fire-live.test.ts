@@ -728,3 +728,39 @@ describe('leitura do feed do Fire Live', () => {
     expect(feed.estadoVazio).toBe('NENHUM_EM_1Q')
   })
 })
+
+describe('filtros do Fire Live (spec 05, fatia 4a)', () => {
+  const QUARTO = ruleset.fire_live.quarto
+  const DIA = '2026-08-19'
+
+  it('recorta por time', async () => {
+    await reproduzir()
+    const lal = await lerFeedFireLive(banco.db, DIA, QUARTO, { time: 'LAL' })
+    expect(lal.itens.length).toBe(2)
+    expect(lal.itens.every((i) => i.timeSigla === 'LAL')).toBe(true)
+    // O recorte discrimina: o adversário não apitou ninguém.
+    const adv = await lerFeedFireLive(banco.db, DIA, QUARTO, { time: 'ADV' })
+    expect(adv.itens).toEqual([])
+  })
+
+  it('recorta por jogo', async () => {
+    await reproduzir()
+    const feed = await lerFeedFireLive(banco.db, DIA, QUARTO, { jogo: jogoId })
+    expect(feed.itens.length).toBeGreaterThan(0)
+    expect(feed.itens.every((i) => i.jogoId === jogoId)).toBe(true)
+  })
+
+  it('filtros combinam entre si', async () => {
+    await reproduzir()
+    const feed = await lerFeedFireLive(banco.db, DIA, QUARTO, { time: 'LAL', jogo: jogoId })
+    expect(feed.itens.length).toBeGreaterThan(0)
+  })
+
+  it('valor desconhecido devolve lista vazia, não erro', async () => {
+    await reproduzir()
+    const feed = await lerFeedFireLive(banco.db, DIA, QUARTO, { time: 'XXX' })
+    expect(feed.itens).toEqual([])
+    // Havia conteúdo antes do recorte: o estado vazio de janela não se aplica.
+    expect(feed.estadoVazio).toBeNull()
+  })
+})

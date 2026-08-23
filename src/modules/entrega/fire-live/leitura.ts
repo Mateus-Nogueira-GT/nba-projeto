@@ -31,10 +31,18 @@ export type FeedFireLive = {
  * jogo segue, o item fica, marcado como `encerrado` quando o 1Q acabou
  * (G2 — proposta enviada ao CJ).
  */
+export type FiltroFireLive = {
+  /** Sigla do time — recorte de leitura, direto da query string. */
+  time?: string
+  /** Id do jogo — é para cá que o toque no push aponta. */
+  jogo?: string
+}
+
 export async function lerFeedFireLive(
   db: Db,
   dataReferencia: string,
   quartoFireLive: number,
+  filtro: FiltroFireLive = {},
 ): Promise<FeedFireLive> {
   const [partidas, snapshots] = await Promise.all([
     db.select().from(jogos).where(eq(jogos.dataReferencia, dataReferencia)),
@@ -55,15 +63,22 @@ export async function lerFeedFireLive(
     (s) => s.jogoId !== null && statusPorJogo.get(s.jogoId) !== 'ENCERRADO',
   )
 
-  const itens = vivos
-    .flatMap((s) => (s.conteudoJson as ConteudoFeedFireLive).itens)
+  const todos = vivos.flatMap((s) => (s.conteudoJson as ConteudoFeedFireLive).itens)
+
+  // Recortes de leitura, combináveis. Valor desconhecido recorta para o vazio
+  // — nunca erro: o estado de janela abaixo só fala quando NADA foi apitado.
+  const itens = todos
+    .filter((i) => (filtro.time === undefined ? true : i.timeSigla === filtro.time))
+    .filter((i) => (filtro.jogo === undefined ? true : i.jogoId === filtro.jogo))
     // PROPOSTA aguardando CJ — spec 05, pergunta 3: mais recente primeiro.
     .sort((a, b) => b.apitadoEm.localeCompare(a.apitadoEm))
 
   const geradoEm =
     vivos.length > 0 ? new Date(Math.max(...vivos.map((s) => s.geradoEm.getTime()))) : null
 
-  if (itens.length > 0) {
+  if (todos.length > 0) {
+    // Havia apito no dia; se o recorte zerou a lista, a tela diz "nada com
+    // esse filtro", não "nenhum jogo" — são mensagens diferentes.
     return { itens, geradoEm, estadoVazio: null, primeiroJogoUtc: null }
   }
 
