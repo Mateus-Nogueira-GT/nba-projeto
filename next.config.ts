@@ -2,6 +2,15 @@ import { withWorkflow } from 'workflow/next'
 import type { NextConfig } from 'next'
 
 const nextConfig: NextConfig = {
+  // O ruleset é lido do DISCO em runtime (entrega/ruleset-ativo.ts) — de
+  // propósito, para o ativo continuar versionado em git (ADR-0002). O file
+  // tracing do build não enxerga esse readFile: sem a inclusão explícita, o
+  // YAML fica fora do bundle e TODA rota que avalia estratégia responde 500
+  // em produção (ENOENT). A chave é glob de ROTA; o valor, do raiz do projeto.
+  outputFileTracingIncludes: {
+    '/*': ['config/ruleset.v1.yaml'],
+    '/**': ['config/ruleset.v1.yaml'],
+  },
   async headers() {
     return [
       {
