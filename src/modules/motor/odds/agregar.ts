@@ -29,13 +29,14 @@ export function agregar(
     .filter((v): v is number => v !== null)
     .sort((a, b) => a - b)
 
+  // casas_minimas é positivo por schema: dentro deste ramo, valores nunca é vazio.
   if (valores.length >= ruleset.odds.casas_minimas) {
     const meio = Math.floor(valores.length / 2)
-    const mediana =
-      valores.length % 2 === 1 ? valores[meio] : (valores[meio - 1] + valores[meio]) / 2
+    const central = valores[meio]!
+    const mediana = valores.length % 2 === 1 ? central : (valores[meio - 1]! + central) / 2
     return {
-      min: valores[0],
-      max: valores[valores.length - 1],
+      min: valores[0]!,
+      max: valores[valores.length - 1]!,
       mediana,
       qtdCasas: valores.length,
       origem: 'CASAS',
