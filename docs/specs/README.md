@@ -32,9 +32,13 @@ compartilham um único service worker: a 03 é dona da fundação e a 02 dos han
 de Push. A capacidade pode ser construída antes da 04, mas o Push público espera
 o controle de acesso para não entregar conteúdo pago a uma conta inelegível.
 
-**Situação em 21/08/2026:** Specs 00–03 estão implementadas localmente. A base da
-Spec 04 também está implementada em modo fail-closed; o rollout comercial segue
-bloqueado pelas decisões de produto e pelo smoke no sandbox do Mercado Pago.
+**Situação em 23/08/2026:** Specs 00–03 implementadas; base da Spec 04 em modo
+fail-closed. A Spec 05 está implementada (snapshot por jogo, tela, filtros por
+time/jogo, deep link do push); da 06, as partes sem contrato (blowout, agregação,
+porta fake, curadoria de mercados); da 07, o alerta de dado parado e o backtest
+com painel. O que resta está bloqueado pelos gates da
+[Spec 08](08-fechamento-v0.md): decisões de produto, contrato com as casas e o
+smoke no sandbox do Mercado Pago.
 
 ---
 

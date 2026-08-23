@@ -4,7 +4,10 @@
 > (recommended) or superpowers:executing-plans to implement this plan task-by-task.
 > Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Estado:** plano aprovável · 23/08/2026
+**Estado:** etapas 0–4 executadas · 23/08/2026 — T0–T15 implementados e
+verificados (453 testes, typecheck, lint, fronteiras e build limpos). Restam a
+Etapa 5 (T16–T20, exige operador humano: conta Vercel, credenciais, aparelhos)
+e as tarefas bloqueadas por gate (G1–G9)
 **Depende de:** specs [05](05-feed-fire-live.md), [06](06-odds-e-blowout.md) e
 [07](07-backtest-e-alerta.md) — este documento não as substitui: **sequencia** as
 fatias delas mais a operação de deploy, separando o executável hoje do bloqueado
@@ -85,14 +88,14 @@ tela não compila. Se o CJ responder diferente, é troca localizada.
 
 **Files:** Create: `.nvmrc` · Modify: `package.json`
 
-- [ ] **Step 1:** criar `.nvmrc` com conteúdo `24` e adicionar ao `package.json`, depois de `"private": true`:
+- [x] **Step 1:** criar `.nvmrc` com conteúdo `24` e adicionar ao `package.json`, depois de `"private": true`:
 
 ```json
 "engines": { "node": ">=22" },
 ```
 
-- [ ] **Step 2:** `nvm install 24 && nvm use 24 && npm run boundaries` → esperado: `✔ no dependency violations`
-- [ ] **Step 3:** `git add .nvmrc package.json && git commit -m "Pina Node 24: a guarda de fronteira não roda em Node 20"`
+- [x] **Step 2:** `nvm install 24 && nvm use 24 && npm run boundaries` → esperado: `✔ no dependency violations`
+- [x] **Step 3:** `git add .nvmrc package.json && git commit -m "Pina Node 24: a guarda de fronteira não roda em Node 20"`
 
 ---
 
@@ -109,7 +112,7 @@ tela não compila. Se o CJ responder diferente, é troca localizada.
 - Consumes: `Ruleset` (já valida `avisos.blowout` em `ruleset/schema.ts:139`)
 - Produces: `emBlowout(jogo, ruleset): boolean` — consumida futuramente pelo texto editorial (G7)
 
-- [ ] **Step 1 — teste que falha:**
+- [x] **Step 1 — teste que falha:**
 
 ```ts
 import { describe, expect, it } from 'vitest'
@@ -139,8 +142,8 @@ describe('aviso de blowout', () => {
 (Se `rulesetDeTeste` não estiver exportado da suíte âncora, extraí-lo para
 `__tests__/ajuda-ruleset.ts` e importar nos dois lugares.)
 
-- [ ] **Step 2:** `npx vitest run src/modules/motor/__tests__/blowout.test.ts` → FAIL (módulo não existe)
-- [ ] **Step 3 — implementação:**
+- [x] **Step 2:** `npx vitest run src/modules/motor/__tests__/blowout.test.ts` → FAIL (módulo não existe)
+- [x] **Step 3 — implementação:**
 
 ```ts
 import type { Ruleset } from '../ruleset/schema'
@@ -157,8 +160,8 @@ export function emBlowout(
 }
 ```
 
-- [ ] **Step 4:** teste passa · `npm run boundaries` limpo
-- [ ] **Step 5:** commit `"Blowout: função pura sobre o ruleset homologado (spec 06, fatia 1)"`
+- [x] **Step 4:** teste passa · `npm run boundaries` limpo
+- [x] **Step 5:** commit `"Blowout: função pura sobre o ruleset homologado (spec 06, fatia 1)"`
 
 **Fora desta tarefa:** o texto editorial e onde ele aparece — G7.
 
@@ -184,7 +187,7 @@ export function agregar(
 ): FaixaOdds | null
 ```
 
-- [ ] **Step 1 — testes que falham** (mediana com 2, 3 e 5 casas; outlier não desloca a mediana; abaixo de `casas_minimas` cai na `tabela_estatica[nivel][linha]` com origem `TABELA_ESTATICA`; linha sem entrada na tabela → `null`; `casas_minimas: 3` no ruleset muda o comportamento do caso de 2 casas — sem mudar código; cotação com `oddOver: null` não conta como casa):
+- [x] **Step 1 — testes que falham** (mediana com 2, 3 e 5 casas; outlier não desloca a mediana; abaixo de `casas_minimas` cai na `tabela_estatica[nivel][linha]` com origem `TABELA_ESTATICA`; linha sem entrada na tabela → `null`; `casas_minimas: 3` no ruleset muda o comportamento do caso de 2 casas — sem mudar código; cotação com `oddOver: null` não conta como casa):
 
 ```ts
 it('mediana de 3 casas resiste a outlier', () => {
@@ -200,10 +203,10 @@ it('uma casa só cai para a tabela estática', () => {
 })
 ```
 
-- [ ] **Step 2:** rodar → FAIL
-- [ ] **Step 3:** implementar — filtrar `oddOver !== null`; se `qtdCasas >= ruleset.odds.casas_minimas`, ordenar e tirar mediana (par: média dos centrais), `min`/`max` dos valores; senão ler `ruleset.odds.tabela_estatica[nivel]?.[linha]` (par `[min, max]`, `mediana = (min + max) / 2`, `qtdCasas: 0`) ou `null` se a linha não existir
-- [ ] **Step 4:** testes passam · boundaries limpo
-- [ ] **Step 5:** commit `"Agregação de odds: mediana, faixa e fallback, tudo do ruleset (spec 06, fatia 2)"`
+- [x] **Step 2:** rodar → FAIL
+- [x] **Step 3:** implementar — filtrar `oddOver !== null`; se `qtdCasas >= ruleset.odds.casas_minimas`, ordenar e tirar mediana (par: média dos centrais), `min`/`max` dos valores; senão ler `ruleset.odds.tabela_estatica[nivel]?.[linha]` (par `[min, max]`, `mediana = (min + max) / 2`, `qtdCasas: 0`) ou `null` se a linha não existir
+- [x] **Step 4:** testes passam · boundaries limpo
+- [x] **Step 5:** commit `"Agregação de odds: mediana, faixa e fallback, tudo do ruleset (spec 06, fatia 2)"`
 
 ### T3: Frescor no ruleset + janela de jogo — spec 07, fatia 1
 
@@ -226,11 +229,11 @@ avisos:
     realerta_minutos: 30
 ```
 
-- [ ] **Step 1:** teste de schema: ruleset atual valida e expõe os quatro números
-- [ ] **Step 2:** teste da janela com PGlite (padrão de `ajuda-banco.ts`): jogo `AO_VIVO` → true; jogo `AGENDADO` para daqui 20 min → true; para daqui 2 h → false; nenhum jogo → false; jogo `ENCERRADO` → false
-- [ ] **Step 3:** implementar — consulta em `jogos` por `status = 'AO_VIVO'` OU (`status = 'AGENDADO'` E `dataHoraUtc` entre `agora` e `agora + antecedencia`), usando o índice `jogos_data_idx`
-- [ ] **Step 4:** testes passam
-- [ ] **Step 5:** commit `"Frescor sai do código para o ruleset; janela de jogo consultável (spec 07, fatia 1)"`
+- [x] **Step 1:** teste de schema: ruleset atual valida e expõe os quatro números
+- [x] **Step 2:** teste da janela com PGlite (padrão de `ajuda-banco.ts`): jogo `AO_VIVO` → true; jogo `AGENDADO` para daqui 20 min → true; para daqui 2 h → false; nenhum jogo → false; jogo `ENCERRADO` → false
+- [x] **Step 3:** implementar — consulta em `jogos` por `status = 'AO_VIVO'` OU (`status = 'AGENDADO'` E `dataHoraUtc` entre `agora` e `agora + antecedencia`), usando o índice `jogos_data_idx`
+- [x] **Step 4:** testes passam
+- [x] **Step 5:** commit `"Frescor sai do código para o ruleset; janela de jogo consultável (spec 07, fatia 1)"`
 
 ### T4: Cron de saúde com realerta — spec 07, fatia 2
 
@@ -243,11 +246,11 @@ avisos:
 - Consumes: `avaliarFrescor(linhas, agora, emJanelaDeJogo, limites)` de `heartbeat.ts:66` · `emJanelaDeJogo` de T3 · `executarCronProtegido` de `cron/guarda.ts` · `logFalhas` de `schema/observabilidade.ts`
 - Produces: `avaliarESinalizar(db, agora, ruleset, notificador): Promise<AlertaEmitido[]>`
 
-- [ ] **Step 1 — testes que falham:** provedor com `dadoMaisRecenteEm` de 1 h atrás fora de janela → 1 linha em `log_falhas` (`origem: 'alerta-dado-parado'`, severidade alta, contexto com provedor e atraso); segunda execução 5 min depois → **0 linhas novas** (realerta de 30 min); mesma situação **em janela de jogo** com dado de 2 min → alerta (limite 90 s); dado fresco → nada
-- [ ] **Step 2:** rodar → FAIL
-- [ ] **Step 3:** implementar — ler `saude_provedor`, chamar `emJanelaDeJogo` e `avaliarFrescor` com os limites do ruleset; antes de gravar, buscar em `log_falhas` o último alerta do mesmo provedor (`origem = 'alerta-dado-parado'` e `contextoJson->>'provedor'`) e suprimir se `ocorridoEm > agora - realerta_minutos`; despachar pelo notificador (T5); rota embrulha em `executarCronProtegido`
-- [ ] **Step 4:** testes passam
-- [ ] **Step 5:** commit `"Alerta de dado parado: cron de saúde com supressão de realerta (spec 07, fatia 2)"`
+- [x] **Step 1 — testes que falham:** provedor com `dadoMaisRecenteEm` de 1 h atrás fora de janela → 1 linha em `log_falhas` (`origem: 'alerta-dado-parado'`, severidade alta, contexto com provedor e atraso); segunda execução 5 min depois → **0 linhas novas** (realerta de 30 min); mesma situação **em janela de jogo** com dado de 2 min → alerta (limite 90 s); dado fresco → nada
+- [x] **Step 2:** rodar → FAIL
+- [x] **Step 3:** implementar — ler `saude_provedor`, chamar `emJanelaDeJogo` e `avaliarFrescor` com os limites do ruleset; antes de gravar, buscar em `log_falhas` o último alerta do mesmo provedor (`origem = 'alerta-dado-parado'` e `contextoJson->>'provedor'`) e suprimir se `ocorridoEm > agora - realerta_minutos`; despachar pelo notificador (T5); rota embrulha em `executarCronProtegido`
+- [x] **Step 4:** testes passam
+- [x] **Step 5:** commit `"Alerta de dado parado: cron de saúde com supressão de realerta (spec 07, fatia 2)"`
 
 ### T5: Porta de notificação operacional — spec 07, fatia 3 (parcial)
 
@@ -261,9 +264,9 @@ export type AvisoOperacional = { severidade: 'ALTA' | 'MEDIA'; titulo: string; c
 export interface NotificadorOperacional { enviar(aviso: AvisoOperacional): Promise<void> }
 ```
 
-- [ ] **Step 1:** teste — `NotificadorMemoria` acumula avisos; T4 conta por ele
-- [ ] **Step 2:** implementar; `NotificadorLog` grava `console.error` estruturado (JSON, sem segredo)
-- [ ] **Step 3:** commit `"Porta de notificação operacional; canal real aguarda decisão do cliente (G8)"`
+- [x] **Step 1:** teste — `NotificadorMemoria` acumula avisos; T4 conta por ele
+- [x] **Step 2:** implementar; `NotificadorLog` grava `console.error` estruturado (JSON, sem segredo)
+- [x] **Step 3:** commit `"Porta de notificação operacional; canal real aguarda decisão do cliente (G8)"`
 
 **Fora:** o adapter real (e-mail/Slack/WhatsApp) — G8.
 
@@ -278,8 +281,8 @@ export interface NotificadorOperacional { enviar(aviso: AvisoOperacional): Promi
 - Create: migration via `npm run db:generate` (gera o down junto)
 - Test: ampliar `src/modules/dominio/__tests__/persistencia.test.ts`
 
-- [ ] **Step 1 — testes que falham:** duas gravações `FIRE_LIVE` do mesmo dia com `jogoId` distintos coexistem; mesma `(data, estrategia, jogoId)` conflita (upsert); `LISTA_SECRETA` com `jogoId` NULL continua uma linha por dia — dois inserts NULL colidem (`nullsNotDistinct`)
-- [ ] **Step 2:** alterar o schema:
+- [x] **Step 1 — testes que falham:** duas gravações `FIRE_LIVE` do mesmo dia com `jogoId` distintos coexistem; mesma `(data, estrategia, jogoId)` conflita (upsert); `LISTA_SECRETA` com `jogoId` NULL continua uma linha por dia — dois inserts NULL colidem (`nullsNotDistinct`)
+- [x] **Step 2:** alterar o schema:
 
 ```ts
 jogoId: uuid('jogo_id').references(() => jogos.id, { onDelete: 'cascade' }),
@@ -289,9 +292,9 @@ jogoId: uuid('jogo_id').references(() => jogos.id, { onDelete: 'cascade' }),
 ],
 ```
 
-- [ ] **Step 3:** `npm run db:generate` · conferir o SQL gerado e o down
-- [ ] **Step 4:** testes passam (PGlite aplica as migrations)
-- [ ] **Step 5:** commit `"feed_snapshot por jogo: workflows simultâneos não disputam a mesma linha (spec 05, fatia 1)"`
+- [x] **Step 3:** `npm run db:generate` · conferir o SQL gerado e o down
+- [x] **Step 4:** testes passam (PGlite aplica as migrations)
+- [x] **Step 5:** commit `"feed_snapshot por jogo: workflows simultâneos não disputam a mesma linha (spec 05, fatia 1)"`
 
 ### T7: Materialização no ciclo — spec 05, fatia 2
 
@@ -314,10 +317,10 @@ export type ItemFireLive = ItemFeed & {
 export async function materializarFeedFireLive(db, jogoId, itens, geradoEm): Promise<void>
 ```
 
-- [ ] **Step 1 — testes que falham:** replay da suíte produz snapshot com os apitos do jogo; replay idêntico **não muda o `hash`** (mesma proteção da Lista Secreta); dois jogos gravam linhas separadas
-- [ ] **Step 2:** implementar — montar `ItemFireLive[]` dos apitos já em mãos no ciclo (sem segunda leitura), serializar como `ConteudoFeed`, upsert por `(dataReferencia, 'FIRE_LIVE', jogoId)` pulando escrita quando o hash não mudou
-- [ ] **Step 3:** testes passam · `npm run boundaries` (a regra `tela-nao-chama-o-motor` segue de pé — quem materializa é o ciclo, que já executa o motor)
-- [ ] **Step 4:** commit `"Fire Live materializa feed por jogo no próprio ciclo (spec 05, fatia 2)"`
+- [x] **Step 1 — testes que falham:** replay da suíte produz snapshot com os apitos do jogo; replay idêntico **não muda o `hash`** (mesma proteção da Lista Secreta); dois jogos gravam linhas separadas
+- [x] **Step 2:** implementar — montar `ItemFireLive[]` dos apitos já em mãos no ciclo (sem segunda leitura), serializar como `ConteudoFeed`, upsert por `(dataReferencia, 'FIRE_LIVE', jogoId)` pulando escrita quando o hash não mudou
+- [x] **Step 3:** testes passam · `npm run boundaries` (a regra `tela-nao-chama-o-motor` segue de pé — quem materializa é o ciclo, que já executa o motor)
+- [x] **Step 4:** commit `"Fire Live materializa feed por jogo no próprio ciclo (spec 05, fatia 2)"`
 
 ### T8: Tela /fire-live — spec 05, fatia 3
 
@@ -329,11 +332,11 @@ export async function materializarFeedFireLive(db, jogoId, itens, geradoEm): Pro
 - Consumes: snapshots de T7 · `CardEntrada` (já exibe alvo, modo fire e OPD) · `UltimaAtualizacao` · guarda de acesso igual à de `/` (`sessaoAtual` + `avaliarAcesso`)
 - Produces: `lerFeedFireLive(db, dataReferencia): Promise<{ itens: ItemFireLive[]; geradoEm: string | null; estadoVazio: EstadoVazio | null }>` com `type EstadoVazio = 'SEM_JOGO_HOJE' | 'AGUARDANDO_PRIMEIRO_JOGO' | 'NENHUM_EM_1Q' | 'SEM_APITO_AINDA'`
 
-- [ ] **Step 1 — testes que falham:** cada um dos quatro estados vazios sai da combinação certa de `jogos` (nenhum hoje / primeiro às 21h30 / em andamento sem 1Q / em 1Q sem apito); com snapshots, itens de N jogos aparecem juntos
-- [ ] **Step 2:** implementar leitura (junta as N linhas do dia) e página — server component `force-dynamic`, mesmo padrão visual de `/`; cada estado vazio com texto próprio que **explica o motivo** (é a experiência dominante da tela — spec 05, riscos); rodapé `UltimaAtualizacao`
-- [ ] **Step 3:** ordenação: mais recente primeiro, com `// PROPOSTA aguardando CJ — spec 05, pergunta 3`; item `encerrado` permanece com selo "1Q encerrado", com `// PROPOSTA aguardando CJ — spec 05, pergunta 2`
-- [ ] **Step 4:** testes passam · boundaries limpo (a tela não importa o motor — só tipos)
-- [ ] **Step 5:** commit `"Tela /fire-live: quatro estados vazios explicados e cards ao vivo (spec 05, fatia 3)"`
+- [x] **Step 1 — testes que falham:** cada um dos quatro estados vazios sai da combinação certa de `jogos` (nenhum hoje / primeiro às 21h30 / em andamento sem 1Q / em 1Q sem apito); com snapshots, itens de N jogos aparecem juntos
+- [x] **Step 2:** implementar leitura (junta as N linhas do dia) e página — server component `force-dynamic`, mesmo padrão visual de `/`; cada estado vazio com texto próprio que **explica o motivo** (é a experiência dominante da tela — spec 05, riscos); rodapé `UltimaAtualizacao`
+- [x] **Step 3:** ordenação: mais recente primeiro, com `// PROPOSTA aguardando CJ — spec 05, pergunta 3`; item `encerrado` permanece com selo "1Q encerrado", com `// PROPOSTA aguardando CJ — spec 05, pergunta 2`
+- [x] **Step 4:** testes passam · boundaries limpo (a tela não importa o motor — só tipos)
+- [x] **Step 5:** commit `"Tela /fire-live: quatro estados vazios explicados e cards ao vivo (spec 05, fatia 3)"`
 
 ### T9: Push abre o jogo certo — spec 05, fatia 5
 
@@ -341,18 +344,18 @@ export async function materializarFeedFireLive(db, jogoId, itens, geradoEm): Pro
 - Modify: `public/sw.js` (função `abrirNotificacao`, handler em `sw.js:264`; incrementar `VERSAO_CACHE`)
 - Test: `src/components/pwa/__tests__/service-worker.test.ts`
 
-- [ ] **Step 1 — teste que falha:** notificação com `dados.jogoId` → navega para `/fire-live?jogo=<id>`; sem `jogoId` → `/fire-live`
-- [ ] **Step 2:** implementar em `abrirNotificacao`; incrementar `VERSAO_CACHE` (runbook do PWA: nunca `skipWaiting` no install)
-- [ ] **Step 3:** `npm run test:spec02 && npm run test:spec03` limpos
-- [ ] **Step 4:** commit `"Toque no push do Fire Live abre a tela no jogo certo (spec 05, fatia 5)"`
+- [x] **Step 1 — teste que falha:** notificação com `dados.jogoId` → navega para `/fire-live?jogo=<id>`; sem `jogoId` → `/fire-live`
+- [x] **Step 2:** implementar em `abrirNotificacao`; incrementar `VERSAO_CACHE` (runbook do PWA: nunca `skipWaiting` no install)
+- [x] **Step 3:** `npm run test:spec02 && npm run test:spec03` limpos
+- [x] **Step 4:** commit `"Toque no push do Fire Live abre a tela no jogo certo (spec 05, fatia 5)"`
 
 ### T10a: Filtros por time e por jogo — spec 05, fatia 4 (parte livre)
 
 **Files:** Modify: `src/app/(app)/fire-live/page.tsx`, `src/modules/entrega/fire-live/leitura.ts`
 
-- [ ] **Step 1 — testes:** `?time=SIGLA` recorta; `?jogo=<id>` recorta; combinados se compõem; valor desconhecido → lista vazia com estado explicado (não erro)
-- [ ] **Step 2:** implementar como recorte de leitura (searchParams), links de filtro no padrão dos chips de `/`
-- [ ] **Step 3:** commit `"Filtros por time e por jogo no Fire Live (spec 05, fatia 4a)"`
+- [x] **Step 1 — testes:** `?time=SIGLA` recorta; `?jogo=<id>` recorta; combinados se compõem; valor desconhecido → lista vazia com estado explicado (não erro)
+- [x] **Step 2:** implementar como recorte de leitura (searchParams), links de filtro no padrão dos chips de `/`
+- [x] **Step 3:** commit `"Filtros por time e por jogo no Fire Live (spec 05, fatia 4a)"`
 
 ### T10b: Excluir jogadores — **BLOQUEADA por G1**
 
@@ -386,9 +389,9 @@ export interface CasaDeAposta {
 }
 ```
 
-- [ ] **Step 1:** teste — fake devolve as cotações da fixture; nenhum campo com nome de casa atravessa para o domínio
-- [ ] **Step 2:** implementar; fixture com dois "provedores" fake e grafias divergentes do mesmo jogador (matéria-prima do T12)
-- [ ] **Step 3:** commit `"Porta anticorrupção de casas de aposta + adapter fake (spec 06, fatia 3)"`
+- [x] **Step 1:** teste — fake devolve as cotações da fixture; nenhum campo com nome de casa atravessa para o domínio
+- [x] **Step 2:** implementar; fixture com dois "provedores" fake e grafias divergentes do mesmo jogador (matéria-prima do T12)
+- [x] **Step 3:** commit `"Porta anticorrupção de casas de aposta + adapter fake (spec 06, fatia 3)"`
 
 ### T12: Reconciliação e curadoria — spec 06, fatia 4
 
@@ -400,9 +403,9 @@ export interface CasaDeAposta {
 - Consumes: `pontuar()` de `dominio/texto.ts:57` (mesma régua da lista do CJ e da busca) · tabela `mapa_mercados` · guarda de admin (o padrão que a auditoria corrigiu em `/admin/mapeamento`)
 - Produces: `sugerirVinculos(cotacoes, jogadores): Sugestao[]` — **nunca** vínculo automático; confirmação humana grava em `mapa_mercados`
 
-- [ ] **Step 1:** testes — nome exato pontua 1 e ainda assim vira sugestão (não vínculo); mercado desconhecido entra na fila de curadoria; vínculo confirmado é reutilizado nas próximas cargas
-- [ ] **Step 2:** implementar serviço + tela (mesmo desenho de `/admin/mapeamento`, **com a guarda**)
-- [ ] **Step 3:** commit `"Curadoria de mercados e nomes de casas: sugestão automática, vínculo humano (spec 06, fatia 4)"`
+- [x] **Step 1:** testes — nome exato pontua 1 e ainda assim vira sugestão (não vínculo); mercado desconhecido entra na fila de curadoria; vínculo confirmado é reutilizado nas próximas cargas
+- [x] **Step 2:** implementar serviço + tela (mesmo desenho de `/admin/mapeamento`, **com a guarda**)
+- [x] **Step 3:** commit `"Curadoria de mercados e nomes de casas: sugestão automática, vínculo humano (spec 06, fatia 4)"`
 
 **Depois desta tarefa, odds para até G4/G5/G6** (coleta real, cron e card).
 O teste de varredura de credenciais já existente cobre o ADR-0004; mantê-lo verde.
@@ -433,18 +436,18 @@ export type ResultadoBacktest = {
 export async function executarBacktest(db: Db, ruleset: Ruleset, periodo: PeriodoBacktest): Promise<ResultadoBacktest>
 ```
 
-- [ ] **Step 1 — testes que falham:** mesma entrada duas vezes → resultado **idêntico**; delta do MVP 6→7 no candidato muda a contagem; **zero linhas novas em `apitos`** após a execução (a distinção mais importante da spec); jogo sem box score → `indeterminados`, nunca erro; nenhum teste importa mock do motor
-- [ ] **Step 2:** implementar — laço por data do período: `montarFatos` (o mesmo do job diário) + `avaliar` + classificação de acerto contra `estatisticas_jogo`; nada gravado
-- [ ] **Step 3:** se o laço doer em período longo: carregar histórico uma vez e recortar por data em memória (seguro por construção — motor puro); medir antes
-- [ ] **Step 4:** commit `"Backtest: reexecução do motor sobre o histórico, sem gravar nada (spec 07, fatia 4)"`
+- [x] **Step 1 — testes que falham:** mesma entrada duas vezes → resultado **idêntico**; delta do MVP 6→7 no candidato muda a contagem; **zero linhas novas em `apitos`** após a execução (a distinção mais importante da spec); jogo sem box score → `indeterminados`, nunca erro; nenhum teste importa mock do motor
+- [x] **Step 2:** implementar — laço por data do período: `montarFatos` (o mesmo do job diário) + `avaliar` + classificação de acerto contra `estatisticas_jogo`; nada gravado
+- [x] **Step 3:** se o laço doer em período longo: carregar histórico uma vez e recortar por data em memória (seguro por construção — motor puro); medir antes
+- [x] **Step 4:** commit `"Backtest: reexecução do motor sobre o histórico, sem gravar nada (spec 07, fatia 4)"`
 
 ### T14: Comparação — spec 07, fatia 5
 
 **Files:** Create: `src/modules/entrega/backtest/comparar.ts` · Test: ampliar `backtest.test.ts`
 
-- [ ] **Step 1:** teste — dois rulesets diferindo só no delta do MVP → `Diferenca` com apitos a mais/a menos, jogadores que entraram/saíram, variação de acertos, e o tamanho da amostra junto do resultado (risco declarado da spec: número sem amostra tem cara de conclusão)
-- [ ] **Step 2:** implementar `comparar(a: ResultadoBacktest, b: ResultadoBacktest): Diferenca`
-- [ ] **Step 3:** commit `"Comparação de rulesets no backtest (spec 07, fatia 5)"`
+- [x] **Step 1:** teste — dois rulesets diferindo só no delta do MVP → `Diferenca` com apitos a mais/a menos, jogadores que entraram/saíram, variação de acertos, e o tamanho da amostra junto do resultado (risco declarado da spec: número sem amostra tem cara de conclusão)
+- [x] **Step 2:** implementar `comparar(a: ResultadoBacktest, b: ResultadoBacktest): Diferenca`
+- [x] **Step 3:** commit `"Comparação de rulesets no backtest (spec 07, fatia 5)"`
 
 ### T15: Painel + candidatos + CSV — spec 07, fatia 6
 
@@ -452,9 +455,9 @@ export async function executarBacktest(db: Db, ruleset: Ruleset, periodo: Period
 - Create: `src/app/(admin)/admin/backtest/page.tsx`, `.../acoes.ts`, `src/modules/entrega/backtest/csv.ts`
 - Test: ampliar `backtest.test.ts` (CSV) + teste de guarda da rota
 
-- [ ] **Step 1:** testes — CSV escapa vírgula/aspas e traz cabeçalho em português; ruleset candidato inválido é recusado por `carregarRuleset` na gravação; a página exige ADMIN
-- [ ] **Step 2:** implementar — tabela `rulesets` guarda **candidatos** (`status: provisorio`; o ativo continua no disco/git, ADR-0002); tela escolhe período + dois rulesets e mostra a `Diferenca`; exportar CSV; rodapé fixo: *"medição de comportamento de regra sobre dado histórico — não é sugestão de aposta nem promessa de retorno"* (P12)
-- [ ] **Step 3:** commit `"Painel de backtest: candidatos versionados, comparação e CSV (spec 07, fatia 6)"`
+- [x] **Step 1:** testes — CSV escapa vírgula/aspas e traz cabeçalho em português; ruleset candidato inválido é recusado por `carregarRuleset` na gravação; a página exige ADMIN
+- [x] **Step 2:** implementar — tabela `rulesets` guarda **candidatos** (`status: provisorio`; o ativo continua no disco/git, ADR-0002); tela escolhe período + dois rulesets e mostra a `Diferenca`; exportar CSV; rodapé fixo: *"medição de comportamento de regra sobre dado histórico — não é sugestão de aposta nem promessa de retorno"* (P12)
+- [x] **Step 3:** commit `"Painel de backtest: candidatos versionados, comparação e CSV (spec 07, fatia 6)"`
 
 ---
 
