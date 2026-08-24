@@ -323,3 +323,8 @@ export async function reprocessarPorEscalacao(
 ): Promise<ResultadoPublicacao> {
   return publicarListaSecreta(db, ruleset, { ...opcoes, ignorarAntecedencia: true })
 }
+
+// Reexport pela ENTREGA: `src/app` não pode importar VALOR do motor (guarda
+// `tela-nao-chama-o-motor` do .dependency-cruiser.cjs). A tela do detalhe
+// precisa da faixa visual da confiança — ela chega por aqui, não direto.
+export { faixaDaConfianca, type FaixaConfianca } from '../motor/confianca'

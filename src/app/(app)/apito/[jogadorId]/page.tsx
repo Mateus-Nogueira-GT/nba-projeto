@@ -2,10 +2,11 @@ import Link from 'next/link'
 import { redirect } from 'next/navigation'
 
 import { dataHora } from '@/components/formato'
-import { Moldura } from '@/components/navegacao'
+import { CabecalhoTela, Moldura } from '@/components/navegacao'
 import { dataDeReferencia } from '@/modules/dominio/rodada'
 import { getDb } from '@/modules/dominio/db/cliente'
-import { linhasDoJogador } from '@/modules/entrega/lista-secreta'
+import { detalheDoApito } from '@/modules/entrega/detalhe-apito'
+import { faixaDaConfianca, linhasDoJogador } from '@/modules/entrega/lista-secreta'
 import { faixasDoJogador } from '@/modules/entrega/odds/leitura'
 import { rotaDoJogador } from '@/modules/entrega/estatisticas/rotas'
 import { rulesetAtivo } from '@/modules/entrega/ruleset-ativo'
@@ -13,7 +14,8 @@ import { rulesetAtivo } from '@/modules/entrega/ruleset-ativo'
 // nunca valor, e a lista de atributos é a mesma nos dois lados.
 import { atributoEnum } from '@/modules/dominio/db/schema'
 import type { Atributo } from '@/modules/motor/tipos'
-import { CardEntrada } from '@/design-system/componentes'
+import { CONFIANCA_GRAU } from '@/design-system/tokens/css'
+import { Avatar } from '@/design-system/componentes'
 import { semantico } from '@/design-system/tokens/semantico'
 import { sessaoAtual } from '@/modules/plataforma/auth/cookies'
 import { avaliarAcesso } from '@/modules/plataforma/assinatura/direito'
@@ -27,12 +29,21 @@ const UNIDADE: Record<Atributo, string> = {
   REBOTES: 'rebotes',
   ASSISTENCIAS: 'assistências',
 }
+const ATRIBUTO_ROTULO: Record<Atributo, string> = {
+  PONTOS: 'PONTOS',
+  REBOTES: 'REBOTES',
+  ASSISTENCIAS: 'ASSISTÊNCIAS',
+}
 export const metadata = { title: 'Linhas e confiança · IA da NBA' }
 
 function formatarOdd(v: number): string {
   return v.toFixed(2).replace('.', ',')
 }
 
+/** Número no padrão pt-BR: vírgula decimal, uma casa. */
+function fmt(n: number): string {
+  return n.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })
+}
 
 /**
  * DETALHE DO APITO — os "quadradinhos" que o documento do CJ pede.
@@ -41,6 +52,9 @@ function formatarOdd(v: number): string {
  * nível, mais o bônus do nível de apito) e sua faixa de odds. O documento é
  * explícito: a plataforma NÃO tem acesso direto à odd da casa, trabalha com
  * uma aproximação — por isso a faixa aparece rotulada como referência.
+ *
+ * A tela é leitura de SNAPSHOT: `detalheDoApito` descreve o que o motor já
+ * decidiu (feed materializado), nunca reexecuta estratégia aqui.
  */
 export default async function PaginaApito({
   params,
@@ -79,11 +93,7 @@ export default async function PaginaApito({
   if (!principal) {
     return (
       <Moldura aba={null}>
-        <p style={{ margin: '0 0 12px', fontSize: 12 }}>
-          <Link href="/" style={{ color: semantico.textoSecundario }}>
-            ← Lista Secreta
-          </Link>
-        </p>
+        <CabecalhoTela sobrancelha="LISTA SECRETA · PRÉ-LIVE" titulo="Sem apito" voltarHref="/" />
         <div
           style={{
             padding: '32px 16px',
@@ -115,32 +125,234 @@ export default async function PaginaApito({
       : ruleset.por_atributo[principal.atributo]?.odds?.[principal.nivelJogador]
   const casasNaTela = Math.max(0, ...[...cotadas.values()].map((f) => f.qtdCasas))
 
+  const detalhe = await detalheDoApito(getDb(), ruleset, principal)
+  const faixa = faixaDaConfianca(principal.confianca, ruleset)
+  const corFaixa = faixa ? CONFIANCA_GRAU[faixa.grau] : semantico.divisor
+  const brilha = faixa?.grau === 5
+  const rotuloLinha =
+    principal.linha != null
+      ? `${ATRIBUTO_ROTULO[principal.atributo]} ${principal.linha}+`
+      : principal.alvo1Q != null
+        ? `${ATRIBUTO_ROTULO[principal.atributo]} · ALVO 1Q ${principal.alvo1Q}`
+        : ATRIBUTO_ROTULO[principal.atributo]
+
   return (
     <Moldura aba={null}>
-      <p style={{ margin: '0 0 12px', fontSize: 12 }}>
-        <Link href="/" style={{ color: semantico.textoSecundario }}>
-          ← Lista Secreta
-        </Link>
-      </p>
+      <CabecalhoTela sobrancelha="LISTA SECRETA · PRÉ-LIVE" titulo={principal.nome} voltarHref="/" />
 
-      <CardEntrada
-        nome={principal.nome}
-        jogadorHref={rotaDoJogador(principal.jogadorId)}
-        timeSigla={principal.timeSigla}
-        timeNome={principal.timeNome}
-        posicao={principal.posicao}
-        atributo={principal.atributo}
-        nivelJogador={principal.nivelJogador}
-        nivelApito={principal.nivelApito}
-        confianca={principal.confianca}
-        grauConfianca={null}
-        turbo={principal.turbo}
-        modoFire={principal.modoFire}
-        opdOrigemNivel={principal.opdOrigemNivel}
-        alvo1Q={principal.alvo1Q}
-      />
+      {/* HERO — faixa de confiança */}
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 14,
+          padding: 16,
+          borderRadius: 16,
+          border: `1.5px solid ${corFaixa}`,
+          boxShadow: brilha ? `0 0 20px 2px ${corFaixa}66` : undefined,
+          marginBottom: 12,
+        }}
+      >
+        <Avatar
+          nome={principal.nome}
+          fotoUrl={null}
+          timeSigla={principal.timeSigla}
+          nivelApito={principal.nivelApito}
+          turbo={principal.turbo}
+          tamanho={56}
+        />
+        <div style={{ flex: 1, minWidth: 0 }}>
+          {faixa && (
+            <p
+              style={{
+                margin: 0,
+                fontFamily: semantico.fonteRotulo,
+                fontSize: 13,
+                letterSpacing: 1.5,
+                color: corFaixa,
+                textTransform: 'uppercase',
+              }}
+            >
+              {faixa.rotulo}
+            </p>
+          )}
+          <p
+            style={{
+              margin: '2px 0 0',
+              fontFamily: semantico.fonteRotulo,
+              fontSize: 13,
+              letterSpacing: 1,
+              color: semantico.textoSecundario,
+              textTransform: 'uppercase',
+            }}
+          >
+            {rotuloLinha}
+          </p>
+        </div>
+        <span
+          style={{
+            fontFamily: semantico.fonteTitulo,
+            fontSize: 40,
+            letterSpacing: 0.5,
+            color: corFaixa,
+            fontVariantNumeric: 'tabular-nums',
+          }}
+        >
+          {principal.confianca === null ? '—' : `${Math.round(principal.confianca)}%`}
+        </span>
+      </div>
 
-      <h2 style={{ fontSize: 15, margin: '20px 0 4px' }}>Linhas de {UNIDADE[principal.atributo]}</h2>
+      {/* TRÊS CAIXAS — média da temporada, aproveitamento, minutos recentes */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, marginBottom: 16 }}>
+        {[
+          { rotulo: 'MÉDIA', valor: detalhe.mediaTemporada === null ? '—' : fmt(detalhe.mediaTemporada) },
+          { rotulo: 'BATEU', valor: `${detalhe.bateu.acertos}/${detalhe.bateu.total}` },
+          { rotulo: 'MIN', valor: `${Math.round(detalhe.minutosRecentes ?? 0)}'` },
+        ].map((caixa) => (
+          <div
+            key={caixa.rotulo}
+            style={{
+              padding: '10px 8px',
+              textAlign: 'center',
+              borderRadius: 10,
+              border: `1px solid ${semantico.divisor}`,
+            }}
+          >
+            <p
+              style={{
+                margin: 0,
+                fontFamily: semantico.fonteRotulo,
+                fontSize: 11,
+                letterSpacing: 1.5,
+                color: semantico.textoSecundario,
+                textTransform: 'uppercase',
+              }}
+            >
+              {caixa.rotulo}
+            </p>
+            <p style={{ margin: '2px 0 0', fontFamily: semantico.fonteTitulo, fontSize: 20 }}>
+              {caixa.valor}
+            </p>
+          </div>
+        ))}
+      </div>
+
+      {/* ÚLTIMOS 5 JOGOS NA LINHA */}
+      <h2
+        style={{
+          margin: '0 0 8px',
+          fontFamily: semantico.fonteRotulo,
+          fontSize: 12,
+          letterSpacing: 1.5,
+          color: semantico.textoSecundario,
+          textTransform: 'uppercase',
+        }}
+      >
+        ÚLTIMOS 5 JOGOS NA LINHA
+      </h2>
+      {detalhe.blocos.length === 0 ? (
+        <p style={{ margin: '0 0 16px', fontSize: 13, color: semantico.textoSecundario }}>
+          Sem histórico suficiente ainda.
+        </p>
+      ) : (
+        <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+          {detalhe.blocos.map((bloco, i) => (
+            <div key={i} style={{ textAlign: 'center' }}>
+              <div
+                style={{
+                  width: 44,
+                  height: 44,
+                  borderRadius: 10,
+                  display: 'grid',
+                  placeItems: 'center',
+                  background: bloco.bateu ? semantico.apitoNivel3 : semantico.superficieElevada,
+                  color: bloco.bateu ? semantico.textoSobreCor : semantico.textoPrimario,
+                  fontFamily: semantico.fonteTitulo,
+                  fontSize: 16,
+                }}
+              >
+                {bloco.valor}
+              </div>
+              <p
+                style={{
+                  margin: '4px 0 0',
+                  fontFamily: semantico.fonteRotulo,
+                  fontSize: 11,
+                  letterSpacing: 1,
+                  color: semantico.textoSecundario,
+                  textTransform: 'uppercase',
+                }}
+              >
+                {bloco.adversarioSigla}
+              </p>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* POR QUE ENTROU */}
+      <h2
+        style={{
+          margin: '0 0 8px',
+          fontFamily: semantico.fonteRotulo,
+          fontSize: 12,
+          letterSpacing: 1.5,
+          color: semantico.textoSecundario,
+          textTransform: 'uppercase',
+        }}
+      >
+        POR QUE ENTROU
+      </h2>
+      <div
+        style={{
+          padding: '12px 14px',
+          borderRadius: 12,
+          border: `1px solid ${semantico.divisor}`,
+          marginBottom: 16,
+        }}
+      >
+        {detalhe.porQueEntrou.length === 0 ? (
+          <p style={{ margin: 0, fontSize: 14, color: semantico.textoSecundario }}>
+            Sem detalhamento disponível para este apito.
+          </p>
+        ) : (
+          detalhe.porQueEntrou.map((frase, i) => (
+            <p
+              key={i}
+              style={{
+                margin: i === 0 ? 0 : '6px 0 0',
+                fontSize: 14,
+                color: semantico.textoPrimario,
+              }}
+            >
+              {frase}
+            </p>
+          ))
+        )}
+      </div>
+
+      {/* VER ESTATÍSTICAS */}
+      <Link
+        href={rotaDoJogador(principal.jogadorId)}
+        style={{
+          display: 'block',
+          textAlign: 'center',
+          padding: '14px 16px',
+          borderRadius: 12,
+          background: `linear-gradient(90deg, ${semantico.acento}, #FFB25E)`,
+          color: semantico.textoSobreCor,
+          fontFamily: semantico.fonteTitulo,
+          fontSize: 16,
+          letterSpacing: 0.5,
+          textTransform: 'uppercase',
+          textDecoration: 'none',
+          marginBottom: 24,
+        }}
+      >
+        VER ESTATÍSTICAS
+      </Link>
+
+      <h2 style={{ fontSize: 15, margin: '0 0 4px' }}>Linhas de {UNIDADE[principal.atributo]}</h2>
       <p style={{ margin: '0 0 12px', fontSize: 12, color: semantico.textoSecundario }}>
         Escolha a linha que quer jogar. Quanto mais alta a linha, menor a confiança da análise.
       </p>
@@ -149,7 +361,7 @@ export default async function PaginaApito({
         {itens.map((item) => {
           const cotada = item.linha === null ? undefined : cotadas.get(item.linha)
           const estatica = item.linha === null ? undefined : referencia?.[String(item.linha)]
-          const faixa: [number, number] | undefined = cotada
+          const faixaOdd: [number, number] | undefined = cotada
             ? [cotada.min, cotada.max]
             : estatica
           return (
@@ -173,7 +385,7 @@ export default async function PaginaApito({
                 {item.confianca === null ? '—' : `${item.confianca}%`}
               </span>
               <span style={{ fontSize: 13, color: semantico.textoSecundario }}>
-                {faixa ? `odd ${formatarOdd(faixa[0])} – ${formatarOdd(faixa[1])}` : 'odd —'}
+                {faixaOdd ? `odd ${formatarOdd(faixaOdd[0])} – ${formatarOdd(faixaOdd[1])}` : 'odd —'}
               </span>
             </div>
           )

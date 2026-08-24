@@ -107,6 +107,25 @@ describe('detalhe do apito', () => {
     // P12: o percentual nunca é chamado de probabilidade sem negação na frente.
     expect(html).toContain('não uma')
   }, 60_000)
+
+  it('detalhe redesenhado: faixa, três caixas, blocos e por quê', async () => {
+    const { lerFeed } = await import('../../modules/entrega/lista-secreta')
+    const feed = await lerFeed(banco.db, HOJE)
+    const lebron = feed!.conteudo.itens.find((i) => i.nome === 'LeBron James')!
+    const { default: Pagina } = await import('../(app)/apito/[jogadorId]/page')
+    const html = renderToStaticMarkup(await Pagina({
+      params: Promise.resolve({ jogadorId: lebron.jogadorId }),
+      searchParams: Promise.resolve({ atributo: 'PONTOS' }),
+    }))
+    expect(html).toMatch(/CONFIANÇA (BOA|SÓLIDA|FORTE|MUITO FORTE|MÁXIMA)/)
+    expect(html).toContain('MÉDIA')
+    expect(html).toContain('BATEU')
+    expect(html).toContain('ÚLTIMOS 5 JOGOS NA LINHA')
+    expect(html).toContain('POR QUE ENTROU')
+    expect(html).toContain('VER ESTATÍSTICAS')
+    expect(html).not.toContain('ALTÍSSIMO VALOR')
+    expect(html).not.toContain('MÉDIA 5J')
+  }, 60_000)
 })
 
 describe('tela de Resultados', () => {
