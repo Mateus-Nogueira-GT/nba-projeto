@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { historicoOscilacao, mediaDe, posicaoDe } from '../demo/dados'
+import type { Nivel } from '../../motor/tipos'
 
 describe('helpers determinísticos da demonstração', () => {
   it('a posição é estável e cobre G, F e C', () => {
@@ -30,17 +31,17 @@ describe('helpers determinísticos da demonstração', () => {
   })
 
   it('nome desconhecido cai na faixa do nível e é estável', () => {
-    const faixas: Record<string, [number, number]> = {
-      MVP: [27, 31],
-      ALL_STAR: [18, 23],
-      SUPORTE: [11, 16],
-      RANDOLA: [5, 9],
-    }
-    for (const [nivel, [min, max]] of Object.entries(faixas)) {
-      const m = mediaDe('Jogador Inventado da Demo', nivel as keyof typeof faixas)
+    const faixas: [Nivel, number, number][] = [
+      ['MVP', 27, 31],
+      ['ALL_STAR', 18, 23],
+      ['SUPORTE', 11, 16],
+      ['RANDOLA', 5, 9],
+    ]
+    for (const [nivel, min, max] of faixas) {
+      const m = mediaDe('Jogador Inventado da Demo', nivel)
       expect(m.ppg).toBeGreaterThanOrEqual(min)
       expect(m.ppg).toBeLessThanOrEqual(max)
-      expect(mediaDe('Jogador Inventado da Demo', nivel as keyof typeof faixas)).toEqual(m)
+      expect(mediaDe('Jogador Inventado da Demo', nivel)).toEqual(m)
     }
   })
 
