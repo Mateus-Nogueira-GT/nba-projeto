@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { createElement } from 'react'
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
+import { eq } from 'drizzle-orm'
 
 import { bancoDeTeste } from '../../dominio/__tests__/ajuda-banco'
 import {
@@ -19,11 +20,14 @@ import type { Nivel, StatusEscalacao } from '../../motor/tipos'
 import { montarFatos } from '../../dominio/fatos'
 import { CardEntrada } from '../../../design-system/componentes'
 import {
+  agruparPorJogador,
+  filtrarItens,
   lerFeed,
   ordenarPorConfianca,
   publicarListaSecreta,
   reprocessarPorEscalacao,
 } from '../lista-secreta'
+import type { ItemFeed } from '../lista-secreta'
 
 const ruleset = carregarRuleset(readFileSync('config/ruleset.v1.yaml', 'utf8'))
 
@@ -389,5 +393,118 @@ describe('fronteira da tela', () => {
     expect(fonte).toContain('lerFeed')
     expect(fonte).not.toContain('avaliar(')
     expect(fonte).not.toContain('montarFatos')
+  })
+})
+
+// ===========================================================================
+// FILTROS E AGRUPAMENTO (spec 08 — o documento do CJ pede filtragem total)
+// ===========================================================================
+
+describe('método e posição viajam no item do feed', () => {
+  it('OPD publicada traz método e a posição do jogador', async () => {
+    await banco.db
+      .update(jogadores)
+      .set({ posicao: 'G' })
+      .where(eq(jogadores.id, idPorNome.get('Austin Reaves')!))
+    await escalar('Luka Doncic', 'FORA')
+
+    await publicarListaSecreta(banco.db, ruleset, {
+      dataReferencia: HOJE,
+      agora: UMA_HORA_ANTES,
+    })
+
+    const feed = await lerFeed(banco.db, HOJE)
+    const reaves = feed!.conteudo.itens.find(
+      (i) => i.jogadorId === idPorNome.get('Austin Reaves'),
+    )!
+    expect(reaves.metodo).toBe('OPD')
+    expect(reaves.posicao).toBe('G')
+  })
+
+  it('snapshot legado sem os campos novos não quebra a leitura', () => {
+    const legado = JSON.parse('{"chave":"k","jogoId":"j","jogadorId":"p","nome":"X"}') as ItemFeed
+    expect(legado.metodo ?? null).toBeNull()
+    expect(legado.posicao ?? null).toBeNull()
+  })
+})
+
+describe('filtrarItens e agruparPorJogador (puros)', () => {
+  const base: ItemFeed = {
+    chave: 'c1',
+    jogoId: 'j1',
+    jogadorId: 'p1',
+    nome: 'Um',
+    timeSigla: 'LAL',
+    timeNome: 'Lakers',
+    atributo: 'PONTOS',
+    nivelJogador: 'MVP',
+    nivelApito: 1,
+    turbo: false,
+    modoFire: false,
+    opdOrigemNivel: null,
+    linha: 20,
+    confianca: 95,
+    alvo1Q: null,
+    metodo: 'OSCILACAO',
+    posicao: 'G',
+  }
+  const item = (over: Partial<ItemFeed>): ItemFeed => ({ ...base, ...over })
+
+  it('recorta por método, nível, time e posição', () => {
+    const itens = [
+      base,
+      item({ chave: 'c2', jogadorId: 'p2', metodo: 'OPD', nivelJogador: 'SUPORTE' }),
+      item({ chave: 'c3', jogadorId: 'p3', timeSigla: 'DEN', posicao: 'C' }),
+    ]
+    expect(filtrarItens(itens, { metodo: 'OPD' }).map((i) => i.jogadorId)).toEqual(['p2'])
+    expect(filtrarItens(itens, { nivel: 'SUPORTE' }).map((i) => i.jogadorId)).toEqual(['p2'])
+    expect(filtrarItens(itens, { time: 'DEN' }).map((i) => i.jogadorId)).toEqual(['p3'])
+    expect(filtrarItens(itens, { posicao: 'C' }).map((i) => i.jogadorId)).toEqual(['p3'])
+  })
+
+  it('turbo é um método de recorte por si', () => {
+    const itens = [base, item({ chave: 'c2', jogadorId: 'p2', turbo: true })]
+    expect(filtrarItens(itens, { metodo: 'TURBO' }).map((i) => i.jogadorId)).toEqual(['p2'])
+  })
+
+  it('filtros combinam entre si', () => {
+    const itens = [
+      base,
+      item({ chave: 'c2', jogadorId: 'p2', timeSigla: 'DEN' }),
+      item({ chave: 'c3', jogadorId: 'p3', timeSigla: 'DEN', nivelJogador: 'RANDOLA' }),
+    ]
+    const r = filtrarItens(itens, { time: 'DEN', nivel: 'RANDOLA' })
+    expect(r.map((i) => i.jogadorId)).toEqual(['p3'])
+  })
+
+  it('valor desconhecido devolve lista vazia, nunca erro', () => {
+    expect(filtrarItens([base], { time: 'XXX' })).toEqual([])
+  })
+
+  it('agrupa por jogador escolhendo a maior confiança', () => {
+    const itens = [
+      item({ chave: 'a', linha: 30, confianca: 85 }),
+      item({ chave: 'b', linha: 20, confianca: 95 }),
+      item({ chave: 'c', jogadorId: 'p2', linha: 15, confianca: 90 }),
+    ]
+    const r = agruparPorJogador(itens)
+    expect(r).toHaveLength(2)
+    expect(r.find((i) => i.jogadorId === 'p1')!.linha).toBe(20)
+  })
+
+  it('empate de confiança resolve pela menor linha (determinismo)', () => {
+    const itens = [
+      item({ chave: 'a', linha: 30, confianca: 90 }),
+      item({ chave: 'b', linha: 20, confianca: 90 }),
+    ]
+    expect(agruparPorJogador(itens)[0]!.linha).toBe(20)
+  })
+
+  it('confiança nula não quebra a ordenação', () => {
+    const itens = [
+      item({ chave: 'a', confianca: null }),
+      item({ chave: 'b', linha: 25, confianca: 80 }),
+    ]
+    expect(agruparPorJogador(itens)[0]!.confianca).toBe(80)
   })
 })

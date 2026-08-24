@@ -6,7 +6,7 @@ import { feedSnapshot, jogadores, niveis, niveisVersao, times } from '../dominio
 import type { Db } from '../dominio/db/tipos'
 import { gravarApitos } from '../dominio/repositorios/apitos'
 import { avaliar } from '../motor'
-import type { Apito, Atributo, Nivel, NivelApito } from '../motor/tipos'
+import type { Apito, Atributo, Metodo, Nivel, NivelApito } from '../motor/tipos'
 import type { Ruleset } from '../motor/ruleset/schema'
 
 /**
@@ -33,6 +33,13 @@ export type ItemFeed = {
   /** Nota de confiança da análise do CJ. Nunca "probabilidade". */
   confianca: number | null
   alvo1Q: number | null
+  /**
+   * Método que produziu o apito. Viaja no feed porque o documento do CJ pede
+   * filtragem por método. Null em snapshot anterior à spec 08.
+   */
+  metodo: Metodo | null
+  /** G/F/C — dado canônico do jogador, usado só como recorte de leitura. */
+  posicao: string | null
 }
 
 export type ConteudoFeed = {
@@ -143,6 +150,7 @@ async function enriquecer(db: Db, apitos: Apito[]): Promise<ItemFeed[]> {
   ])
 
   const nomePorJogador = new Map(elenco.map((j) => [j.id, j.nomeCompleto] as const))
+  const posicaoPorJogador = new Map(elenco.map((j) => [j.id, j.posicao] as const))
   const timePorId = new Map(listaTimes.map((t) => [t.id, t] as const))
   // O time vem da LISTA do CJ, não de jogadores.time_id — elencos projetados.
   const timeDoJogador = new Map(vinculos.map((v) => [v.jogadorId, v.timeId] as const))
@@ -165,8 +173,64 @@ async function enriquecer(db: Db, apitos: Apito[]): Promise<ItemFeed[]> {
       linha: a.linha,
       confianca: a.confianca,
       alvo1Q: a.alvo1Q,
+      metodo: a.metodo,
+      posicao: posicaoPorJogador.get(a.jogadorId) ?? null,
     }
   })
+}
+
+// ---------------------------------------------------------------------------
+// FILTROS DA LISTA — recorte de LEITURA, puro. A tela nunca executa o motor.
+// ---------------------------------------------------------------------------
+
+/** "TURBO" não é um método do motor: é o destaque que atravessa os dois. */
+export type FiltroLista = {
+  metodo?: 'OSCILACAO' | 'OPD' | 'TURBO'
+  nivel?: Nivel
+  time?: string
+  posicao?: string
+}
+
+export function filtrarItens(itens: ItemFeed[], filtro: FiltroLista): ItemFeed[] {
+  return itens
+    .filter((i) =>
+      filtro.metodo === undefined
+        ? true
+        : filtro.metodo === 'TURBO'
+          ? i.turbo
+          : i.metodo === filtro.metodo,
+    )
+    .filter((i) => (filtro.nivel === undefined ? true : i.nivelJogador === filtro.nivel))
+    .filter((i) => (filtro.time === undefined ? true : i.timeSigla === filtro.time))
+    .filter((i) => (filtro.posicao === undefined ? true : i.posicao === filtro.posicao))
+}
+
+/**
+ * Um card por JOGADOR, não por linha.
+ *
+ * O motor emite um apito por linha de pontos (20/25/30/35). O documento do CJ
+ * desenha uma BARRA por jogador com os "quadradinhos" das linhas dentro dela —
+ * as linhas restantes vivem em /apito/<jogador>. Sem isso o mesmo nome aparece
+ * três ou quatro vezes seguidas na lista.
+ *
+ * Escolhe a linha de maior confiança; empate resolve pela MENOR linha, para
+ * que a ordem não dependa da ordem de chegada.
+ */
+export function agruparPorJogador(itens: ItemFeed[]): ItemFeed[] {
+  const melhor = new Map<string, ItemFeed>()
+  for (const item of itens) {
+    const atual = melhor.get(item.jogadorId)
+    if (atual === undefined) {
+      melhor.set(item.jogadorId, item)
+      continue
+    }
+    const c = item.confianca ?? -1
+    const cAtual = atual.confianca ?? -1
+    if (c > cAtual || (c === cAtual && (item.linha ?? Infinity) < (atual.linha ?? Infinity))) {
+      melhor.set(item.jogadorId, item)
+    }
+  }
+  return [...melhor.values()]
 }
 
 /** Lê o feed materializado. É por aqui que a tela entra — nunca pelo motor. */
