@@ -370,7 +370,6 @@ export default async function PaginaListaSecreta({
                 jogadorHref={rotaDoJogador(item.jogadorId)}
                 fotoUrl={item.fotoUrl ?? null}
                 timeSigla={item.timeSigla}
-                timeNome={item.timeNome}
                 posicao={item.posicao}
                 atributo={item.atributo}
                 nivelJogador={item.nivelJogador}

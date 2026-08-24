@@ -351,7 +351,6 @@ describe('a tela consome o feed materializado', () => {
       createElement(CardEntrada, {
         nome: item.nome,
         timeSigla: item.timeSigla,
-        timeNome: item.timeNome,
         posicao: null,
         atributo: item.atributo,
         nivelJogador: item.nivelJogador,

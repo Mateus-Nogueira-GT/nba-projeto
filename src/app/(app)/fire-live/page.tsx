@@ -268,7 +268,7 @@ export default async function PaginaFireLive({
               jogadorHref={rotaDoJogador(item.jogadorId)}
               fotoUrl={item.fotoUrl ?? null}
               timeSigla={item.timeSigla}
-              timeNome={`${item.timeNome} · vs ${item.adversarioSigla}`}
+              adversarioSigla={item.adversarioSigla}
               posicao={item.posicao}
               atributo={item.atributo}
               nivelJogador={item.nivelJogador}

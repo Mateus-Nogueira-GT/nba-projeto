@@ -224,7 +224,6 @@ describe('os dois caminhos chegam na mesma tela', () => {
         nome: 'Luka Dončić',
         jogadorHref: rotaDoJogador(lukaId),
         timeSigla: 'LAL',
-        timeNome: 'Lakers',
         posicao: 'PG',
         atributo: 'PONTOS' as const,
         nivelJogador: 'MVP' as const,
@@ -255,7 +254,6 @@ describe('os dois caminhos chegam na mesma tela', () => {
       createElement(CardEntrada, {
         nome: 'Luka Dončić',
         timeSigla: 'LAL',
-        timeNome: 'Lakers',
         posicao: null,
         atributo: 'PONTOS' as const,
         nivelJogador: 'MVP' as const,

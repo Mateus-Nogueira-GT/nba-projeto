@@ -409,7 +409,6 @@ export default async function PaginaComoFunciona() {
           <CardEntrada
             nome="Austin Reaves"
             timeSigla="LAL"
-            timeNome="Lakers"
             posicao="G"
             atributo="PONTOS"
             nivelJogador="ALL_STAR"

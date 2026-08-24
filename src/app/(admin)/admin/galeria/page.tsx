@@ -75,7 +75,6 @@ export default async function PaginaGaleria() {
               key={`${nivel}-${apito}`}
               nome={EXEMPLO[nivel].nome}
               timeSigla={EXEMPLO[nivel].sigla}
-              timeNome={EXEMPLO[nivel].time}
               posicao={EXEMPLO[nivel].posicao}
               atributo="PONTOS"
               nivelJogador={nivel}
@@ -95,7 +94,6 @@ export default async function PaginaGaleria() {
         <CardEntrada
           nome="Austin Reaves"
           timeSigla="LAL"
-          timeNome="Lakers"
           posicao="G"
           atributo="PONTOS"
           nivelJogador="ALL_STAR"
@@ -107,7 +105,6 @@ export default async function PaginaGaleria() {
         <CardEntrada
           nome="Jokic"
           timeSigla="DEN"
-          timeNome="Denver Nuggets"
           posicao="C"
           atributo="PONTOS"
           nivelJogador="MVP"
@@ -125,7 +122,6 @@ export default async function PaginaGaleria() {
         <CardEntrada
           nome="Jokic"
           timeSigla="DEN"
-          timeNome="Denver Nuggets"
           posicao="C"
           atributo="PONTOS"
           nivelJogador="MVP"
@@ -145,7 +141,6 @@ export default async function PaginaGaleria() {
         <CardEntrada
           nome="Anthony Edwards"
           timeSigla="MIN"
-          timeNome="Minnesota Timberwolves"
           posicao="G"
           atributo="PONTOS"
           nivelJogador="MVP"
@@ -160,7 +155,6 @@ export default async function PaginaGaleria() {
         <CardEntrada
           nome="Grimes"
           timeSigla="LAL"
-          timeNome="Lakers"
           posicao="G"
           atributo="PONTOS"
           nivelJogador="SUPORTE"
@@ -178,7 +172,6 @@ export default async function PaginaGaleria() {
         <CardEntrada
           nome="Wembanyama"
           timeSigla="SAS"
-          timeNome="San Antonio Spurs"
           posicao="C"
           atributo="REBOTES"
           nivelJogador="MVP"
@@ -190,7 +183,6 @@ export default async function PaginaGaleria() {
         <CardEntrada
           nome="Haliburton"
           timeSigla="IND"
-          timeNome="Indiana Pacers"
           posicao="G"
           atributo="ASSISTENCIAS"
           nivelJogador="SUPORTE"
@@ -209,7 +201,6 @@ export default async function PaginaGaleria() {
           nome="LeBron James"
           fotoUrl={null}
           timeSigla="PHI"
-          timeNome="Philadelphia 76ers"
           posicao="F"
           atributo="PONTOS"
           nivelJogador="MVP"
@@ -228,7 +219,6 @@ export default async function PaginaGaleria() {
           nome="Anthony Edwards"
           fotoUrl="/icons/app-192.png"
           timeSigla="MIN"
-          timeNome="Minnesota Timberwolves"
           posicao="G"
           atributo="PONTOS"
           nivelJogador="MVP"

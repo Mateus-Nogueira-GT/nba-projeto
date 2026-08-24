@@ -25,7 +25,14 @@ export type CardEntradaProps = {
   jogadorHref?: string | null
   fotoUrl?: string | null
   timeSigla: string
-  timeNome: string
+  /**
+   * Sigla do time ADVERSÁRIO, quando a tela sabe contra quem é o jogo.
+   *
+   * Opcional de propósito: a Lista Secreta agrupa por jogador e não carrega o
+   * confronto; o Fire Live carrega. Ausente, a linha de apoio simplesmente
+   * não fala em confronto — melhor que um "vs —" que não informa nada.
+   */
+  adversarioSigla?: string | null
   posicao: string | null
   atributo: Atributo
   nivelJogador: Nivel
@@ -142,6 +149,7 @@ export function CardEntrada(props: CardEntradaProps) {
             >
               {rotuloLinha} · {nivel.rotulo} · N{props.nivelApito}
               {props.posicao ? ` · ${props.posicao}` : ''} · {props.timeSigla}
+              {props.adversarioSigla ? ` · vs ${props.adversarioSigla}` : ''}
             </div>
             <div style={{ display: 'flex', gap: 6, marginTop: 4, flexWrap: 'wrap' }}>
               {props.turbo && <Selo icone="⚡" rotulo="TURBO" cor={TURBO.cor} />}

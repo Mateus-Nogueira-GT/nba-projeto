@@ -4,7 +4,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { CardEntrada } from '../componentes/CardEntrada'
 
 const base = {
-  nome: 'D. Malloy', timeSigla: 'LAL', timeNome: 'Lakers', posicao: 'G',
+  nome: 'D. Malloy', timeSigla: 'LAL', posicao: 'G',
   atributo: 'PONTOS' as const, nivelJogador: 'MVP' as const, nivelApito: 3 as const,
   confianca: 92, grauConfianca: 4 as const, fotoUrl: null,
 }
@@ -46,6 +46,30 @@ describe('CardEntrada (identidade 02)', () => {
       createElement(CardEntrada, { ...base, vivo: true, alvo1Q: 12, progresso1Q: { observado: 9, alvo: 12 } }),
     )
     expect(parcial).toContain('FALTA 3 PTS')
+  })
+
+  it('mostra contra quem o jogador está jogando, quando a tela sabe', () => {
+    // A tela ao vivo montava "Lakers · vs DEN" e passava a string em
+    // `timeNome`, prop que o corpo do componente nunca lia: o card perdia o
+    // confronto. Agora o adversário é prop de verdade — e some quando não há,
+    // em vez de virar um "vs —" que não informa nada.
+    const comAdversario = renderToStaticMarkup(
+      createElement(CardEntrada, { ...base, linha: 20, adversarioSigla: 'DEN' }),
+    )
+    expect(comAdversario).toContain('vs DEN')
+
+    const sem = renderToStaticMarkup(createElement(CardEntrada, { ...base, linha: 20 }))
+    expect(sem).not.toContain('vs ')
+  })
+
+  it('toda prop obrigatória do card aparece na saída renderizada', () => {
+    // Prop obrigatória que ninguém lê é uma promessa que a tela paga e o
+    // usuário não recebe — foi assim que o confronto do Fire Live sumiu.
+    const html = renderToStaticMarkup(
+      createElement(CardEntrada, { ...base, linha: 20, adversarioSigla: 'DEN' }),
+    )
+    for (const valor of ['D. Malloy', 'LAL', 'G', '20', 'MVP', '92'])
+      expect(html, `prop com valor ${valor} não chegou à tela`).toContain(valor)
   })
 
   it('nível do jogador e do apito têm redundância textual', () => {
