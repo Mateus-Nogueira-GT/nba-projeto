@@ -37,6 +37,15 @@ export const primitivo = {
   // Apoio
   vermelho400: '#FF6B6B',
 
+  // Fundos alternativos do monograma do Avatar (sem foto) — variação
+  // determinística por sigla de time, puramente decorativa, sem significado
+  // de estratégia.
+  avatarFundo2: '#243147',
+  avatarFundo3: '#1E2A3E',
+  avatarFundo4: '#2C2438',
+  avatarFundo5: '#1F3038',
+  avatarFundo6: '#332A22',
+
   // Rampa de confiança — UM matiz, intensidade crescente. Identidade 02.
   turquesa700: '#2FA093',
   turquesa600: '#3AB5A6',

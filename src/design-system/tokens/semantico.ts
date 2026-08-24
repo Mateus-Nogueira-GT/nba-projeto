@@ -61,6 +61,13 @@ export const semantico = {
   confiancaGrau3: p.turquesa500,
   confiancaGrau4: p.turquesa400,
   confiancaGrau5: p.turquesa300,
+
+  // -- Fundos alternativos do monograma do Avatar (identidade 03) -----------
+  avatarFundo2: p.avatarFundo2,
+  avatarFundo3: p.avatarFundo3,
+  avatarFundo4: p.avatarFundo4,
+  avatarFundo5: p.avatarFundo5,
+  avatarFundo6: p.avatarFundo6,
 } as const
 
 export type Semantico = typeof semantico
