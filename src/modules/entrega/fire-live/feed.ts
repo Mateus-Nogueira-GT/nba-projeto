@@ -105,6 +105,7 @@ export async function materializarFeedFireLive(
       nome: jogador?.nomeCompleto ?? a.jogadorId,
       timeSigla: time?.sigla ?? '—',
       timeNome: time?.nome ?? '—',
+      fotoUrl: jogador?.fotoUrl ?? null,
       atributo: a.atributo,
       nivelJogador: a.nivelJogador,
       nivelApito: a.nivelApito as NivelApito,

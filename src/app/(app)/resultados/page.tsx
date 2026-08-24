@@ -2,18 +2,19 @@ import Link from 'next/link'
 import { redirect } from 'next/navigation'
 
 import { diaLongo } from '@/components/formato'
-import { Moldura } from '@/components/navegacao'
+import { CabecalhoTela, Chip, Moldura } from '@/components/navegacao'
 import { dataDeReferencia } from '@/modules/dominio/rodada'
 import { rulesetAtivo } from '@/modules/entrega/ruleset-ativo'
 import { NIVEL_JOGADOR } from '@/design-system/tokens/css'
 import { semantico } from '@/design-system/tokens/semantico'
+import { Avatar } from '@/design-system/componentes'
 import { getDb } from '@/modules/dominio/db/cliente'
 import { conferirRodadas, greensDoDia } from '@/modules/entrega/resultados'
 import type { DiaConferido, JogadorConferido } from '@/modules/entrega/resultados'
 import { rotaDoJogador } from '@/modules/entrega/estatisticas/rotas'
 import { avaliarAcesso } from '@/modules/plataforma/assinatura/direito'
 import { sessaoAtual } from '@/modules/plataforma/auth/cookies'
-import type { Atributo } from '@/modules/motor/tipos'
+import type { Atributo, NivelApito } from '@/modules/motor/tipos'
 import '@/design-system/tokens/tokens.css'
 
 export const dynamic = 'force-dynamic'
@@ -46,6 +47,13 @@ function Cartao({ jogador }: { jogador: JogadorConferido }) {
         borderLeft: `3px solid ${nivel.cor}`,
       }}
     >
+      <Avatar
+        nome={jogador.nome}
+        fotoUrl={jogador.fotoUrl}
+        timeSigla={jogador.timeSigla}
+        nivelApito={jogador.nivelApito as NivelApito}
+        tamanho={44}
+      />
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontSize: 15, fontWeight: 700 }}>
           <Link
@@ -155,13 +163,19 @@ export default async function PaginaResultados() {
 
   return (
     <Moldura aba="lista">
-      <header style={{ marginBottom: 16 }}>
-        <h1 style={{ margin: 0, fontSize: 22 }}>Resultados</h1>
-        <p style={{ margin: '4px 0 0', fontSize: 13, color: semantico.textoSecundario }}>
-          O que aconteceu com quem a lista sinalizou nas rodadas encerradas. A rodada de hoje
-          entra aqui quando os jogos acabarem.
-        </p>
-      </header>
+      <CabecalhoTela sobrancelha="LISTA SECRETA · PRÉ-LIVE" titulo="RESULTADOS">
+        <Chip href="/" ativo={false}>
+          HOJE
+        </Chip>
+        <Chip href="/resultados" ativo>
+          RESULTADOS
+        </Chip>
+      </CabecalhoTela>
+
+      <p style={{ margin: '0 0 16px', fontSize: 13, color: semantico.textoSecundario }}>
+        O que aconteceu com quem a lista sinalizou nas rodadas encerradas. A rodada de hoje
+        entra aqui quando os jogos acabarem.
+      </p>
 
       {greens.length > 0 && (
         <section style={{ marginBottom: 22 }}>

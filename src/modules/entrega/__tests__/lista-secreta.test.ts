@@ -436,6 +436,7 @@ describe('filtrarItens e agruparPorJogador (puros)', () => {
     nome: 'Um',
     timeSigla: 'LAL',
     timeNome: 'Lakers',
+    fotoUrl: null,
     atributo: 'PONTOS',
     nivelJogador: 'MVP',
     nivelApito: 1,

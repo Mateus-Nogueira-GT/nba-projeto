@@ -24,6 +24,8 @@ export type ItemFeed = {
   nome: string
   timeSigla: string
   timeNome: string
+  /** Foto do jogador, quando o provedor tem uma. Ausente em snapshot antigo. */
+  fotoUrl: string | null
   atributo: Atributo
   nivelJogador: Nivel
   nivelApito: NivelApito
@@ -149,6 +151,7 @@ async function enriquecer(db: Db, apitos: Apito[]): Promise<ItemFeed[]> {
 
   const nomePorJogador = new Map(elenco.map((j) => [j.id, j.nomeCompleto] as const))
   const posicaoPorJogador = new Map(elenco.map((j) => [j.id, j.posicao] as const))
+  const fotoPorJogador = new Map(elenco.map((j) => [j.id, j.fotoUrl] as const))
   const timePorId = new Map(listaTimes.map((t) => [t.id, t] as const))
   // O time vem da LISTA do CJ, não de jogadores.time_id — elencos projetados.
   const timeDoJogador = new Map(vinculos.map((v) => [v.jogadorId, v.timeId] as const))
@@ -162,6 +165,7 @@ async function enriquecer(db: Db, apitos: Apito[]): Promise<ItemFeed[]> {
       nome: nomePorJogador.get(a.jogadorId) ?? a.jogadorId,
       timeSigla: time?.sigla ?? '—',
       timeNome: time?.nome ?? '—',
+      fotoUrl: fotoPorJogador.get(a.jogadorId) ?? null,
       atributo: a.atributo,
       nivelJogador: a.nivelJogador,
       nivelApito: a.nivelApito,

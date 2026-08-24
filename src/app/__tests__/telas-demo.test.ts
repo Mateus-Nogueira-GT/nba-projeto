@@ -63,7 +63,7 @@ describe('Lista Secreta', () => {
     const { default: Pagina } = await import('../(app)/page')
     const html = renderToStaticMarkup(await Pagina({ searchParams: Promise.resolve({}) }))
 
-    expect(html).toContain('Lista Secreta')
+    expect(html).toContain('LISTA DO DIA')
     // Com rebotes e assistências no ar, o recorte por atributo precisa existir.
     expect(html).toContain('Atributo')
     expect(html).toContain('Rebotes')
@@ -83,6 +83,19 @@ describe('Lista Secreta', () => {
     expect(html).not.toContain('Nada com esse filtro')
     expect(html).toContain('REB')
     expect(html).not.toContain(' · PTS')
+  }, 60_000)
+
+  it('cabeçalho do mockup + seletor Hoje/Resultados + grau na pílula', async () => {
+    const { default: Pagina } = await import('../(app)/page')
+    const html = renderToStaticMarkup(await Pagina({ searchParams: Promise.resolve({}) }))
+    expect(html).toContain('LISTA SECRETA · PRÉ-LIVE')
+    expect(html).toContain('LISTA DO DIA')
+    expect(html).toContain('HOJE')
+    expect(html).toContain('RESULTADOS')
+    expect(html).toMatch(/PONTOS \d+\+/)
+    // Nenhuma LINHA com meio ponto. Cegar em /\d,5/ seria errado: a tela de
+    // Gestão exibe "0,5 unidade" legitimamente.
+    expect(html).not.toMatch(/(PONTOS|REBOTES|ASSISTÊNCIAS)\s+\d+,\d/)
   }, 60_000)
 })
 
@@ -136,12 +149,19 @@ describe('tela de Resultados', () => {
     const { default: Pagina } = await import('../(app)/resultados/page')
     const html = renderToStaticMarkup(await Pagina())
 
-    expect(html).toContain('Resultados')
+    expect(html).toContain('RESULTADOS')
     expect(html).toContain('bateram a linha')
     // Se a conferência viesse vazia, a tela cairia no estado vazio — e a demo
     // abriria numa tela em branco.
     expect(html).not.toContain('Nenhuma rodada encerrada ainda')
     expect(html).toMatch(/bateu \d+/)
+  }, 60_000)
+
+  it('divide o cabeçalho com Entradas', async () => {
+    const { default: Pagina } = await import('../(app)/resultados/page')
+    const html = renderToStaticMarkup(await Pagina())
+    expect(html).toContain('LISTA SECRETA')
+    expect(html).toContain('HOJE') // o seletor aparece nos dois lados
   }, 60_000)
 })
 

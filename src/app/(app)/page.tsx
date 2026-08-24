@@ -2,6 +2,7 @@ import { getDb } from '@/modules/dominio/db/cliente'
 import Link from 'next/link'
 import {
   agruparPorJogador,
+  faixaDaConfianca,
   filtrarItens,
   lerFeed,
   ordenarPorConfianca,
@@ -12,7 +13,7 @@ import { rotaDoJogador, BASE_ESTATISTICAS } from '@/modules/entrega/estatisticas
 import { rulesetAtivo } from '@/modules/entrega/ruleset-ativo'
 import { dataDeReferencia } from '@/modules/dominio/rodada'
 import { dataHora } from '@/components/formato'
-import { Moldura } from '@/components/navegacao'
+import { CabecalhoTela, Chip, Moldura } from '@/components/navegacao'
 import { CardEntrada } from '@/design-system/componentes'
 import { semantico } from '@/design-system/tokens/semantico'
 import { AtivarAlertas, PainelPwa } from '@/components/pwa'
@@ -74,27 +75,6 @@ function comFiltro(recorte: Recorte, campo: string, valor: string | undefined): 
   else p.set(campo, valor)
   const q = p.toString()
   return q === '' ? '/' : `/?${q}`
-}
-
-function Chip({ href, ativo, children }: { href: string; ativo: boolean; children: React.ReactNode }) {
-  return (
-    <Link
-      href={href}
-      aria-current={ativo ? 'page' : undefined}
-      style={{
-        padding: '5px 12px',
-        borderRadius: 999,
-        fontSize: 12,
-        fontWeight: ativo ? 700 : 500,
-        textDecoration: 'none',
-        color: ativo ? semantico.textoSobreCor : semantico.textoPrimario,
-        background: ativo ? semantico.textoPrimario : semantico.superficie,
-        border: `1px solid ${semantico.divisor}`,
-      }}
-    >
-      {children}
-    </Link>
-  )
 }
 
 function GrupoFiltro({
@@ -199,7 +179,8 @@ export default async function PaginaListaSecreta({
     }),
   )
 
-  const { fuso } = (await rulesetAtivo()).rodada
+  const ruleset = await rulesetAtivo()
+  const { fuso } = ruleset.rodada
   const hoje = dataDeReferencia(new Date(), fuso)
   // A tela lê o snapshot MATERIALIZADO. Nunca executa o motor: a avaliação
   // acontece uma vez por evento, não uma vez por usuário.
@@ -231,24 +212,30 @@ export default async function PaginaListaSecreta({
 
   return (
     <Moldura aba="lista">
-      <header style={{ marginBottom: 16 }}>
-        <h1 style={{ margin: 0, fontSize: 22 }}>Lista Secreta</h1>
-        <p style={{ margin: '4px 0 0', fontSize: 13, color: semantico.textoSecundario }}>
-          {ordenados.length} entrada{ordenados.length === 1 ? '' : 's'} sugerida
-          {ordenados.length === 1 ? '' : 's'} pela estratégia · ordenadas pela escala de confiança
-        </p>
-        <p style={{ margin: '8px 0 0', fontSize: 12, display: 'flex', gap: 12 }}>
-          <Link href="/como-funciona" style={{ color: semantico.textoSecundario }}>
-            Como funciona →
-          </Link>
-          <Link href="/fire-live" style={{ color: semantico.textoSecundario }}>
-            Fire Live →
-          </Link>
-          <Link href="/conta" style={{ color: semantico.textoSecundario }}>
-            Minha conta
-          </Link>
-        </p>
-      </header>
+      <CabecalhoTela sobrancelha="LISTA SECRETA · PRÉ-LIVE" titulo="LISTA DO DIA">
+        <Chip href="/" ativo>
+          HOJE
+        </Chip>
+        <Chip href="/resultados" ativo={false}>
+          RESULTADOS
+        </Chip>
+      </CabecalhoTela>
+
+      <p style={{ margin: '0 0 4px', fontSize: 13, color: semantico.textoSecundario }}>
+        {ordenados.length} entrada{ordenados.length === 1 ? '' : 's'} sugerida
+        {ordenados.length === 1 ? '' : 's'} pela estratégia · ordenadas pela escala de confiança
+      </p>
+      <p style={{ margin: '0 0 16px', fontSize: 12, display: 'flex', gap: 12 }}>
+        <Link href="/como-funciona" style={{ color: semantico.textoSecundario }}>
+          Como funciona →
+        </Link>
+        <Link href="/fire-live" style={{ color: semantico.textoSecundario }}>
+          Fire Live →
+        </Link>
+        <Link href="/conta" style={{ color: semantico.textoSecundario }}>
+          Minha conta
+        </Link>
+      </p>
 
       {pushDisponivel && (
         <div style={{ marginBottom: 16 }}>
@@ -374,37 +361,42 @@ export default async function PaginaListaSecreta({
       </p>
 
       <div style={{ display: 'grid', gap: 10 }}>
-        {visiveis.map((item) => (
-          <div key={item.chave}>
-            <CardEntrada
-            nome={item.nome}
-            // Segundo caminho de entrada da aba de estatísticas: o nome do
-            // jogador dentro de qualquer card leva à MESMA tela que a busca
-            // do menu — a URL sai da mesma função nos dois lugares.
-            jogadorHref={rotaDoJogador(item.jogadorId)}
-            timeSigla={item.timeSigla}
-            timeNome={item.timeNome}
-            posicao={item.posicao}
-            atributo={item.atributo}
-            nivelJogador={item.nivelJogador}
-            nivelApito={item.nivelApito}
-            confianca={item.confianca}
-            grauConfianca={null}
-            turbo={item.turbo}
-            modoFire={item.modoFire}
-            opdOrigemNivel={item.opdOrigemNivel}
-            alvo1Q={item.alvo1Q}
-          />
-            <p style={{ margin: '4px 0 0', fontSize: 12 }}>
-              <Link
-                href={`/apito/${item.jogadorId}?atributo=${item.atributo}`}
-                style={{ color: semantico.textoSecundario }}
-              >
-                linhas e confiança →
-              </Link>
-            </p>
-          </div>
-        ))}
+        {visiveis.map((item) => {
+          const faixa = faixaDaConfianca(item.confianca, ruleset)
+          return (
+            <div key={item.chave}>
+              <CardEntrada
+                nome={item.nome}
+                // Segundo caminho de entrada da aba de estatísticas: o nome do
+                // jogador dentro de qualquer card leva à MESMA tela que a busca
+                // do menu — a URL sai da mesma função nos dois lugares.
+                jogadorHref={rotaDoJogador(item.jogadorId)}
+                fotoUrl={item.fotoUrl ?? null}
+                timeSigla={item.timeSigla}
+                timeNome={item.timeNome}
+                posicao={item.posicao}
+                atributo={item.atributo}
+                nivelJogador={item.nivelJogador}
+                nivelApito={item.nivelApito}
+                linha={item.linha}
+                confianca={item.confianca}
+                grauConfianca={faixa?.grau ?? null}
+                turbo={item.turbo}
+                modoFire={item.modoFire}
+                opdOrigemNivel={item.opdOrigemNivel}
+                alvo1Q={item.alvo1Q}
+              />
+              <p style={{ margin: '4px 0 0', fontSize: 12 }}>
+                <Link
+                  href={`/apito/${item.jogadorId}?atributo=${item.atributo}`}
+                  style={{ color: semantico.textoSecundario }}
+                >
+                  linhas e confiança →
+                </Link>
+              </p>
+            </div>
+          )
+        })}
       </div>
 
       {visiveis.length === 0 && (

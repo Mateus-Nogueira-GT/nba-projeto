@@ -38,6 +38,7 @@ export type JogadorConferido = {
   jogadorId: string
   nome: string
   timeSigla: string
+  fotoUrl: string | null
   atributo: Atributo
   nivelJogador: Nivel
   nivelApito: number
@@ -101,6 +102,7 @@ export async function conferirRodadas(
       jogadorId: apitos.jogadorId,
       nome: jogadores.nomeCompleto,
       timeSigla: times.sigla,
+      fotoUrl: jogadores.fotoUrl,
       atributo: apitos.atributo,
       nivelJogador: apitos.nivelJogador,
       nivelApito: apitos.nivelApito,
@@ -156,6 +158,7 @@ export async function conferirRodadas(
         jogadorId: l.jogadorId,
         nome: l.nome,
         timeSigla: l.timeSigla ?? '—',
+        fotoUrl: l.fotoUrl,
         atributo: l.atributo,
         nivelJogador: l.nivelJogador,
         nivelApito: l.nivelApito,
