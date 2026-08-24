@@ -1,9 +1,10 @@
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
 
-import { Moldura } from '@/components/navegacao'
+import { CabecalhoTela, Moldura } from '@/components/navegacao'
 import { dataDeReferencia } from '@/modules/dominio/rodada'
 import { NIVEL_JOGADOR } from '@/design-system/tokens/css'
+import { Avatar } from '@/design-system/componentes'
 import { semantico } from '@/design-system/tokens/semantico'
 import { getDb } from '@/modules/dominio/db/cliente'
 import { BANCA_PADRAO, planoDoDia } from '@/modules/entrega/gestao'
@@ -24,6 +25,8 @@ const ATRIBUTO_ROTULO: Record<Atributo, string> = {
   REBOTES: 'REB',
   ASSISTENCIAS: 'AST',
 }
+
+const SOBRANCELHA_GESTAO = 'GESTÃO DE BANCA'
 
 function dinheiro(v: number): string {
   return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
@@ -66,7 +69,7 @@ export default async function PaginaGestao({
   if (!process.env.DATABASE_URL) {
     return (
       <Moldura aba="gestao">
-        <h1>Gestão de banca</h1>
+        <CabecalhoTela sobrancelha={SOBRANCELHA_GESTAO} titulo="PLANO DO DIA" />
         <p style={{ color: semantico.textoSecundario }}>Banco não configurado.</p>
       </Moldura>
     )
@@ -86,7 +89,7 @@ export default async function PaginaGestao({
   if (!plano.temModelo) {
     return (
       <Moldura aba="gestao">
-        <h1 style={{ margin: '0 0 8px', fontSize: 22 }}>Gestão de banca</h1>
+        <CabecalhoTela sobrancelha={SOBRANCELHA_GESTAO} titulo="PLANO DO DIA" />
         <div
           style={{
             padding: '28px 16px',
@@ -107,12 +110,10 @@ export default async function PaginaGestao({
 
   return (
     <Moldura aba="gestao">
-      <header style={{ marginBottom: 14 }}>
-        <h1 style={{ margin: 0, fontSize: 22 }}>Gestão de banca</h1>
-        <p style={{ margin: '4px 0 0', fontSize: 13, color: semantico.textoSecundario }}>
-          Quanto entrar em cada apito de hoje, proporcional ao nível do sinal.
-        </p>
-      </header>
+      <CabecalhoTela sobrancelha={SOBRANCELHA_GESTAO} titulo="PLANO DO DIA" />
+      <p style={{ margin: '0 0 14px', fontSize: 13, color: semantico.textoSecundario }}>
+        Quanto entrar em cada apito de hoje, proporcional ao nível do sinal.
+      </p>
 
       {plano.origem === 'demonstracao' && (
         <div
@@ -251,6 +252,14 @@ export default async function PaginaGestao({
                   borderLeft: `3px solid ${nivel.cor}`,
                 }}
               >
+                <Avatar
+                  nome={item.nome}
+                  fotoUrl={item.fotoUrl}
+                  timeSigla={item.timeSigla}
+                  nivelApito={item.nivelApito}
+                  turbo={item.turbo}
+                  tamanho={36}
+                />
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: 15, fontWeight: 700 }}>{item.nome}</div>
                   <div style={{ fontSize: 12, color: semantico.textoSecundario }}>

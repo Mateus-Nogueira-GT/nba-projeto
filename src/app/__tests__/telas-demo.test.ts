@@ -217,7 +217,8 @@ describe('tela de Gestão de banca', () => {
     const { default: Pagina } = await import('../(app)/gestao/page')
     const html = renderToStaticMarkup(await Pagina({ searchParams: Promise.resolve({ banca: '1000' }) }))
 
-    expect(html).toContain('Gestão de banca')
+    expect(html).toContain('GESTÃO DE BANCA')
+    expect(html).toContain('PLANO DO DIA')
     // O aviso não é decoração: é o que separa um exemplo de uma recomendação.
     expect(html).toContain('Modelo de demonstração')
     expect(html).toContain('1 unidade')
