@@ -454,6 +454,9 @@ export function Pilula({
 - Modify: `src/design-system/componentes/CardEntrada.tsx` (reescrita)
 - Modify: `src/design-system/componentes/Anel.tsx` → **apagar** (o canal do apito migrou para o Avatar); remover export do `index.ts` e usos
 - Modify: `src/app/(admin)/admin/galeria/page.tsx` (galeria mostra os estados novos)
+- Modify: `src/modules/entrega/__tests__/estatisticas.test.ts` e
+  `src/modules/entrega/__tests__/lista-secreta.test.ts` — os dois montam
+  `CardEntrada` e quebram com as props novas
 - Test: `src/design-system/__tests__/card.test.ts` (novo)
 
 **Interfaces:**
@@ -843,12 +846,18 @@ describe('detalhe do apito', () => {
 
 - [ ] **Step 2: Ver falhar.**
 
-- [ ] **Step 3: Implementar.** Esqueleto completo:
+- [ ] **Step 3: Implementar.** Cabeçalho do módulo:
 
 ```ts
 // Leitura DERIVADA: descreve o que o motor já decidiu, não decide nada novo.
-export async function detalheDoApito(db: Db, ruleset: Ruleset, item: ItemFeed): Promise<DetalheApito> {
-  const temporada = temporadaDe(new Date(`${/* dataReferencia do feed não viaja no item; usar o jogo */''}`), ...)
+// Por isso vive na entrega e não no motor — nenhuma regra nova nasce aqui.
+export async function detalheDoApito(
+  db: Db,
+  ruleset: Ruleset,
+  item: ItemFeed,
+): Promise<DetalheApito> {
+  // 1º passo obrigatório: buscar o jogo do item — dele saem a data (para a
+  // temporada e para recortar o histórico) e os dois times (para o adversário).
 ```
 
 Passos internos (todos com Drizzle, sem SQL cru):
@@ -932,7 +941,9 @@ it('Entradas: cabeçalho do mockup + seletor Hoje/Resultados + grau na pílula',
   expect(html).toContain('HOJE')
   expect(html).toContain('RESULTADOS')
   expect(html).toMatch(/PONTOS \d+\+/)
-  expect(html).not.toContain(',5')      // nenhuma linha com meio ponto
+  // Nenhuma LINHA com meio ponto. Cegar em /\d,5/ seria errado: a tela de
+  // Gestão exibe "0,5 unidade" legitimamente.
+  expect(html).not.toMatch(/(PONTOS|REBOTES|ASSISTÊNCIAS)\s+\d+,\d/)
 })
 
 it('Resultados divide o cabeçalho com Entradas', async () => {
@@ -1127,7 +1138,7 @@ describe('regras transversais da identidade', () => {
     for (const rota of ['../(app)/page', '../(app)/fire-live/page', '../(app)/gestao/page', '../(app)/resultados/page']) {
       const { default: Pagina } = await import(rota)
       const html = renderToStaticMarkup(await Pagina({ searchParams: Promise.resolve({}) }))
-      expect(html).not.toMatch(/\d,5/)
+      expect(html).not.toMatch(/(PONTOS|REBOTES|ASSISTÊNCIAS)\s+\d+,\d/)
       expect(html).not.toContain('ALTÍSSIMO VALOR')
       expect(html).not.toContain('3 PONTOS')
     }
