@@ -1,6 +1,7 @@
 'use client'
 
 import { useActionState } from 'react'
+import { componente } from '@/design-system/tokens/componente'
 import { semantico } from '@/design-system/tokens/semantico'
 import { entrar } from './acoes'
 
@@ -70,7 +71,7 @@ export function FormularioLogin({ destino }: { destino: string }) {
         disabled={enviando}
         style={{
           ...campo,
-          background: `linear-gradient(90deg, ${semantico.acento}, #FFB25E)`,
+          background: componente.ctaFundo,
           color: semantico.textoSobreCor,
           fontFamily: semantico.fonteTitulo,
           letterSpacing: 0.5,

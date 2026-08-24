@@ -24,6 +24,7 @@
   --fonte-rotulo: var(--fonte-barlow-condensed), 'Arial Narrow', sans-serif;
   --fonte-corpo: var(--fonte-barlow), system-ui, sans-serif;
   --acento: #FF7A1A;
+  --acento-claro: #FFB25E;
   --ao-vivo: #FF6B6B;
   --confianca-grau1: #2FA093;
   --confianca-grau2: #3AB5A6;
@@ -53,4 +54,5 @@
   --pilula-borda-largura: 1.5px;
   --avatar-anel-espessura: 2px;
   --faixa-nivel-altura: 3px;
+  --cta-fundo: linear-gradient(90deg, #FF7A1A, #FFB25E);
 }

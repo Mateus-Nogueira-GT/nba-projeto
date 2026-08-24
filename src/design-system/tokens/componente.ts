@@ -27,6 +27,11 @@ export const componente = {
   pilulaBordaLargura: '1.5px',
   avatarAnelEspessura: '2px',
   faixaNivelAltura: '3px',
+
+  // Fundo dos botões de CTA em destaque (VER ESTATÍSTICAS, Entrar, Criar
+  // conta, Continuar no Mercado Pago) — mesmo degradê nas quatro telas,
+  // montado aqui a partir de dois semânticos em vez de repetido por tela.
+  ctaFundo: `linear-gradient(90deg, ${s.acento}, ${s.acentoClaro})`,
 } as const
 
 export type Componente = typeof componente

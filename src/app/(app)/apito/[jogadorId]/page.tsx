@@ -15,6 +15,7 @@ import { rulesetAtivo } from '@/modules/entrega/ruleset-ativo'
 import { atributoEnum } from '@/modules/dominio/db/schema'
 import type { Atributo } from '@/modules/motor/tipos'
 import { CONFIANCA_GRAU } from '@/design-system/tokens/css'
+import { componente } from '@/design-system/tokens/componente'
 import { Avatar } from '@/design-system/componentes'
 import { semantico } from '@/design-system/tokens/semantico'
 import { sessaoAtual } from '@/modules/plataforma/auth/cookies'
@@ -346,7 +347,7 @@ export default async function PaginaApito({
           textAlign: 'center',
           padding: '14px 16px',
           borderRadius: 12,
-          background: `linear-gradient(90deg, ${semantico.acento}, #FFB25E)`,
+          background: componente.ctaFundo,
           color: semantico.textoSobreCor,
           fontFamily: semantico.fonteTitulo,
           fontSize: 16,

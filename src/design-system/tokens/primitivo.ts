@@ -55,6 +55,9 @@ export const primitivo = {
   // Acento de INTERFACE (chips, aba ativa, CTA). Não é canal de estratégia —
   // papel diferente do laranja400 do apito nível 2.
   laranjaAcento: '#FF7A1A',
+  // Ponta clara do degradê dos botões de CTA (VER ESTATÍSTICAS, Entrar,
+  // Criar conta, Continuar no Mercado Pago) — laranjaAcento é o início.
+  laranjaAcentoClaro: '#FFB25E',
   tinta950: '#05080F',
   // Fontes — a família vem por variável CSS publicada no layout (next/font).
   fonteAnton: "var(--fonte-anton), 'Arial Narrow', sans-serif",

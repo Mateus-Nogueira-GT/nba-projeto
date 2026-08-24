@@ -250,7 +250,13 @@ describe('a aba teórica', () => {
 
     const { default: Pagina } = await import('../(app)/como-funciona/page')
     const html = renderToStaticMarkup(await Pagina())
-    expect(html).toContain('demonstração')
+    // Âncora no texto exclusivo do aviso da RÉGUA — não em "demonstração"
+    // sozinho, que também aparece na seção (não relacionada) de rebotes e
+    // assistências. Se só o aviso da régua for apagado, esta asserção tem
+    // que cair.
+    expect(html).toContain('Régua de demonstração')
+    expect(html).toContain('ainda não')
+    expect(html).toContain('vieram do Mestre da NBA')
   }, 60_000)
 
   it('não fala mais em círculo para o indicador do apito — o Avatar é um quadrado arredondado', async () => {

@@ -2,6 +2,7 @@
 
 import { useActionState } from 'react'
 
+import { componente } from '@/design-system/tokens/componente'
 import { semantico } from '@/design-system/tokens/semantico'
 import { cadastrar } from './acoes'
 
@@ -70,7 +71,7 @@ export function FormularioCadastro() {
         style={{
           ...campo,
           border: 0,
-          background: `linear-gradient(90deg, ${semantico.acento}, #FFB25E)`,
+          background: componente.ctaFundo,
           color: semantico.textoSobreCor,
           fontFamily: semantico.fonteTitulo,
           letterSpacing: 0.5,

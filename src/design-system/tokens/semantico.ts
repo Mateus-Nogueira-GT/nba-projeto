@@ -53,6 +53,12 @@ export const semantico = {
 
   // -- Acento de interface --------------------------------------------------
   acento: p.laranjaAcento,
+  // Ponta clara do degradê de CTA — combinada com `acento` na camada de
+  // componente (ver `componente.ctaFundo`). Fica aqui, e não composta já
+  // como linear-gradient(), porque o teste "todo token semântico aponta para
+  // um valor da paleta primitiva" exige igualdade literal com um valor do
+  // primitivo — um gradiente já montado não seria mais um alias.
+  acentoClaro: p.laranjaAcentoClaro,
   aoVivo: p.vermelho400,
 
   // -- Rampa de confiança — grau 1 (menor) ao 5 (maior) ----------------------

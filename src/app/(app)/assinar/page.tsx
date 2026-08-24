@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation'
 import Link from 'next/link'
 
 import { MolduraConta } from '@/components/conta/MolduraConta'
+import { componente } from '@/design-system/tokens/componente'
 import { semantico } from '@/design-system/tokens/semantico'
 import { getDb } from '@/modules/dominio/db/cliente'
 import { configuracaoProdutoPago } from '@/modules/plataforma/assinatura/configuracao'
@@ -62,7 +63,7 @@ export default async function PaginaAssinar({
                 border: 0,
                 borderRadius: 10,
                 padding: 13,
-                background: `linear-gradient(90deg, ${semantico.acento}, #FFB25E)`,
+                background: componente.ctaFundo,
                 color: semantico.textoSobreCor,
                 fontFamily: semantico.fonteTitulo,
                 letterSpacing: 0.5,
