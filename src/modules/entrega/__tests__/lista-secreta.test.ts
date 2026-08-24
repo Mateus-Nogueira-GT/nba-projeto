@@ -23,6 +23,7 @@ import {
   agruparPorJogador,
   filtrarItens,
   lerFeed,
+  linhasDoJogador,
   ordenarPorConfianca,
   publicarListaSecreta,
   reprocessarPorEscalacao,
@@ -506,5 +507,40 @@ describe('filtrarItens e agruparPorJogador (puros)', () => {
       item({ chave: 'b', linha: 25, confianca: 80 }),
     ]
     expect(agruparPorJogador(itens)[0]!.confianca).toBe(80)
+  })
+})
+
+describe('linhasDoJogador (detalhe do apito)', () => {
+  it('devolve as linhas do jogador ordenadas por pontos', async () => {
+    await escalar('Luka Doncic', 'FORA')
+    await publicarListaSecreta(banco.db, ruleset, {
+      dataReferencia: HOJE,
+      agora: UMA_HORA_ANTES,
+    })
+
+    const reavesId = idPorNome.get('Austin Reaves')!
+    const { itens, geradoEm } = await linhasDoJogador(banco.db, HOJE, reavesId)
+
+    expect(itens.length).toBeGreaterThan(1)
+    expect(itens.every((i) => i.jogadorId === reavesId)).toBe(true)
+    const linhas = itens.map((i) => i.linha)
+    expect(linhas).toEqual([...linhas].sort((a, b) => (a ?? 0) - (b ?? 0)))
+    expect(geradoEm).not.toBeNull()
+    // A confiança é a nota da análise — nunca probabilidade.
+    expect(itens.every((i) => i.confianca !== null)).toBe(true)
+  })
+
+  it('jogador sem apito hoje devolve lista vazia, não erro', async () => {
+    await publicarListaSecreta(banco.db, ruleset, {
+      dataReferencia: HOJE,
+      agora: UMA_HORA_ANTES,
+    })
+    const { itens } = await linhasDoJogador(banco.db, HOJE, idPorNome.get('Sexton')!)
+    expect(itens).toEqual([])
+  })
+
+  it('dia sem feed publicado devolve geradoEm nulo', async () => {
+    const r = await linhasDoJogador(banco.db, '2026-01-01', idPorNome.get('Grimes')!)
+    expect(r).toEqual({ itens: [], geradoEm: null })
   })
 })

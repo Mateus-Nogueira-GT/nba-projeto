@@ -179,6 +179,33 @@ async function enriquecer(db: Db, apitos: Apito[]): Promise<ItemFeed[]> {
   })
 }
 
+/**
+ * As linhas de UM jogador no dia — o que o card resume e a tela de detalhe abre.
+ *
+ * O motor emite um apito por linha de pontos com a confiança já calculada (a
+ * tabela base do nível mais o bônus do nível de apito). Aqui é só recorte de
+ * leitura sobre o snapshot: a tela nunca executa o motor.
+ */
+export type LinhasDoJogador = {
+  itens: ItemFeed[]
+  geradoEm: Date | null
+}
+
+export async function linhasDoJogador(
+  db: Db,
+  dataReferencia: string,
+  jogadorId: string,
+): Promise<LinhasDoJogador> {
+  const feed = await lerFeed(db, dataReferencia)
+  if (feed === null) return { itens: [], geradoEm: null }
+
+  const itens = feed.conteudo.itens
+    .filter((i) => i.jogadorId === jogadorId)
+    .sort((a, b) => (a.linha ?? 0) - (b.linha ?? 0))
+
+  return { itens, geradoEm: feed.geradoEm }
+}
+
 // ---------------------------------------------------------------------------
 // FILTROS DA LISTA — recorte de LEITURA, puro. A tela nunca executa o motor.
 // ---------------------------------------------------------------------------
