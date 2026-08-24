@@ -152,7 +152,11 @@ describe('Fire Live', () => {
     expect(html).toContain('ACONTECENDO')
     expect(html).toContain('1º Q')
     expect(html).toContain('OKC') // placar do jogo ao vivo da demo
-    expect(html).toContain('VIVO')
+    // A sobrancelha da tela já contém "AO VIVO" — `toContain('VIVO')` passaria
+    // mesmo sem o selo do card. O selo é a Pilula `texto="VIVO"` de
+    // CardEntrada, que renderiza como `>VIVO<` (span sem filhos além do
+    // texto); a sobrancelha nunca produz esse padrão.
+    expect(html).toMatch(/>VIVO</)
     expect(html).toMatch(/LINHA BATIDA|FALTA \d/)
   }, 60_000)
 })
@@ -263,5 +267,25 @@ describe('a aba teórica', () => {
     const { default: Pagina } = await import('../(app)/como-funciona/page')
     const html = renderToStaticMarkup(await Pagina())
     expect(html).not.toContain('círculo')
+  }, 60_000)
+})
+
+describe('regras transversais da identidade', () => {
+  it('nenhuma tela contém meio ponto, ALTÍSSIMO VALOR ou três pontos', async () => {
+    const comSearchParams = ['../(app)/page', '../(app)/fire-live/page', '../(app)/gestao/page']
+    for (const rota of comSearchParams) {
+      const { default: Pagina } = await import(rota)
+      const html = renderToStaticMarkup(await Pagina({ searchParams: Promise.resolve({}) }))
+      expect(html).not.toMatch(/(PONTOS|REBOTES|ASSISTÊNCIAS)\s+\d+,\d/)
+      expect(html).not.toContain('ALTÍSSIMO VALOR')
+      expect(html).not.toContain('3 PONTOS')
+    }
+
+    // /resultados não recebe searchParams.
+    const { default: Resultados } = await import('../(app)/resultados/page')
+    const htmlResultados = renderToStaticMarkup(await Resultados())
+    expect(htmlResultados).not.toMatch(/(PONTOS|REBOTES|ASSISTÊNCIAS)\s+\d+,\d/)
+    expect(htmlResultados).not.toContain('ALTÍSSIMO VALOR')
+    expect(htmlResultados).not.toContain('3 PONTOS')
   }, 60_000)
 })

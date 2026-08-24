@@ -21,7 +21,7 @@ import { carregarRuleset } from '../../motor/ruleset/carregar'
 import type { Nivel } from '../../motor/tipos'
 import { executarCiclo } from '../fire-live/ciclo'
 import type { ConteudoFeedFireLive } from '../fire-live/feed'
-import { lerFeedFireLive } from '../fire-live/leitura'
+import { lerFeedFireLive, placaresAoVivo } from '../fire-live/leitura'
 import type { EstadoObservado } from '../fire-live/ciclo'
 import { reservarJogosParaObservar } from '../fire-live/inicio'
 import { FilaEmMemoria } from '../fila/memoria'
@@ -726,6 +726,32 @@ describe('leitura do feed do Fire Live', () => {
     const feed = await lerFeedFireLive(banco.db, DIA, QUARTO)
     expect(feed.itens).toEqual([])
     expect(feed.estadoVazio).toBe('NENHUM_EM_1Q')
+  })
+})
+
+describe('placares ao vivo — a trava mais dura do projeto (só 1º quarto)', () => {
+  const QUARTO = ruleset.fire_live.quarto
+  const DIA = '2026-08-19'
+
+  it('jogo ao vivo NO 1º quarto aparece na grade de placares', async () => {
+    await banco.db
+      .update(jogos)
+      .set({ status: 'AO_VIVO', quartoAtual: QUARTO, placarCasa: 12, placarVisitante: 9 })
+    const placares = await placaresAoVivo(banco.db, DIA, QUARTO)
+    expect(placares).toEqual([
+      expect.objectContaining({ jogoId, casaSigla: 'LAL', casaPlacar: 12, visitanteSigla: 'ADV', visitantePlacar: 9 }),
+    ])
+  })
+
+  it('jogo ao vivo que JÁ SAIU do 1º quarto some da grade — não basta estar AO_VIVO', async () => {
+    // Se alguém remover o filtro por quartoAtual de `placaresAoVivo`, este é
+    // o único teste que cai: sem ele, um jogo no 2º quarto (ainda AO_VIVO)
+    // continuaria aparecendo numa tela que só existe para o 1º.
+    await banco.db
+      .update(jogos)
+      .set({ status: 'AO_VIVO', quartoAtual: 2, placarCasa: 30, placarVisitante: 28 })
+    const placares = await placaresAoVivo(banco.db, DIA, QUARTO)
+    expect(placares).toEqual([])
   })
 })
 
