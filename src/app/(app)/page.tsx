@@ -1,6 +1,13 @@
 import { getDb } from '@/modules/dominio/db/cliente'
 import Link from 'next/link'
-import { lerFeed, ordenarPorConfianca, type ItemFeed } from '@/modules/entrega/lista-secreta'
+import {
+  agruparPorJogador,
+  filtrarItens,
+  lerFeed,
+  ordenarPorConfianca,
+  type FiltroLista,
+  type ItemFeed,
+} from '@/modules/entrega/lista-secreta'
 import { rotaDoJogador, BASE_ESTATISTICAS } from '@/modules/entrega/estatisticas/rotas'
 import { CardEntrada } from '@/design-system/componentes'
 import { semantico } from '@/design-system/tokens/semantico'
@@ -25,6 +32,80 @@ function rotuloQuantidade(n: number): string {
 function horaLocal(iso: string | Date): string {
   const d = typeof iso === 'string' ? new Date(iso) : iso
   return d.toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })
+}
+
+type Recorte = FiltroLista & { quantidade: number }
+
+const METODOS = [
+  { valor: 'OSCILACAO', rotulo: 'Oscilação' },
+  { valor: 'OPD', rotulo: 'OPD' },
+  { valor: 'TURBO', rotulo: 'Turbo' },
+] as const
+
+const NIVEIS = [
+  { valor: 'MVP', rotulo: 'MVP' },
+  { valor: 'ALL_STAR', rotulo: 'All Star' },
+  { valor: 'SUPORTE', rotulo: 'Suporte' },
+  { valor: 'RANDOLA', rotulo: 'Randola' },
+] as const
+
+const POSICOES = ['G', 'F', 'C'] as const
+
+function primeiroValor(v: string | string[] | undefined): string | undefined {
+  const s = Array.isArray(v) ? v[0] : v
+  return s === undefined || s === '' ? undefined : s
+}
+
+/** Monta a URL preservando os demais recortes — os filtros combinam entre si. */
+function comFiltro(recorte: Recorte, campo: string, valor: string | undefined): string {
+  const p = new URLSearchParams()
+  if (recorte.quantidade !== 0) p.set('quantidade', String(recorte.quantidade))
+  if (recorte.metodo) p.set('metodo', recorte.metodo)
+  if (recorte.nivel) p.set('nivel', recorte.nivel)
+  if (recorte.time) p.set('time', recorte.time)
+  if (recorte.posicao) p.set('posicao', recorte.posicao)
+  if (valor === undefined) p.delete(campo)
+  else p.set(campo, valor)
+  const q = p.toString()
+  return q === '' ? '/' : `/?${q}`
+}
+
+function Chip({ href, ativo, children }: { href: string; ativo: boolean; children: React.ReactNode }) {
+  return (
+    <Link
+      href={href}
+      aria-current={ativo ? 'page' : undefined}
+      style={{
+        padding: '5px 12px',
+        borderRadius: 999,
+        fontSize: 12,
+        fontWeight: ativo ? 700 : 500,
+        textDecoration: 'none',
+        color: ativo ? semantico.textoSobreCor : semantico.textoPrimario,
+        background: ativo ? semantico.textoPrimario : semantico.superficie,
+        border: `1px solid ${semantico.divisor}`,
+      }}
+    >
+      {children}
+    </Link>
+  )
+}
+
+function GrupoFiltro({
+  titulo,
+  children,
+}: {
+  titulo: string
+  children: React.ReactNode
+}) {
+  return (
+    <div style={{ marginBottom: 10 }}>
+      <p style={{ margin: '0 0 4px', fontSize: 11, color: semantico.textoSecundario }}>{titulo}</p>
+      <nav aria-label={titulo} style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+        {children}
+      </nav>
+    </div>
+  )
 }
 
 function Filtros({ atual, base }: { atual: number; base: string }) {
@@ -83,6 +164,19 @@ export default async function PaginaListaSecreta({
   const params = await searchParams
   const bruto = Number(Array.isArray(params.quantidade) ? params.quantidade[0] : params.quantidade)
   const quantidade = QUANTIDADES.includes(bruto as (typeof QUANTIDADES)[number]) ? bruto : 0
+  const metodoBruto = primeiroValor(params.metodo)
+  const nivelBruto = primeiroValor(params.nivel)
+  const recorte: Recorte = {
+    quantidade,
+    metodo: METODOS.some((m) => m.valor === metodoBruto)
+      ? (metodoBruto as FiltroLista['metodo'])
+      : undefined,
+    nivel: NIVEIS.some((n) => n.valor === nivelBruto)
+      ? (nivelBruto as FiltroLista['nivel'])
+      : undefined,
+    time: primeiroValor(params.time),
+    posicao: primeiroValor(params.posicao),
+  }
 
   if (!process.env.DATABASE_URL) {
     return (
@@ -127,8 +221,22 @@ export default async function PaginaListaSecreta({
     )
   }
 
-  const ordenados = ordenarPorConfianca(feed.conteudo.itens)
+  // Um card por JOGADOR (o doc do CJ desenha uma barra por jogador, com as
+  // linhas dentro dela). O recorte é de LEITURA: a tela nunca chama o motor.
+  const doDia = feed.conteudo.itens
+  const recortados = filtrarItens(doDia, recorte)
+  const ordenados = ordenarPorConfianca(agruparPorJogador(recortados))
   const visiveis: ItemFeed[] = quantidade === 0 ? ordenados : ordenados.slice(0, quantidade)
+
+  // Chips construídos do que EXISTE hoje — nunca oferecem recorte vazio.
+  const timesDoDia = [...new Set(doDia.map((i) => i.timeSigla))].sort()
+  const posicoesDoDia = POSICOES.filter((p) => doDia.some((i) => i.posicao === p))
+  const temFiltro =
+    recorte.metodo !== undefined ||
+    recorte.nivel !== undefined ||
+    recorte.time !== undefined ||
+    recorte.posicao !== undefined
+  const recorteVazio = visiveis.length === 0 && agruparPorJogador(doDia).length > 0
 
   return (
     <Moldura>
@@ -138,7 +246,13 @@ export default async function PaginaListaSecreta({
           {ordenados.length} entrada{ordenados.length === 1 ? '' : 's'} sugerida
           {ordenados.length === 1 ? '' : 's'} pela estratégia · ordenadas pela escala de confiança
         </p>
-        <p style={{ margin: '8px 0 0', fontSize: 12 }}>
+        <p style={{ margin: '8px 0 0', fontSize: 12, display: 'flex', gap: 12 }}>
+          <Link href="/como-funciona" style={{ color: semantico.textoSecundario }}>
+            Como funciona →
+          </Link>
+          <Link href="/fire-live" style={{ color: semantico.textoSecundario }}>
+            Fire Live →
+          </Link>
           <Link href="/conta" style={{ color: semantico.textoSecundario }}>
             Minha conta
           </Link>
@@ -153,6 +267,95 @@ export default async function PaginaListaSecreta({
 
       <Filtros atual={quantidade} base="/" />
 
+      <section style={{ marginBottom: 14 }}>
+        <GrupoFiltro titulo="Método">
+          <Chip href={comFiltro(recorte, 'metodo', undefined)} ativo={recorte.metodo === undefined}>
+            Todos
+          </Chip>
+          {METODOS.map((m) => (
+            <Chip
+              key={m.valor}
+              href={comFiltro(recorte, 'metodo', m.valor)}
+              ativo={recorte.metodo === m.valor}
+            >
+              {m.rotulo}
+            </Chip>
+          ))}
+        </GrupoFiltro>
+
+        <GrupoFiltro titulo="Nível do jogador">
+          <Chip href={comFiltro(recorte, 'nivel', undefined)} ativo={recorte.nivel === undefined}>
+            Todos
+          </Chip>
+          {NIVEIS.map((n) => (
+            <Chip
+              key={n.valor}
+              href={comFiltro(recorte, 'nivel', n.valor)}
+              ativo={recorte.nivel === n.valor}
+            >
+              {n.rotulo}
+            </Chip>
+          ))}
+        </GrupoFiltro>
+
+        {timesDoDia.length > 1 && (
+          <GrupoFiltro titulo="Time">
+            <Chip href={comFiltro(recorte, 'time', undefined)} ativo={recorte.time === undefined}>
+              Todos
+            </Chip>
+            {timesDoDia.map((sigla) => (
+              <Chip
+                key={sigla}
+                href={comFiltro(recorte, 'time', sigla)}
+                ativo={recorte.time === sigla}
+              >
+                {sigla}
+              </Chip>
+            ))}
+          </GrupoFiltro>
+        )}
+
+        {posicoesDoDia.length > 1 && (
+          <GrupoFiltro titulo="Posição">
+            <Chip
+              href={comFiltro(recorte, 'posicao', undefined)}
+              ativo={recorte.posicao === undefined}
+            >
+              Todas
+            </Chip>
+            {posicoesDoDia.map((pos) => (
+              <Chip
+                key={pos}
+                href={comFiltro(recorte, 'posicao', pos)}
+                ativo={recorte.posicao === pos}
+              >
+                {pos}
+              </Chip>
+            ))}
+          </GrupoFiltro>
+        )}
+      </section>
+
+      {recorteVazio && (
+        <div
+          style={{
+            padding: '28px 16px',
+            textAlign: 'center',
+            border: `1px dashed ${semantico.divisor}`,
+            borderRadius: 12,
+            marginBottom: 12,
+          }}
+        >
+          <p style={{ margin: 0, fontWeight: 700 }}>Nada com esse filtro</p>
+          <p style={{ margin: '6px 0 0', fontSize: 13, color: semantico.textoSecundario }}>
+            A lista de hoje tem entradas, mas nenhuma bate com o recorte escolhido.{' '}
+            <Link href="/" style={{ color: semantico.textoPrimario }}>
+              Ver todas
+            </Link>
+          </p>
+        </div>
+      )}
+
       <p style={{ margin: '0 0 12px', fontSize: 13 }}>
         <Link href={BASE_ESTATISTICAS} style={{ color: semantico.textoSecundario }}>
           Estatísticas · jogos do dia, jogadores e times →
@@ -161,8 +364,8 @@ export default async function PaginaListaSecreta({
 
       <div style={{ display: 'grid', gap: 10 }}>
         {visiveis.map((item) => (
-          <CardEntrada
-            key={item.chave}
+          <div key={item.chave}>
+            <CardEntrada
             nome={item.nome}
             // Segundo caminho de entrada da aba de estatísticas: o nome do
             // jogador dentro de qualquer card leva à MESMA tela que a busca
@@ -180,6 +383,15 @@ export default async function PaginaListaSecreta({
             opdOrigemNivel={item.opdOrigemNivel}
             alvo1Q={item.alvo1Q}
           />
+            <p style={{ margin: '4px 0 0', fontSize: 12 }}>
+              <Link
+                href={`/apito/${item.jogadorId}`}
+                style={{ color: semantico.textoSecundario }}
+              >
+                linhas e confiança →
+              </Link>
+            </p>
+          </div>
         ))}
       </div>
 
