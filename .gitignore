@@ -14,3 +14,4 @@ next-env.d.ts
 
 # Gerado por `@vercel/config` a partir de vercel.ts — nunca versionar.
 vercel.json
+.env*.local

@@ -30,7 +30,7 @@ Cinco atos, todos idempotentes (upsert por chave natural):
    `ingestao/niveis/times.ts`), ~230 jogadores canônicos, `niveis_versao` `demo`
    ativa com hierarquia e níveis do documento. Posições (G/F/C) atribuídas
    deterministicamente (hash do nome) — `jogadores.posicao` já existe no schema.
-2. **Médias** (`medias_jogador`, temporada corrente, janela TEMPORADA) — números do
+2. **Médias** (`medias_jogador`, temporada derivada de `temporadaDe(hoje, ruleset.temporada)` — a MESMA que `montarFatos` consultará, janela TEMPORADA) — números do
    doc quando dados (Shai 31 ppg, KAT 20, Jokic 12.9 rpg, Gordon 16, LeBron 25.7,
    Fontecchio 8.5, Murray 7 apg...); demais por faixa de nível (MVP 27–31,
    ALL_STAR 18–23, SUPORTE 11–16, RANDOLA 5–9), determinísticos por jogador.
@@ -41,8 +41,9 @@ Cinco atos, todos idempotentes (upsert por chave natural):
 4. **Rodada de hoje** — 4 jogos: LAL×PHI com Luka `FORA` em `lesoes_escalacao` →
    OPD 3/2/1 em Reaves/Grimes/Kessler (exemplo literal do doc); OKC×DEN `AO_VIVO`
    `quartoAtual=1` com `estatisticas_quarto`: Shai cruza o alvo 12 e chega a 24
-   (75% da média → modo fire; green no marco 20); mais 2 jogos AGENDADOS para os
-   estados da tela Fire Live.
+   (75% da média → modo fire; green no marco 20); GSW×BOS e MIA×NYK AGENDADOS
+   para mais tarde (GSW na rodada para o turbo do Curry aparecer no feed; e os
+   estados vazios/aguardando da tela Fire Live ficam demonstráveis).
 5. **Motor** — `publicarListaSecreta({ignorarAntecedencia:true})` e, para cada jogo
    ao vivo, `executarCiclo()` (com `fireLiveExecucoes` semeada) → apitos, greens e
    snapshots materializados pelo caminho de produção. Nenhum resultado escrito à mão.
