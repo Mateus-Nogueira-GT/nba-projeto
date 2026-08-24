@@ -70,8 +70,11 @@ export function FormularioCadastro() {
         style={{
           ...campo,
           border: 0,
-          background: semantico.textoPrimario,
+          background: `linear-gradient(90deg, ${semantico.acento}, #FFB25E)`,
           color: semantico.textoSobreCor,
+          fontFamily: semantico.fonteTitulo,
+          letterSpacing: 0.5,
+          textTransform: 'uppercase',
           fontWeight: 700,
           cursor: 'pointer',
         }}

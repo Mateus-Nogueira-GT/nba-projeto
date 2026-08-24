@@ -35,7 +35,17 @@ export function MolduraConta({
           ← IA da NBA
         </Link>
         <header style={{ margin: '20px 0' }}>
-          <h1 style={{ margin: 0, fontSize: 26 }}>{titulo}</h1>
+          <h1
+            style={{
+              margin: 0,
+              fontSize: 26,
+              fontFamily: semantico.fonteTitulo,
+              letterSpacing: 0.5,
+              textTransform: 'uppercase',
+            }}
+          >
+            {titulo}
+          </h1>
           {descricao && (
             <p style={{ margin: '8px 0 0', color: semantico.textoSecundario, lineHeight: 1.55 }}>
               {descricao}

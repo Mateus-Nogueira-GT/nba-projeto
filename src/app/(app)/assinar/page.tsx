@@ -62,8 +62,11 @@ export default async function PaginaAssinar({
                 border: 0,
                 borderRadius: 10,
                 padding: 13,
-                background: semantico.textoPrimario,
+                background: `linear-gradient(90deg, ${semantico.acento}, #FFB25E)`,
                 color: semantico.textoSobreCor,
+                fontFamily: semantico.fonteTitulo,
+                letterSpacing: 0.5,
+                textTransform: 'uppercase',
                 fontWeight: 700,
                 cursor: 'pointer',
               }}

@@ -29,7 +29,17 @@ export default async function PaginaEntrar({
       }}
     >
       <div style={{ width: '100%', maxWidth: 360 }}>
-        <h1 style={{ fontSize: 22, marginBottom: 4 }}>IA da NBA</h1>
+        <h1
+          style={{
+            fontSize: 22,
+            marginBottom: 4,
+            fontFamily: semantico.fonteTitulo,
+            letterSpacing: 0.5,
+            textTransform: 'uppercase',
+          }}
+        >
+          IA da NBA
+        </h1>
         <p style={{ margin: '0 0 20px', fontSize: 13, color: semantico.textoSecundario }}>
           Entre para ver a Lista Secreta do dia.
         </p>
