@@ -81,6 +81,23 @@ Nenhuma destas eu posso responder sozinho. Onde o cliente ou o CJ não definiu,
 | 06 | A odd exibida é do over? | odds |
 | 07 | Por qual canal o alerta acorda alguém? | alerta |
 
+### Da identidade 02 (mudança de identidade visual, ago/2026)
+
+Fora dos oito specs numerados acima: a mudança de identidade visual do app (mockup do
+cliente, telas navegáveis por abas — ver
+[`docs/superpowers/specs/2026-08-24-identidade-rota-transmissao-design.md`](../superpowers/specs/2026-08-24-identidade-rota-transmissao-design.md))
+levantou seis perguntas próprias, ainda sem resposta do CJ. Levar todas de uma vez, junto
+com as pendências herdadas abaixo — não uma por vez.
+
+| Pergunta | Bloqueia |
+| --- | --- |
+| Calibração da escala de confiança exibida — as 5 faixas (80/83/86/89/93) e seus rótulos são demonstração (rampa turquesa de `confianca_exibicao`, ver `docs/04-design-system.md` § Identidade 02 e ADR-0005). Quais faixas ele quer? | os cinco degraus da pílula de confiança |
+| Rótulo da faixa máxima — mockup dizia "ALTÍSSIMO VALOR"; o app usa "CONFIANÇA MÁXIMA" por causa da P12 (nunca chamar de probabilidade). Ele valida o rótulo? | texto da pílula no grau 5 |
+| Fotos dos jogadores — headshots do CDN público da NBA sem contrato de licenciamento (ver `docs/demonstracao.md` § Fotos dos jogadores). Decisão comercial: manter, licenciar ou trocar por monogramas? | risco jurídico do produto pago |
+| Linha com meio ponto — as casas usam 18,5; a lista do CJ usa inteiras. A tela deve exibir a linha como ele define (20+) ou na convenção da casa (19,5)? | formato da linha em todo card |
+| Três pontos — o mockup do designer desenhou "3 PONTOS +2,5". Existe, ou vai existir, classificação de três pontos? Se sim, precisa da lista de níveis dele. | se um quarto atributo entra no modelo |
+| Cronômetro no placar ao vivo — depende do provedor entregar relógio de jogo. Ele quer isso no card do Fire Live? | campo novo na ingestão, só quando houver provedor |
+
 ---
 
 ## Respondidas
