@@ -207,7 +207,12 @@ export default async function PaginaApito({
         {[
           { rotulo: 'MÉDIA', valor: detalhe.mediaTemporada === null ? '—' : fmt(detalhe.mediaTemporada) },
           { rotulo: 'BATEU', valor: `${detalhe.bateu.acertos}/${detalhe.bateu.total}` },
-          { rotulo: 'MIN', valor: `${Math.round(detalhe.minutosRecentes ?? 0)}'` },
+          {
+            rotulo: 'MIN',
+            // Dado ausente não é zero minutos: é "não sabemos". Mostrar 0'
+            // afirmaria um fato falso (padrão de UltimaAtualizacao).
+            valor: detalhe.minutosRecentes === null ? '—' : `${Math.round(detalhe.minutosRecentes)}'`,
+          },
         ].map((caixa) => (
           <div
             key={caixa.rotulo}
@@ -271,6 +276,8 @@ export default async function PaginaApito({
                   fontSize: 16,
                 }}
               >
+                {/* Redundância obrigatória: a marca não é só a cor de fundo. */}
+                {bloco.bateu ? '✓ ' : '· '}
                 {bloco.valor}
               </div>
               <p

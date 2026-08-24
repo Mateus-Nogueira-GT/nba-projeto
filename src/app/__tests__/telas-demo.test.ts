@@ -125,6 +125,9 @@ describe('detalhe do apito', () => {
     expect(html).toContain('VER ESTATÍSTICAS')
     expect(html).not.toContain('ALTÍSSIMO VALOR')
     expect(html).not.toContain('MÉDIA 5J')
+    // Redundância obrigatória (mesmo padrão de resultados/page.tsx): bateu/não-bateu
+    // não pode depender só da cor de fundo do bloco — precisa do sinal textual.
+    expect(html).toMatch(/width:44px;height:44px;[^"]*"\s*>\s*(✓|·)\s?\d/)
   }, 60_000)
 })
 
