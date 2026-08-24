@@ -198,6 +198,22 @@ confianca:
   # automática de oscilacao.nivel_minimo_apito, não é regra separada.
 
 # -----------------------------------------------------------------------------
+# CONFIANÇA — EXIBIÇÃO (identidade 02)
+#
+# ⚠️  DEMONSTRAÇÃO. As 5 faixas traduzem o % (80–95 na prática) em intensidade
+# visual (rampa de um só matiz). NÃO é a escala de 5 cores removida pelo
+# ADR-0005: nenhuma faixa usa cor de apito. Calibração real: pergunta ao CJ.
+# -----------------------------------------------------------------------------
+confianca_exibicao:
+  origem: demonstracao
+  faixas:
+    - { de: 80, grau: 1, rotulo: CONFIANÇA BOA }
+    - { de: 83, grau: 2, rotulo: CONFIANÇA SÓLIDA }
+    - { de: 86, grau: 3, rotulo: CONFIANÇA FORTE }
+    - { de: 89, grau: 4, rotulo: CONFIANÇA MUITO FORTE }
+    - { de: 93, grau: 5, rotulo: CONFIANÇA MÁXIMA }
+
+# -----------------------------------------------------------------------------
 # ODDS — leitura das casas, agregação em faixa. Nunca envio de aposta. ADR-0004.
 # -----------------------------------------------------------------------------
 odds:

@@ -156,6 +156,20 @@ export const rulesetSchema = z.object({
     bonus_por_nivel_apito: porNivel(porLinha),
   }),
 
+  /** Tradução do % em intensidade visual. Exibição, não estratégia. */
+  confianca_exibicao: z.object({
+    origem: z.enum(['homologado', 'demonstracao']),
+    faixas: z
+      .array(
+        z.object({
+          de: z.number(),
+          grau: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4), z.literal(5)]),
+          rotulo: z.string().min(1),
+        }),
+      )
+      .min(1),
+  }),
+
   odds: z.object({
     fonte: z.literal('casas'),
     agregacao: z.enum(['mediana', 'media']),
