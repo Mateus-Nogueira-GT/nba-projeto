@@ -1,5 +1,7 @@
+import { linhasDoNivel, origemDoAtributo } from '../../motor/atributos'
 import type { Ruleset } from '../../motor/ruleset/schema'
-import type { Nivel, NivelApito } from '../../motor/tipos'
+import { ATRIBUTOS, NIVEIS } from '../../motor/tipos'
+import type { Atributo, Nivel, NivelApito } from '../../motor/tipos'
 
 /**
  * A METODOLOGIA DO CJ, LIDA DO RULESET.
@@ -9,7 +11,21 @@ import type { Nivel, NivelApito } from '../../motor/tipos'
  * uma regra que o motor não executa mais. Este módulo é a ponte, e o teste
  * compara campo a campo com o ruleset carregado.
  */
+export type AtributoNaTeoria = {
+  atributo: Atributo
+  /**
+   * `demonstracao` significa que os números daquele atributo foram inventados
+   * para a apresentação, porque o Mestre da NBA ainda não os enviou. A tela
+   * mostra isso ao usuário — a alternativa seria a plataforma ensinar como
+   * regra do CJ algo que ele nunca disse.
+   */
+  origem: 'homologado' | 'demonstracao' | null
+  /** Linhas oferecidas por nível. Vazio = o atributo não gera apito. */
+  linhas: Partial<Record<Nivel, number[]>>
+}
+
 export type Teoria = {
+  atributos: AtributoNaTeoria[]
   niveis: {
     ordem: Nivel[]
     /** Nível de apito mínimo em que cada classe aparece na oscilação. */
@@ -58,6 +74,15 @@ export type Teoria = {
 export function montarTeoria(ruleset: Ruleset): Teoria {
   const fl = ruleset.fire_live
   return {
+    atributos: ATRIBUTOS.map((atributo) => ({
+      atributo,
+      origem: origemDoAtributo(atributo, ruleset),
+      linhas: Object.fromEntries(
+        NIVEIS.map((nivel) => [nivel, linhasDoNivel(nivel, atributo, ruleset)]).filter(
+          ([, linhas]) => (linhas as number[]).length > 0,
+        ),
+      ),
+    })),
     niveis: {
       ordem: ruleset.niveis.ordem,
       minimoOscilacao: ruleset.oscilacao.nivel_minimo_apito as Record<Nivel, number>,

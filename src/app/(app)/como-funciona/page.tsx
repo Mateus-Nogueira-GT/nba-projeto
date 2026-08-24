@@ -6,6 +6,7 @@ import { rulesetAtivo } from '@/modules/entrega/ruleset-ativo'
 import { Anel, CardEntrada } from '@/design-system/componentes'
 import { APITO, MODO_FIRE, NIVEL_JOGADOR, TURBO } from '@/design-system/tokens/css'
 import { semantico } from '@/design-system/tokens/semantico'
+import type { Atributo, Nivel } from '@/modules/motor/tipos'
 import { sessaoAtual } from '@/modules/plataforma/auth/cookies'
 import '@/design-system/tokens/tokens.css'
 
@@ -14,6 +15,12 @@ export const metadata = { title: 'Como funciona · IA da NBA' }
 
 function n(v: number): string {
   return String(v).replace('.', ',')
+}
+
+const ATRIBUTO_ROTULO: Record<Atributo, string> = {
+  PONTOS: 'Pontos',
+  REBOTES: 'Rebotes',
+  ASSISTENCIAS: 'Assistências',
 }
 
 function Secao({
@@ -244,6 +251,45 @@ export default async function PaginaComoFunciona() {
             {n(t.confianca.bonus.ALL_STAR?.['3'] ?? 0)}%. Randola nunca ganha bônus: usa sempre a
             tabela base.
           </p>
+        </Secao>
+
+        <Secao titulo="Pontos, rebotes e assistências">
+          <p style={{ margin: '0 0 8px' }}>
+            As estratégias funcionam igual nos três atributos — o que muda é a escala. Uma linha de
+            25 faz sentido em pontos e nenhum sentido em assistências, então cada atributo tem sua
+            própria tabela de linhas.
+          </p>
+          <div style={{ display: 'grid', gap: 8 }}>
+            {t.atributos.map((a) => (
+              <Caixa key={a.atributo}>
+                <p style={{ margin: 0, fontSize: 13, fontWeight: 700 }}>
+                  {ATRIBUTO_ROTULO[a.atributo]}
+                  {a.origem === 'demonstracao' && (
+                    <span style={{ marginLeft: 8, fontWeight: 600, color: semantico.alerta }}>
+                      · demonstração
+                    </span>
+                  )}
+                </p>
+                {Object.keys(a.linhas).length === 0 ? (
+                  <p style={{ margin: '4px 0 0', fontSize: 12, color: semantico.textoSecundario }}>
+                    Ainda sem classificação — nenhum apito sai neste atributo.
+                  </p>
+                ) : (
+                  <p style={{ margin: '4px 0 0', fontSize: 12, color: semantico.textoSecundario }}>
+                    {Object.entries(a.linhas)
+                      .map(([nivel, linhas]) => `${NIVEL_JOGADOR[nivel as Nivel].rotulo}: ${(linhas ?? []).join(' · ')}`)
+                      .join('   |   ')}
+                  </p>
+                )}
+              </Caixa>
+            ))}
+          </div>
+          {t.atributos.some((a) => a.origem === 'demonstracao') && (
+            <p style={{ margin: '10px 0 0', fontSize: 12, color: semantico.alerta, lineHeight: 1.6 }}>
+              Os atributos marcados como demonstração usam números de exemplo. A lista oficial de
+              níveis de rebotes e assistências do Mestre da NBA ainda não foi carregada.
+            </p>
+          )}
         </Secao>
 
         <Secao titulo="As odds">

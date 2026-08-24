@@ -40,6 +40,13 @@ com painel. O que resta está bloqueado pelos gates da
 [Spec 08](08-fechamento-v0.md): decisões de produto, contrato com as casas e o
 smoke no sandbox do Mercado Pago.
 
+**Modo demonstração.** Enquanto os gates externos não caem, o produto está no ar
+com dados inventados e as telas que faltavam: navegação por abas, Resultados
+(conferência das rodadas encerradas) e Gestão de banca. O motor é genérico por
+atributo de verdade — rebotes e assistências têm tabelas próprias em
+`por_atributo`, marcadas `origem: demonstracao`. O que é real e o que é inventado
+está em [docs/demonstracao.md](../demonstracao.md).
+
 ---
 
 ## O que dá para começar hoje

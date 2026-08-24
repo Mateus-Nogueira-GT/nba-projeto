@@ -31,6 +31,19 @@ describe('a aba teórica é derivada do ruleset, nunca escrita à mão', () => {
     expect(t.confianca.base).toEqual(ruleset.confianca.base)
     expect(t.confianca.bonus).toEqual(ruleset.confianca.bonus_por_nivel_apito)
     expect(t.odds.tabela).toEqual(ruleset.odds.tabela_estatica)
+  })
+
+  it('declara a origem de cada atributo — a tela precisa poder avisar', () => {
+    const t = montarTeoria(ruleset)
+    const porAtributo = new Map(t.atributos.map((a) => [a.atributo, a] as const))
+
+    expect(porAtributo.get('PONTOS')?.origem).toBe('homologado')
+    expect(porAtributo.get('PONTOS')?.linhas.MVP).toEqual([20, 25, 30, 35])
+
+    // Rebotes e assistências ainda são exemplo: a aba teórica não pode
+    // apresentá-los como regra do CJ.
+    expect(porAtributo.get('REBOTES')?.origem).toBe('demonstracao')
+    expect(porAtributo.get('REBOTES')?.linhas.MVP).toEqual([8, 10, 12])
     expect(t.odds.casasMinimas).toBe(ruleset.odds.casas_minimas)
   })
 

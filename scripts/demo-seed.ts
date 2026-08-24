@@ -22,6 +22,8 @@ async function principal() {
   console.log(`  jogos hoje ............ ${resumo.jogosHoje}`)
   console.log(`  itens na Lista Secreta  ${resumo.itensListaSecreta}`)
   console.log(`  apitos do Fire Live ... ${resumo.apitosFireLive}`)
+  console.log(`  linhas com odd ........ ${resumo.linhasComOdd}`)
+  console.log(`  rodadas conferíveis ... ${resumo.rodadasPublicadas}`)
 }
 
 principal()
