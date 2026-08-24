@@ -125,7 +125,7 @@ const PONTOS: Atributo = 'PONTOS'
 
 describe('A1 · limiar de oscilação', () => {
   it('LeBron, média 25,7, Suporte (delta 5) → limiar 20,7; jogo de 20 conta como abaixo', () => {
-    const limiar = limiarOscilacao(25.7, 'SUPORTE', 'lebron-james', ruleset)
+    const limiar = limiarOscilacao(25.7, 'SUPORTE', PONTOS, 'lebron-james', ruleset)!
 
     expect(limiar).toBeCloseTo(20.7, 10)
     expect(20 <= limiar).toBe(true)
@@ -133,8 +133,8 @@ describe('A1 · limiar de oscilação', () => {
   })
 
   it('Luka é a única exceção nominal: delta 7 em vez de 6', () => {
-    expect(limiarOscilacao(30, 'MVP', 'luka-doncic', ruleset)).toBeCloseTo(23, 10)
-    expect(limiarOscilacao(30, 'MVP', 'jokic', ruleset)).toBeCloseTo(24, 10)
+    expect(limiarOscilacao(30, 'MVP', PONTOS, 'luka-doncic', ruleset)).toBeCloseTo(23, 10)
+    expect(limiarOscilacao(30, 'MVP', PONTOS, 'jokic', ruleset)).toBeCloseTo(24, 10)
   })
 })
 
@@ -322,14 +322,14 @@ describe('A13 · P6 — time sem nenhum MVP olha o jogador nº 1', () => {
 
 describe('A14 · P8 — Randola nunca ganha bônus de nível', () => {
   it('Randola no nível 2 mantém a tabela base', () => {
-    expect(calcularConfianca('RANDOLA', 5, 1, ruleset)).toBe(85)
-    expect(calcularConfianca('RANDOLA', 5, 2, ruleset)).toBe(85)
-    expect(calcularConfianca('RANDOLA', 5, 3, ruleset)).toBe(85)
+    expect(calcularConfianca('RANDOLA', PONTOS, 5, 1, ruleset)).toBe(85)
+    expect(calcularConfianca('RANDOLA', PONTOS, 5, 2, ruleset)).toBe(85)
+    expect(calcularConfianca('RANDOLA', PONTOS, 5, 3, ruleset)).toBe(85)
   })
 
   it('os demais níveis ganham bônus normalmente', () => {
-    expect(calcularConfianca('SUPORTE', 15, 2, ruleset)).toBe(85.5)
-    expect(calcularConfianca('ALL_STAR', 20, 2, ruleset)).toBe(86)
+    expect(calcularConfianca('SUPORTE', PONTOS, 15, 2, ruleset)).toBe(85.5)
+    expect(calcularConfianca('ALL_STAR', PONTOS, 20, 2, ruleset)).toBe(86)
   })
 })
 
@@ -341,7 +341,7 @@ describe('A15 · P9 — MVP no nível 3 vai pro turbo E acumula os +4%', () => {
     })
 
     expect(avaliarOscilacao(jokic, PONTOS, ruleset)).toEqual({ nivelApito: 3, turbo: true })
-    expect(calcularConfianca('MVP', 25, 3, ruleset)).toBe(94)
+    expect(calcularConfianca('MVP', PONTOS, 25, 3, ruleset)).toBe(94)
   })
 })
 

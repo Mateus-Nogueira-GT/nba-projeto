@@ -1,5 +1,6 @@
+import { faixaEstatica } from '../atributos'
 import type { Ruleset } from '../ruleset/schema'
-import type { Nivel } from '../tipos'
+import type { Atributo, Nivel } from '../tipos'
 
 export type OrigemOdds = 'CASAS' | 'TABELA_ESTATICA'
 
@@ -21,6 +22,7 @@ export type FaixaOdds = {
 export function agregar(
   cotacoes: { casa: string; oddOver: number | null }[],
   nivel: Nivel,
+  atributo: Atributo,
   linha: number,
   ruleset: Ruleset,
 ): FaixaOdds | null {
@@ -43,7 +45,7 @@ export function agregar(
     }
   }
 
-  const faixa = ruleset.odds.tabela_estatica[nivel]?.[String(linha)]
+  const faixa = faixaEstatica(nivel, atributo, linha, ruleset)
   if (!faixa) return null
 
   const [min, max] = faixa

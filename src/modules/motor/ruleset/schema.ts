@@ -16,6 +16,37 @@ const porLinha = z.record(z.string(), z.number())
 const porLinhaFaixa = z.record(z.string(), z.tuple([z.number(), z.number()]))
 const porNivel = <T extends z.ZodTypeAny>(valor: T) => z.record(nivel, valor)
 
+/**
+ * Bloco POR ATRIBUTO — as tabelas de rebotes e assistências.
+ *
+ * PONTOS nunca aparece aqui: continua nos blocos homologados de topo. Este
+ * bloco existe porque as escalas são incomparáveis — 25 é uma linha de pontos
+ * plausível e uma linha de assistências impossível — e porque o CJ ainda não
+ * enviou os números. Cada atributo declara sua `origem`, e a UI mostra o aviso
+ * quando ela é `demonstracao`.
+ *
+ * Tudo é opcional: atributo sem bloco simplesmente não gera apito, que é
+ * exatamente o comportamento de hoje.
+ */
+const blocoAtributo = z.object({
+  origem: z.enum(['homologado', 'demonstracao']),
+  oscilacao: z
+    .object({
+      delta: porNivel(z.number()),
+    })
+    .optional(),
+  confianca: z
+    .object({
+      base: porNivel(porLinha),
+      bonus_por_nivel_apito: porNivel(porLinha),
+    })
+    .optional(),
+  odds: porNivel(porLinhaFaixa).optional(),
+  marcos_green: porNivel(z.array(z.number())).optional(),
+})
+
+export type BlocoAtributo = z.infer<typeof blocoAtributo>
+
 export const rulesetSchema = z.object({
   version: z.number().int().positive(),
   status: z.enum(['provisorio', 'homologado']),
@@ -151,6 +182,9 @@ export const rulesetSchema = z.object({
       local: z.string(),
     }),
   }),
+
+  /** Rebotes e assistências. Ausente = só pontos, o estado homologado. */
+  por_atributo: z.partialRecord(atributo, blocoAtributo).default({}),
 
   matchup: z.object({
     habilitado: z.boolean(),

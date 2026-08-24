@@ -1,3 +1,4 @@
+import { marcosDoNivel } from '../atributos'
 import type { Ruleset } from '../ruleset/schema'
 import type { Atributo, Nivel } from '../tipos'
 
@@ -14,11 +15,10 @@ import type { Atributo, Nivel } from '../tipos'
  * dependeria de o estado anterior estar correto — e um estado perdido viraria
  * push duplicado no celular do assinante.
  *
- * SÓ PONTOS. `push.marcos_green` é indexado por nível, não por atributo, e os
- * valores (25, 30, 35…) são totais de pontos. Não existe marco de rebote ou
- * assistência definido pelo cliente, e inventar um seria violar a regra 3.
- * Quando o Mestre da NBA enviar os níveis de rebotes/assistências, o ruleset
- * ganha a chave por atributo e esta função passa a consultá-la.
+ * Os marcos são POR ATRIBUTO. Pontos usa `push.marcos_green` — homologado, com
+ * os valores do cliente. Rebotes e assistências leem `por_atributo`, hoje
+ * preenchido com números de DEMONSTRAÇÃO. Atributo sem marcos devolve lista
+ * vazia, e nenhum push sai — que era o comportamento anterior desta função.
  */
 export function marcosAtingidos(
   nivel: Nivel | null,
@@ -27,9 +27,8 @@ export function marcosAtingidos(
   ruleset: Ruleset,
 ): number[] {
   if (nivel === null) return []
-  if (atributo !== 'PONTOS') return []
 
-  return (ruleset.push.marcos_green[nivel] ?? [])
+  return marcosDoNivel(nivel, atributo, ruleset)
     .filter((marco) => valor >= marco)
     .sort((a, b) => a - b)
 }

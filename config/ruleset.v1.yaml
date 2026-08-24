@@ -238,6 +238,85 @@ avisos:
     local: introducao_das_estrategias # lembrete fixo, não dentro do card
 
 # -----------------------------------------------------------------------------
+# POR ATRIBUTO — REBOTES e ASSISTÊNCIAS
+#
+# ⚠️  DEMONSTRAÇÃO. NÃO HOMOLOGADO.
+#
+# O Mestre da NBA classificou apenas PONTOS. Rebotes e assistências não têm
+# lista de níveis nem tabela de confiança definidas por ele. Os números abaixo
+# foram INVENTADOS para a apresentação ao cliente — existem para provar que o
+# motor é genérico por atributo, não para sugerir entrada de verdade.
+#
+# PONTOS não aparece aqui de propósito: continua governado pelos blocos
+# homologados acima (`oscilacao`, `confianca`, `odds`, `push`), intocados.
+#
+# Quando as listas reais chegarem, isto vira um diff de YAML: `origem` passa a
+# `homologado` e os números trocam. Nenhuma linha de código muda.
+# -----------------------------------------------------------------------------
+por_atributo:
+  REBOTES:
+    origem: demonstracao
+
+    # Delta menor que o de pontos: quem tira 10 rebotes não cai 6 num jogo ruim,
+    # cai 3. Usar o delta de pontos aqui faria o limiar ficar inalcançável.
+    oscilacao:
+      delta: { MVP: 3, ALL_STAR: 3, SUPORTE: 2, RANDOLA: 2 }
+
+    confianca:
+      base:
+        MVP: { 8: 90, 10: 85, 12: 80 }
+        ALL_STAR: { 6: 90, 8: 85, 10: 80 }
+        SUPORTE: { 4: 90, 6: 85, 8: 80 }
+        RANDOLA: { 3: 85, 5: 80 }
+      bonus_por_nivel_apito:
+        MVP: { 2: 2.0, 3: 4.0 }
+        ALL_STAR: { 2: 1.0, 3: 2.0 }
+        SUPORTE: { 2: 0.5, 3: 1.0 }
+        RANDOLA: { 2: 0.0, 3: 0.0 }
+
+    odds:
+      MVP: { 8: [1.30, 1.60], 10: [1.90, 2.40], 12: [2.80, 3.60] }
+      ALL_STAR: { 6: [1.35, 1.65], 8: [2.00, 2.50], 10: [3.00, 4.20] }
+      SUPORTE: { 4: [1.40, 1.75], 6: [2.10, 2.60], 8: [3.20, 4.50] }
+      RANDOLA: { 3: [1.80, 2.30], 5: [2.60, 3.80] }
+
+    marcos_green:
+      MVP: [10, 12, 15, 18, 20]
+      ALL_STAR: [8, 10, 12, 15]
+      SUPORTE: [8, 10, 12]
+      RANDOLA: [6, 8, 10]
+
+  ASSISTENCIAS:
+    origem: demonstracao
+
+    oscilacao:
+      delta: { MVP: 3, ALL_STAR: 2, SUPORTE: 2, RANDOLA: 1 }
+
+    confianca:
+      base:
+        MVP: { 5: 90, 7: 85, 9: 80 }
+        ALL_STAR: { 4: 90, 6: 85, 8: 80 }
+        SUPORTE: { 3: 90, 5: 85 }
+        RANDOLA: { 2: 85, 4: 80 }
+      bonus_por_nivel_apito:
+        MVP: { 2: 2.0, 3: 4.0 }
+        ALL_STAR: { 2: 1.0, 3: 2.0 }
+        SUPORTE: { 2: 0.5, 3: 1.0 }
+        RANDOLA: { 2: 0.0, 3: 0.0 }
+
+    odds:
+      MVP: { 5: [1.30, 1.60], 7: [1.95, 2.45], 9: [3.00, 4.00] }
+      ALL_STAR: { 4: [1.35, 1.70], 6: [2.05, 2.55], 8: [3.10, 4.30] }
+      SUPORTE: { 3: [1.45, 1.80], 5: [2.30, 3.00] }
+      RANDOLA: { 2: [1.75, 2.20], 4: [2.90, 4.00] }
+
+    marcos_green:
+      MVP: [8, 10, 12, 15]
+      ALL_STAR: [6, 8, 10, 12]
+      SUPORTE: [5, 7, 9]
+      RANDOLA: [4, 6, 8]
+
+# -----------------------------------------------------------------------------
 # MATCHUP — programado, desligado. Liberar 20 dias após início da competição.
 # -----------------------------------------------------------------------------
 matchup:

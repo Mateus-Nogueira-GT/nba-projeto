@@ -23,6 +23,7 @@ export type { Green, OpcoesFireLive, ResultadoFireLive } from './fire-live/avali
 export { marcosAtingidos } from './fire-live/green'
 export { emBlowout } from './avisos/blowout'
 export { agregar as agregarOdds } from './odds/agregar'
+export { origemDoAtributo, linhasDoNivel, faixaEstatica } from './atributos'
 export type { FaixaOdds, OrigemOdds } from './odds/agregar'
 export { carregarRuleset } from './ruleset/carregar'
 export type { Ruleset } from './ruleset/schema'
@@ -121,7 +122,7 @@ function porLinha(p: {
   opdOrigemNivel: NivelApito | null
   ruleset: Ruleset
 }): Apito[] {
-  return linhasDoNivel(p.nivel, p.ruleset).map((linha) => ({
+  return linhasDoNivel(p.nivel, p.atributo, p.ruleset).map((linha) => ({
     chaveDeduplicacao: montarChave(
       p.jogo.id,
       p.jogador.id,
@@ -140,7 +141,7 @@ function porLinha(p: {
     modoFire: false,
     opdOrigemNivel: p.opdOrigemNivel,
     linha,
-    confianca: calcularConfianca(p.nivel, linha, p.nivelApito, p.ruleset),
+    confianca: calcularConfianca(p.nivel, p.atributo, linha, p.nivelApito, p.ruleset),
     alvo1Q: null,
   }))
 }

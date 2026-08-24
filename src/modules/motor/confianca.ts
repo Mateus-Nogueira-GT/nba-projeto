@@ -1,5 +1,6 @@
+import { bonusConfianca, confiancaBase, linhasDoNivel as linhasPorAtributo } from './atributos'
 import type { Ruleset } from './ruleset/schema'
-import type { Nivel, NivelApito } from './tipos'
+import type { Atributo, Nivel, NivelApito } from './tipos'
 
 /**
  * NOTA DE CONFIANÇA da análise do CJ — não é probabilidade de evento.
@@ -7,22 +8,19 @@ import type { Nivel, NivelApito } from './tipos'
  */
 export function calcularConfianca(
   nivel: Nivel,
+  atributo: Atributo,
   linha: number,
   nivelApito: NivelApito,
   ruleset: Ruleset,
 ): number | null {
-  const base = ruleset.confianca.base[nivel]?.[String(linha)]
+  const base = confiancaBase(nivel, atributo, linha, ruleset)
   if (base === undefined) return null
 
   // Randola tem bônus 0 em todos os níveis (P8) — sempre a tabela base.
-  const bonus = ruleset.confianca.bonus_por_nivel_apito[nivel]?.[String(nivelApito)] ?? 0
-
-  return base + bonus
+  return base + bonusConfianca(nivel, atributo, nivelApito, ruleset)
 }
 
-/** Linhas disponíveis para um nível, na ordem do ruleset. */
-export function linhasDoNivel(nivel: Nivel, ruleset: Ruleset): number[] {
-  return Object.keys(ruleset.confianca.base[nivel] ?? {})
-    .map(Number)
-    .sort((a, b) => a - b)
+/** Linhas disponíveis para um nível e atributo, na ordem do ruleset. */
+export function linhasDoNivel(nivel: Nivel, atributo: Atributo, ruleset: Ruleset): number[] {
+  return linhasPorAtributo(nivel, atributo, ruleset)
 }
