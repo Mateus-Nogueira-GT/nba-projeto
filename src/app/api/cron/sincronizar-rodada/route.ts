@@ -17,7 +17,7 @@ export async function GET(requisicao: Request): Promise<Response> {
     rota: '/api/cron/sincronizar-rodada',
     tarefa: async () => {
       const contexto = await contextoDoJob()
-      const fim = dataReferenciaNba(contexto.agora)
+      const fim = dataReferenciaNba(contexto.agora, contexto.ruleset.rodada.fuso)
       const inicio = deslocarData(fim, -contexto.config.sobreposicaoDias)
       const db = getDb()
       const fontes = montarFontes(db, contexto.config)

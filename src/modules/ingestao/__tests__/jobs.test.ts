@@ -56,7 +56,15 @@ describe('configuração de ingestão', () => {
 
 describe('rodada NBA', () => {
   it('não trunca UTC quando a noite de Nova York cruza meia-noite', () => {
-    expect(dataReferenciaNba(new Date('2026-01-03T00:30:00.000Z'))).toBe('2026-01-02')
+    // 00:30Z de 03/01 ainda é 02/01 em Nova York (19:30) e também 02/01 em
+    // Brasília (21:30) — os dois fusos concordam neste instante.
+    expect(dataReferenciaNba(new Date('2026-01-03T00:30:00.000Z'), 'America/New_York')).toBe('2026-01-02')
+    expect(dataReferenciaNba(new Date('2026-01-03T00:30:00.000Z'), 'America/Sao_Paulo')).toBe('2026-01-02')
+
+    // Mas às 03:30Z já é 03/01 em Brasília e ainda 02/01 em Nova York: é aqui
+    // que a noite de NBA se parte em duas rodadas.
+    expect(dataReferenciaNba(new Date('2026-01-03T03:30:00.000Z'), 'America/New_York')).toBe('2026-01-02')
+    expect(dataReferenciaNba(new Date('2026-01-03T03:30:00.000Z'), 'America/Sao_Paulo')).toBe('2026-01-03')
     expect(deslocarData('2026-01-02', -2)).toBe('2025-12-31')
   })
 })

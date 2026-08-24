@@ -2,6 +2,7 @@ import { getDb } from '@/modules/dominio/db/cliente'
 import { executarCronProtegido } from '@/modules/entrega/cron/guarda'
 import { publicarListaSecreta } from '@/modules/entrega/lista-secreta'
 import { rulesetAtivo } from '@/modules/entrega/ruleset-ativo'
+import { dataDeReferencia } from '@/modules/dominio/rodada'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
@@ -22,9 +23,10 @@ export async function GET(requisicao: Request): Promise<Response> {
     rota: '/api/cron/lista-secreta',
     tarefa: async () => {
       const agora = new Date()
-      const dataReferencia = agora.toISOString().slice(0, 10)
+      const ruleset = await rulesetAtivo()
+      const dataReferencia = dataDeReferencia(agora, ruleset.rodada.fuso)
 
-      const resultado = await publicarListaSecreta(getDb(), await rulesetAtivo(), {
+      const resultado = await publicarListaSecreta(getDb(), ruleset, {
         dataReferencia,
         agora,
       })

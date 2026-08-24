@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { redirect } from 'next/navigation'
 
 import { Moldura } from '@/components/navegacao'
+import { dataDeReferencia } from '@/modules/dominio/rodada'
 import { NIVEL_JOGADOR } from '@/design-system/tokens/css'
 import { semantico } from '@/design-system/tokens/semantico'
 import { getDb } from '@/modules/dominio/db/cliente'
@@ -79,7 +80,7 @@ export default async function PaginaGestao({
   const params = await searchParams
   const banca = bancaDe(params.banca)
   const ruleset = await rulesetAtivo()
-  const hoje = new Date().toISOString().slice(0, 10)
+  const hoje = dataDeReferencia(new Date(), ruleset.rodada.fuso)
   const plano = await planoDoDia(getDb(), ruleset, hoje, banca)
 
   if (!plano.temModelo) {

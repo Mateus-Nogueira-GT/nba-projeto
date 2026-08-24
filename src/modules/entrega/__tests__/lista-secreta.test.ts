@@ -29,6 +29,7 @@ import {
   reprocessarPorEscalacao,
 } from '../lista-secreta'
 import type { ItemFeed } from '../lista-secreta'
+import { calendarioDoRuleset } from '../../dominio/temporada'
 
 const ruleset = carregarRuleset(readFileSync('config/ruleset.v1.yaml', 'utf8'))
 
@@ -151,10 +152,7 @@ describe('job diário da Lista Secreta', () => {
       ppg: '99.0',
     })
 
-    const fatos = await montarFatos(banco.db, HOJE, {
-      mesInicio: ruleset.temporada.mes_inicio,
-      formato: ruleset.temporada.formato,
-    })
+    const fatos = await montarFatos(banco.db, HOJE, calendarioDoRuleset(ruleset))
     const luka = fatos.times
       .flatMap((time) => time.jogadores)
       .find((j) => j.id === idPorNome.get('Luka Doncic'))

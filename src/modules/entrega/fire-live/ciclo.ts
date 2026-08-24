@@ -13,6 +13,7 @@ import type { Ruleset } from '../../motor/ruleset/schema'
 import type { MensagemPush, PortaFila } from '../fila/porta'
 import { mensagemDeApito, mensagemDeGreen } from './push'
 import { materializarFeedFireLive } from './feed'
+import { calendarioDoRuleset } from '../../dominio/temporada'
 
 /**
  * Estado observado no ciclo anterior: valor por (jogador, atributo).
@@ -115,10 +116,7 @@ export async function executarCiclo(
     return { encerrar: true, motivo: 'limite-de-tempo', ciclou: false }
   }
 
-  const fatos = await montarFatosDoJogo(db, opcoes.jogoId, {
-    mesInicio: ruleset.temporada.mes_inicio,
-    formato: ruleset.temporada.formato,
-  })
+  const fatos = await montarFatosDoJogo(db, opcoes.jogoId, calendarioDoRuleset(ruleset))
   if (fatos === null) return { encerrar: true, motivo: 'jogo-nao-encontrado', ciclou: false }
 
   // A GUARDA DO QUARTO. Vale para os dois lados: o jogo ainda não começou

@@ -22,6 +22,7 @@ import {
   times,
 } from './db/schema'
 import type { Db } from './db/tipos'
+import { intervaloDoDia } from './rodada'
 import { temporadaDe, type ConfigTemporada } from './temporada'
 
 /**
@@ -32,10 +33,15 @@ import { temporadaDe, type ConfigTemporada } from './temporada'
  * (ADR-0002) e testes de motor sem mock.
  */
 
-function diaDe(iso: string): { inicio: Date; fim: Date } {
-  const inicio = new Date(`${iso}T00:00:00.000Z`)
-  const fim = new Date(`${iso}T23:59:59.999Z`)
-  return { inicio, fim }
+/**
+ * A janela UTC de um dia de rodada.
+ *
+ * Era meia-noite a meia-noite EM UTC, o que no Brasil significa 21h de ontem
+ * às 21h de hoje: os jogos noturnos da NBA caíam na rodada errada. O fuso vem
+ * do ruleset — ver `dominio/rodada.ts`.
+ */
+function diaDe(iso: string, fuso: string): { inicio: Date; fim: Date } {
+  return intervaloDoDia(iso, fuso)
 }
 
 function numero(v: string | null): number | undefined {
@@ -49,7 +55,7 @@ export async function montarFatos(
   dataReferencia: string,
   configTemporada: ConfigTemporada,
 ): Promise<Fatos> {
-  const { inicio, fim } = diaDe(dataReferencia)
+  const { inicio, fim } = diaDe(dataReferencia, configTemporada.fuso)
   const temporada = temporadaDe(inicio, configTemporada)
 
   // 1 · Versão ATIVA da lista do CJ. Sem ela não há estratégia nenhuma.
@@ -220,8 +226,12 @@ export async function montarFatos(
 }
 
 /** Horário do primeiro jogo do dia — governa quando a Lista Secreta sai. */
-export async function primeiroJogoDoDia(db: Db, dataReferencia: string): Promise<Date | null> {
-  const { inicio, fim } = diaDe(dataReferencia)
+export async function primeiroJogoDoDia(
+  db: Db,
+  dataReferencia: string,
+  fuso: string,
+): Promise<Date | null> {
+  const { inicio, fim } = diaDe(dataReferencia, fuso)
 
   const [primeiro] = await db
     .select({ dataHoraUtc: jogos.dataHoraUtc })

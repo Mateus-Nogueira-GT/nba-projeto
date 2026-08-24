@@ -1,4 +1,4 @@
-import { temporadaDe } from '../../dominio/temporada'
+import { calendarioDoRuleset, temporadaDe } from '../../dominio/temporada'
 import { rulesetAtivo } from '../../entrega/ruleset-ativo'
 import { configDoAmbiente } from '../sincronizar/fonte'
 
@@ -8,10 +8,7 @@ export async function contextoDoJob(agora = new Date()) {
   if (!config.habilitada) throw new Error('ingestão NBA desabilitada pelo kill switch')
 
   const ruleset = await rulesetAtivo()
-  const configTemporada = {
-    mesInicio: ruleset.temporada.mes_inicio,
-    formato: ruleset.temporada.formato,
-  } as const
+  const configTemporada = calendarioDoRuleset(ruleset)
   return {
     agora,
     config,

@@ -501,7 +501,7 @@ describe('tela do time', () => {
 
 describe('jogos do dia', () => {
   it('lista os jogos da data com placar e estado', async () => {
-    const tela = await telaJogosDoDia(banco.db, HOJE)
+    const tela = await telaJogosDoDia(banco.db, HOJE, 'America/Sao_Paulo')
 
     expect(tela.jogos).toHaveLength(1)
     expect(tela.jogos[0]).toMatchObject({
@@ -514,12 +514,12 @@ describe('jogos do dia', () => {
   })
 
   it('não traz jogo de outro dia', async () => {
-    const tela = await telaJogosDoDia(banco.db, HOJE)
+    const tela = await telaJogosDoDia(banco.db, HOJE, 'America/Sao_Paulo')
     expect(tela.jogos.map((j) => j.id)).not.toContain(jogoDeOntemId)
   })
 
   it('leva à tela do time pelos dois lados', async () => {
-    const tela = await telaJogosDoDia(banco.db, HOJE)
+    const tela = await telaJogosDoDia(banco.db, HOJE, 'America/Sao_Paulo')
     const jogo = tela.jogos[0]!
 
     expect(rotaDoTime(jogo.casa.id)).toContain(jogo.casa.id)
@@ -535,7 +535,7 @@ describe('jogos do dia', () => {
 describe('horário da última atualização', () => {
   it('toda carga de tela da aba traz a marca de atualização', async () => {
     const telas = [
-      await telaJogosDoDia(banco.db, HOJE),
+      await telaJogosDoDia(banco.db, HOJE, 'America/Sao_Paulo'),
       await telaDaClassificacao(banco.db, TEMPORADA),
       (await telaDoJogador(banco.db, idPorNome.get('Luka Dončić')!, { temporada: TEMPORADA }))!,
       (await telaDoTime(banco.db, lalId, { temporada: TEMPORADA }))!,
@@ -550,7 +550,7 @@ describe('horário da última atualização', () => {
   })
 
   it('o horário vem do DADO, não do relógio da consulta', async () => {
-    const tela = await telaJogosDoDia(banco.db, HOJE)
+    const tela = await telaJogosDoDia(banco.db, HOJE, 'America/Sao_Paulo')
     // As linhas foram gravadas no `semear`, portanto antes de agora.
     expect(tela.atualizacao.em.getTime()).toBeLessThanOrEqual(Date.now())
     expect(tela.atualizacao.em.getTime()).toBeGreaterThan(0)
@@ -566,12 +566,13 @@ describe('horário da última atualização', () => {
   })
 
   it('sem dado nenhum, admite que não há dado em vez de datar 1970', async () => {
-    const tela = await telaJogosDoDia(banco.db, '2020-01-01')
+    const tela = await telaJogosDoDia(banco.db, '2020-01-01', 'America/Sao_Paulo')
     expect(tela.jogos).toHaveLength(0)
     expect(tela.atualizacao.em.getTime()).toBe(0)
 
     const html = renderToStaticMarkup(
       createElement(UltimaAtualizacao, {
+        fuso: 'America/Sao_Paulo',
         em: tela.atualizacao.em,
         fonte: tela.atualizacao.fonte,
         agora: AGORA,
@@ -584,6 +585,7 @@ describe('horário da última atualização', () => {
   it('o componente mostra o tempo decorrido e o horário absoluto', () => {
     const html = renderToStaticMarkup(
       createElement(UltimaAtualizacao, {
+        fuso: 'America/Sao_Paulo',
         em: new Date('2026-08-19T23:27:00.000Z'),
         fonte: 'ao vivo',
         agora: AGORA,

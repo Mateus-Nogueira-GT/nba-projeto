@@ -38,6 +38,27 @@ temporada:
   formato: dois_anos # 2025-26   (alternativa: ano_inicial -> 2025)
 
 # -----------------------------------------------------------------------------
+# RODADA — o fuso que decide a que DIA um jogo pertence
+#
+# Respondido pelo cliente em 24/08/2026: fuso do horário de Brasília.
+#
+# Governa duas coisas: qual é a "rodada de hoje" e em que horário os jogos
+# aparecem na tela. Antes disto o servidor da Vercel roda em UTC, e todo horário
+# de jogo saía 3 horas adiantado para o assinante brasileiro.
+#
+# ⚠️  CONSEQUÊNCIA: a NBA joga à noite nos EUA. No inverno americano — que é
+# quase toda a temporada — o leste dos EUA está 2 horas atrás de Brasília, então
+# um jogo das 22h30 no horário de lá começa 00h30 aqui, JÁ NO DIA SEGUINTE. Uma
+# mesma noite de NBA se parte em duas rodadas, e os jogos da costa oeste caem na
+# lista de "amanhã".
+#
+# A alternativa é `America/New_York`, que é a convenção da própria liga: a noite
+# inteira fica num dia só. Trocar é editar a linha abaixo — nenhum código muda.
+# -----------------------------------------------------------------------------
+rodada:
+  fuso: America/Sao_Paulo
+
+# -----------------------------------------------------------------------------
 # ARREDONDAMENTO
 # Validado contra os 4 exemplos numéricos do documento do CJ:
 #   24 ppg -> alvo 9  |  5,4 ppg -> alvo 4  |  5 apg -> alvo 2  |  11 rpg -> alvo 6

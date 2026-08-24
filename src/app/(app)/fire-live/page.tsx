@@ -12,18 +12,12 @@ import { semantico } from '@/design-system/tokens/semantico'
 import { sessaoAtual } from '@/modules/plataforma/auth/cookies'
 import { avaliarAcesso } from '@/modules/plataforma/assinatura/direito'
 import '@/design-system/tokens/tokens.css'
+import { dataHora, horaCurta } from '@/components/formato'
 import { Moldura } from '@/components/navegacao'
+import { dataDeReferencia } from '@/modules/dominio/rodada'
 
 export const dynamic = 'force-dynamic'
 export const metadata = { title: 'Fire Live · IA da NBA' }
-
-function horaLocal(d: Date): string {
-  return d.toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })
-}
-
-function horaCurta(d: Date): string {
-  return d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
-}
 
 
 /**
@@ -31,7 +25,15 @@ function horaCurta(d: Date): string {
  * durante o 1º quarto dos jogos. Cada motivo tem o próprio texto: parecer
  * defeito aqui faria o produto parecer quebrado a maior parte do tempo.
  */
-function TextoVazio({ estado, primeiroJogo }: { estado: EstadoVazio; primeiroJogo: Date | null }) {
+function TextoVazio({
+  estado,
+  primeiroJogo,
+  fuso,
+}: {
+  estado: EstadoVazio
+  primeiroJogo: Date | null
+  fuso: string
+}) {
   const textos: Record<EstadoVazio, { titulo: string; corpo: string }> = {
     SEM_JOGO_HOJE: {
       titulo: 'Sem jogos hoje',
@@ -40,7 +42,7 @@ function TextoVazio({ estado, primeiroJogo }: { estado: EstadoVazio; primeiroJog
     AGUARDANDO_PRIMEIRO_JOGO: {
       titulo: 'Ainda não começou',
       corpo: primeiroJogo
-        ? `O primeiro jogo de hoje começa às ${horaCurta(primeiroJogo)}. Os apitos aparecem aqui durante o 1º quarto.`
+        ? `O primeiro jogo de hoje começa às ${horaCurta(primeiroJogo, fuso)}. Os apitos aparecem aqui durante o 1º quarto.`
         : 'Os apitos aparecem aqui durante o 1º quarto de cada jogo.',
     },
     NENHUM_EM_1Q: {
@@ -120,7 +122,8 @@ export default async function PaginaFireLive({
   if (!acesso.permitido) redirect('/assinar')
 
   const ruleset = await rulesetAtivo()
-  const hoje = new Date().toISOString().slice(0, 10)
+  const { fuso } = ruleset.rodada
+  const hoje = dataDeReferencia(new Date(), fuso)
   // A tela lê o snapshot MATERIALIZADO por jogo — nunca executa o motor.
   const feed = await lerFeedFireLive(getDb(), hoje, ruleset.fire_live.quarto, filtro)
 
@@ -166,7 +169,7 @@ export default async function PaginaFireLive({
       )}
 
       {feed.estadoVazio !== null && (
-        <TextoVazio estado={feed.estadoVazio} primeiroJogo={feed.primeiroJogoUtc} />
+        <TextoVazio estado={feed.estadoVazio} primeiroJogo={feed.primeiroJogoUtc} fuso={fuso} />
       )}
 
       {recorteVazio && (
@@ -230,7 +233,7 @@ export default async function PaginaFireLive({
         }}
       >
         {feed.geradoEm
-          ? `Última atualização: ${horaLocal(feed.geradoEm)}`
+          ? `Última atualização: ${dataHora(feed.geradoEm, fuso)}`
           : 'Sem dado ao vivo no momento.'}
       </footer>
     </Moldura>

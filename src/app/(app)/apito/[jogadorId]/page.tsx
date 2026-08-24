@@ -1,7 +1,9 @@
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
 
+import { dataHora } from '@/components/formato'
 import { Moldura } from '@/components/navegacao'
+import { dataDeReferencia } from '@/modules/dominio/rodada'
 import { getDb } from '@/modules/dominio/db/cliente'
 import { linhasDoJogador } from '@/modules/entrega/lista-secreta'
 import { faixasDoJogador } from '@/modules/entrega/odds/leitura'
@@ -26,10 +28,6 @@ const UNIDADE: Record<Atributo, string> = {
   ASSISTENCIAS: 'assistências',
 }
 export const metadata = { title: 'Linhas e confiança · IA da NBA' }
-
-function horaLocal(d: Date): string {
-  return d.toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })
-}
 
 function formatarOdd(v: number): string {
   return v.toFixed(2).replace('.', ',')
@@ -74,7 +72,7 @@ export default async function PaginaApito({
   if (!acesso.permitido) redirect('/assinar')
 
   const ruleset = await rulesetAtivo()
-  const hoje = new Date().toISOString().slice(0, 10)
+  const hoje = dataDeReferencia(new Date(), ruleset.rodada.fuso)
   const { itens, geradoEm } = await linhasDoJogador(getDb(), hoje, jogadorId, atributo)
   const principal = itens[0]
 
@@ -199,7 +197,7 @@ export default async function PaginaApito({
       >
         O percentual é a <strong>nota de confiança</strong> da análise do CJ, não uma
         probabilidade de acerto.
-        {geradoEm ? ` · Última atualização: ${horaLocal(geradoEm)}` : ''}
+        {geradoEm ? ` · Última atualização: ${dataHora(geradoEm, ruleset.rodada.fuso)}` : ''}
       </footer>
     </Moldura>
   )

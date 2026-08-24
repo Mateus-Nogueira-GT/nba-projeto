@@ -17,7 +17,8 @@ import {
   times,
 } from '../../dominio/db/schema'
 import type { Db } from '../../dominio/db/tipos'
-import { temporadaDe } from '../../dominio/temporada'
+import { dataDeReferencia, intervaloDoDia, somarDias } from '../../dominio/rodada'
+import { calendarioDoRuleset, temporadaDe } from '../../dominio/temporada'
 import { ativarVersaoNiveis } from '../../dominio/repositorios/niveis'
 import { executarCiclo } from '../../entrega/fire-live/ciclo'
 import { FilaEmMemoria } from '../../entrega/fila/memoria'
@@ -148,10 +149,7 @@ export async function semearDemo(db: Db, ruleset: Ruleset, agora: Date): Promise
   }
 
   // 2 · Médias da temporada — a MESMA que montarFatos vai consultar.
-  const temporada = temporadaDe(agora, {
-    mesInicio: ruleset.temporada.mes_inicio,
-    formato: ruleset.temporada.formato,
-  })
+  const temporada = temporadaDe(agora, calendarioDoRuleset(ruleset))
   const nivelPorNome = new Map(analise.jogadores.map((j) => [j.nomeNaLista, j.nivel] as const))
   for (const [nome, jogadorId] of jaExistentes) {
     const nivel = nivelPorNome.get(nome)
@@ -175,7 +173,8 @@ export async function semearDemo(db: Db, ruleset: Ruleset, agora: Date): Promise
       })
   }
 
-  const dataReferencia = agora.toISOString().slice(0, 10)
+  const { fuso } = ruleset.rodada
+  const dataReferencia = dataDeReferencia(agora, fuso)
   const idDoTime = (sigla: string) => timePorSigla.get(sigla)
 
   async function criarJogo(
@@ -256,7 +255,7 @@ export async function semearDemo(db: Db, ruleset: Ruleset, agora: Date): Promise
   const DIAS = 6
   for (let i = 1; i <= DIAS; i++) {
     const dia = new Date(agora.getTime() - i * 24 * 60 * 60_000)
-    const diaRef = dia.toISOString().slice(0, 10)
+    const diaRef = somarDias(dataReferencia, -i)
 
     const jogoDoTime = new Map<string, string>()
     for (const [casa, visitante] of CONFRONTOS) {
@@ -316,7 +315,7 @@ export async function semearDemo(db: Db, ruleset: Ruleset, agora: Date): Promise
   //     `agora + N horas`: com o seed rodando às 22h UTC, "+3h" cairia no dia
   //     seguinte e o time inteiro sumiria da rodada sem aviso. É a mesma
   //     armadilha de fuso que o runbook de ingestão descreve.
-  const inicioDoDia = new Date(`${dataReferencia}T00:00:00.000Z`).getTime()
+  const inicioDoDia = intervaloDoDia(dataReferencia, fuso).inicio.getTime()
   const hora = (h: number) => new Date(inicioDoDia + h * 60 * 60_000)
 
   const jogosDeHoje = new Map<string, string>()
@@ -433,7 +432,7 @@ export async function semearDemo(db: Db, ruleset: Ruleset, agora: Date): Promise
   for (let i = 1; i <= DIAS_CONFERIVEIS; i++) {
     const dia = new Date(agora.getTime() - i * 24 * 60 * 60_000)
     const publicacaoPassada = await publicarListaSecreta(db, ruleset, {
-      dataReferencia: dia.toISOString().slice(0, 10),
+      dataReferencia: somarDias(dataReferencia, -i),
       agora: dia,
       ignorarAntecedencia: true,
     })

@@ -8,6 +8,7 @@ import { gravarApitos } from '../dominio/repositorios/apitos'
 import { avaliar } from '../motor'
 import type { Apito, Atributo, Metodo, Nivel, NivelApito } from '../motor/tipos'
 import type { Ruleset } from '../motor/ruleset/schema'
+import { calendarioDoRuleset } from '../dominio/temporada'
 
 /**
  * Item já pronto para a tela.
@@ -74,7 +75,7 @@ export async function publicarListaSecreta(
   ruleset: Ruleset,
   opcoes: { dataReferencia: string; agora: Date; ignorarAntecedencia?: boolean },
 ): Promise<ResultadoPublicacao> {
-  const primeiro = await primeiroJogoDoDia(db, opcoes.dataReferencia)
+  const primeiro = await primeiroJogoDoDia(db, opcoes.dataReferencia, ruleset.rodada.fuso)
   if (primeiro === null) return { publicou: false, motivo: 'sem-jogos' }
 
   if (opcoes.ignorarAntecedencia !== true) {
@@ -84,10 +85,7 @@ export async function publicarListaSecreta(
     }
   }
 
-  const fatos = await montarFatos(db, opcoes.dataReferencia, {
-    mesInicio: ruleset.temporada.mes_inicio,
-    formato: ruleset.temporada.formato,
-  })
+  const fatos = await montarFatos(db, opcoes.dataReferencia, calendarioDoRuleset(ruleset))
   if (fatos.times.length === 0) return { publicou: false, motivo: 'sem-lista-ativa' }
 
   const apitos = avaliar(fatos, ruleset).filter((a) => a.estrategia === 'LISTA_SECRETA')

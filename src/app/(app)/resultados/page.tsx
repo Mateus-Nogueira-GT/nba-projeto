@@ -1,7 +1,10 @@
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
 
+import { diaLongo } from '@/components/formato'
 import { Moldura } from '@/components/navegacao'
+import { dataDeReferencia } from '@/modules/dominio/rodada'
+import { rulesetAtivo } from '@/modules/entrega/ruleset-ativo'
 import { NIVEL_JOGADOR } from '@/design-system/tokens/css'
 import { semantico } from '@/design-system/tokens/semantico'
 import { getDb } from '@/modules/dominio/db/cliente'
@@ -25,17 +28,6 @@ const ATRIBUTO_ROTULO: Record<Atributo, string> = {
   ASSISTENCIAS: 'assistências',
 }
 
-function dataLonga(iso: string): string {
-  // A data vem como dia de referência (YYYY-MM-DD), sem hora. Somar o fuso do
-  // navegador a uma data sem hora recuaria um dia em todo o Brasil.
-  const [ano, mes, dia] = iso.split('-').map(Number)
-  return new Date(Date.UTC(ano!, mes! - 1, dia!)).toLocaleDateString('pt-BR', {
-    weekday: 'long',
-    day: '2-digit',
-    month: 'short',
-    timeZone: 'UTC',
-  })
-}
 
 function Cartao({ jogador }: { jogador: JogadorConferido }) {
   const nivel = NIVEL_JOGADOR[jogador.nivelJogador]
@@ -123,7 +115,7 @@ function Rodada({ dia }: { dia: DiaConferido }) {
         }}
       >
         <h2 style={{ margin: 0, fontSize: 14, textTransform: 'capitalize' }}>
-          {dataLonga(dia.dataReferencia)}
+          {diaLongo(dia.dataReferencia)}
         </h2>
         <span style={{ fontSize: 12, color: semantico.textoSecundario }}>
           {dia.acertos} de {dia.conferidos} sinalizados bateram a linha
@@ -154,7 +146,8 @@ export default async function PaginaResultados() {
   const acesso = await avaliarAcesso(getDb(), sessao.usuarioId)
   if (!acesso.permitido) redirect('/assinar')
 
-  const hoje = new Date().toISOString().slice(0, 10)
+  const { fuso } = (await rulesetAtivo()).rodada
+  const hoje = dataDeReferencia(new Date(), fuso)
   const [rodadas, greens] = await Promise.all([
     conferirRodadas(getDb(), hoje, DIAS),
     greensDoDia(getDb(), hoje),

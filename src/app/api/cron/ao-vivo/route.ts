@@ -20,7 +20,7 @@ export async function GET(requisicao: Request): Promise<Response> {
     rota: '/api/cron/ao-vivo',
     tarefa: async () => {
       const contexto = await contextoDoJob()
-      const dataReferencia = dataReferenciaNba(contexto.agora)
+      const dataReferencia = dataReferenciaNba(contexto.agora, contexto.ruleset.rodada.fuso)
       const db = getDb()
       const fontes = montarFontes(db, contexto.config)
       const ingestao = await executarJobComLease(

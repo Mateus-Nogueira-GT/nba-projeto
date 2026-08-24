@@ -2,6 +2,7 @@ import { eq } from 'drizzle-orm'
 
 import { identidadesJogo, jogos } from '../../dominio/db/schema'
 import type { Db } from '../../dominio/db/tipos'
+import { dataDeReferencia, somarDias } from '../../dominio/rodada'
 import type { ConfigTemporada } from '../../dominio/temporada'
 import { CapacidadeNaoSuportadaError } from '../nba/porta'
 import { consultarComOrigem } from '../nba/failover'
@@ -27,22 +28,19 @@ function somar(contagens: ContagensJob, chave: string, valor: number): void {
   contagens[chave] = (contagens[chave] ?? 0) + valor
 }
 
-export function dataReferenciaNba(instante: Date): string {
-  const partes = new Intl.DateTimeFormat('en-US', {
-    timeZone: 'America/New_York',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).formatToParts(instante)
-  const valor = Object.fromEntries(partes.map((p) => [p.type, p.value]))
-  return `${valor.year}-${valor.month}-${valor.day}`
-}
+/**
+ * A que dia de rodada pertence este instante.
+ *
+ * O fuso vinha fixo em `America/New_York` aqui dentro — a convenção da liga,
+ * escolhida no código e não pelo cliente. Isso quebrava a regra 1 do
+ * CLAUDE.md e, pior, discordava em silêncio da tela: a ingestão gravava o dia
+ * segundo Nova York e o app perguntava pelo dia segundo outro fuso.
+ *
+ * Agora só existe um fuso, e ele vive no ruleset (`rodada.fuso`).
+ */
+export const dataReferenciaNba = dataDeReferencia
 
-export function deslocarData(dataIso: string, dias: number): string {
-  const data = new Date(`${dataIso}T12:00:00.000Z`)
-  data.setUTCDate(data.getUTCDate() + dias)
-  return data.toISOString().slice(0, 10)
-}
+export const deslocarData = somarDias
 
 async function sincronizarIdentidadesDeJogo(
   db: Db,

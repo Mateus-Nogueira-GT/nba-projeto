@@ -2,7 +2,7 @@ import { and, desc, eq } from 'drizzle-orm'
 
 import { fecharDb, getDb } from '../src/modules/dominio/db/cliente'
 import { checkpointsIngestao } from '../src/modules/dominio/db/schema'
-import { temporadaDe } from '../src/modules/dominio/temporada'
+import { calendarioDoRuleset, temporadaDe } from '../src/modules/dominio/temporada'
 import { rulesetAtivo } from '../src/modules/entrega/ruleset-ativo'
 import { executarJobComLease } from '../src/modules/ingestao/jobs/execucao'
 import { deslocarData, executarJobRodada } from '../src/modules/ingestao/jobs/orquestradores'
@@ -35,10 +35,7 @@ async function main() {
   if (!config.habilitada && !dryRun) throw new Error('ingestão NBA desabilitada pelo kill switch')
 
   const ruleset = await rulesetAtivo()
-  const configTemporada = {
-    mesInicio: ruleset.temporada.mes_inicio,
-    formato: ruleset.temporada.formato,
-  } as const
+  const configTemporada = calendarioDoRuleset(ruleset)
 
   if (dryRun) {
     console.info(

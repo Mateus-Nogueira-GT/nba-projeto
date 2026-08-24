@@ -13,7 +13,7 @@ export async function GET(requisicao: Request): Promise<Response> {
     rota: '/api/cron/sincronizar-escalacao',
     tarefa: async () => {
       const contexto = await contextoDoJob()
-      const dataReferencia = dataReferenciaNba(contexto.agora)
+      const dataReferencia = dataReferenciaNba(contexto.agora, contexto.ruleset.rodada.fuso)
       const db = getDb()
       const fontes = montarFontes(db, contexto.config)
       return executarJobComLease(

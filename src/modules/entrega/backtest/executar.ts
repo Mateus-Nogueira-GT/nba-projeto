@@ -6,6 +6,8 @@ import { montarFatos } from '../../dominio/fatos'
 import { avaliar } from '../../motor'
 import type { Ruleset } from '../../motor/ruleset/schema'
 import type { Apito, Atributo, Metodo, Nivel } from '../../motor/tipos'
+import { calendarioDoRuleset } from '../../dominio/temporada'
+import { somarDias } from '../../dominio/rodada'
 
 /**
  * BACKTEST — a entrega comercial que justificou o motor puro (ADR-0002).
@@ -39,11 +41,10 @@ export type ResultadoBacktest = {
 /** Datas ISO (YYYY-MM-DD) do período, inclusivas. Puro — sem relógio. */
 export function datasDoPeriodo(periodo: PeriodoBacktest): string[] {
   const datas: string[] = []
-  const fim = new Date(`${periodo.ate}T00:00:00.000Z`).getTime()
-  let atual = new Date(`${periodo.de}T00:00:00.000Z`).getTime()
-  while (atual <= fim) {
-    datas.push(new Date(atual).toISOString().slice(0, 10))
-    atual += 24 * 60 * 60_000
+  let atual = periodo.de
+  while (atual <= periodo.ate) {
+    datas.push(atual)
+    atual = somarDias(atual, 1)
   }
   return datas
 }
@@ -67,10 +68,7 @@ export async function executarBacktest(
   ruleset: Ruleset,
   periodo: PeriodoBacktest,
 ): Promise<ResultadoBacktest> {
-  const configTemporada = {
-    mesInicio: ruleset.temporada.mes_inicio,
-    formato: ruleset.temporada.formato,
-  }
+  const configTemporada = calendarioDoRuleset(ruleset)
 
   // O laço é o mesmo do job diário: para cada data, montarFatos e avaliar.
   const calculados: Apito[] = []

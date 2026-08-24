@@ -8,6 +8,7 @@ import {
   jogos,
   times,
 } from '../dominio/db/schema'
+import { somarDias } from '../dominio/rodada'
 import type { Db } from '../dominio/db/tipos'
 import type { Atributo, Nivel } from '../motor/tipos'
 
@@ -88,10 +89,10 @@ export async function conferirRodadas(
   ate: string,
   dias: number,
 ): Promise<DiaConferido[]> {
-  const fim = new Date(`${ate}T00:00:00.000Z`)
-  const inicio = new Date(fim.getTime() - dias * 24 * 60 * 60_000)
-  const deRef = inicio.toISOString().slice(0, 10)
-  const ateRef = new Date(fim.getTime() - 24 * 60 * 60_000).toISOString().slice(0, 10)
+  // Aritmética de RÓTULO de calendário, não de instante: `somarDias` anda no
+  // string YYYY-MM-DD e por isso não escorrega em borda de fuso.
+  const deRef = somarDias(ate, -dias)
+  const ateRef = somarDias(ate, -1)
 
   const linhas = await db
     .select({

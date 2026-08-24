@@ -1,12 +1,13 @@
 import { notFound } from 'next/navigation'
 
 import { getDb } from '@/modules/dominio/db/cliente'
-import { temporadaDe } from '@/modules/dominio/temporada'
+import { calendarioDoRuleset, temporadaDe } from '@/modules/dominio/temporada'
 import { exigirAcessoEstatisticasSeConfigurado } from '@/modules/plataforma/assinatura/guarda'
 import { telaDoTime } from '@/modules/entrega/estatisticas/time'
 import type { BoxScoreDoJogo } from '@/modules/entrega/estatisticas/time'
 import { rotaDoJogador } from '@/modules/entrega/estatisticas/rotas'
 import { rulesetAtivo } from '@/modules/entrega/ruleset-ativo'
+import { diaCurto } from '@/components/formato'
 import { Tabela, UltimaAtualizacao } from '@/design-system/componentes'
 import type { Coluna } from '@/design-system/componentes'
 import { semantico } from '@/design-system/tokens/semantico'
@@ -24,17 +25,13 @@ function n(v: number | null | undefined): string {
   return v === null || v === undefined ? '—' : String(v)
 }
 
-function dataCurta(d: Date): string {
-  return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })
-}
-
 /**
  * Box score por jogo COM QUEBRA POR QUARTO.
  *
  * A prorrogação só ganha coluna quando existe: uma coluna "PR" zerada em todas
  * as linhas rouba largura numa tabela que já rola de lado no celular.
  */
-function colunas(temProrrogacao: boolean): Coluna<BoxScoreDoJogo>[] {
+function colunas(temProrrogacao: boolean, fuso: string): Coluna<BoxScoreDoJogo>[] {
   const base: Coluna<BoxScoreDoJogo>[] = [
     {
       chave: 'jogo',
@@ -42,7 +39,7 @@ function colunas(temProrrogacao: boolean): Coluna<BoxScoreDoJogo>[] {
       fixa: true,
       celula: (l) => (
         <span>
-          {dataCurta(l.data)}{' '}
+          {diaCurto(l.data, fuso)}{' '}
           <span style={{ color: semantico.textoSecundario }}>
             {l.emCasa ? 'vs' : '@'} {l.adversarioSigla}
           </span>
@@ -177,10 +174,7 @@ export default async function PaginaTime({ params }: { params: Promise<{ id: str
   const agora = new Date()
   const ruleset = await rulesetAtivo()
   const tela = await telaDoTime(getDb(), id, {
-    temporada: temporadaDe(agora, {
-      mesInicio: ruleset.temporada.mes_inicio,
-      formato: ruleset.temporada.formato,
-    }),
+    temporada: temporadaDe(agora, calendarioDoRuleset(ruleset)),
   })
   if (tela === null) notFound()
 
@@ -218,7 +212,7 @@ export default async function PaginaTime({ params }: { params: Promise<{ id: str
       <Secao titulo="Box score por jogo">
         <Tabela
           legenda="Pontos por quarto, da partida mais recente para a mais antiga"
-          colunas={colunas(temProrrogacao)}
+          colunas={colunas(temProrrogacao, ruleset.rodada.fuso)}
           linhas={tela.jogosDoTime}
           chaveDaLinha={(l) => l.jogoId}
           vazio="Nenhuma partida registrada para este time."
@@ -268,7 +262,7 @@ export default async function PaginaTime({ params }: { params: Promise<{ id: str
         )}
       </Secao>
 
-      <UltimaAtualizacao em={tela.atualizacao.em} fonte={tela.atualizacao.fonte} agora={agora} />
+      <UltimaAtualizacao em={tela.atualizacao.em} fonte={tela.atualizacao.fonte} agora={agora} fuso={ruleset.rodada.fuso} />
     </Moldura>
   )
 }

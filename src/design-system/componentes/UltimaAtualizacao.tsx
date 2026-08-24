@@ -6,6 +6,12 @@ export type UltimaAtualizacaoProps = {
   fonte: string
   /** Referência para calcular "há quanto tempo". Injetada, nunca `Date.now()`. */
   agora: Date
+  /**
+   * Fuso de exibição. Obrigatório de propósito: sem ele o componente usa o do
+   * SERVIDOR, que na Vercel é UTC — e o rodapé de toda a aba de estatísticas
+   * mostrava três horas a mais para o assinante brasileiro.
+   */
+  fuso: string
 }
 
 /**
@@ -16,8 +22,8 @@ function semDado(em: Date): boolean {
   return em.getTime() === 0
 }
 
-function formatar(em: Date): string {
-  return em.toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })
+function formatar(em: Date, fuso: string): string {
+  return em.toLocaleString('pt-BR', { timeZone: fuso, dateStyle: 'short', timeStyle: 'short' })
 }
 
 /**
@@ -53,7 +59,7 @@ function decorrido(em: Date, agora: Date): string {
  * chamar o relógio aqui dentro tornaria o teste dependente do segundo em que
  * roda.
  */
-export function UltimaAtualizacao({ em, fonte, agora }: UltimaAtualizacaoProps) {
+export function UltimaAtualizacao({ em, fonte, agora, fuso }: UltimaAtualizacaoProps) {
   const vazio = semDado(em)
 
   return (
@@ -79,7 +85,7 @@ export function UltimaAtualizacao({ em, fonte, agora }: UltimaAtualizacaoProps) 
           <span aria-hidden>·</span>
           {/* O absoluto acompanha o relativo: um serve para decidir, o outro
               para conferir. */}
-          <time dateTime={em.toISOString()}>{formatar(em)}</time>
+          <time dateTime={em.toISOString()}>{formatar(em, fuso)}</time>
           <span aria-hidden>·</span>
           <span>{fonte}</span>
         </>

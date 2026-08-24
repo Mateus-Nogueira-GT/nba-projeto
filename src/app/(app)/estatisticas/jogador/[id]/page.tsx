@@ -1,12 +1,13 @@
 import { notFound } from 'next/navigation'
 
 import { getDb } from '@/modules/dominio/db/cliente'
-import { temporadaDe } from '@/modules/dominio/temporada'
+import { calendarioDoRuleset, temporadaDe } from '@/modules/dominio/temporada'
 import { exigirAcessoEstatisticasSeConfigurado } from '@/modules/plataforma/assinatura/guarda'
 import { telaDoJogador } from '@/modules/entrega/estatisticas/jogador'
 import type { LinhaHistorico, Numeros } from '@/modules/entrega/estatisticas/jogador'
 import { rotaDoTime } from '@/modules/entrega/estatisticas/rotas'
 import { rulesetAtivo } from '@/modules/entrega/ruleset-ativo'
+import { diaCurto } from '@/components/formato'
 import { Tabela, UltimaAtualizacao } from '@/design-system/componentes'
 import type { Coluna } from '@/design-system/componentes'
 import { semantico } from '@/design-system/tokens/semantico'
@@ -24,18 +25,20 @@ function pct(v: number | null): string {
   return v === null ? '—' : `${v.toFixed(1).replace('.', ',')}%`
 }
 
-function dataCurta(d: Date): string {
-  return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })
-}
-
-const COLUNAS: Coluna<LinhaHistorico>[] = [
+/**
+ * As colunas viraram função do FUSO. A data de cada jogo é a única célula que
+ * depende dele, e uma constante de módulo não tem como recebê-lo — era por
+ * isso que a tabela do histórico mostrava a data em UTC.
+ */
+function colunas(fuso: string): Coluna<LinhaHistorico>[] {
+  return [
   {
     chave: 'jogo',
     rotulo: 'Jogo',
     fixa: true,
     celula: (l) => (
       <span>
-        {dataCurta(l.data)}{' '}
+        {diaCurto(l.data, fuso)}{' '}
         <span style={{ color: semantico.textoSecundario }}>
           {l.emCasa ? 'vs' : '@'} {l.adversarioSigla}
         </span>
@@ -100,7 +103,8 @@ const COLUNAS: Coluna<LinhaHistorico>[] = [
     alinhamento: 'direita',
     celula: (l) => pct(l.tresPercentual),
   },
-]
+  ]
+}
 
 function Grupo({ titulo, itens }: { titulo: string; itens: [string, string][] }) {
   return (
@@ -180,10 +184,7 @@ export default async function PaginaJogador({ params }: { params: Promise<{ id: 
   const agora = new Date()
   const ruleset = await rulesetAtivo()
   const tela = await telaDoJogador(getDb(), id, {
-    temporada: temporadaDe(agora, {
-      mesInicio: ruleset.temporada.mes_inicio,
-      formato: ruleset.temporada.formato,
-    }),
+    temporada: temporadaDe(agora, calendarioDoRuleset(ruleset)),
   })
   if (tela === null) notFound()
 
@@ -266,14 +267,14 @@ export default async function PaginaJogador({ params }: { params: Promise<{ id: 
       <Secao titulo="Histórico">
         <Tabela
           legenda="Uma linha por partida, da mais recente para a mais antiga"
-          colunas={COLUNAS}
+          colunas={colunas(ruleset.rodada.fuso)}
           linhas={tela.historico}
           chaveDaLinha={(l) => l.jogoId}
           vazio="Nenhuma partida registrada para este jogador."
         />
       </Secao>
 
-      <UltimaAtualizacao em={tela.atualizacao.em} fonte={tela.atualizacao.fonte} agora={agora} />
+      <UltimaAtualizacao em={tela.atualizacao.em} fonte={tela.atualizacao.fonte} agora={agora} fuso={ruleset.rodada.fuso} />
     </Moldura>
   )
 }

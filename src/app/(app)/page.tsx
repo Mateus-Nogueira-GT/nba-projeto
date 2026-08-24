@@ -9,6 +9,9 @@ import {
   type ItemFeed,
 } from '@/modules/entrega/lista-secreta'
 import { rotaDoJogador, BASE_ESTATISTICAS } from '@/modules/entrega/estatisticas/rotas'
+import { rulesetAtivo } from '@/modules/entrega/ruleset-ativo'
+import { dataDeReferencia } from '@/modules/dominio/rodada'
+import { dataHora } from '@/components/formato'
 import { Moldura } from '@/components/navegacao'
 import { CardEntrada } from '@/design-system/componentes'
 import { semantico } from '@/design-system/tokens/semantico'
@@ -28,11 +31,6 @@ const QUANTIDADES = [1, 2, 5, 0] as const
 
 function rotuloQuantidade(n: number): string {
   return n === 0 ? 'Lista inteira' : `${n} vítima${n === 1 ? '' : 's'}`
-}
-
-function horaLocal(iso: string | Date): string {
-  const d = typeof iso === 'string' ? new Date(iso) : iso
-  return d.toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })
 }
 
 type Recorte = FiltroLista & { quantidade: number }
@@ -201,7 +199,8 @@ export default async function PaginaListaSecreta({
     }),
   )
 
-  const hoje = new Date().toISOString().slice(0, 10)
+  const { fuso } = (await rulesetAtivo()).rodada
+  const hoje = dataDeReferencia(new Date(), fuso)
   // A tela lê o snapshot MATERIALIZADO. Nunca executa o motor: a avaliação
   // acontece uma vez por evento, não uma vez por usuário.
   const feed = await lerFeed(getDb(), hoje)
@@ -425,7 +424,7 @@ export default async function PaginaListaSecreta({
           color: semantico.textoSecundario,
         }}
       >
-        Última atualização: {horaLocal(feed.geradoEm)} · ruleset {feed.conteudo.rulesetVersao}
+        Última atualização: {dataHora(feed.geradoEm, fuso)} · ruleset {feed.conteudo.rulesetVersao}
       </footer>
     </Moldura>
   )

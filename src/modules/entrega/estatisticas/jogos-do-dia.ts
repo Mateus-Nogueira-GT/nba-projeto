@@ -4,6 +4,7 @@ import { jogos, times } from '../../dominio/db/schema'
 import type { Db } from '../../dominio/db/tipos'
 import { daColuna } from './atualizacao'
 import type { ComAtualizacao } from './atualizacao'
+import { intervaloDoDia } from '../../dominio/rodada'
 
 export type JogoDoDia = {
   id: string
@@ -37,9 +38,11 @@ export type TelaJogosDoDia = ComAtualizacao & {
 export async function telaJogosDoDia(
   db: Db,
   dataReferencia: string,
+  fuso: string,
 ): Promise<TelaJogosDoDia> {
-  const inicio = new Date(`${dataReferencia}T00:00:00.000Z`)
-  const fim = new Date(`${dataReferencia}T23:59:59.999Z`)
+  // A janela do dia é a do FUSO, não a de UTC. Em Brasília, o jogo das 21h
+  // acontece às 00h do dia seguinte em UTC — e sumia desta lista.
+  const { inicio, fim } = intervaloDoDia(dataReferencia, fuso)
 
   const [partidas, listaTimes] = await Promise.all([
     db

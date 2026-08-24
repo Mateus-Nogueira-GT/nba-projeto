@@ -1,22 +1,20 @@
 import { getDb } from '@/modules/dominio/db/cliente'
-import { temporadaDe } from '@/modules/dominio/temporada'
+import { calendarioDoRuleset, temporadaDe } from '@/modules/dominio/temporada'
 import { exigirAcessoEstatisticasSeConfigurado } from '@/modules/plataforma/assinatura/guarda'
 import { buscar } from '@/modules/entrega/estatisticas/busca'
 import { telaJogosDoDia } from '@/modules/entrega/estatisticas/jogos-do-dia'
 import { telaDaClassificacao } from '@/modules/entrega/estatisticas/time'
 import { rotaDoJogador, rotaDoTime } from '@/modules/entrega/estatisticas/rotas'
 import { rulesetAtivo } from '@/modules/entrega/ruleset-ativo'
+import { horaCurta as horaDoJogo } from '@/components/formato'
 import { UltimaAtualizacao } from '@/design-system/componentes'
+import { dataDeReferencia } from '@/modules/dominio/rodada'
 import { semantico } from '@/design-system/tokens/semantico'
 import '@/design-system/tokens/tokens.css'
 import { Moldura, Secao, SemBanco } from './moldura'
 
 export const dynamic = 'force-dynamic'
 export const metadata = { title: 'Estatísticas · IA da NBA' }
-
-function horaDoJogo(d: Date): string {
-  return d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
-}
 
 function Campo({ valor }: { valor: string }) {
   return (
@@ -75,15 +73,13 @@ export default async function PaginaEstatisticas({
 
   const db = getDb()
   const agora = new Date()
-  const hoje = agora.toISOString().slice(0, 10)
   const ruleset = await rulesetAtivo()
-  const temporada = temporadaDe(agora, {
-    mesInicio: ruleset.temporada.mes_inicio,
-    formato: ruleset.temporada.formato,
-  })
+  const { fuso } = ruleset.rodada
+  const hoje = dataDeReferencia(agora, fuso)
+  const temporada = temporadaDe(agora, calendarioDoRuleset(ruleset))
 
   const [doDia, classificacao, resultados] = await Promise.all([
-    telaJogosDoDia(db, hoje),
+    telaJogosDoDia(db, hoje, fuso),
     telaDaClassificacao(db, temporada),
     termo.length > 0 ? buscar(db, termo) : Promise.resolve([]),
   ])
@@ -180,7 +176,7 @@ export default async function PaginaEstatisticas({
                 </span>
                 <span style={{ fontSize: 12, color: semantico.textoSecundario }}>
                   {j.status === 'AGENDADO'
-                    ? horaDoJogo(j.dataHoraUtc)
+                    ? horaDoJogo(j.dataHoraUtc, fuso)
                     : `${j.casa.placar ?? 0}–${j.visitante.placar ?? 0}`}
                   {j.status !== 'AGENDADO' && ` · ${ESTADO_ROTULO[j.status]}`}
                   {j.status === 'AO_VIVO' && j.quartoAtual !== null && ` · ${j.quartoAtual}º Q`}
@@ -234,7 +230,7 @@ export default async function PaginaEstatisticas({
       </Secao>
 
       {/* Requisito: TODA tela da aba informa o horário do dado. */}
-      <UltimaAtualizacao em={doDia.atualizacao.em} fonte={doDia.atualizacao.fonte} agora={agora} />
+      <UltimaAtualizacao em={doDia.atualizacao.em} fonte={doDia.atualizacao.fonte} agora={agora} fuso={fuso} />
     </Moldura>
   )
 }

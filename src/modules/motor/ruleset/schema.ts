@@ -63,6 +63,15 @@ export const rulesetSchema = z.object({
     formato: z.enum(['dois_anos', 'ano_inicial']),
   }),
 
+  /**
+   * Fuso que decide a que dia um jogo pertence e em que horário ele aparece.
+   * Calendário e apresentação, não estratégia — mas vive aqui pela mesma razão
+   * que `temporada`: nenhum valor de calendário solto no código.
+   */
+  rodada: z.object({
+    fuso: z.string().min(1),
+  }),
+
   arredondamento: z.object({
     politica: z.literal('precisao_cheia_arredonda_no_fim'),
     regra: z.literal('meio_para_cima'),

@@ -34,7 +34,7 @@ import { garantirJogadores } from '../sincronizar/identidade'
 const PROVEDOR = 'provedor-a'
 const DATA = '2026-08-19'
 const AGORA = new Date('2026-08-19T12:00:00.000Z')
-const CONFIG_TEMPORADA = { mesInicio: 10, formato: 'dois_anos' as const }
+const CONFIG_TEMPORADA = { mesInicio: 10, formato: 'dois_anos' as const, fuso: 'America/Sao_Paulo' }
 
 let banco: Awaited<ReturnType<typeof bancoDeTeste>>
 

@@ -68,7 +68,6 @@ Nenhuma destas eu posso responder sozinho. Onde o cliente ou o CJ não definiu,
 | Spec | Pergunta | Bloqueia |
 | --- | --- | --- |
 | 01 | Quem é o provedor NBA primário e o reserva? Credenciais? | tudo |
-| 01 | Qual timezone/regra define a data de referência da rodada? | agenda e jobs |
 | 01 | O provedor entrega quebra por quarto **do time**? | tela do time |
 | 02 | As chaves VAPID são da conta de quem? | push |
 | 03 | Nome comercial, ícones e plataformas mínimas suportadas | instalação |
@@ -81,6 +80,24 @@ Nenhuma destas eu posso responder sozinho. Onde o cliente ou o CJ não definiu,
 | 06 | Quais casas, com qual contrato? | odds inteiro |
 | 06 | A odd exibida é do over? | odds |
 | 07 | Por qual canal o alerta acorda alguém? | alerta |
+
+---
+
+## Respondidas
+
+| Data | Pergunta | Resposta | Onde vive |
+| --- | --- | --- | --- |
+| 24/08/2026 | Qual timezone define a data de referência da rodada? | Fuso do horário de Brasília | `rodada.fuso` no ruleset |
+
+A resposta do fuso trouxe uma consequência que o cliente ainda não avaliou: no
+inverno americano — quase toda a temporada — o leste dos EUA está 2 horas atrás
+de Brasília, então os jogos que começam 22h30 lá caem 00h30 aqui, **no dia
+seguinte**. Uma mesma noite de NBA se parte em duas rodadas, e os jogos da costa
+oeste aparecem na lista de "amanhã". A alternativa é `America/New_York`, a
+convenção da própria liga, e trocar é editar uma linha do YAML.
+
+Até 24/08/2026 a ingestão fixava `America/New_York` **dentro do código**, e a
+tela usava UTC: os dois discordavam em silêncio. Agora existe um fuso só.
 
 ---
 

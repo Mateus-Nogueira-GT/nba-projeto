@@ -3,6 +3,8 @@ import Link from 'next/link'
 import { redirect } from 'next/navigation'
 
 import { MolduraConta } from '@/components/conta/MolduraConta'
+import { dataHora, diaCompleto } from '@/components/formato'
+import { rulesetAtivo } from '@/modules/entrega/ruleset-ativo'
 import { semantico } from '@/design-system/tokens/semantico'
 import { getDb } from '@/modules/dominio/db/cliente'
 import { assinaturas } from '@/modules/dominio/db/schema'
@@ -16,8 +18,8 @@ import { cancelarAssinatura } from './acoes'
 export const dynamic = 'force-dynamic'
 export const metadata = { title: 'Minha conta · IA da NBA' }
 
-function data(valor: Date | null): string {
-  return valor ? valor.toLocaleDateString('pt-BR') : '—'
+function data(valor: Date | null, fuso: string): string {
+  return valor ? diaCompleto(valor, fuso) : '—'
 }
 
 export default async function PaginaConta({
@@ -27,6 +29,7 @@ export default async function PaginaConta({
 }) {
   const sessao = await sessaoAtual()
   if (!sessao) redirect('/entrar?destino=/conta')
+  const { fuso } = (await rulesetAtivo()).rodada
   const db = getDb()
   const [acesso, dispositivos, preferencias, linhas, parametros] = await Promise.all([
     avaliarAcesso(db, sessao.usuarioId),
@@ -94,9 +97,9 @@ export default async function PaginaConta({
             <dt>Acesso</dt>
             <dd style={{ margin: 0 }}>{acesso.permitido ? 'Ativo' : 'Inativo'}</dd>
             <dt>Válido até</dt>
-            <dd style={{ margin: 0 }}>{acesso.permitido ? data(acesso.validoAte) : '—'}</dd>
+            <dd style={{ margin: 0 }}>{acesso.permitido ? data(acesso.validoAte, fuso) : '—'}</dd>
             <dt>Próxima cobrança</dt>
-            <dd style={{ margin: 0 }}>{data(assinatura?.proximaCobranca ?? null)}</dd>
+            <dd style={{ margin: 0 }}>{data(assinatura?.proximaCobranca ?? null, fuso)}</dd>
           </dl>
           {!acesso.permitido && (
             <p style={{ marginBottom: 0 }}>
@@ -109,7 +112,7 @@ export default async function PaginaConta({
           <h2 style={{ margin: '0 0 10px', fontSize: 17 }}>Dispositivos</h2>
           {dispositivos.map((dispositivo) => (
             <p key={dispositivo.id} style={{ margin: '5px 0', fontSize: 13 }}>
-              {dispositivo.tipo} · último uso {dispositivo.ultimoUso.toLocaleString('pt-BR')}
+              {dispositivo.tipo} · último uso {dataHora(dispositivo.ultimoUso, fuso)}
               {dispositivo.temSessaoAtiva ? ' · ativo' : ''}
             </p>
           ))}

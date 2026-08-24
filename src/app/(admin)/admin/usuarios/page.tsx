@@ -2,6 +2,11 @@ import { getDb } from '@/modules/dominio/db/cliente'
 import { exigirAdmin } from '@/modules/plataforma/auth/cookies'
 import { dispositivosDoUsuario, listarUsuarios } from '@/modules/plataforma/admin/usuarios'
 import { acaoAdicionar, acaoBloquear, acaoDesbloquear, acaoExcluir } from './acoes'
+import { dataHora, diaCompleto } from '@/components/formato'
+
+// O painel admin é operado do Brasil e não passa pelo ruleset — o fuso aqui é
+// só apresentação, não decide a que rodada nada pertence.
+const FUSO_ADMIN = 'America/Sao_Paulo'
 
 export const dynamic = 'force-dynamic'
 export const metadata = { title: 'Usuários · Painel' }
@@ -87,7 +92,7 @@ export default async function PaginaUsuarios({
                 </div>
                 {u.proximaCobranca && (
                   <div style={{ opacity: 0.6, fontSize: 12 }}>
-                    próxima: {u.proximaCobranca.toLocaleDateString('pt-BR')}
+                    próxima: {diaCompleto(u.proximaCobranca, FUSO_ADMIN)}
                   </div>
                 )}
               </td>
@@ -100,7 +105,7 @@ export default async function PaginaUsuarios({
                 ))}
               </td>
               <td style={celula}>
-                {u.ultimoAcesso ? u.ultimoAcesso.toLocaleString('pt-BR') : 'nunca'}
+                {u.ultimoAcesso ? dataHora(u.ultimoAcesso, FUSO_ADMIN) : 'nunca'}
               </td>
               <td style={celula}>
                 <div style={{ display: 'flex', gap: 6 }}>
