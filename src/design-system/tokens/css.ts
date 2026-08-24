@@ -24,6 +24,15 @@ export const APITO: Record<NivelApito, { cor: string; rotulo: string }> = {
 export const TURBO = { cor: semantico.apitoTurbo, rotulo: 'Turbo' }
 export const MODO_FIRE = { cor: semantico.apitoModoFire, rotulo: 'Modo Fire' }
 
+/** Rampa de confiança (identidade 02) — grau 1 (menor) a 5 (maior). */
+export const CONFIANCA_GRAU: Record<1 | 2 | 3 | 4 | 5, string> = {
+  1: semantico.confiancaGrau1,
+  2: semantico.confiancaGrau2,
+  3: semantico.confiancaGrau3,
+  4: semantico.confiancaGrau4,
+  5: semantico.confiancaGrau5,
+}
+
 function kebab(nome: string): string {
   return nome.replace(/([a-z0-9])([A-Z])/g, '$1-$2').toLowerCase()
 }

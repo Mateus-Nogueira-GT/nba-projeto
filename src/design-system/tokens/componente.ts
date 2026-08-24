@@ -23,6 +23,10 @@ export const componente = {
   marcadorOpdTexto: s.textoSecundario,
 
   oddTexto: s.textoSecundario,
+
+  pilulaBordaLargura: '1.5px',
+  avatarAnelEspessura: '2px',
+  faixaNivelAltura: '3px',
 } as const
 
 export type Componente = typeof componente

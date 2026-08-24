@@ -36,6 +36,21 @@ export const primitivo = {
 
   // Apoio
   vermelho400: '#FF6B6B',
+
+  // Rampa de confiança — UM matiz, intensidade crescente. Identidade 02.
+  turquesa700: '#2FA093',
+  turquesa600: '#3AB5A6',
+  turquesa500: '#47CBBA',
+  turquesa400: '#5CE0CE',
+  turquesa300: '#79F2E1',
+  // Acento de INTERFACE (chips, aba ativa, CTA). Não é canal de estratégia —
+  // papel diferente do laranja400 do apito nível 2.
+  laranjaAcento: '#FF7A1A',
+  tinta950: '#05080F',
+  // Fontes — a família vem por variável CSS publicada no layout (next/font).
+  fonteAnton: "var(--fonte-anton), 'Arial Narrow', sans-serif",
+  fonteBarlow: "var(--fonte-barlow), system-ui, sans-serif",
+  fonteBarlowCondensed: "var(--fonte-barlow-condensed), 'Arial Narrow', sans-serif",
 } as const
 
 export type Primitivo = typeof primitivo

@@ -20,6 +20,16 @@
   --apito-turbo: #4DA3FF;
   --apito-modo-fire: #FF9838;
   --alerta: #FF6B6B;
+  --fonte-titulo: var(--fonte-anton), 'Arial Narrow', sans-serif;
+  --fonte-rotulo: var(--fonte-barlow-condensed), 'Arial Narrow', sans-serif;
+  --fonte-corpo: var(--fonte-barlow), system-ui, sans-serif;
+  --acento: #FF7A1A;
+  --ao-vivo: #FF6B6B;
+  --confianca-grau1: #2FA093;
+  --confianca-grau2: #3AB5A6;
+  --confianca-grau3: #47CBBA;
+  --confianca-grau4: #5CE0CE;
+  --confianca-grau5: #79F2E1;
 
   /* componente */
   --card-fundo: #131C2E;
@@ -35,4 +45,7 @@
   --marcador-opd-fundo: #1B2740;
   --marcador-opd-texto: #8D9AB0;
   --odd-texto: #8D9AB0;
+  --pilula-borda-largura: 1.5px;
+  --avatar-anel-espessura: 2px;
+  --faixa-nivel-altura: 3px;
 }

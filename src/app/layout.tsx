@@ -1,3 +1,4 @@
+import { Anton, Barlow, Barlow_Condensed } from 'next/font/google'
 import type { Metadata, Viewport } from 'next'
 import type { ReactNode } from 'react'
 
@@ -6,6 +7,16 @@ import { semantico } from '@/design-system/tokens/semantico'
 
 import '@/design-system/tokens/tokens.css'
 import './globals.css'
+
+// Fontes da identidade "02 Rota Transmissão" — self-hosted em build pelo
+// next/font/google (zero request ao Google em runtime).
+const anton = Anton({ weight: '400', subsets: ['latin'], variable: '--fonte-anton' })
+const barlow = Barlow({ weight: ['400', '600', '700'], subsets: ['latin'], variable: '--fonte-barlow' })
+const barlowCondensed = Barlow_Condensed({
+  weight: ['500', '600', '700'],
+  subsets: ['latin'],
+  variable: '--fonte-barlow-condensed',
+})
 
 export const metadata: Metadata = {
   applicationName: 'IA da NBA',
@@ -36,7 +47,7 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="pt-BR">
+    <html lang="pt-BR" className={`${anton.variable} ${barlow.variable} ${barlowCondensed.variable}`}>
       <body>
         <RegistrarServiceWorker />
         {children}
