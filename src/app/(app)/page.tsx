@@ -2,7 +2,6 @@ import { getDb } from '@/modules/dominio/db/cliente'
 import Link from 'next/link'
 import {
   agruparPorJogador,
-  faixaDaConfianca,
   filtrarItens,
   lerFeed,
   ordenarPorConfianca,
@@ -361,9 +360,7 @@ export default async function PaginaListaSecreta({
       </p>
 
       <div style={{ display: 'grid', gap: 10 }}>
-        {visiveis.map((item) => {
-          const faixa = faixaDaConfianca(item.confianca, ruleset)
-          return (
+        {visiveis.map((item) => (
             <div key={item.chave}>
               <CardEntrada
                 nome={item.nome}
@@ -380,7 +377,9 @@ export default async function PaginaListaSecreta({
                 nivelApito={item.nivelApito}
                 linha={item.linha}
                 confianca={item.confianca}
-                grauConfianca={faixa?.grau ?? null}
+                // O grau já veio calculado na materialização (uma vez por
+                // evento). A tela lê; não recalcula nem chama o motor.
+                grauConfianca={item.grauConfianca ?? null}
                 turbo={item.turbo}
                 modoFire={item.modoFire}
                 opdOrigemNivel={item.opdOrigemNivel}
@@ -395,8 +394,7 @@ export default async function PaginaListaSecreta({
                 </Link>
               </p>
             </div>
-          )
-        })}
+        ))}
       </div>
 
       {visiveis.length === 0 && (

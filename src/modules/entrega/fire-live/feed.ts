@@ -114,6 +114,9 @@ export async function materializarFeedFireLive(
       opdOrigemNivel: (a.opdOrigemNivel ?? null) as ItemFeed['opdOrigemNivel'],
       linha: null,
       confianca: null, // Fire Live não tem nota — e o card não inventa número
+      // Sem nota não há faixa: a pílula sai neutra, e isso é a REGRA do
+      // produto (confiança é conceito pré-live), não dado faltando.
+      grauConfianca: null,
       alvo1Q: a.alvo1q,
       // O Fire Live é estratégia própria: não nasce de oscilação nem de OPD.
       metodo: null,

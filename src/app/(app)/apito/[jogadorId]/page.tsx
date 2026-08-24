@@ -6,7 +6,7 @@ import { CabecalhoTela, Moldura } from '@/components/navegacao'
 import { dataDeReferencia } from '@/modules/dominio/rodada'
 import { getDb } from '@/modules/dominio/db/cliente'
 import { detalheDoApito } from '@/modules/entrega/detalhe-apito'
-import { faixaDaConfianca, linhasDoJogador } from '@/modules/entrega/lista-secreta'
+import { linhasDoJogador } from '@/modules/entrega/lista-secreta'
 import { faixasDoJogador } from '@/modules/entrega/odds/leitura'
 import { rotaDoJogador } from '@/modules/entrega/estatisticas/rotas'
 import { rulesetAtivo } from '@/modules/entrega/ruleset-ativo'
@@ -127,9 +127,16 @@ export default async function PaginaApito({
   const casasNaTela = Math.max(0, ...[...cotadas.values()].map((f) => f.qtdCasas))
 
   const detalhe = await detalheDoApito(getDb(), ruleset, principal)
-  const faixa = faixaDaConfianca(principal.confianca, ruleset)
-  const corFaixa = faixa ? CONFIANCA_GRAU[faixa.grau] : semantico.divisor
-  const brilha = faixa?.grau === 5
+  // O grau chega PRONTO no item do feed — calculado uma vez, na
+  // materialização. A tela não executa o motor (`tela-nao-chama-o-motor`).
+  // O rótulo é leitura de CONFIGURAÇÃO do ruleset, como em /como-funciona.
+  const grau = principal.grauConfianca ?? null
+  const rotuloFaixa =
+    grau === null
+      ? null
+      : (ruleset.confianca_exibicao.faixas.find((f) => f.grau === grau)?.rotulo ?? null)
+  const corFaixa = grau === null ? semantico.divisor : CONFIANCA_GRAU[grau]
+  const brilha = grau === 5
   const rotuloLinha =
     principal.linha != null
       ? `${ATRIBUTO_ROTULO[principal.atributo]} ${principal.linha}+`
@@ -163,7 +170,7 @@ export default async function PaginaApito({
           tamanho={56}
         />
         <div style={{ flex: 1, minWidth: 0 }}>
-          {faixa && (
+          {rotuloFaixa && (
             <p
               style={{
                 margin: 0,
@@ -174,7 +181,7 @@ export default async function PaginaApito({
                 textTransform: 'uppercase',
               }}
             >
-              {faixa.rotulo}
+              {rotuloFaixa}
             </p>
           )}
           <p

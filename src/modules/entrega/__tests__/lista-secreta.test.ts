@@ -1,4 +1,5 @@
-import { readFileSync } from 'node:fs'
+import { readFileSync, readdirSync } from 'node:fs'
+import { join } from 'node:path'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { createElement } from 'react'
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
@@ -30,6 +31,17 @@ import {
 } from '../lista-secreta'
 import type { ItemFeed } from '../lista-secreta'
 import { calendarioDoRuleset } from '../../dominio/temporada'
+
+/** Todos os .ts/.tsx sob um diretório, recursivamente. */
+function arquivosDe(dir: string): string[] {
+  return readdirSync(dir, { withFileTypes: true }).flatMap((e) =>
+    e.isDirectory()
+      ? arquivosDe(join(dir, e.name))
+      : /\.tsx?$/.test(e.name)
+        ? [join(dir, e.name)]
+        : [],
+  )
+}
 
 const ruleset = carregarRuleset(readFileSync('config/ruleset.v1.yaml', 'utf8'))
 
@@ -369,6 +381,48 @@ describe('a tela consome o feed materializado', () => {
 
 // ===========================================================================
 
+// ===========================================================================
+// O GRAU DA CONFIANÇA VIAJA NO FEED (C1)
+// ===========================================================================
+
+describe('o grau da confiança é calculado UMA vez, na materialização', () => {
+  beforeEach(async () => {
+    await escalar('Luka Doncic', 'FORA')
+    await publicarListaSecreta(banco.db, ruleset, { dataReferencia: HOJE, agora: UMA_HORA_ANTES })
+  })
+
+  it('todo item publicado traz o grau junto — a tela não precisa recalcular', async () => {
+    const feed = await lerFeed(banco.db, HOJE)
+    const itens = feed!.conteudo.itens
+
+    expect(itens.length).toBeGreaterThan(0)
+    for (const item of itens) {
+      if (item.confianca === null) expect(item.grauConfianca).toBeNull()
+      else expect([1, 2, 3, 4, 5]).toContain(item.grauConfianca)
+    }
+  })
+
+  it('o grau sai do valor ARREDONDADO — 85,5 exibe 86% e 86% é grau 3 (I4)', async () => {
+    // Grimes é SUPORTE e recebe OPD nível 2: 85 da tabela base da linha 15
+    // mais 0,5 de bônus. A tela imprime "86%"; se o grau viesse do valor bruto
+    // a pílula sairia no grau 2 ("CONFIANÇA SÓLIDA") enquanto a régua de
+    // /como-funciona promete "CONFIANÇA FORTE" para 86. Duas telas, uma
+    // contradição — o assinante confere.
+    const feed = await lerFeed(banco.db, HOJE)
+    const grimes = feed!.conteudo.itens.find(
+      (i) => i.jogadorId === idPorNome.get('Grimes') && i.linha === 15,
+    )!
+
+    expect(grimes.confianca).toBe(85.5)
+    expect(grimes.grauConfianca).toBe(3)
+  })
+
+  it('snapshot antigo, sem o campo, continua legível como grau nulo', () => {
+    const legado = JSON.parse('{"chave":"k","confianca":92}') as ItemFeed
+    expect(legado.grauConfianca ?? null).toBeNull()
+  })
+})
+
 describe('fronteira da tela', () => {
   it('nenhuma rota importa o motor em tempo de execução', () => {
     const rotas = [
@@ -385,6 +439,21 @@ describe('fronteira da tela', () => {
         expect(ehTipo, `${rota}: ${linha}`).toBeDefined()
       }
     }
+  })
+
+  it('a tela não recalcula a faixa — nem por reexport da entrega', () => {
+    // O reexport de `faixaDaConfianca` em lista-secreta.ts existia só para
+    // driblar a guarda `tela-nao-chama-o-motor`: a função é do MOTOR e era
+    // chamada uma vez por item, por render, por usuário. A avaliação acontece
+    // uma vez por EVENTO — é isso que separa 10k usuários de ser trivial ou
+    // impossível. O grau agora viaja no feed.
+    const infratores = arquivosDe('src/app').filter((a) =>
+      /faixaDaConfianca/.test(readFileSync(a, 'utf8')),
+    )
+    expect(infratores).toEqual([])
+
+    const entrega = readFileSync('src/modules/entrega/lista-secreta.ts', 'utf8')
+    expect(/export\s*\{[^}]*faixaDaConfianca/.test(entrega)).toBe(false)
   })
 
   it('o feed é lido do snapshot, não recalculado', async () => {
@@ -445,6 +514,7 @@ describe('filtrarItens e agruparPorJogador (puros)', () => {
     opdOrigemNivel: null,
     linha: 20,
     confianca: 95,
+    grauConfianca: 5,
     alvo1Q: null,
     metodo: 'OSCILACAO',
     posicao: 'G',

@@ -6,6 +6,8 @@ import { feedSnapshot, jogadores, niveis, niveisVersao, times } from '../dominio
 import type { Db } from '../dominio/db/tipos'
 import { gravarApitos } from '../dominio/repositorios/apitos'
 import { avaliar } from '../motor'
+import { arredondar } from '../motor/arredondamento'
+import { faixaDaConfianca } from '../motor/confianca'
 import type { Apito, Atributo, Metodo, Nivel, NivelApito } from '../motor/tipos'
 import type { Ruleset } from '../motor/ruleset/schema'
 import { calendarioDoRuleset } from '../dominio/temporada'
@@ -35,6 +37,20 @@ export type ItemFeed = {
   linha: number | null
   /** Nota de confiança da análise do CJ. Nunca "probabilidade". */
   confianca: number | null
+  /**
+   * Faixa VISUAL da nota (1..5), calculada UMA vez aqui, na materialização.
+   *
+   * Não é conveniência: `faixaDaConfianca` é função do MOTOR, e a tela não
+   * executa o motor — a avaliação acontece uma vez por evento, não uma vez
+   * por usuário (`tela-nao-chama-o-motor`, docs/01-arquitetura.md). O grau
+   * viaja no feed pelo mesmo motivo que o resto do item viaja.
+   *
+   * Calculado sobre o valor ARREDONDADO, que é o que a tela imprime: com 85,5
+   * a pílula mostra "86%" e a régua de /como-funciona promete grau 3 para 86.
+   * Graduar o valor bruto daria grau 2 e a contradição apareceria em duas
+   * telas. Null em snapshot anterior a este campo.
+   */
+  grauConfianca: 1 | 2 | 3 | 4 | 5 | null
   alvo1Q: number | null
   /**
    * Método que produziu o apito. Viaja no feed porque o documento do CJ pede
@@ -101,7 +117,7 @@ export async function publicarListaSecreta(
     dataReferencia: opcoes.dataReferencia,
     geradoEm: opcoes.agora.toISOString(),
     rulesetVersao: versao ? `${rulesetVersao}+${versao.versao}` : rulesetVersao,
-    itens: await enriquecer(db, apitos),
+    itens: await enriquecer(db, ruleset, apitos),
   }
 
   const hash = hashDe(conteudo)
@@ -140,7 +156,7 @@ export async function publicarListaSecreta(
 }
 
 /** Junta ao apito o que a tela precisa mostrar: nome, time, sigla. */
-async function enriquecer(db: Db, apitos: Apito[]): Promise<ItemFeed[]> {
+async function enriquecer(db: Db, ruleset: Ruleset, apitos: Apito[]): Promise<ItemFeed[]> {
   if (apitos.length === 0) return []
 
   const [elenco, listaTimes, vinculos] = await Promise.all([
@@ -158,6 +174,8 @@ async function enriquecer(db: Db, apitos: Apito[]): Promise<ItemFeed[]> {
 
   return apitos.map((a) => {
     const time = timePorId.get(timeDoJogador.get(a.jogadorId) ?? '')
+    // Mesma conta que a tela imprime: arredonda primeiro, gradua depois.
+    const exibido = a.confianca === null ? null : arredondar(a.confianca, ruleset)
     return {
       chave: a.chaveDeduplicacao,
       jogoId: a.jogoId,
@@ -174,6 +192,7 @@ async function enriquecer(db: Db, apitos: Apito[]): Promise<ItemFeed[]> {
       opdOrigemNivel: a.opdOrigemNivel,
       linha: a.linha,
       confianca: a.confianca,
+      grauConfianca: faixaDaConfianca(exibido, ruleset)?.grau ?? null,
       alvo1Q: a.alvo1Q,
       metodo: a.metodo,
       posicao: posicaoPorJogador.get(a.jogadorId) ?? null,
@@ -327,8 +346,3 @@ export async function reprocessarPorEscalacao(
 ): Promise<ResultadoPublicacao> {
   return publicarListaSecreta(db, ruleset, { ...opcoes, ignorarAntecedencia: true })
 }
-
-// Reexport pela ENTREGA: `src/app` não pode importar VALOR do motor (guarda
-// `tela-nao-chama-o-motor` do .dependency-cruiser.cjs). A tela do detalhe
-// precisa da faixa visual da confiança — ela chega por aqui, não direto.
-export { faixaDaConfianca, type FaixaConfianca } from '../motor/confianca'
