@@ -26,6 +26,7 @@
     "cortesia": "vite-node scripts/conceder-cortesia.ts",
     "demo:seed": "vite-node scripts/demo-seed.ts",
     "demo:limpar": "vite-node scripts/demo-limpar.ts",
+    "demo:fotos": "vite-node scripts/demo-fotos.ts",
     "ingestao:backfill": "vite-node scripts/backfill-ingestao.ts",
     "tokens": "vite-node scripts/gerar-tokens-css.mts",
     "pwa:assets": "vite-node scripts/gerar-assets-pwa.ts"

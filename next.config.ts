@@ -11,6 +11,12 @@ const nextConfig: NextConfig = {
     '/*': ['config/ruleset.v1.yaml'],
     '/**': ['config/ruleset.v1.yaml'],
   },
+  // Fotos dos jogadores vêm do CDN público da NBA (ver
+  // src/modules/ingestao/demo/fotos.ts). Sem o domínio liberado aqui o
+  // next/image recusa a URL e o build quebra.
+  images: {
+    remotePatterns: [{ protocol: 'https', hostname: 'cdn.nba.com', pathname: '/headshots/**' }],
+  },
   async headers() {
     return [
       {
