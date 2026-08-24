@@ -1,10 +1,10 @@
-import Link from 'next/link'
 import { redirect } from 'next/navigation'
 
 import { montarTeoria } from '@/modules/entrega/teoria/conteudo'
 import { rulesetAtivo } from '@/modules/entrega/ruleset-ativo'
+import { CabecalhoTela, Moldura } from '@/components/navegacao'
 import { Avatar, CardEntrada } from '@/design-system/componentes'
-import { APITO, MODO_FIRE, NIVEL_JOGADOR, TURBO } from '@/design-system/tokens/css'
+import { APITO, CONFIANCA_GRAU, MODO_FIRE, NIVEL_JOGADOR, TURBO } from '@/design-system/tokens/css'
 import { semantico } from '@/design-system/tokens/semantico'
 import type { Atributo, Nivel } from '@/modules/motor/tipos'
 import { sessaoAtual } from '@/modules/plataforma/auth/cookies'
@@ -78,25 +78,12 @@ export default async function PaginaComoFunciona() {
 
   const ruleset = await rulesetAtivo()
   const t = montarTeoria(ruleset)
+  const faixasConfianca = [...ruleset.confianca_exibicao.faixas].sort((a, b) => a.de - b.de)
 
   return (
-    <main
-      style={{
-        background: semantico.fundo,
-        color: semantico.textoPrimario,
-        minHeight: '100vh',
-        padding: '24px 16px 64px',
-        fontFamily: 'system-ui, sans-serif',
-      }}
-    >
-      <div style={{ maxWidth: 680, margin: '0 auto' }}>
-        <p style={{ margin: '0 0 12px', fontSize: 12 }}>
-          <Link href="/" style={{ color: semantico.textoSecundario }}>
-            ← Lista Secreta
-          </Link>
-        </p>
-
-        <h1 style={{ fontSize: 24, margin: '0 0 4px' }}>Como funciona</h1>
+    <Moldura aba={null}>
+      <CabecalhoTela sobrancelha="METODOLOGIA DO CJ" titulo="COMO FUNCIONA" voltarHref="/" />
+      <div>
         <p style={{ margin: '0 0 24px', color: semantico.textoSecundario, fontSize: 14 }}>
           As duas estratégias do Mestre da NBA, o que cada cor significa e como ler os
           percentuais. Leia uma vez: depois os cards se explicam sozinhos.
@@ -143,10 +130,11 @@ export default async function PaginaComoFunciona() {
           </div>
         </Secao>
 
-        <Secao titulo="O círculo colorido: o nível do apito">
+        <Secao titulo="A borda colorida: o nível do apito">
           <p style={{ margin: '0 0 10px' }}>
-            O anel colorido no card mostra a <strong>força do apito</strong> — não confundir com o
-            nível do jogador. Quanto mais jogos seguidos abaixo da média, mais forte.
+            A borda colorida do avatar no card mostra a <strong>força do apito</strong> — não
+            confundir com o nível do jogador. Quanto mais jogos seguidos abaixo da média, mais
+            forte.
           </p>
           <div style={{ display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap' }}>
             <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -245,6 +233,52 @@ export default async function PaginaComoFunciona() {
               probabilidade de acerto, nem promessa de resultado.
             </p>
           </Caixa>
+
+          <p style={{ margin: '14px 0 6px', fontSize: 13 }}>
+            A cor da nota na tela segue esta régua — quanto mais alta, mais forte a leitura:
+          </p>
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(112px, 1fr))',
+              gap: 8,
+            }}
+          >
+            {faixasConfianca.map((faixa) => (
+              <div
+                key={faixa.grau}
+                style={{
+                  padding: '10px 8px',
+                  textAlign: 'center',
+                  borderRadius: 10,
+                  border: `1.5px solid ${CONFIANCA_GRAU[faixa.grau]}`,
+                }}
+              >
+                <p
+                  style={{
+                    margin: 0,
+                    fontFamily: semantico.fonteRotulo,
+                    fontSize: 11,
+                    letterSpacing: 1,
+                    color: CONFIANCA_GRAU[faixa.grau],
+                    textTransform: 'uppercase',
+                  }}
+                >
+                  {faixa.rotulo}
+                </p>
+                <p style={{ margin: '4px 0 0', fontSize: 13, color: semantico.textoSecundario }}>
+                  {faixa.de}%+
+                </p>
+              </div>
+            ))}
+          </div>
+          {ruleset.confianca_exibicao.origem === 'demonstracao' && (
+            <p style={{ margin: '10px 0 0', fontSize: 12, color: semantico.alerta, lineHeight: 1.6 }}>
+              Régua de demonstração: estes limiares são um exemplo de leitura visual — ainda não
+              vieram do Mestre da NBA.
+            </p>
+          )}
+
           <p style={{ margin: '10px 0 6px', fontSize: 13 }}>
             Um apito mais forte melhora a nota: {NIVEL_JOGADOR.MVP.rotulo} ganha{' '}
             {n(t.confianca.bonus.MVP?.['3'] ?? 0)}% no nível 3, {NIVEL_JOGADOR.ALL_STAR.rotulo}{' '}
@@ -388,8 +422,8 @@ export default async function PaginaComoFunciona() {
             alvo1Q={null}
           />
           <p style={{ margin: '8px 0 0', fontSize: 13, color: semantico.textoSecundario }}>
-            Nível do jogador na borda, força do apito no anel, e o cruzamento com a OPD sinalizado
-            quando existe. O nome leva às estatísticas do jogador.
+            Nível do jogador na faixa metálica, força do apito na borda do avatar, e o cruzamento
+            com a OPD sinalizado quando existe. O nome leva às estatísticas do jogador.
           </p>
         </Secao>
 
@@ -401,6 +435,6 @@ export default async function PaginaComoFunciona() {
           </p>
         )}
       </div>
-    </main>
+    </Moldura>
   )
 }

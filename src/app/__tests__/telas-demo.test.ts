@@ -232,3 +232,30 @@ describe('tela de Gestão de banca', () => {
     expect(html).not.toContain('NaN')
   }, 60_000)
 })
+
+describe('a aba teórica', () => {
+  it('mostra a régua de 5 faixas turquesa com rótulos, não a escala antiga', async () => {
+    const { default: Pagina } = await import('../(app)/como-funciona/page')
+    const html = renderToStaticMarkup(await Pagina())
+    for (const r of ['CONFIANÇA BOA', 'CONFIANÇA SÓLIDA', 'CONFIANÇA FORTE', 'CONFIANÇA MUITO FORTE', 'CONFIANÇA MÁXIMA'])
+      expect(html).toContain(r)
+  }, 60_000)
+
+  it('avisa que a régua é de demonstração quando o ruleset diz isso', async () => {
+    const { rulesetAtivo } = await import('../../modules/entrega/ruleset-ativo')
+    const ruleset = await rulesetAtivo()
+    // A homologação de 18/08/2026 marcou a régua como demonstração — se isso
+    // mudar no ruleset, o teste falha e lembra de rever o texto do aviso.
+    expect(ruleset.confianca_exibicao.origem).toBe('demonstracao')
+
+    const { default: Pagina } = await import('../(app)/como-funciona/page')
+    const html = renderToStaticMarkup(await Pagina())
+    expect(html).toContain('demonstração')
+  }, 60_000)
+
+  it('não fala mais em círculo para o indicador do apito — o Avatar é um quadrado arredondado', async () => {
+    const { default: Pagina } = await import('../(app)/como-funciona/page')
+    const html = renderToStaticMarkup(await Pagina())
+    expect(html).not.toContain('círculo')
+  }, 60_000)
+})
