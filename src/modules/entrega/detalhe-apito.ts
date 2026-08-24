@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, lt } from 'drizzle-orm'
+import { and, asc, desc, eq, inArray, lt } from 'drizzle-orm'
 
 import {
   estatisticasJogo,
@@ -161,7 +161,10 @@ export async function detalheDoApito(
         }
 
   // 5 · O porquê — nomeia a regra que disparou, não uma frase genérica.
-  const porQueEntrou = await construirPorque(db, ruleset, item, mediaTemporada, historico)
+  const porQueEntrou = await construirPorque(db, ruleset, item, mediaTemporada, historico, {
+    timeDoJogadorId,
+    niveisVersaoId: versaoAtiva?.id ?? null,
+  })
 
   return { mediaTemporada, bateu, minutosRecentes, blocos, porQueEntrou }
 }
@@ -172,6 +175,8 @@ async function construirPorque(
   item: ItemFeed,
   mediaTemporada: number | null,
   historico: { pontos: number; rebotesTotal: number; assistencias: number }[],
+  /** Time e versão de níveis do apitado — a OPD só existe dentro deles. */
+  contexto: { timeDoJogadorId: string | null; niveisVersaoId: string | null },
 ): Promise<string[]> {
   if (item.metodo === 'OSCILACAO') {
     const delta = deltaOscilacao(item.nivelJogador, item.atributo, item.jogadorId, ruleset)
@@ -192,13 +197,42 @@ async function construirPorque(
   }
 
   if (item.metodo === 'OPD') {
-    const fora = await db
-      .select({ nome: jogadores.nomeCompleto })
-      .from(lesoesEscalacao)
-      .innerJoin(jogadores, eq(lesoesEscalacao.jogadorId, jogadores.id))
-      .where(and(eq(lesoesEscalacao.jogoId, item.jogoId), eq(lesoesEscalacao.status, 'FORA')))
+    // A OPD trabalha sobre a hierarquia do PRÓPRIO time do apitado, e só o
+    // PREFIXO contíguo de desfalques a partir do topo abre a regra (motor/
+    // lista-secreta/opd.ts). Listar todo mundo que está FORA da partida
+    // nomearia jogadores do adversário e desfalques que não participam de
+    // nada — o assinante leria uma justificativa que não é a dele.
+    if (contexto.timeDoJogadorId === null || contexto.niveisVersaoId === null) return []
 
-    const nomes = fora.map((f) => f.nome)
+    const hierarquia = await db
+      .select({ jogadorId: niveis.jogadorId, nome: jogadores.nomeCompleto })
+      .from(niveis)
+      .innerJoin(jogadores, eq(niveis.jogadorId, jogadores.id))
+      .where(
+        and(
+          eq(niveis.niveisVersaoId, contexto.niveisVersaoId),
+          eq(niveis.timeId, contexto.timeDoJogadorId),
+          eq(niveis.atributo, item.atributo),
+        ),
+      )
+      .orderBy(asc(niveis.posicaoHierarquia))
+
+    const desfalcados = new Set(
+      (
+        await db
+          .select({ jogadorId: lesoesEscalacao.jogadorId })
+          .from(lesoesEscalacao)
+          .where(and(eq(lesoesEscalacao.jogoId, item.jogoId), eq(lesoesEscalacao.status, 'FORA')))
+      ).map((l) => l.jogadorId),
+    )
+
+    // Mesmo laço do motor: para no primeiro que NÃO está fora.
+    const nomes: string[] = []
+    for (const j of hierarquia) {
+      if (!desfalcados.has(j.jogadorId)) break
+      nomes.push(j.nome)
+    }
+
     if (nomes.length === 0) return []
     return [`◆ ${nomes.join(', ')} fora da partida — oportunidade nível ${item.opdOrigemNivel} pela hierarquia do time.`]
   }
