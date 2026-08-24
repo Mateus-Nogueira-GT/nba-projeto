@@ -74,9 +74,8 @@ export function BarraInferior({ atual }: { atual: Aba }) {
               fontWeight: ativo ? 700 : 500,
               color: ativo ? semantico.acento : semantico.textoSecundario,
               // Redundância: a aba ativa não se distingue só pela cor — o
-              // ícone preenchido e o peso da fonte já marcam; o border-top
-              // branco de antes saiu porque colidiria com o preenchimento.
-              borderTop: '2px solid transparent',
+              // ícone preenchido, o peso da fonte e o `aria-current` acima já
+              // marcam o estado, sem depender de nenhum border-top.
             }}
           >
             <IconeAba forma={aba.forma} ativo={ativo} />

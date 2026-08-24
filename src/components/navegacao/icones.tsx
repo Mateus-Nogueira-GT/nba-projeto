@@ -4,10 +4,13 @@ import { semantico } from '@/design-system/tokens/semantico'
  * ÍCONES DA BARRA — geométricos, em SVG inline, sem emoji.
  *
  * Cada aba tem uma forma fixa (quadrado, quadrado vazado, círculo, losango);
- * a única coisa que muda com o estado é o preenchimento. Ativo preenche em
- * `semantico.acento` (laranja); inativo é só contorno em
+ * TODAS preenchem em `semantico.acento` (laranja) quando ativas — cor nunca é
+ * canal único, então o preenchimento precisa mudar de estado em toda aba, não
+ * só em algumas. `quadrado` e `quadradoVazado` continuam visualmente
+ * diferentes mesmo preenchendo as duas: o que as distingue é o RAIO DO CANTO
+ * (`rx={4}` contra `rx={1}`), não o preenchimento. Inativo é só contorno em
  * `semantico.textoSecundario`. Isso é redundância deliberada com o peso da
- * fonte do rótulo e o `aria-current` do link — cor nunca é canal único.
+ * fonte do rótulo e o `aria-current` do link.
  */
 export function IconeAba({
   forma,
@@ -43,9 +46,9 @@ export function IconeAba({
       </svg>
     )
 
-  // 'quadrado' e 'quadradoVazado' compartilham a mesma forma; só o
-  // 'quadrado' preenche quando ativo — o vazado (Ao Vivo) fica sempre em
-  // contorno, mudando apenas a cor do contorno.
+  // 'quadrado' e 'quadradoVazado' compartilham a mesma forma base; a única
+  // diferença entre as duas é o raio do canto — as duas preenchem quando
+  // ativas.
   return (
     <svg {...comum}>
       <rect
@@ -53,8 +56,8 @@ export function IconeAba({
         y={3.5}
         width={13}
         height={13}
-        rx={4}
-        fill={ativo && forma === 'quadrado' ? cor : 'none'}
+        rx={forma === 'quadrado' ? 4 : 1}
+        fill={ativo ? cor : 'none'}
         stroke={cor}
         strokeWidth={1.6}
       />
