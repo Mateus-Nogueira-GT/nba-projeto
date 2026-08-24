@@ -5,14 +5,15 @@ import { calendarioDoRuleset, temporadaDe } from '@/modules/dominio/temporada'
 import { exigirAcessoEstatisticasSeConfigurado } from '@/modules/plataforma/assinatura/guarda'
 import { telaDoTime } from '@/modules/entrega/estatisticas/time'
 import type { BoxScoreDoJogo } from '@/modules/entrega/estatisticas/time'
-import { rotaDoJogador } from '@/modules/entrega/estatisticas/rotas'
+import { BASE_ESTATISTICAS, rotaDoJogador } from '@/modules/entrega/estatisticas/rotas'
 import { rulesetAtivo } from '@/modules/entrega/ruleset-ativo'
 import { diaCurto } from '@/components/formato'
+import { CabecalhoTela, Moldura } from '@/components/navegacao'
 import { Tabela, UltimaAtualizacao } from '@/design-system/componentes'
 import type { Coluna } from '@/design-system/componentes'
 import { semantico } from '@/design-system/tokens/semantico'
 import '@/design-system/tokens/tokens.css'
-import { Moldura, Secao, SemBanco } from '../../moldura'
+import { Secao, SemBanco, SOBRANCELHA_STATS } from '../../moldura'
 
 export const dynamic = 'force-dynamic'
 
@@ -182,7 +183,18 @@ export default async function PaginaTime({ params }: { params: Promise<{ id: str
   const temProrrogacao = tela.jogosDoTime.some((j) => (j.nosso?.prorrogacao ?? 0) > 0)
 
   return (
-    <Moldura titulo={`${time.sigla} · ${time.nome}`} subtitulo={time.conferencia}>
+    <Moldura aba={null}>
+      <CabecalhoTela
+        sobrancelha={SOBRANCELHA_STATS}
+        titulo={`${time.sigla} · ${time.nome}`}
+        voltarHref={BASE_ESTATISTICAS}
+      />
+      {time.conferencia && (
+        <p style={{ margin: '0 0 12px', fontSize: 13, color: semantico.textoSecundario }}>
+          {time.conferencia}
+        </p>
+      )}
+
       <Secao titulo="Campanha">
         {campanha === null ? (
           <p style={{ fontSize: 13, color: semantico.textoSecundario }}>

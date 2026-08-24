@@ -7,11 +7,12 @@ import { telaDaClassificacao } from '@/modules/entrega/estatisticas/time'
 import { rotaDoJogador, rotaDoTime } from '@/modules/entrega/estatisticas/rotas'
 import { rulesetAtivo } from '@/modules/entrega/ruleset-ativo'
 import { horaCurta as horaDoJogo } from '@/components/formato'
+import { CabecalhoTela, Moldura } from '@/components/navegacao'
 import { UltimaAtualizacao } from '@/design-system/componentes'
 import { dataDeReferencia } from '@/modules/dominio/rodada'
 import { semantico } from '@/design-system/tokens/semantico'
 import '@/design-system/tokens/tokens.css'
-import { Moldura, Secao, SemBanco } from './moldura'
+import { Secao, SemBanco, SOBRANCELHA_STATS } from './moldura'
 
 export const dynamic = 'force-dynamic'
 export const metadata = { title: 'Estatísticas · IA da NBA' }
@@ -85,11 +86,9 @@ export default async function PaginaEstatisticas({
   ])
 
   return (
-    <Moldura
-      titulo="Estatísticas"
-      subtitulo="Jogos do dia, jogadores e times — dado canônico, sem estratégia"
-      voltarPara="/"
-    >
+    <Moldura aba="stats">
+      <CabecalhoTela sobrancelha={SOBRANCELHA_STATS} titulo="STATS" />
+
       <Campo valor={termo} />
 
       {termo.length > 0 && (

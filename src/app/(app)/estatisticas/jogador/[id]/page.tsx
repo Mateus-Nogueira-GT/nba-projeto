@@ -5,14 +5,15 @@ import { calendarioDoRuleset, temporadaDe } from '@/modules/dominio/temporada'
 import { exigirAcessoEstatisticasSeConfigurado } from '@/modules/plataforma/assinatura/guarda'
 import { telaDoJogador } from '@/modules/entrega/estatisticas/jogador'
 import type { LinhaHistorico, Numeros } from '@/modules/entrega/estatisticas/jogador'
-import { rotaDoTime } from '@/modules/entrega/estatisticas/rotas'
+import { BASE_ESTATISTICAS, rotaDoTime } from '@/modules/entrega/estatisticas/rotas'
 import { rulesetAtivo } from '@/modules/entrega/ruleset-ativo'
 import { diaCurto } from '@/components/formato'
-import { Tabela, UltimaAtualizacao } from '@/design-system/componentes'
+import { CabecalhoTela, Moldura } from '@/components/navegacao'
+import { Avatar, Tabela, UltimaAtualizacao } from '@/design-system/componentes'
 import type { Coluna } from '@/design-system/componentes'
 import { semantico } from '@/design-system/tokens/semantico'
 import '@/design-system/tokens/tokens.css'
-import { Moldura, Secao, SemBanco } from '../../moldura'
+import { Secao, SemBanco, SOBRANCELHA_STATS } from '../../moldura'
 
 export const dynamic = 'force-dynamic'
 
@@ -190,18 +191,38 @@ export default async function PaginaJogador({ params }: { params: Promise<{ id: 
 
   const { perfil, aoVivo } = tela
 
+  const subtitulo = [
+    perfil.timeSigla && perfil.timeNome ? `${perfil.timeSigla} · ${perfil.timeNome}` : null,
+    perfil.posicao,
+    perfil.numeroCamisa !== null ? `nº ${perfil.numeroCamisa}` : null,
+    perfil.alturaCm !== null ? `${perfil.alturaCm} cm` : null,
+  ]
+    .filter(Boolean)
+    .join(' · ')
+
   return (
-    <Moldura
-      titulo={perfil.nome}
-      subtitulo={[
-        perfil.timeSigla && perfil.timeNome ? `${perfil.timeSigla} · ${perfil.timeNome}` : null,
-        perfil.posicao,
-        perfil.numeroCamisa !== null ? `nº ${perfil.numeroCamisa}` : null,
-        perfil.alturaCm !== null ? `${perfil.alturaCm} cm` : null,
-      ]
-        .filter(Boolean)
-        .join(' · ')}
-    >
+    <Moldura aba={null}>
+      <CabecalhoTela
+        sobrancelha={SOBRANCELHA_STATS}
+        titulo={perfil.nome}
+        voltarHref={BASE_ESTATISTICAS}
+      />
+
+      {/* Dado canônico: sem anel de apito — a aba de estatísticas não calcula
+          estratégia (nivelApito: null é a marca disso, não um esquecimento). */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
+        <Avatar
+          nome={perfil.nome}
+          fotoUrl={perfil.fotoUrl}
+          timeSigla={perfil.timeSigla ?? ''}
+          nivelApito={null}
+          tamanho={64}
+        />
+        {subtitulo && (
+          <p style={{ margin: 0, fontSize: 13, color: semantico.textoSecundario }}>{subtitulo}</p>
+        )}
+      </div>
+
       {!perfil.ativo && (
         <p
           style={{
