@@ -2,7 +2,7 @@ import { desc, eq } from 'drizzle-orm'
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
 
-import { MolduraConta } from '@/components/conta/MolduraConta'
+import { CabecalhoTela, Moldura } from '@/components/navegacao'
 import { dataHora, diaCompleto } from '@/components/formato'
 import { rulesetAtivo } from '@/modules/entrega/ruleset-ativo'
 import { semantico } from '@/design-system/tokens/semantico'
@@ -52,7 +52,11 @@ export default async function PaginaConta({
   )
 
   return (
-    <MolduraConta titulo="Minha conta" descricao={sessao.email} aba="conta">
+    <Moldura aba="conta">
+      <CabecalhoTela sobrancelha="SUA CONTA" titulo="PERFIL" />
+      <p style={{ margin: '0 0 20px', fontSize: 13, color: semantico.textoSecundario }}>
+        {sessao.email}
+      </p>
       <div style={{ display: 'grid', gap: 24 }}>
         {estadoCancelamento && (
           <p
@@ -139,6 +143,6 @@ export default async function PaginaConta({
           </form>
         </div>
       </div>
-    </MolduraConta>
+    </Moldura>
   )
 }
