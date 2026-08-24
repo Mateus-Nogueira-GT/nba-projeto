@@ -153,9 +153,12 @@ export default async function PaginaFireLive({
         <p style={{ margin: '4px 0 0', fontSize: 13, color: semantico.textoSecundario }}>
           Alvos do 1º quarto, ao vivo · o push chega no instante do apito
         </p>
-        <p style={{ margin: '8px 0 0', fontSize: 12 }}>
+        <p style={{ margin: '8px 0 0', fontSize: 12, display: 'flex', gap: 12 }}>
           <Link href="/" style={{ color: semantico.textoSecundario }}>
             ← Lista Secreta
+          </Link>
+          <Link href="/como-funciona" style={{ color: semantico.textoSecundario }}>
+            Como funciona →
           </Link>
         </p>
       </header>

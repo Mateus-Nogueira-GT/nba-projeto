@@ -59,3 +59,32 @@ describe('a aba teórica é derivada do ruleset, nunca escrita à mão', () => {
     expect(JSON.stringify(t).toLowerCase()).not.toContain('probabilidade')
   })
 })
+
+describe('a página /como-funciona', () => {
+  const fonte = readFileSync('src/app/(app)/como-funciona/page.tsx', 'utf8')
+
+  it('exige sessão, mas NÃO exige assinatura (vitrine para quem ainda não assinou)', () => {
+    expect(fonte).toContain('sessaoAtual')
+    expect(fonte).not.toContain('avaliarAcesso')
+  })
+
+  it('todo número vem do view-model do ruleset', () => {
+    expect(fonte).toContain('montarTeoria')
+  })
+
+  it('chama o percentual de nota de confiança e nega ser probabilidade (P12)', () => {
+    expect(fonte).toContain('nota de confiança da análise')
+    // A palavra só pode aparecer NEGADA — a ressalva que o P12 exige.
+    const ocorrencias = [...fonte.matchAll(/probabilidade/gi)]
+    expect(ocorrencias.length).toBeGreaterThan(0)
+    for (const oc of ocorrencias) {
+      const contexto = fonte.slice(Math.max(0, oc.index - 40), oc.index)
+      expect(contexto).toMatch(/não é|nunca|nem/i)
+    }
+  })
+
+  it('traz o aviso de blowout, que o documento manda morar aqui', () => {
+    expect(fonte).toContain('t.blowout.diferenca')
+    expect(fonte).toContain('t.blowout.quarto')
+  })
+})
