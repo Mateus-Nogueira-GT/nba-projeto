@@ -218,6 +218,25 @@ export default async function PaginaGaleria() {
           grauConfianca={3}
           linha={24}
         />
+        {/* Ícone local do próprio PWA (public/icons/app-192.png) só para provar
+            o estado visual "com foto" do Avatar — a galeria demonstra estado de
+            componente, não integração com o CDN da NBA. Apontar para
+            cdn.nba.com exige `images.remotePatterns` (Task 11); sem isso o
+            `next/image` rejeita a origem e quebra o build de páginas estáticas
+            como esta. */}
+        <CardEntrada
+          nome="Anthony Edwards"
+          fotoUrl="/icons/app-192.png"
+          timeSigla="MIN"
+          timeNome="Minnesota Timberwolves"
+          posicao="G"
+          atributo="PONTOS"
+          nivelJogador="MVP"
+          nivelApito={2}
+          confianca={91}
+          grauConfianca={3}
+          linha={24}
+        />
       </Secao>
 
       <Secao
