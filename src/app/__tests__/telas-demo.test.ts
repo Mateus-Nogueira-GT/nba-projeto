@@ -144,6 +144,19 @@ describe('detalhe do apito', () => {
   }, 60_000)
 })
 
+describe('Fire Live', () => {
+  it('Ao vivo: cabeçalho vermelho, placar 1Q, selo VIVO e barra de progresso', async () => {
+    const { default: Pagina } = await import('../(app)/fire-live/page')
+    const html = renderToStaticMarkup(await Pagina({ searchParams: Promise.resolve({}) }))
+    expect(html).toContain('FIRE LIVE · AO VIVO')
+    expect(html).toContain('ACONTECENDO')
+    expect(html).toContain('1º Q')
+    expect(html).toContain('OKC') // placar do jogo ao vivo da demo
+    expect(html).toContain('VIVO')
+    expect(html).toMatch(/LINHA BATIDA|FALTA \d/)
+  }, 60_000)
+})
+
 describe('tela de Resultados', () => {
   it('renderiza a conferência das rodadas encerradas', async () => {
     const { default: Pagina } = await import('../(app)/resultados/page')

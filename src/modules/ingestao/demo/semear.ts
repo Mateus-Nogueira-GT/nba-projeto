@@ -352,6 +352,11 @@ export async function semearDemo(db: Db, ruleset: Ruleset, agora: Date): Promise
   if (jogoAoVivo !== null) {
     const quarto = ruleset.fire_live.quarto
     const quartos = ruleset.fire_live.quartos_por_jogo
+    // Placar do jogo ao vivo: nada digitado — é a SOMA dos pontos do 1º
+    // quarto que o laço abaixo já está gravando. OKC é a casa do confronto
+    // (CONFRONTOS[0] = ['OKC', 'DEN']).
+    let pontosOkc = 0
+    let pontosDen = 0
 
     for (const j of analise.jogadores) {
       if (j.timeSigla !== 'OKC' && j.timeSigla !== 'DEN') continue
@@ -393,7 +398,15 @@ export async function semearDemo(db: Db, ruleset: Ruleset, agora: Date): Promise
           target: [estatisticasQuarto.jogoId, estatisticasQuarto.jogadorId, estatisticasQuarto.quarto],
           set: valores,
         })
+
+      if (j.timeSigla === 'OKC') pontosOkc += valores.pontos
+      else pontosDen += valores.pontos
     }
+
+    await db
+      .update(jogos)
+      .set({ placarCasa: pontosOkc, placarVisitante: pontosDen })
+      .where(eq(jogos.id, jogoAoVivo))
 
     await db
       .insert(fireLiveExecucoes)

@@ -1,6 +1,6 @@
-import { and, eq } from 'drizzle-orm'
+import { and, eq, inArray } from 'drizzle-orm'
 
-import { feedSnapshot, jogos } from '../../dominio/db/schema'
+import { feedSnapshot, jogos, times } from '../../dominio/db/schema'
 import type { Db } from '../../dominio/db/tipos'
 import type { ConteudoFeedFireLive, ItemFireLive } from './feed'
 
@@ -102,4 +102,50 @@ export async function lerFeedFireLive(
     estadoVazio: algumEm1Q ? 'SEM_APITO_AINDA' : 'NENHUM_EM_1Q',
     primeiroJogoUtc: null,
   }
+}
+
+export type PlacarAoVivo = {
+  jogoId: string
+  casaSigla: string
+  casaPlacar: number
+  visitanteSigla: string
+  visitantePlacar: number
+}
+
+/**
+ * Placares dos jogos AO VIVO NO 1º QUARTO — a grade que abre a tela.
+ *
+ * A trava mais dura do projeto: Fire Live é só 1º quarto, então o placar só
+ * existe para `quartoAtual === quartoFireLive`. Um jogo que já avançou de
+ * quarto some daqui mesmo que ainda esteja `AO_VIVO` — ele sai pelo mesmo
+ * motivo que os apitos saem do feed.
+ */
+export async function placaresAoVivo(
+  db: Db,
+  dataReferencia: string,
+  quartoFireLive: number,
+): Promise<PlacarAoVivo[]> {
+  const partidas = await db
+    .select()
+    .from(jogos)
+    .where(
+      and(
+        eq(jogos.dataReferencia, dataReferencia),
+        eq(jogos.status, 'AO_VIVO'),
+        eq(jogos.quartoAtual, quartoFireLive),
+      ),
+    )
+  if (partidas.length === 0) return []
+
+  const idsTimes = [...new Set(partidas.flatMap((p) => [p.timeCasaId, p.timeVisitanteId]))]
+  const listaTimes = await db.select().from(times).where(inArray(times.id, idsTimes))
+  const timePorId = new Map(listaTimes.map((t) => [t.id, t] as const))
+
+  return partidas.map((p) => ({
+    jogoId: p.id,
+    casaSigla: timePorId.get(p.timeCasaId)?.sigla ?? '—',
+    casaPlacar: p.placarCasa ?? 0,
+    visitanteSigla: timePorId.get(p.timeVisitanteId)?.sigla ?? '—',
+    visitantePlacar: p.placarVisitante ?? 0,
+  }))
 }

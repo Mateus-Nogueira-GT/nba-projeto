@@ -2,8 +2,8 @@ import Link from 'next/link'
 import { redirect } from 'next/navigation'
 
 import { getDb } from '@/modules/dominio/db/cliente'
-import { lerFeedFireLive } from '@/modules/entrega/fire-live/leitura'
-import type { FiltroFireLive } from '@/modules/entrega/fire-live/leitura'
+import { lerFeedFireLive, placaresAoVivo } from '@/modules/entrega/fire-live/leitura'
+import type { FiltroFireLive, PlacarAoVivo } from '@/modules/entrega/fire-live/leitura'
 import type { EstadoVazio } from '@/modules/entrega/fire-live/leitura'
 import { rulesetAtivo } from '@/modules/entrega/ruleset-ativo'
 import { rotaDoJogador } from '@/modules/entrega/estatisticas/rotas'
@@ -13,7 +13,7 @@ import { sessaoAtual } from '@/modules/plataforma/auth/cookies'
 import { avaliarAcesso } from '@/modules/plataforma/assinatura/direito'
 import '@/design-system/tokens/tokens.css'
 import { dataHora, horaCurta } from '@/components/formato'
-import { Moldura } from '@/components/navegacao'
+import { CabecalhoTela, Chip, Moldura } from '@/components/navegacao'
 import { dataDeReferencia } from '@/modules/dominio/rodada'
 
 export const dynamic = 'force-dynamic'
@@ -70,24 +70,69 @@ function TextoVazio({
   )
 }
 
-function Chip({ href, ativo, children }: { href: string; ativo: boolean; children: React.ReactNode }) {
+/**
+ * Mini-placar do jogo ao vivo — sempre 1º quarto (a única janela em que esta
+ * grade existe). O ponto pulsante é redundante com o texto "ao vivo" ao lado
+ * — nunca o único sinal — e para de piscar sozinho quando o navegador pede
+ * menos movimento (`globals.css`).
+ */
+function PlacarMini({ placar }: { placar: PlacarAoVivo }) {
   return (
-    <Link
-      href={href}
-      aria-current={ativo ? 'page' : undefined}
+    <div
       style={{
-        padding: '6px 14px',
-        borderRadius: 999,
-        fontSize: 13,
-        fontWeight: ativo ? 700 : 500,
-        textDecoration: 'none',
-        color: ativo ? semantico.textoSobreCor : semantico.textoPrimario,
-        background: ativo ? semantico.textoPrimario : semantico.superficie,
+        padding: '10px 14px',
+        borderRadius: 12,
         border: `1px solid ${semantico.divisor}`,
+        background: semantico.superficie,
       }}
     >
-      {children}
-    </Link>
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 6,
+          fontFamily: semantico.fonteRotulo,
+          fontSize: 11,
+          letterSpacing: 1.5,
+          textTransform: 'uppercase',
+          color: semantico.textoSecundario,
+        }}
+      >
+        <span>1º Q</span>
+        <span
+          aria-hidden
+          className="ponto-ao-vivo"
+          style={{
+            display: 'inline-block',
+            width: 6,
+            height: 6,
+            borderRadius: '50%',
+            background: semantico.aoVivo,
+          }}
+        />
+        <span style={{ color: semantico.aoVivo }}>ao vivo</span>
+      </div>
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'baseline',
+          justifyContent: 'space-between',
+          gap: 14,
+          marginTop: 4,
+          fontFamily: semantico.fonteTitulo,
+          fontSize: 20,
+          letterSpacing: 0.5,
+        }}
+      >
+        <span>
+          {placar.casaSigla} {placar.casaPlacar}
+        </span>
+        <span style={{ fontSize: 13, color: semantico.textoSecundario }}>×</span>
+        <span>
+          {placar.visitanteSigla} {placar.visitantePlacar}
+        </span>
+      </div>
+    </div>
   )
 }
 
@@ -125,7 +170,10 @@ export default async function PaginaFireLive({
   const { fuso } = ruleset.rodada
   const hoje = dataDeReferencia(new Date(), fuso)
   // A tela lê o snapshot MATERIALIZADO por jogo — nunca executa o motor.
-  const feed = await lerFeedFireLive(getDb(), hoje, ruleset.fire_live.quarto, filtro)
+  const [feed, placares] = await Promise.all([
+    lerFeedFireLive(getDb(), hoje, ruleset.fire_live.quarto, filtro),
+    placaresAoVivo(getDb(), hoje, ruleset.fire_live.quarto),
+  ])
 
   // Chips construídos do que está NA TELA: times e jogos com apito hoje.
   const semFiltro =
@@ -137,20 +185,34 @@ export default async function PaginaFireLive({
 
   return (
     <Moldura aba="fire-live">
-      <header style={{ marginBottom: 16 }}>
-        <h1 style={{ margin: 0, fontSize: 22 }}>Fire Live</h1>
-        <p style={{ margin: '4px 0 0', fontSize: 13, color: semantico.textoSecundario }}>
-          Alvos do 1º quarto, ao vivo · o push chega no instante do apito
-        </p>
-        <p style={{ margin: '8px 0 0', fontSize: 12, display: 'flex', gap: 12 }}>
-          <Link href="/" style={{ color: semantico.textoSecundario }}>
-            ← Lista Secreta
-          </Link>
-          <Link href="/como-funciona" style={{ color: semantico.textoSecundario }}>
-            Como funciona →
-          </Link>
-        </p>
-      </header>
+      <CabecalhoTela sobrancelha="FIRE LIVE · AO VIVO" titulo="ACONTECENDO" contexto="aoVivo" />
+
+      <p style={{ margin: '0 0 4px', fontSize: 13, color: semantico.textoSecundario }}>
+        Alvos do 1º quarto, ao vivo · o push chega no instante do apito
+      </p>
+      <p style={{ margin: '0 0 16px', fontSize: 12, display: 'flex', gap: 12 }}>
+        <Link href="/" style={{ color: semantico.textoSecundario }}>
+          ← Lista Secreta
+        </Link>
+        <Link href="/como-funciona" style={{ color: semantico.textoSecundario }}>
+          Como funciona →
+        </Link>
+      </p>
+
+      {placares.length > 0 && (
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))',
+            gap: 8,
+            marginBottom: 16,
+          }}
+        >
+          {placares.map((p) => (
+            <PlacarMini key={p.jogoId} placar={p} />
+          ))}
+        </div>
+      )}
 
       {timesComApito.length > 1 && (
         <nav
@@ -204,22 +266,25 @@ export default async function PaginaFireLive({
             <CardEntrada
               nome={item.nome}
               jogadorHref={rotaDoJogador(item.jogadorId)}
+              fotoUrl={item.fotoUrl ?? null}
               timeSigla={item.timeSigla}
               timeNome={`${item.timeNome} · vs ${item.adversarioSigla}`}
-              posicao={null}
+              posicao={item.posicao}
               atributo={item.atributo}
               nivelJogador={item.nivelJogador}
               nivelApito={item.nivelApito}
+              // Confiança é conceito PRÉ-LIVE (docs/02-motor-regras.md): o item
+              // do Fire Live traz `confianca: null` e a pílula sai neutra, sem
+              // brilho — não é dado faltando, é a regra do produto.
               confianca={item.confianca}
               grauConfianca={null}
               turbo={item.turbo}
               modoFire={item.modoFire}
               opdOrigemNivel={item.opdOrigemNivel}
               alvo1Q={item.alvo1Q}
+              vivo={!item.encerrado}
+              progresso1Q={{ observado: item.valorNoQuarto, alvo: item.alvo1Q ?? 0 }}
             />
-            <p style={{ margin: '4px 0 0', fontSize: 12, color: semantico.textoSecundario }}>
-              {item.valorNoQuarto} no 1º quarto · alvo {item.alvo1Q}
-            </p>
           </div>
         ))}
       </div>
