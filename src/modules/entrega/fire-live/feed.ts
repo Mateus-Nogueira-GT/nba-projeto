@@ -114,6 +114,9 @@ export async function materializarFeedFireLive(
       linha: null,
       confianca: null, // Fire Live não tem nota — e o card não inventa número
       alvo1Q: a.alvo1q,
+      // O Fire Live é estratégia própria: não nasce de oscilação nem de OPD.
+      metodo: null,
+      posicao: jogador?.posicao ?? null,
       adversarioSigla: timePorId.get(adversarioId)?.sigla ?? '—',
       quartoAtual: partida.quartoAtual,
       encerrado,
