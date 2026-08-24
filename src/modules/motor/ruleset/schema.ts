@@ -186,6 +186,23 @@ export const rulesetSchema = z.object({
   /** Rebotes e assistências. Ausente = só pontos, o estado homologado. */
   por_atributo: z.partialRecord(atributo, blocoAtributo).default({}),
 
+  /**
+   * Gestão de banca. Opcional: o modelo do CJ ainda não chegou, e um ruleset
+   * sem este bloco é um ruleset válido — a tela avisa que está sem modelo em
+   * vez de inventar um número na hora de renderizar.
+   */
+  gestao_banca: z
+    .object({
+      origem: z.enum(['homologado', 'demonstracao']),
+      unidade_percentual_banca: z.number().positive(),
+      unidades_por_nivel_apito: z.record(z.string(), z.number().nonnegative()),
+      bonus_turbo_unidades: z.number().nonnegative(),
+      teto_por_entrada_percentual: z.number().positive(),
+      stop_win_percentual: z.number().positive(),
+      stop_loss_percentual: z.number().positive(),
+    })
+    .optional(),
+
   matchup: z.object({
     habilitado: z.boolean(),
     liberar_apos_dias_de_competicao: z.number().int().nonnegative(),

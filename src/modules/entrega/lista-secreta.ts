@@ -195,12 +195,20 @@ export async function linhasDoJogador(
   db: Db,
   dataReferencia: string,
   jogadorId: string,
+  atributo?: Atributo,
 ): Promise<LinhasDoJogador> {
   const feed = await lerFeed(db, dataReferencia)
   if (feed === null) return { itens: [], geradoEm: null }
 
-  const itens = feed.conteudo.itens
-    .filter((i) => i.jogadorId === jogadorId)
+  const doJogador = feed.conteudo.itens.filter((i) => i.jogadorId === jogadorId)
+
+  // Sem atributo pedido, mostra o do primeiro apito em vez de misturar linhas
+  // de pontos com linhas de rebotes na mesma coluna — 25 e 8 lado a lado não
+  // significam nada juntos.
+  const escolhido = atributo ?? doJogador[0]?.atributo
+
+  const itens = doJogador
+    .filter((i) => i.atributo === escolhido)
     .sort((a, b) => (a.linha ?? 0) - (b.linha ?? 0))
 
   return { itens, geradoEm: feed.geradoEm }
@@ -216,6 +224,7 @@ export type FiltroLista = {
   nivel?: Nivel
   time?: string
   posicao?: string
+  atributo?: Atributo
 }
 
 export function filtrarItens(itens: ItemFeed[], filtro: FiltroLista): ItemFeed[] {
@@ -230,15 +239,20 @@ export function filtrarItens(itens: ItemFeed[], filtro: FiltroLista): ItemFeed[]
     .filter((i) => (filtro.nivel === undefined ? true : i.nivelJogador === filtro.nivel))
     .filter((i) => (filtro.time === undefined ? true : i.timeSigla === filtro.time))
     .filter((i) => (filtro.posicao === undefined ? true : i.posicao === filtro.posicao))
+    .filter((i) => (filtro.atributo === undefined ? true : i.atributo === filtro.atributo))
 }
 
 /**
- * Um card por JOGADOR, não por linha.
+ * Um card por JOGADOR E ATRIBUTO, não por linha.
  *
- * O motor emite um apito por linha de pontos (20/25/30/35). O documento do CJ
+ * O motor emite um apito por linha (20/25/30/35 em pontos). O documento do CJ
  * desenha uma BARRA por jogador com os "quadradinhos" das linhas dentro dela —
  * as linhas restantes vivem em /apito/<jogador>. Sem isso o mesmo nome aparece
  * três ou quatro vezes seguidas na lista.
+ *
+ * O atributo entra na chave porque um jogador pode apitar em pontos, rebotes e
+ * assistências no mesmo dia: são três leituras independentes, e agrupar só por
+ * jogador faria duas delas desaparecerem da tela sem aviso.
  *
  * Escolhe a linha de maior confiança; empate resolve pela MENOR linha, para
  * que a ordem não dependa da ordem de chegada.
@@ -246,15 +260,16 @@ export function filtrarItens(itens: ItemFeed[], filtro: FiltroLista): ItemFeed[]
 export function agruparPorJogador(itens: ItemFeed[]): ItemFeed[] {
   const melhor = new Map<string, ItemFeed>()
   for (const item of itens) {
-    const atual = melhor.get(item.jogadorId)
+    const chave = `${item.jogadorId}|${item.atributo}`
+    const atual = melhor.get(chave)
     if (atual === undefined) {
-      melhor.set(item.jogadorId, item)
+      melhor.set(chave, item)
       continue
     }
     const c = item.confianca ?? -1
     const cAtual = atual.confianca ?? -1
     if (c > cAtual || (c === cAtual && (item.linha ?? Infinity) < (atual.linha ?? Infinity))) {
-      melhor.set(item.jogadorId, item)
+      melhor.set(chave, item)
     }
   }
   return [...melhor.values()]

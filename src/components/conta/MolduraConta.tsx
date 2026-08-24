@@ -1,15 +1,23 @@
 import type { ReactNode } from 'react'
 import Link from 'next/link'
 
+import { BarraInferior, type Aba } from '@/components/navegacao'
 import { semantico } from '@/design-system/tokens/semantico'
 
 export function MolduraConta({
   titulo,
   descricao,
+  aba = null,
   children,
 }: {
   titulo: string
   descricao?: string
+  /**
+   * Aba do rodapé. `null` nas telas de entrada e cadastro: quem ainda não fez
+   * login não tem para onde navegar, e uma barra com quatro destinos que
+   * redirecionam de volta para o login é ruído.
+   */
+  aba?: Aba | null
   children: ReactNode
 }) {
   return (
@@ -18,7 +26,7 @@ export function MolduraConta({
         minHeight: '100vh',
         background: semantico.fundo,
         color: semantico.textoPrimario,
-        padding: '40px 18px',
+        padding: aba === null ? '40px 18px' : '40px 18px 96px',
         fontFamily: 'system-ui, sans-serif',
       }}
     >
@@ -45,6 +53,7 @@ export function MolduraConta({
           {children}
         </section>
       </div>
+      {aba !== null && <BarraInferior atual={aba} />}
     </main>
   )
 }

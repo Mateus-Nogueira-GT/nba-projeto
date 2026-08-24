@@ -12,6 +12,7 @@ import { semantico } from '@/design-system/tokens/semantico'
 import { sessaoAtual } from '@/modules/plataforma/auth/cookies'
 import { avaliarAcesso } from '@/modules/plataforma/assinatura/direito'
 import '@/design-system/tokens/tokens.css'
+import { Moldura } from '@/components/navegacao'
 
 export const dynamic = 'force-dynamic'
 export const metadata = { title: 'Fire Live · IA da NBA' }
@@ -24,21 +25,6 @@ function horaCurta(d: Date): string {
   return d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
 }
 
-function Moldura({ children }: { children: React.ReactNode }) {
-  return (
-    <main
-      style={{
-        background: semantico.fundo,
-        color: semantico.textoPrimario,
-        minHeight: '100vh',
-        padding: '24px 16px 64px',
-        fontFamily: 'system-ui, sans-serif',
-      }}
-    >
-      <div style={{ maxWidth: 640, margin: '0 auto' }}>{children}</div>
-    </main>
-  )
-}
 
 /**
  * A tela vazia é a experiência dominante desta tela — o Fire Live só existe
@@ -119,7 +105,7 @@ export default async function PaginaFireLive({
   }
   if (!process.env.DATABASE_URL) {
     return (
-      <Moldura>
+      <Moldura aba="fire-live">
         <h1>Fire Live</h1>
         <p style={{ color: semantico.textoSecundario }}>
           Banco não configurado. Rode <code>vercel env pull</code> e <code>npm run db:migrate</code>.
@@ -147,7 +133,7 @@ export default async function PaginaFireLive({
   const recorteVazio = feed.itens.length === 0 && feed.estadoVazio === null
 
   return (
-    <Moldura>
+    <Moldura aba="fire-live">
       <header style={{ marginBottom: 16 }}>
         <h1 style={{ margin: 0, fontSize: 22 }}>Fire Live</h1>
         <p style={{ margin: '4px 0 0', fontSize: 13, color: semantico.textoSecundario }}>

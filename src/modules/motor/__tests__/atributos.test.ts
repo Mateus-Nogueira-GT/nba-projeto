@@ -4,6 +4,7 @@ import yamlBruto from '../../../../config/ruleset.v1.yaml?raw'
 import { calcularConfianca, linhasDoNivel } from '../confianca'
 import { deltaOscilacao, marcosDoNivel, origemDoAtributo } from '../atributos'
 import { limiarOscilacao } from '../lista-secreta/oscilacao'
+import { avaliarFireLive } from '../fire-live/avaliar'
 import { marcosAtingidos } from '../fire-live/green'
 import { agregar } from '../odds/agregar'
 import { carregarRuleset } from '../ruleset/carregar'
@@ -103,5 +104,38 @@ describe('sem bloco, o atributo simplesmente não existe', () => {
   it('mas pontos continua intacto', () => {
     expect(linhasDoNivel('MVP', 'PONTOS', sem)).toEqual([20, 25, 30, 35])
     expect(calcularConfianca('MVP', 'PONTOS', 25, 3, sem)).toBe(94)
+  })
+})
+
+describe('o green carrega o atributo em que foi batido', () => {
+  it('12 rebotes no 1º quarto viram green de REBOTES, não de PONTOS', () => {
+    const pivo = {
+      id: 'pivo',
+      nome: 'Pivô',
+      timeId: 'TIME',
+      posicaoHierarquia: 1,
+      classificacoes: { PONTOS: 'MVP' as const, REBOTES: 'MVP' as const },
+      medias: { PONTOS: 20, REBOTES: 11 },
+      historico: [],
+    }
+    const time = { id: 'TIME', sigla: 'TIM', jogadores: [pivo] }
+    const jogo = {
+      id: 'jogo',
+      timeCasaId: 'TIME',
+      timeVisitanteId: 'OUTRO',
+      quartoAtual: ruleset.fire_live.quarto,
+      escalacao: {},
+      estatisticasQuarto: [
+        { jogadorId: 'pivo', quarto: ruleset.fire_live.quarto, pontos: 4, rebotes: 12, assistencias: 0 },
+      ],
+    }
+
+    const { greens } = avaliarFireLive(time, jogo, ruleset, { opdPreLive: new Map() })
+    const deRebotes = greens.filter((g) => g.atributo === 'REBOTES')
+
+    // MVP em rebotes: marcos 10 e 12 caem com 12 rebotes.
+    expect(deRebotes.map((g) => g.marco).sort((a, b) => a - b)).toEqual([10, 12])
+    // 4 pontos não cruza marco de pontos nenhum — não pode existir green de PONTOS.
+    expect(greens.filter((g) => g.atributo === 'PONTOS')).toEqual([])
   })
 })

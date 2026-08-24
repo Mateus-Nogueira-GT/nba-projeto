@@ -4,7 +4,7 @@ import { emModoFire } from './modo-fire'
 import { marcosAtingidos } from './green'
 import type { Ruleset } from '../ruleset/schema'
 import { montarChave, valorDoAtributo } from '../tipos'
-import type { Apito, JogoFato, Nivel, NivelApito, TimeFato } from '../tipos'
+import type { Apito, Atributo, JogoFato, Nivel, NivelApito, TimeFato } from '../tipos'
 
 export type OpcoesFireLive = {
   /**
@@ -38,7 +38,7 @@ export type OpcoesFireLive = {
 export type Green = {
   jogoId: string
   jogadorId: string
-  atributo: 'PONTOS'
+  atributo: Atributo
   /** Green só existe para jogador classificado — marcosAtingidos garante isso. */
   nivelJogador: Nivel
   marco: number
@@ -102,11 +102,17 @@ export function avaliarFireLive(
       const valor = valorDoAtributo(estatistica, atributo)
 
       // Green não depende de alvo nem de bloco de topo: a marca foi batida.
+      //
+      // O atributo é o do laço. Enquanto só PONTOS tinha marcos, gravar
+      // 'PONTOS' fixo aqui era inofensivo; com marcos de rebote e assistência
+      // no ruleset, um green de 12 rebotes viraria uma linha dizendo 12 PONTOS
+      // — e a UNIQUE (jogo, jogador, atributo, marco) deixaria de separar os
+      // dois, engolindo em silêncio o segundo green do mesmo jogador.
       for (const marco of marcosAtingidos(nivel, atributo, valor, ruleset)) {
         greens.push({
           jogoId: jogo.id,
           jogadorId: jogador.id,
-          atributo: 'PONTOS',
+          atributo,
           nivelJogador: nivel as Nivel,
           marco,
           valor,

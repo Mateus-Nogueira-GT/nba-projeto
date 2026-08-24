@@ -317,6 +317,41 @@ por_atributo:
       RANDOLA: [4, 6, 8]
 
 # -----------------------------------------------------------------------------
+# GESTÃO DE BANCA
+#
+# ⚠️  DEMONSTRAÇÃO. NÃO HOMOLOGADO.
+#
+# O documento do CJ menciona a aba de gestão e diz que "o modelo completo foi
+# enviado no grupo" — arquivo que não chegou ao repositório. O modelo abaixo é
+# uma proporcionalidade simples INVENTADA para a apresentação: quanto maior o
+# nível do apito, maior a entrada, com teto por entrada e limites de sessão.
+#
+# Não é conselho financeiro nem a estratégia do CJ. Quando o modelo dele
+# chegar, os números trocam aqui e a tela acompanha sem mudar de código.
+# -----------------------------------------------------------------------------
+gestao_banca:
+  origem: demonstracao
+
+  # Uma unidade = 1% da banca. É a convenção mais comum de gestão, e é o único
+  # número do bloco que não sai de uma tabela: define a escala de todo o resto.
+  unidade_percentual_banca: 1.0
+
+  # Quanto entrar, em unidades, por nível do apito.
+  unidades_por_nivel_apito:
+    1: 0.5
+    2: 1.0
+    3: 2.0
+
+  # Turbo soma; nunca multiplica. Multiplicar faria o nível 3 com turbo saltar
+  # para 4 unidades, acima do teto — e o teto deixaria de ser o teto.
+  bonus_turbo_unidades: 0.5
+
+  # Tetos e limites de sessão, em percentual da banca.
+  teto_por_entrada_percentual: 3.0
+  stop_win_percentual: 10.0
+  stop_loss_percentual: 6.0
+
+# -----------------------------------------------------------------------------
 # MATCHUP — programado, desligado. Liberar 20 dias após início da competição.
 # -----------------------------------------------------------------------------
 matchup:

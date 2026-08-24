@@ -35,7 +35,10 @@ export const dadosGreenSchema = z
   .object({
     jogoId: z.string().uuid(),
     jogadorId: z.string().uuid(),
-    atributo: z.literal('PONTOS'),
+    // Era z.literal('PONTOS') enquanto só pontos tinha marcos de green. Com
+    // rebotes e assistências no ruleset, um green de rebote seria rejeitado
+    // pelo worker — e o push sumiria sem erro visível na tela.
+    atributo: z.enum(ATRIBUTOS),
     nivelJogador: z.enum(NIVEIS),
     marco: z.number().finite().nonnegative(),
     valor: z.number().finite().nonnegative(),

@@ -253,7 +253,7 @@ async function drenarOutbox(
         {
           jogoId: g.jogoId,
           jogadorId: g.jogadorId,
-          atributo: 'PONTOS',
+          atributo: g.atributo,
           nivelJogador: g.nivelJogador as Nivel,
           marco: g.marco,
           valor: g.valor,

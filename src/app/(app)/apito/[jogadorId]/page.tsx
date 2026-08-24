@@ -1,10 +1,16 @@
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
 
+import { Moldura } from '@/components/navegacao'
 import { getDb } from '@/modules/dominio/db/cliente'
 import { linhasDoJogador } from '@/modules/entrega/lista-secreta'
+import { faixasDoJogador } from '@/modules/entrega/odds/leitura'
 import { rotaDoJogador } from '@/modules/entrega/estatisticas/rotas'
 import { rulesetAtivo } from '@/modules/entrega/ruleset-ativo'
+// Os valores vêm do enum do BANCO, não do motor: a fronteira permite tipo,
+// nunca valor, e a lista de atributos é a mesma nos dois lados.
+import { atributoEnum } from '@/modules/dominio/db/schema'
+import type { Atributo } from '@/modules/motor/tipos'
 import { CardEntrada } from '@/design-system/componentes'
 import { semantico } from '@/design-system/tokens/semantico'
 import { sessaoAtual } from '@/modules/plataforma/auth/cookies'
@@ -12,6 +18,13 @@ import { avaliarAcesso } from '@/modules/plataforma/assinatura/direito'
 import '@/design-system/tokens/tokens.css'
 
 export const dynamic = 'force-dynamic'
+
+const SIGLA: Record<Atributo, string> = { PONTOS: 'PTS', REBOTES: 'REB', ASSISTENCIAS: 'AST' }
+const UNIDADE: Record<Atributo, string> = {
+  PONTOS: 'pontos',
+  REBOTES: 'rebotes',
+  ASSISTENCIAS: 'assistências',
+}
 export const metadata = { title: 'Linhas e confiança · IA da NBA' }
 
 function horaLocal(d: Date): string {
@@ -22,21 +35,6 @@ function formatarOdd(v: number): string {
   return v.toFixed(2).replace('.', ',')
 }
 
-function Moldura({ children }: { children: React.ReactNode }) {
-  return (
-    <main
-      style={{
-        background: semantico.fundo,
-        color: semantico.textoPrimario,
-        minHeight: '100vh',
-        padding: '24px 16px 64px',
-        fontFamily: 'system-ui, sans-serif',
-      }}
-    >
-      <div style={{ maxWidth: 640, margin: '0 auto' }}>{children}</div>
-    </main>
-  )
-}
 
 /**
  * DETALHE DO APITO — os "quadradinhos" que o documento do CJ pede.
@@ -48,14 +46,22 @@ function Moldura({ children }: { children: React.ReactNode }) {
  */
 export default async function PaginaApito({
   params,
+  searchParams,
 }: {
   params: Promise<{ jogadorId: string }>
+  searchParams: Promise<Record<string, string | string[] | undefined>>
 }) {
   const { jogadorId } = await params
+  const consulta = await searchParams
+  const atributoBruto = Array.isArray(consulta.atributo) ? consulta.atributo[0] : consulta.atributo
+  // Um jogador pode apitar em pontos, rebotes e assistências no mesmo dia.
+  // Sem o recorte, a tela empilharia linhas de 25 pontos ao lado de linhas de
+  // 8 rebotes na mesma coluna, como se fossem comparáveis.
+  const atributo = atributoEnum.enumValues.find((a) => a === atributoBruto)
 
   if (!process.env.DATABASE_URL) {
     return (
-      <Moldura>
+      <Moldura aba={null}>
         <h1>Linhas e confiança</h1>
         <p style={{ color: semantico.textoSecundario }}>Banco não configurado.</p>
       </Moldura>
@@ -69,12 +75,12 @@ export default async function PaginaApito({
 
   const ruleset = await rulesetAtivo()
   const hoje = new Date().toISOString().slice(0, 10)
-  const { itens, geradoEm } = await linhasDoJogador(getDb(), hoje, jogadorId)
+  const { itens, geradoEm } = await linhasDoJogador(getDb(), hoje, jogadorId, atributo)
   const principal = itens[0]
 
   if (!principal) {
     return (
-      <Moldura>
+      <Moldura aba={null}>
         <p style={{ margin: '0 0 12px', fontSize: 12 }}>
           <Link href="/" style={{ color: semantico.textoSecundario }}>
             ← Lista Secreta
@@ -97,10 +103,22 @@ export default async function PaginaApito({
     )
   }
 
-  const faixas = ruleset.odds.tabela_estatica[principal.nivelJogador] ?? {}
+  // Faixa REAL das casas quando houve coleta; a tabela de referência do
+  // ruleset é o fallback, exatamente como o motor define.
+  const cotadas = await faixasDoJogador(
+    getDb(),
+    [...new Set(itens.map((i) => i.jogoId))],
+    jogadorId,
+    principal.atributo,
+  )
+  const referencia =
+    principal.atributo === 'PONTOS'
+      ? ruleset.odds.tabela_estatica[principal.nivelJogador]
+      : ruleset.por_atributo[principal.atributo]?.odds?.[principal.nivelJogador]
+  const casasNaTela = Math.max(0, ...[...cotadas.values()].map((f) => f.qtdCasas))
 
   return (
-    <Moldura>
+    <Moldura aba={null}>
       <p style={{ margin: '0 0 12px', fontSize: 12 }}>
         <Link href="/" style={{ color: semantico.textoSecundario }}>
           ← Lista Secreta
@@ -123,14 +141,18 @@ export default async function PaginaApito({
         alvo1Q={principal.alvo1Q}
       />
 
-      <h2 style={{ fontSize: 15, margin: '20px 0 4px' }}>Linhas de pontos</h2>
+      <h2 style={{ fontSize: 15, margin: '20px 0 4px' }}>Linhas de {UNIDADE[principal.atributo]}</h2>
       <p style={{ margin: '0 0 12px', fontSize: 12, color: semantico.textoSecundario }}>
         Escolha a linha que quer jogar. Quanto mais alta a linha, menor a confiança da análise.
       </p>
 
       <div style={{ display: 'grid', gap: 8 }}>
         {itens.map((item) => {
-          const faixa = item.linha === null ? undefined : faixas[String(item.linha)]
+          const cotada = item.linha === null ? undefined : cotadas.get(item.linha)
+          const estatica = item.linha === null ? undefined : referencia?.[String(item.linha)]
+          const faixa: [number, number] | undefined = cotada
+            ? [cotada.min, cotada.max]
+            : estatica
           return (
             <div
               key={item.chave}
@@ -145,7 +167,9 @@ export default async function PaginaApito({
                 border: `1px solid ${semantico.divisor}`,
               }}
             >
-              <span style={{ fontWeight: 700, fontSize: 16 }}>{item.linha} PTS</span>
+              <span style={{ fontWeight: 700, fontSize: 16 }}>
+                {item.linha} {SIGLA[item.atributo]}
+              </span>
               <span style={{ fontSize: 16, fontWeight: 700 }}>
                 {item.confianca === null ? '—' : `${item.confianca}%`}
               </span>
@@ -158,8 +182,10 @@ export default async function PaginaApito({
       </div>
 
       <p style={{ margin: '10px 0 0', fontSize: 12, color: semantico.textoSecundario }}>
-        Faixa de odds da tabela de referência da plataforma. Não é a odd da sua casa: elas mudam
-        todos os dias e variam entre casas.
+        {casasNaTela > 0
+          ? `Faixa entre ${casasNaTela} casas na última coleta.`
+          : 'Faixa da tabela de referência da plataforma.'}{' '}
+        Não é a odd da sua casa: elas mudam todos os dias e variam entre casas.
       </p>
 
       <footer

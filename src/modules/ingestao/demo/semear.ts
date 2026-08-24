@@ -22,7 +22,7 @@ import { ativarVersaoNiveis } from '../../dominio/repositorios/niveis'
 import { executarCiclo } from '../../entrega/fire-live/ciclo'
 import { FilaEmMemoria } from '../../entrega/fila/memoria'
 import { lerFeed, publicarListaSecreta } from '../../entrega/lista-secreta'
-import { deltaOscilacao, faixaEstatica } from '../../motor/atributos'
+import { deltaOscilacao, faixaEstatica, marcosDoNivel } from '../../motor/atributos'
 import { agregar } from '../../motor/odds/agregar'
 import type { Ruleset } from '../../motor/ruleset/schema'
 import { ATRIBUTOS } from '../../motor/tipos'
@@ -42,6 +42,8 @@ export type ResumoDemo = {
   itensListaSecreta: number
   apitosFireLive: number
   linhasComOdd: number
+  /** Rodadas passadas com lista publicada — o que a aba de Resultados lê. */
+  rodadasPublicadas: number
 }
 
 /**
@@ -211,32 +213,65 @@ export async function semearDemo(db: Db, ruleset: Ruleset, agora: Date): Promise
   //     nível 1 (amarelo) tem que ser MVP ou All Star.
   //     Cada atributo tem seus próprios protagonistas, e todos jogam HOJE —
   //     apito de quem não entra em quadra não aparece na lista.
-  const CENARIOS: Record<Atributo, { nome: string; jogosAbaixo: number }[]> = {
+  //
+  //     `desde: 1` marca quem PAROU de oscilar ontem: apitou na rodada passada
+  //     e voltou à média no jogo seguinte. Sem esse segundo grupo, a aba de
+  //     Resultados só teria quem continua abaixo — e o jogo conferido seria
+  //     mais um jogo ruim, fazendo a estratégia parecer errar sempre.
+  type Cenario = { nome: string; jogosAbaixo: number; desde?: number }
+  const CENARIOS: Record<Atributo, Cenario[]> = {
     PONTOS: [
       { nome: 'Brunson', jogosAbaixo: 1 }, // MVP · 1 jogo abaixo → amarelo
       { nome: 'LeBron James', jogosAbaixo: 2 }, // Suporte · 2 jogos → laranja
       { nome: 'stephen Curry', jogosAbaixo: 3 }, // MVP · 3 jogos → verde + turbo
+      { nome: 'Shai', jogosAbaixo: 3, desde: 1 }, // apitou ontem, bateu ontem
+      { nome: 'Tatum', jogosAbaixo: 2, desde: 1 },
     ],
     REBOTES: [
       { nome: 'Tatum', jogosAbaixo: 2 }, // BOS
       { nome: 'Jokic', jogosAbaixo: 3 }, // DEN — os 12,9 rpg do documento
+      { nome: 'Giannis', jogosAbaixo: 3, desde: 1 }, // MIA
     ],
     ASSISTENCIAS: [
       { nome: 'Giannis', jogosAbaixo: 2 }, // MIA
       { nome: 'Jamal Murray', jogosAbaixo: 3 }, // DEN — os 7 apg do documento
+      { nome: 'Brunson', jogosAbaixo: 2, desde: 1 }, // NYK
     ],
   }
-  const jogosAbaixoDe = (nome: string, atributo: Atributo): number =>
-    CENARIOS[atributo].find((c) => c.nome === nome)?.jogosAbaixo ?? 0
+  const cenarioDe = (nome: string, atributo: Atributo): Cenario | undefined =>
+    CENARIOS[atributo].find((c) => c.nome === nome)
+
+  // A rodada é a MESMA todos os dias: os oito times do documento se enfrentando.
+  // Antes, o histórico inteiro cabia num único LAL x GSW e todo jogador da liga
+  // ganhava uma linha nele — o que bastava para a oscilação de hoje, mas
+  // produzia uma rodada passada que não dá para conferir: o jogador aparecia
+  // num jogo que o time dele não disputou.
+  const CONFRONTOS: [string, string][] = [
+    ['OKC', 'DEN'],
+    ['LAL', 'PHI'],
+    ['GSW', 'BOS'],
+    ['MIA', 'NYK'],
+  ]
 
   const DIAS = 6
   for (let i = 1; i <= DIAS; i++) {
     const dia = new Date(agora.getTime() - i * 24 * 60 * 60_000)
     const diaRef = dia.toISOString().slice(0, 10)
-    const jogoId = await criarJogo('LAL', 'GSW', dia, diaRef, { status: 'ENCERRADO' })
-    if (!jogoId) continue
 
-    for (const [nome, jogadorId] of jaExistentes) {
+    const jogoDoTime = new Map<string, string>()
+    for (const [casa, visitante] of CONFRONTOS) {
+      const jogoId = await criarJogo(casa, visitante, dia, diaRef, { status: 'ENCERRADO' })
+      if (jogoId === null) continue
+      jogoDoTime.set(casa, jogoId)
+      jogoDoTime.set(visitante, jogoId)
+    }
+
+    for (const j of analise.jogadores) {
+      const nome = j.nomeNaLista
+      const jogadorId = jaExistentes.get(nome)
+      const jogoId = j.timeSigla === null ? undefined : jogoDoTime.get(j.timeSigla)
+      if (jogadorId === undefined || jogoId === undefined) continue
+
       const nivelPontos = nivelPorNome.get(nome)
       if (!nivelPontos) continue
 
@@ -254,7 +289,11 @@ export async function semearDemo(db: Db, ruleset: Ruleset, agora: Date): Promise
         const media = mediaDoAtributo[atributo]
         const delta = deltaOscilacao(derivados[atributo], atributo, jogadorId, ruleset)
         if (delta === undefined) return Math.round(media)
-        const sequencia = historicoOscilacao(media, delta, jogosAbaixoDe(nome, atributo))
+        const cenario = cenarioDe(nome, atributo)
+        const sequencia = historicoOscilacao(media, delta, cenario?.jogosAbaixo ?? 0, {
+          deslocamento: cenario?.desde ?? 0,
+          variacao: `${nome}|${atributo}`,
+        })
         return sequencia[i - 1] ?? Math.round(media)
       }
 
@@ -280,13 +319,21 @@ export async function semearDemo(db: Db, ruleset: Ruleset, agora: Date): Promise
   const inicioDoDia = new Date(`${dataReferencia}T00:00:00.000Z`).getTime()
   const hora = (h: number) => new Date(inicioDoDia + h * 60 * 60_000)
 
-  const jogoAoVivo = await criarJogo('OKC', 'DEN', hora(20), dataReferencia, {
-    status: 'AO_VIVO',
-    quartoAtual: ruleset.fire_live.quarto,
-  })
-  const jogoOpd = await criarJogo('LAL', 'PHI', hora(21), dataReferencia, { status: 'AGENDADO' })
-  await criarJogo('GSW', 'BOS', hora(22), dataReferencia)
-  await criarJogo('MIA', 'NYK', hora(23), dataReferencia)
+  const jogosDeHoje = new Map<string, string>()
+  for (const [indice, [casa, visitante]] of CONFRONTOS.entries()) {
+    // O primeiro confronto é o que está AO VIVO no 1º quarto; os outros ainda
+    // não começaram. É o que dá à demo um Fire Live e uma Lista Secreta ao
+    // mesmo tempo.
+    const aoVivo = indice === 0
+    const jogoId = await criarJogo(casa, visitante, hora(20 + indice), dataReferencia, {
+      status: aoVivo ? 'AO_VIVO' : 'AGENDADO',
+      quartoAtual: aoVivo ? ruleset.fire_live.quarto : null,
+    })
+    if (jogoId !== null) jogosDeHoje.set(`${casa}|${visitante}`, jogoId)
+  }
+
+  const jogoAoVivo = jogosDeHoje.get('OKC|DEN') ?? null
+  const jogoOpd = jogosDeHoje.get('LAL|PHI') ?? null
 
   // Luka FORA — o exemplo literal da OPD no documento do CJ.
   const lukaId = jaExistentes.get('Luka Doncic')
@@ -300,18 +347,55 @@ export async function semearDemo(db: Db, ruleset: Ruleset, agora: Date): Promise
       })
   }
 
-  // 1º quarto ao vivo: o MVP cruza o alvo e chega aos 75% da média (modo fire).
-  const shaiId = jaExistentes.get('Shai')
-  if (jogoAoVivo && shaiId) {
-    const mediaShai = mediaDe('Shai', 'MVP').ppg
-    const pontos1Q = Math.ceil(mediaShai * ruleset.fire_live.modo_fire.percentual_media)
-    await db
-      .insert(estatisticasQuarto)
-      .values({ jogoId: jogoAoVivo, jogadorId: shaiId, quarto: ruleset.fire_live.quarto, pontos: pontos1Q })
-      .onConflictDoUpdate({
-        target: [estatisticasQuarto.jogoId, estatisticasQuarto.jogadorId, estatisticasQuarto.quarto],
-        set: { pontos: pontos1Q },
-      })
+  // 1º quarto ao vivo — o elenco INTEIRO dos dois times, não só o protagonista.
+  // Com uma linha só, a tela do Fire Live abria com um card solitário e a
+  // trava de alvo mínimo do ruleset nunca aparecia em ação.
+  if (jogoAoVivo !== null) {
+    const quarto = ruleset.fire_live.quarto
+    const quartos = ruleset.fire_live.quartos_por_jogo
+
+    for (const j of analise.jogadores) {
+      if (j.timeSigla !== 'OKC' && j.timeSigla !== 'DEN') continue
+      const jogadorId = jaExistentes.get(j.nomeNaLista)
+      if (jogadorId === undefined) continue
+
+      const m = mediaDe(j.nomeNaLista, j.nivel)
+      const derivados = niveisDoJogador(j.nomeNaLista, j.nivel)
+      // Um quarto é um quarto do jogo: a média dividida pelos quartos é o
+      // desempenho neutro. A variação vem do mesmo gerador do histórico.
+      const noQuarto = (media: number, atributo: Atributo): number => {
+        const sequencia = historicoOscilacao(media / quartos, 1, 0, {
+          variacao: `1Q|${j.nomeNaLista}|${atributo}`,
+        })
+        return Math.max(0, sequencia[0] ?? Math.round(media / quartos))
+      }
+
+      // O protagonista cruza os 75% da média (modo fire) E o primeiro marco de
+      // green — os dois números saem do ruleset, nenhum é digitado aqui.
+      const primeiroMarco = marcosDoNivel(derivados.PONTOS, 'PONTOS', ruleset)[0]
+      const pontos =
+        j.nomeNaLista === 'Shai'
+          ? Math.max(
+              Math.ceil(m.ppg * ruleset.fire_live.modo_fire.percentual_media),
+              primeiroMarco ?? 0,
+            )
+          : noQuarto(m.ppg, 'PONTOS')
+
+      const valores = {
+        pontos,
+        rebotes: noQuarto(m.rpg, 'REBOTES'),
+        assistencias: noQuarto(m.apg, 'ASSISTENCIAS'),
+      }
+
+      await db
+        .insert(estatisticasQuarto)
+        .values({ jogoId: jogoAoVivo, jogadorId, quarto, ...valores })
+        .onConflictDoUpdate({
+          target: [estatisticasQuarto.jogoId, estatisticasQuarto.jogadorId, estatisticasQuarto.quarto],
+          set: valores,
+        })
+    }
+
     await db
       .insert(fireLiveExecucoes)
       .values({ jogoId: jogoAoVivo, iniciadoEm: agora })
@@ -336,6 +420,26 @@ export async function semearDemo(db: Db, ruleset: Ruleset, agora: Date): Promise
     if (!ciclo.encerrar) apitosFireLive = ciclo.apitosNovos
   }
 
+  // 5b · Rodadas ENCERRADAS. A aba de Resultados confere apito contra box
+  //      score, e só existe apito onde a lista foi publicada. Publicar um dia
+  //      que já passou usa exatamente o mesmo caminho do dia de hoje: o motor
+  //      recebe a data como fato e não sabe que ela é passado.
+  //
+  //      Três dias, não seis: publicar D-4 em diante daria sequências de
+  //      oscilação truncadas pelo fim do histórico, e a tela mostraria níveis
+  //      que caem por falta de dado em vez de por comportamento do jogador.
+  const DIAS_CONFERIVEIS = 3
+  let rodadasPublicadas = 0
+  for (let i = 1; i <= DIAS_CONFERIVEIS; i++) {
+    const dia = new Date(agora.getTime() - i * 24 * 60 * 60_000)
+    const publicacaoPassada = await publicarListaSecreta(db, ruleset, {
+      dataReferencia: dia.toISOString().slice(0, 10),
+      agora: dia,
+      ignorarAntecedencia: true,
+    })
+    if (publicacaoPassada.publicou) rodadasPublicadas += 1
+  }
+
   // 6 · Odds. Só depois da lista publicada — a cotação é POR LINHA, e quem
   //     decide quais linhas existem é o motor.
   const linhasComOdd = await semearOdds(db, ruleset, dataReferencia, agora)
@@ -353,6 +457,7 @@ export async function semearDemo(db: Db, ruleset: Ruleset, agora: Date): Promise
     itensListaSecreta: publicacao.publicou ? publicacao.itens : 0,
     apitosFireLive,
     linhasComOdd,
+    rodadasPublicadas,
   }
 }
 

@@ -5,7 +5,9 @@ import { eq } from 'drizzle-orm'
 import { bancoDeTeste } from '../../dominio/__tests__/ajuda-banco'
 import { casas, feedSnapshot, jogadores, niveisVersao, oddsAgregada, times, usuarios } from '../../dominio/db/schema'
 import { carregarRuleset } from '../../motor/ruleset/carregar'
-import { lerFeed } from '../../entrega/lista-secreta'
+import { agruparPorJogador, lerFeed } from '../../entrega/lista-secreta'
+import { planoDoDia } from '../../entrega/gestao'
+import { conferirRodadas, greensDoDia } from '../../entrega/resultados'
 import { limparDemo, semearDemo } from '../demo/semear'
 
 const ruleset = carregarRuleset(readFileSync('config/ruleset.v1.yaml', 'utf8'))
@@ -210,6 +212,87 @@ describe('semearDemo (PGlite, banco vazio)', () => {
     // Três casas discordando é o que dá sentido à mediana do ruleset.
     expect(agregadas.every((o) => o.qtdCasas === 3 && o.origem === 'CASAS')).toBe(true)
     expect(agregadas.every((o) => Number(o.oddMin) < Number(o.oddMax))).toBe(true)
+  })
+
+  it('as rodadas passadas são conferíveis e a leitura se confirma na maioria', async () => {
+    const rodadas = await conferirRodadas(banco.db, HOJE, 7)
+
+    expect(rodadas.length).toBeGreaterThan(0)
+    // Nenhuma rodada conferida pode ser a de hoje: os jogos ainda estão em
+    // andamento e "não bateu" seria mentira para quem nem entrou em quadra.
+    expect(rodadas.every((r) => r.dataReferencia < HOJE)).toBe(true)
+
+    const ontem = rodadas[0]!
+    expect(ontem.conferidos).toBeGreaterThan(0)
+    // A demo existe para mostrar a estratégia funcionando: se a maioria dos
+    // sinalizados não bate a linha, o seed voltou a colocar o jogo ruim
+    // depois do apito em vez de antes.
+    expect(ontem.acertos / ontem.conferidos).toBeGreaterThan(0.5)
+  })
+
+  it('cada card conferido guarda as linhas do jogador, não uma linha solta', async () => {
+    const [ontem] = await conferirRodadas(banco.db, HOJE, 7)
+    const comMaisDeUma = ontem!.jogadores.filter((j) => j.linhas.length > 1)
+
+    expect(comMaisDeUma.length).toBeGreaterThan(0)
+    for (const jogador of comMaisDeUma) {
+      // Ordenadas da mais baixa para a mais alta — a ordem da tela.
+      const linhas = jogador.linhas.map((l) => l.linha)
+      expect(linhas).toEqual([...linhas].sort((a, b) => a - b))
+      if (jogador.valor !== null) {
+        const batidas = jogador.linhas.filter((l) => l.bateu === true).map((l) => l.linha)
+        expect(jogador.maiorLinhaBatida).toBe(batidas.length === 0 ? null : Math.max(...batidas))
+      }
+    }
+  })
+
+  it('o Fire Live registra green com um marco do ruleset', async () => {
+    const greens = await greensDoDia(banco.db, HOJE)
+
+    expect(greens.length).toBeGreaterThan(0)
+    for (const green of greens) {
+      const marcos =
+        green.atributo === 'PONTOS'
+          ? ruleset.push.marcos_green[green.nivelJogador]
+          : ruleset.por_atributo[green.atributo]?.marcos_green?.[green.nivelJogador]
+      expect(marcos).toContain(green.marco)
+      expect(green.valor).toBeGreaterThanOrEqual(green.marco)
+    }
+  })
+
+  it('a gestão de banca sugere entrada para cada apito do dia', async () => {
+    const plano = await planoDoDia(banco.db, ruleset, HOJE, 1000)
+
+    expect(plano.temModelo).toBe(true)
+    // Enquanto o modelo do CJ não chega, a tela precisa poder avisar.
+    expect(plano.origem).toBe('demonstracao')
+    expect(plano.entradas.length).toBeGreaterThan(0)
+    expect(plano.entradas.every((e) => e.entrada !== null)).toBe(true)
+    // Nenhuma entrada pode furar o teto por entrada do ruleset.
+    const teto = plano.limites!.tetoPorEntrada
+    expect(plano.entradas.every((e) => e.entrada!.valor <= teto)).toBe(true)
+    expect(plano.totalExposto).toBeCloseTo(
+      plano.entradas.reduce((s, e) => s + e.entrada!.valor, 0),
+      10,
+    )
+  })
+
+  it('um jogador apitado em dois atributos vira dois cards, não um', async () => {
+    const feed = await lerFeed(banco.db, HOJE)
+    const cards = agruparPorJogador(feed!.conteudo.itens)
+
+    const porJogador = new Map<string, Set<string>>()
+    for (const c of cards) {
+      const atributos = porJogador.get(c.jogadorId) ?? new Set<string>()
+      atributos.add(c.atributo)
+      porJogador.set(c.jogadorId, atributos)
+    }
+
+    // Alguém precisa aparecer em mais de um atributo, senão o teste não prova
+    // nada — a OPD do Luka fora sinaliza Reaves nos três.
+    expect([...porJogador.values()].some((a) => a.size > 1)).toBe(true)
+    // E cada par (jogador, atributo) aparece uma única vez.
+    expect(cards.length).toBe([...porJogador.values()].reduce((s, a) => s + a.size, 0))
   })
 
   it('reexecutar o seed não duplica nada', async () => {

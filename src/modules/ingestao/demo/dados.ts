@@ -74,18 +74,53 @@ export function mediaDe(nome: string, nivel: Nivel): MediaDemo {
   }
 }
 
+export type OpcoesHistorico = {
+  /**
+   * Em que jogo a sequência abaixo COMEÇA, contando do mais recente.
+   *
+   * `0` = ele ainda está oscilando hoje, e a lista de hoje o sinaliza.
+   * `1` = a oscilação terminou ontem: ele apitou na rodada passada e voltou à
+   * média no jogo seguinte. Sem esse segundo caso, a aba de Resultados só teria
+   * quem ainda está abaixo — e abriria com uma sequência de vermelhos, porque
+   * o jogo conferido seria justamente mais um jogo ruim.
+   */
+  deslocamento?: number
+  /**
+   * Semente para variar os jogos ACIMA do limiar. Sem ela todo jogador faz
+   * exatamente `média + 2` em toda partida, e a aba de estatísticas fica com
+   * cara de planilha preenchida por fórmula. A variação nunca cruza o limiar:
+   * ninguém apita por acidente.
+   */
+  variacao?: string
+}
+
 /**
  * Pontuações de 6 jogos, do MAIS RECENTE para o mais antigo — a ordem que o
  * motor usa para contar a sequência de oscilação.
  *
- * `jogosAbaixo` primeiros ficam em (limiar - 1); os seguintes voltam para a
- * média. O limiar é `média - delta`: quem decide o delta é o ruleset, não este
- * arquivo — ele só recebe o número já calculado.
+ * Os `jogosAbaixo` a partir de `deslocamento` ficam em (limiar - 1); os demais
+ * ficam acima. O limiar é `média - delta`: quem decide o delta é o ruleset, não
+ * este arquivo — ele só recebe o número já calculado.
  */
-export function historicoOscilacao(media: number, delta: number, jogosAbaixo: number): number[] {
+export function historicoOscilacao(
+  media: number,
+  delta: number,
+  jogosAbaixo: number,
+  opcoes: OpcoesHistorico = {},
+): number[] {
   const limiar = media - delta
+  const inicio = opcoes.deslocamento ?? 0
+  const piso = Math.ceil(limiar + 1)
+
+  const acima = (i: number): number => {
+    if (opcoes.variacao === undefined) return Math.round(media + 2)
+    const amplitude = Math.max(1, Math.round(delta))
+    const desvio = (semente(`${opcoes.variacao}|${i}`) % (amplitude * 2 + 1)) - amplitude
+    return Math.max(piso, Math.round(media + desvio))
+  }
+
   return Array.from({ length: 6 }, (_, i) =>
-    i < jogosAbaixo ? Math.max(0, Math.round(limiar - 1)) : Math.round(media + 2),
+    i >= inicio && i < inicio + jogosAbaixo ? Math.max(0, Math.round(limiar - 1)) : acima(i),
   )
 }
 

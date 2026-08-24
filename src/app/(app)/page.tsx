@@ -9,6 +9,7 @@ import {
   type ItemFeed,
 } from '@/modules/entrega/lista-secreta'
 import { rotaDoJogador, BASE_ESTATISTICAS } from '@/modules/entrega/estatisticas/rotas'
+import { Moldura } from '@/components/navegacao'
 import { CardEntrada } from '@/design-system/componentes'
 import { semantico } from '@/design-system/tokens/semantico'
 import { AtivarAlertas, PainelPwa } from '@/components/pwa'
@@ -51,6 +52,12 @@ const NIVEIS = [
 
 const POSICOES = ['G', 'F', 'C'] as const
 
+const ATRIBUTOS = [
+  { valor: 'PONTOS', rotulo: 'Pontos' },
+  { valor: 'REBOTES', rotulo: 'Rebotes' },
+  { valor: 'ASSISTENCIAS', rotulo: 'Assistências' },
+] as const
+
 function primeiroValor(v: string | string[] | undefined): string | undefined {
   const s = Array.isArray(v) ? v[0] : v
   return s === undefined || s === '' ? undefined : s
@@ -64,6 +71,7 @@ function comFiltro(recorte: Recorte, campo: string, valor: string | undefined): 
   if (recorte.nivel) p.set('nivel', recorte.nivel)
   if (recorte.time) p.set('time', recorte.time)
   if (recorte.posicao) p.set('posicao', recorte.posicao)
+  if (recorte.atributo) p.set('atributo', recorte.atributo)
   if (valor === undefined) p.delete(campo)
   else p.set(campo, valor)
   const q = p.toString()
@@ -140,22 +148,6 @@ function Filtros({ atual, base }: { atual: number; base: string }) {
   )
 }
 
-function Moldura({ children }: { children: React.ReactNode }) {
-  return (
-    <main
-      style={{
-        background: semantico.fundo,
-        color: semantico.textoPrimario,
-        minHeight: '100vh',
-        padding: '24px 16px 64px',
-        fontFamily: 'system-ui, sans-serif',
-      }}
-    >
-      <div style={{ maxWidth: 640, margin: '0 auto' }}>{children}</div>
-    </main>
-  )
-}
-
 export default async function PaginaListaSecreta({
   searchParams,
 }: {
@@ -166,6 +158,7 @@ export default async function PaginaListaSecreta({
   const quantidade = QUANTIDADES.includes(bruto as (typeof QUANTIDADES)[number]) ? bruto : 0
   const metodoBruto = primeiroValor(params.metodo)
   const nivelBruto = primeiroValor(params.nivel)
+  const atributoBruto = primeiroValor(params.atributo)
   const recorte: Recorte = {
     quantidade,
     metodo: METODOS.some((m) => m.valor === metodoBruto)
@@ -176,11 +169,14 @@ export default async function PaginaListaSecreta({
       : undefined,
     time: primeiroValor(params.time),
     posicao: primeiroValor(params.posicao),
+    atributo: ATRIBUTOS.some((a) => a.valor === atributoBruto)
+      ? (atributoBruto as FiltroLista['atributo'])
+      : undefined,
   }
 
   if (!process.env.DATABASE_URL) {
     return (
-      <Moldura>
+      <Moldura aba="lista">
         <h1>Lista Secreta</h1>
         <p style={{ color: semantico.textoSecundario }}>
           Banco não configurado. Rode <code>vercel env pull</code> e <code>npm run db:migrate</code>
@@ -212,7 +208,7 @@ export default async function PaginaListaSecreta({
 
   if (feed === null) {
     return (
-      <Moldura>
+      <Moldura aba="lista">
         <h1 style={{ marginBottom: 4 }}>Lista Secreta</h1>
         <p style={{ color: semantico.textoSecundario }}>
           A lista de hoje ainda não foi publicada. Ela sai 1 hora antes do primeiro jogo.
@@ -231,15 +227,11 @@ export default async function PaginaListaSecreta({
   // Chips construídos do que EXISTE hoje — nunca oferecem recorte vazio.
   const timesDoDia = [...new Set(doDia.map((i) => i.timeSigla))].sort()
   const posicoesDoDia = POSICOES.filter((p) => doDia.some((i) => i.posicao === p))
-  const temFiltro =
-    recorte.metodo !== undefined ||
-    recorte.nivel !== undefined ||
-    recorte.time !== undefined ||
-    recorte.posicao !== undefined
+  const atributosDoDia = ATRIBUTOS.filter((a) => doDia.some((i) => i.atributo === a.valor))
   const recorteVazio = visiveis.length === 0 && agruparPorJogador(doDia).length > 0
 
   return (
-    <Moldura>
+    <Moldura aba="lista">
       <header style={{ marginBottom: 16 }}>
         <h1 style={{ margin: 0, fontSize: 22 }}>Lista Secreta</h1>
         <p style={{ margin: '4px 0 0', fontSize: 13, color: semantico.textoSecundario }}>
@@ -268,6 +260,26 @@ export default async function PaginaListaSecreta({
       <Filtros atual={quantidade} base="/" />
 
       <section style={{ marginBottom: 14 }}>
+        {atributosDoDia.length > 1 && (
+          <GrupoFiltro titulo="Atributo">
+            <Chip
+              href={comFiltro(recorte, 'atributo', undefined)}
+              ativo={recorte.atributo === undefined}
+            >
+              Todos
+            </Chip>
+            {atributosDoDia.map((a) => (
+              <Chip
+                key={a.valor}
+                href={comFiltro(recorte, 'atributo', a.valor)}
+                ativo={recorte.atributo === a.valor}
+              >
+                {a.rotulo}
+              </Chip>
+            ))}
+          </GrupoFiltro>
+        )}
+
         <GrupoFiltro titulo="Método">
           <Chip href={comFiltro(recorte, 'metodo', undefined)} ativo={recorte.metodo === undefined}>
             Todos
@@ -373,7 +385,7 @@ export default async function PaginaListaSecreta({
             jogadorHref={rotaDoJogador(item.jogadorId)}
             timeSigla={item.timeSigla}
             timeNome={item.timeNome}
-            posicao={null}
+            posicao={item.posicao}
             atributo={item.atributo}
             nivelJogador={item.nivelJogador}
             nivelApito={item.nivelApito}
@@ -385,7 +397,7 @@ export default async function PaginaListaSecreta({
           />
             <p style={{ margin: '4px 0 0', fontSize: 12 }}>
               <Link
-                href={`/apito/${item.jogadorId}`}
+                href={`/apito/${item.jogadorId}?atributo=${item.atributo}`}
                 style={{ color: semantico.textoSecundario }}
               >
                 linhas e confiança →

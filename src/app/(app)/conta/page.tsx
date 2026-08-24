@@ -49,7 +49,7 @@ export default async function PaginaConta({
   )
 
   return (
-    <MolduraConta titulo="Minha conta" descricao={sessao.email}>
+    <MolduraConta titulo="Minha conta" descricao={sessao.email} aba="conta">
       <div style={{ display: 'grid', gap: 24 }}>
         {estadoCancelamento && (
           <p
@@ -71,6 +71,18 @@ export default async function PaginaConta({
                   : 'Não foi possível confirmar o cancelamento no Mercado Pago.'}
           </p>
         )}
+
+        <section>
+          <h2 style={{ margin: '0 0 10px', fontSize: 17 }}>Explorar</h2>
+          <ul style={{ margin: 0, paddingLeft: 18, fontSize: 14, lineHeight: 2 }}>
+            <li>
+              <Link href="/estatisticas">Estatísticas — jogos, jogadores e times</Link>
+            </li>
+            <li>
+              <Link href="/como-funciona">Como funciona a metodologia</Link>
+            </li>
+          </ul>
+        </section>
 
         <section>
           <h2 style={{ margin: '0 0 10px', fontSize: 17 }}>Assinatura e acesso</h2>
