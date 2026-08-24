@@ -133,6 +133,7 @@ export default async function PaginaApito({
         nivelJogador={principal.nivelJogador}
         nivelApito={principal.nivelApito}
         confianca={principal.confianca}
+        grauConfianca={null}
         turbo={principal.turbo}
         modoFire={principal.modoFire}
         opdOrigemNivel={principal.opdOrigemNivel}

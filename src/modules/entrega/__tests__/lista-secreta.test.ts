@@ -345,6 +345,7 @@ describe('a tela consome o feed materializado', () => {
         nivelJogador: item.nivelJogador,
         nivelApito: item.nivelApito,
         confianca: item.confianca,
+        grauConfianca: null,
         turbo: item.turbo,
         modoFire: item.modoFire,
         opdOrigemNivel: item.opdOrigemNivel,
@@ -353,7 +354,7 @@ describe('a tela consome o feed materializado', () => {
 
     expect(html).toContain(item.nome)
     expect(html).toContain('LAL')
-    expect(html).toContain(`NÍVEL ${item.nivelApito}`)
+    expect(html).toContain(`N${item.nivelApito}`)
     // A palavra proibida não pode aparecer na saída renderizada (P12).
     expect(html.toLowerCase()).not.toContain('probabilidade')
   })

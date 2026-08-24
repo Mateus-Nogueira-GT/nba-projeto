@@ -211,6 +211,7 @@ export default async function PaginaFireLive({
               nivelJogador={item.nivelJogador}
               nivelApito={item.nivelApito}
               confianca={item.confianca}
+              grauConfianca={null}
               turbo={item.turbo}
               modoFire={item.modoFire}
               opdOrigemNivel={item.opdOrigemNivel}

@@ -1,15 +1,17 @@
 import type { Atributo, Nivel, NivelApito } from '../../modules/motor/tipos'
 import { componente } from '../tokens/componente'
-import { MODO_FIRE, NIVEL_JOGADOR, TURBO } from '../tokens/css'
-import { Anel } from './Anel'
-import { Historico } from './Historico'
+import { CONFIANCA_GRAU, MODO_FIRE, NIVEL_JOGADOR, TURBO } from '../tokens/css'
+import { semantico } from '../tokens/semantico'
+import { Avatar } from './Avatar'
+import { Pilula } from './Pilula'
 import { Selo } from './Selo'
 
 const ATRIBUTO_ROTULO: Record<Atributo, string> = {
-  PONTOS: 'PTS',
-  REBOTES: 'REB',
-  ASSISTENCIAS: 'AST',
+  PONTOS: 'PONTOS',
+  REBOTES: 'REBOTES',
+  ASSISTENCIAS: 'ASSISTÊNCIAS',
 }
+const ATRIBUTO_CURTO: Record<Atributo, string> = { PONTOS: 'PTS', REBOTES: 'REB', ASSISTENCIAS: 'AST' }
 
 export type CardEntradaProps = {
   nome: string
@@ -30,120 +32,167 @@ export type CardEntradaProps = {
   nivelApito: NivelApito
   /** Nota de confiança. Nunca "probabilidade". */
   confianca: number | null
+  /** Grau visual (1..5) calculado por faixaDaConfianca na TELA. */
+  grauConfianca: 1 | 2 | 3 | 4 | 5 | null
   turbo?: boolean
   modoFire?: boolean
-  /** Últimas partidas: true = bateu a linha. Mais recente primeiro. */
-  historico?: boolean[]
-  /** Faixa de odd entre casas. Nunca valor único. */
-  odd?: { min: number; max: number; casas: number } | null
   /** Nível de origem quando o jogador já vinha apitado em OPD pré-live. */
   opdOrigemNivel?: NivelApito | null
+  /** Linha do apito. Exibida SEMPRE inteira, com sufixo "+" — nunca meio ponto. */
+  linha?: number | null
   /** Alvo do 1º quarto, no Fire Live. */
   alvo1Q?: number | null
-}
-
-function formatarOdd(v: number): string {
-  return v.toFixed(2).replace('.', ',')
+  /** Selo VIVO — fire live em andamento. */
+  vivo?: boolean
+  /** Progresso observado no 1º quarto, contra o alvo. */
+  progresso1Q?: { observado: number; alvo: number } | null
 }
 
 /**
- * Card de entrada.
+ * Card de entrada — identidade 02.
  *
- * DOIS canais visuais, e só dois:
- *   borda metálica = nível do jogador  (+ rótulo textual, redundância obrigatória)
- *   anel colorido  = nível do apito    (+ número do nível, redundância obrigatória)
+ * QUATRO sinais, QUATRO formas distintas, cada um com redundância escrita:
+ *   faixa metálica curta no topo = nível do JOGADOR   (+ rótulo na linha de apoio)
+ *   anel do avatar               = nível do APITO      (+ numeral N{n}/T)
+ *   pílula de contorno           = faixa de CONFIANÇA  (+ número dentro)
+ *   brilho ao redor do card      = SÓ no grau máximo de confiança (grau 5)
  *
- * Turbo e modo fire nunca comunicam só por cor ou movimento: os dois carregam
- * ícone e rótulo escrito.
+ * Turbo e modo fire nunca comunicam só por cor ou brilho: os dois carregam
+ * selo com ícone e rótulo escrito.
  */
 export function CardEntrada(props: CardEntradaProps) {
   const nivel = NIVEL_JOGADOR[props.nivelJogador]
-  const turbo = props.turbo ?? false
-  const modoFire = props.modoFire ?? false
+  const grau = props.grauConfianca
+  const corPilula = grau === null ? semantico.divisor : CONFIANCA_GRAU[grau]
+  const brilha = grau === 5 // regra DO MOCKUP: só a faixa máxima brilha
+  const rotuloLinha =
+    props.linha != null
+      ? `${ATRIBUTO_ROTULO[props.atributo]} ${props.linha}+`
+      : props.alvo1Q != null
+        ? `${ATRIBUTO_ROTULO[props.atributo]} · ALVO 1Q ${props.alvo1Q}`
+        : ATRIBUTO_ROTULO[props.atributo]
+  const p = props.progresso1Q
+  const faltam = p ? Math.max(0, p.alvo - p.observado) : 0
 
   return (
-    <article
-      style={{
-        position: 'relative',
-        display: 'flex',
-        alignItems: 'center',
-        gap: 12,
-        padding: 14,
-        borderRadius: 12,
-        background: componente.cardFundo,
-        color: componente.cardTexto,
-        // Canal 1 — a borda metálica é o nível do jogador.
-        border: `${componente.cardBordaLargura} solid ${nivel.cor}`,
-        // Modo fire arde ao redor do card; o rótulo abaixo é que informa.
-        boxShadow: modoFire ? `0 0 16px 2px ${MODO_FIRE.cor}66` : undefined,
-      }}
-    >
+    <div>
+      {/* faixa metálica CURTA = nível do jogador */}
       <div
         aria-hidden
         style={{
-          width: 52,
-          height: 52,
-          borderRadius: '50%',
-          flexShrink: 0,
-          background: componente.marcadorOpdFundo,
-          backgroundImage: props.fotoUrl ? `url(${props.fotoUrl})` : undefined,
-          backgroundSize: 'cover',
-          backgroundPosition: 'center',
+          width: 56,
+          height: componente.faixaNivelAltura,
+          borderRadius: 2,
+          background: nivel.cor,
+          marginBottom: 4,
         }}
       />
-
-      <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 6 }}>
-        <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
-          <strong style={{ fontSize: 16, lineHeight: 1.2 }}>
-            {props.jogadorHref ? (
-              <a
-                href={props.jogadorHref}
-                style={{ color: 'inherit', textDecorationThickness: 1, textUnderlineOffset: 3 }}
+      <article
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 10,
+          padding: 14,
+          borderRadius: 14,
+          background: componente.cardFundo,
+          color: componente.cardTexto,
+          border: `1px solid ${brilha ? corPilula : semantico.divisor}`,
+          boxShadow: brilha ? `0 0 16px 1px ${corPilula}55` : undefined,
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <Avatar
+            nome={props.nome}
+            fotoUrl={props.fotoUrl ?? null}
+            timeSigla={props.timeSigla}
+            nivelApito={props.nivelApito}
+            turbo={props.turbo}
+          />
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+              <strong
+                style={{
+                  fontFamily: semantico.fonteTitulo,
+                  fontSize: 18,
+                  letterSpacing: 0.5,
+                  textTransform: 'uppercase',
+                }}
               >
-                {props.nome}
-              </a>
-            ) : (
-              props.nome
-            )}
-          </strong>
-          {/* Redundância do canal 1: o nível também vem escrito. */}
-          <span style={{ fontSize: 11, fontWeight: 600, color: nivel.cor, letterSpacing: 0.4 }}>
-            {nivel.rotulo}
-          </span>
+                {props.jogadorHref ? (
+                  <a
+                    href={props.jogadorHref}
+                    style={{ color: 'inherit', textUnderlineOffset: 3 }}
+                  >
+                    {props.nome}
+                  </a>
+                ) : (
+                  props.nome
+                )}
+              </strong>
+              {props.vivo && <Pilula texto="VIVO" cor={semantico.aoVivo} />}
+            </div>
+            <div
+              style={{
+                fontFamily: semantico.fonteRotulo,
+                fontSize: 12,
+                letterSpacing: 1,
+                color: componente.cardTextoApoio,
+                textTransform: 'uppercase',
+              }}
+            >
+              {rotuloLinha} · {nivel.rotulo} · N{props.nivelApito}
+              {props.posicao ? ` · ${props.posicao}` : ''} · {props.timeSigla}
+            </div>
+            <div style={{ display: 'flex', gap: 6, marginTop: 4, flexWrap: 'wrap' }}>
+              {props.turbo && <Selo icone="⚡" rotulo="TURBO" cor={TURBO.cor} />}
+              {props.modoFire && <Selo icone="🔥" rotulo="MODO FIRE" cor={MODO_FIRE.cor} />}
+              {props.opdOrigemNivel != null && (
+                <Selo icone="↗" rotulo={`OPD nível ${props.opdOrigemNivel}`} />
+              )}
+            </div>
+          </div>
+          <Pilula
+            texto={props.confianca === null ? '—' : `${Math.round(props.confianca)}%`}
+            cor={corPilula}
+            brilho={brilha}
+          />
         </div>
 
-        <div style={{ fontSize: 12, color: componente.cardTextoApoio }}>
-          {props.timeSigla} · {props.timeNome}
-          {props.posicao ? ` · ${props.posicao}` : ''} · {ATRIBUTO_ROTULO[props.atributo]}
-          {props.alvo1Q !== null && props.alvo1Q !== undefined
-            ? ` · alvo 1º quarto: ${props.alvo1Q}`
-            : ''}
-        </div>
-
-        {props.historico && props.historico.length > 0 && (
-          <Historico jogos={props.historico} />
-        )}
-
-        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
-          {turbo && <Selo icone="⚡" rotulo="TURBO" cor={TURBO.cor} />}
-          {modoFire && <Selo icone="🔥" rotulo="MODO FIRE" cor={MODO_FIRE.cor} />}
-          {props.opdOrigemNivel != null && (
-            <Selo icone="↗" rotulo={`OPD nível ${props.opdOrigemNivel}`} />
-          )}
-        </div>
-
-        {props.odd && (
-          // Odd é SEMPRE faixa, nunca valor único: varia por casa e por minuto.
-          <div style={{ fontSize: 12, color: componente.oddTexto }}>
-            Odd entre casas: {formatarOdd(props.odd.min)} – {formatarOdd(props.odd.max)}{' '}
-            <span style={{ opacity: 0.7 }}>
-              · média de {props.odd.casas} casa{props.odd.casas === 1 ? '' : 's'}
-            </span>
+        {p && (
+          <div>
+            <div
+              aria-hidden
+              style={{
+                height: 5,
+                borderRadius: 3,
+                background: semantico.superficieElevada,
+                overflow: 'hidden',
+              }}
+            >
+              <div
+                style={{
+                  width: `${Math.min(100, (p.observado / Math.max(1, p.alvo)) * 100)}%`,
+                  height: '100%',
+                  background: corPilula,
+                }}
+              />
+            </div>
+            <div
+              style={{
+                fontFamily: semantico.fonteRotulo,
+                fontSize: 11,
+                letterSpacing: 1,
+                marginTop: 4,
+                color: componente.cardTextoApoio,
+              }}
+            >
+              {p.observado >= p.alvo
+                ? `LINHA BATIDA · ${p.observado} ${ATRIBUTO_CURTO[props.atributo]}`
+                : `FALTA ${faltam} ${ATRIBUTO_CURTO[props.atributo]}`}
+            </div>
           </div>
         )}
-      </div>
-
-      <Anel nivelApito={props.nivelApito} confianca={props.confianca} turbo={turbo} />
-    </article>
+      </article>
+    </div>
   )
 }

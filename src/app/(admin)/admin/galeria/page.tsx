@@ -1,7 +1,7 @@
 import type { Nivel, NivelApito } from '@/modules/motor/tipos'
-import { CardEntrada } from '@/design-system/componentes'
+import { CardEntrada, Pilula } from '@/design-system/componentes'
 import { semantico } from '@/design-system/tokens/semantico'
-import { NIVEL_JOGADOR, APITO, TURBO, MODO_FIRE } from '@/design-system/tokens/css'
+import { CONFIANCA_GRAU, NIVEL_JOGADOR, APITO, TURBO, MODO_FIRE } from '@/design-system/tokens/css'
 import { razaoDeContraste } from '@/design-system/tokens/contraste'
 import '@/design-system/tokens/tokens.css'
 import { negarSeNaoForAdmin } from '../guarda'
@@ -10,6 +10,7 @@ export const metadata = { title: 'Galeria · Design System' }
 
 const NIVEIS: Nivel[] = ['MVP', 'ALL_STAR', 'SUPORTE', 'RANDOLA']
 const APITOS: NivelApito[] = [1, 2, 3]
+const GRAUS = [1, 2, 3, 4, 5] as const
 
 /** Confiança plausível por nível, só para a galeria ter número realista. */
 const CONFIANCA: Record<Nivel, number> = {
@@ -56,15 +57,17 @@ export default async function PaginaGaleria() {
       <header style={{ marginBottom: 32, maxWidth: 720 }}>
         <h1 style={{ margin: 0 }}>Design System · IA da NBA</h1>
         <p style={{ opacity: 0.75, lineHeight: 1.6 }}>
-          Dois canais visuais, e só dois: a <strong>borda metálica</strong> é o nível do
-          jogador, o <strong>anel colorido</strong> é o nível do apito e o número dentro dele é
-          a confiança. A escala de 5 faixas da proposta foi removida (ADR-0005).
+          Quatro sinais, quatro formas distintas: a <strong>faixa metálica</strong> no topo é o
+          nível do jogador, o <strong>anel do avatar</strong> é o nível do apito, a{' '}
+          <strong>pílula de contorno</strong> é a faixa de confiança e o{' '}
+          <strong>brilho ao redor do card</strong> só aparece no grau máximo de confiança. Turbo e
+          modo fire nunca comunicam por cor ou brilho sozinhos — sempre selo escrito.
         </p>
       </header>
 
       <Secao
         titulo="4 níveis de jogador × 3 níveis de apito"
-        nota="A borda muda com o nível do jogador; o anel muda com o nível do apito. Nenhuma cor é compartilhada entre os dois canais."
+        nota="A faixa metálica muda com o nível do jogador; o anel do avatar muda com o nível do apito. Nenhuma cor é compartilhada entre os dois canais."
       >
         {NIVEIS.map((nivel) =>
           APITOS.map((apito) => (
@@ -78,16 +81,46 @@ export default async function PaginaGaleria() {
               nivelJogador={nivel}
               nivelApito={apito}
               confianca={CONFIANCA[nivel]}
-              historico={[true, true, false, true, false]}
-              odd={{ min: 1.3, max: 1.7, casas: 3 }}
+              grauConfianca={3}
+              linha={20}
             />
           )),
         )}
       </Secao>
 
       <Secao
-        titulo="Turbo"
-        nota="MVP em oscilação nível 3. Azul, com ícone e rótulo escritos — a cor nunca comunica sozinha."
+        titulo="Card comum (grau 3) vs. grau máximo (grau 5, brilha)"
+        nota="Só o grau 5 de confiança acende o brilho ao redor do card — os demais graus só mudam a cor da pílula."
+      >
+        <CardEntrada
+          nome="Austin Reaves"
+          timeSigla="LAL"
+          timeNome="Lakers"
+          posicao="G"
+          atributo="PONTOS"
+          nivelJogador="ALL_STAR"
+          nivelApito={3}
+          confianca={90}
+          grauConfianca={3}
+          linha={18}
+        />
+        <CardEntrada
+          nome="Jokic"
+          timeSigla="DEN"
+          timeNome="Denver Nuggets"
+          posicao="C"
+          atributo="PONTOS"
+          nivelJogador="MVP"
+          nivelApito={3}
+          confianca={97}
+          grauConfianca={5}
+          linha={26}
+        />
+      </Secao>
+
+      <Secao
+        titulo="Turbo + Modo Fire"
+        nota="MVP em oscilação nível 3 e em modo fire. Ícone e rótulo escritos nos dois — a cor nunca comunica sozinha."
       >
         <CardEntrada
           nome="Jokic"
@@ -98,15 +131,16 @@ export default async function PaginaGaleria() {
           nivelJogador="MVP"
           nivelApito={3}
           confianca={94}
+          grauConfianca={4}
           turbo
-          historico={[false, false, false, true, true]}
-          odd={{ min: 1.3, max: 1.7, casas: 4 }}
+          modoFire
+          linha={26}
         />
       </Secao>
 
       <Secao
-        titulo="Modo Fire"
-        nota="MVP ou All Star com 75% da média já no 1º quarto. Brilho ao redor do card mais ícone e rótulo."
+        titulo="Fire Live: selo VIVO e barra de progresso"
+        nota="Uma linha batida e uma ainda em aberto — o texto do estado muda, nunca só a cor da barra."
       >
         <CardEntrada
           nome="Anthony Edwards"
@@ -117,16 +151,12 @@ export default async function PaginaGaleria() {
           nivelJogador="MVP"
           nivelApito={1}
           confianca={95}
+          grauConfianca={4}
           modoFire
+          vivo
           alvo1Q={9}
-          historico={[true, true, true, false, true]}
+          progresso1Q={{ observado: 11, alvo: 9 }}
         />
-      </Secao>
-
-      <Secao
-        titulo="Cruzamento com OPD"
-        nota="Jogador que já vinha apitado em OPD pré-live e voltou a apitar ao vivo. O marcador registra a origem."
-      >
         <CardEntrada
           nome="Grimes"
           timeSigla="LAL"
@@ -134,11 +164,13 @@ export default async function PaginaGaleria() {
           posicao="G"
           atributo="PONTOS"
           nivelJogador="SUPORTE"
-          nivelApito={3}
-          confianca={91}
+          nivelApito={2}
+          confianca={87}
+          grauConfianca={2}
+          vivo
           opdOrigemNivel={3}
           alvo1Q={7}
-          odd={{ min: 2.0, max: 2.5, casas: 2 }}
+          progresso1Q={{ observado: 4, alvo: 7 }}
         />
       </Secao>
 
@@ -152,7 +184,8 @@ export default async function PaginaGaleria() {
           nivelJogador="MVP"
           nivelApito={2}
           confianca={92}
-          alvo1Q={6}
+          grauConfianca={4}
+          linha={12}
         />
         <CardEntrada
           nome="Haliburton"
@@ -163,8 +196,42 @@ export default async function PaginaGaleria() {
           nivelJogador="SUPORTE"
           nivelApito={2}
           confianca={85.5}
-          alvo1Q={2}
+          grauConfianca={1}
+          linha={7}
         />
+      </Secao>
+
+      <Secao
+        titulo="Avatar: com foto e sem foto (monograma)"
+        nota="Sem foto, o monograma entra no lugar. O numeral do nível do apito fica sobreposto nos dois casos — nunca só a cor do anel."
+      >
+        <CardEntrada
+          nome="LeBron James"
+          fotoUrl={null}
+          timeSigla="PHI"
+          timeNome="Philadelphia 76ers"
+          posicao="F"
+          atributo="PONTOS"
+          nivelJogador="MVP"
+          nivelApito={2}
+          confianca={91}
+          grauConfianca={3}
+          linha={24}
+        />
+      </Secao>
+
+      <Secao
+        titulo="Rampa de confiança — as 5 pílulas"
+        nota="Um matiz só, intensidade crescente do grau 1 (menor) ao 5 (maior). Nunca reusa cor categórica do apito ou do nível do jogador."
+      >
+        <div style={{ display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap' }}>
+          {GRAUS.map((grau) => (
+            <span key={grau} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
+              <Pilula texto={`${80 + grau * 3}%`} cor={CONFIANCA_GRAU[grau]} brilho={grau === 5} />
+              <span style={{ fontSize: 12, opacity: 0.7 }}>grau {grau}</span>
+            </span>
+          ))}
+        </div>
       </Secao>
 
       <Secao titulo="Contraste verificado" nota="Valores calculados na renderização — não são texto fixo.">
@@ -173,15 +240,16 @@ export default async function PaginaGaleria() {
             <tr style={{ textAlign: 'left', opacity: 0.6 }}>
               <th style={{ padding: '6px 12px 6px 0' }}>Elemento</th>
               <th style={{ padding: '6px 12px 6px 0' }}>vs superfície</th>
-              <th style={{ padding: '6px 0' }}>número no anel</th>
+              <th style={{ padding: '6px 0' }}>vs texto sobre cor</th>
             </tr>
           </thead>
           <tbody>
             {[
-              ...Object.entries(APITO).map(([k, v]) => [`Anel nível ${k}`, v.cor] as const),
-              ['Anel turbo', TURBO.cor] as const,
+              ...Object.entries(APITO).map(([k, v]) => [`Apito nível ${k}`, v.cor] as const),
+              ['Apito turbo', TURBO.cor] as const,
               ['Modo fire', MODO_FIRE.cor] as const,
-              ...Object.entries(NIVEL_JOGADOR).map(([k, v]) => [`Borda ${k}`, v.cor] as const),
+              ...Object.entries(NIVEL_JOGADOR).map(([k, v]) => [`Faixa ${k}`, v.cor] as const),
+              ...Object.entries(CONFIANCA_GRAU).map(([k, v]) => [`Pílula confiança grau ${k}`, v] as const),
             ].map(([nome, cor]) => (
               <tr key={nome} style={{ borderTop: `1px solid ${semantico.divisor}` }}>
                 <td style={{ padding: '6px 12px 6px 0' }}>

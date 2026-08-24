@@ -3,7 +3,7 @@ import { redirect } from 'next/navigation'
 
 import { montarTeoria } from '@/modules/entrega/teoria/conteudo'
 import { rulesetAtivo } from '@/modules/entrega/ruleset-ativo'
-import { Anel, CardEntrada } from '@/design-system/componentes'
+import { Avatar, CardEntrada } from '@/design-system/componentes'
 import { APITO, MODO_FIRE, NIVEL_JOGADOR, TURBO } from '@/design-system/tokens/css'
 import { semantico } from '@/design-system/tokens/semantico'
 import type { Atributo, Nivel } from '@/modules/motor/tipos'
@@ -150,19 +150,19 @@ export default async function PaginaComoFunciona() {
           </p>
           <div style={{ display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap' }}>
             <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <Anel nivelApito={1} confianca={90} />
+              <Avatar nome="Jogador" fotoUrl={null} timeSigla="LAL" nivelApito={1} />
               <span style={{ fontSize: 13 }}>1 jogo abaixo</span>
             </span>
             <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <Anel nivelApito={2} confianca={92} />
+              <Avatar nome="Jogador" fotoUrl={null} timeSigla="LAL" nivelApito={2} />
               <span style={{ fontSize: 13 }}>2 jogos seguidos</span>
             </span>
             <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <Anel nivelApito={3} confianca={94} />
+              <Avatar nome="Jogador" fotoUrl={null} timeSigla="LAL" nivelApito={3} />
               <span style={{ fontSize: 13 }}>3 jogos seguidos</span>
             </span>
             <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <Anel nivelApito={3} confianca={94} turbo />
+              <Avatar nome="Jogador" fotoUrl={null} timeSigla="LAL" nivelApito={3} turbo />
               <span style={{ fontSize: 13 }}>{TURBO.rotulo}</span>
             </span>
           </div>
@@ -381,6 +381,7 @@ export default async function PaginaComoFunciona() {
             nivelJogador="ALL_STAR"
             nivelApito={3}
             confianca={92}
+            grauConfianca={null}
             turbo={false}
             modoFire={false}
             opdOrigemNivel={3}

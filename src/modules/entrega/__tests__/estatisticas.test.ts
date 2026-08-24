@@ -230,6 +230,7 @@ describe('os dois caminhos chegam na mesma tela', () => {
         nivelJogador: 'MVP' as const,
         nivelApito: 1 as const,
         confianca: 90,
+        grauConfianca: null,
       }),
     )
     const href = /href="([^"]+)"/.exec(html)?.[1]
@@ -260,6 +261,7 @@ describe('os dois caminhos chegam na mesma tela', () => {
         nivelJogador: 'MVP' as const,
         nivelApito: 1 as const,
         confianca: 90,
+        grauConfianca: null,
       }),
     )
     // `<a` sozinho casaria com `<article` — o que interessa é a âncora.
