@@ -163,7 +163,7 @@ export default async function PaginaApito({
       >
         <Avatar
           nome={principal.nome}
-          fotoUrl={null}
+          fotoUrl={principal.fotoUrl ?? null}
           timeSigla={principal.timeSigla}
           nivelApito={principal.nivelApito}
           turbo={principal.turbo}

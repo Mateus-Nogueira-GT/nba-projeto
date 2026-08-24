@@ -1,7 +1,9 @@
+import { and, eq } from 'drizzle-orm'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 
 import { bancoDeTeste } from '../../modules/dominio/__tests__/ajuda-banco'
+import { feedSnapshot, jogadores } from '../../modules/dominio/db/schema'
 import { dataDeReferencia, somarDias } from '../../modules/dominio/rodada'
 import { rulesetAtivo } from '../../modules/entrega/ruleset-ativo'
 import { semearDemo } from '../../modules/ingestao/demo/semear'
@@ -287,5 +289,59 @@ describe('regras transversais da identidade', () => {
     expect(htmlResultados).not.toMatch(/(PONTOS|REBOTES|ASSISTÊNCIAS)\s+\d+,\d/)
     expect(htmlResultados).not.toContain('ALTÍSSIMO VALOR')
     expect(htmlResultados).not.toContain('3 PONTOS')
+  }, 60_000)
+})
+
+// ===========================================================================
+// A FOTO ATRAVESSA AS DUAS TELAS (I3)
+// ===========================================================================
+
+describe('a foto do jogador', () => {
+  const FOTO = 'https://cdn.nba.com/headshots/nba/latest/1040x760/2544.png'
+
+  it('aparece no card da lista E no hero do detalhe — não some no caminho', async () => {
+    // O detalhe passava `fotoUrl={null}` literal, embora o item do feed já
+    // trouxesse a URL. O assinante via a headshot no card, tocava em "linhas e
+    // confiança →" e encontrava o monograma "LJ" — o mesmo jogador, dois
+    // rostos. /gestao, /resultados e /estatisticas já passavam a foto.
+    const { publicarListaSecreta } = await import('../../modules/entrega/lista-secreta')
+    const ruleset = await rulesetAtivo()
+
+    await banco.db
+      .update(jogadores)
+      .set({ fotoUrl: FOTO })
+      .where(eq(jogadores.nomeCompleto, 'LeBron James'))
+    // O hash do snapshot não olha para a foto: sem apagar, a republicação
+    // veria "nada mudou" e o feed continuaria sem a URL.
+    await banco.db
+      .delete(feedSnapshot)
+      .where(
+        and(eq(feedSnapshot.dataReferencia, HOJE), eq(feedSnapshot.estrategia, 'LISTA_SECRETA')),
+      )
+    await publicarListaSecreta(banco.db, ruleset, {
+      dataReferencia: HOJE,
+      agora: AGORA,
+      ignorarAntecedencia: true,
+    })
+
+    const { lerFeed } = await import('../../modules/entrega/lista-secreta')
+    const lebron = (await lerFeed(banco.db, HOJE))!.conteudo.itens.find(
+      (i) => i.nome === 'LeBron James',
+    )!
+    expect(lebron.fotoUrl).toBe(FOTO)
+
+    const { default: Lista } = await import('../(app)/page')
+    const htmlLista = renderToStaticMarkup(await Lista({ searchParams: Promise.resolve({}) }))
+    expect(htmlLista).toContain('<img')
+
+    const { default: Detalhe } = await import('../(app)/apito/[jogadorId]/page')
+    const htmlDetalhe = renderToStaticMarkup(
+      await Detalhe({
+        params: Promise.resolve({ jogadorId: lebron.jogadorId }),
+        searchParams: Promise.resolve({ atributo: lebron.atributo }),
+      }),
+    )
+    expect(htmlDetalhe).toContain('<img')
+    expect(htmlDetalhe).not.toContain('>LJ<')
   }, 60_000)
 })
