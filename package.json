@@ -24,6 +24,8 @@
     "db:studio": "dotenv -e .env.local -- drizzle-kit studio",
     "admin:bootstrap": "vite-node scripts/bootstrap-admin.ts",
     "cortesia": "vite-node scripts/conceder-cortesia.ts",
+    "demo:seed": "vite-node scripts/demo-seed.ts",
+    "demo:limpar": "vite-node scripts/demo-limpar.ts",
     "ingestao:backfill": "vite-node scripts/backfill-ingestao.ts",
     "tokens": "vite-node scripts/gerar-tokens-css.mts",
     "pwa:assets": "vite-node scripts/gerar-assets-pwa.ts"
