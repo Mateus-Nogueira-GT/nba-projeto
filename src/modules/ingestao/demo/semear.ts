@@ -2,6 +2,7 @@ import { readFile } from 'node:fs/promises'
 import { eq, inArray } from 'drizzle-orm'
 
 import {
+  casas,
   estatisticasJogo,
   estatisticasQuarto,
   fireLiveExecucoes,
@@ -10,6 +11,9 @@ import {
   lesoesEscalacao,
   mapaJogadores,
   mediasJogador,
+  niveis,
+  oddsAgregada,
+  oddsSnapshot,
   times,
 } from '../../dominio/db/schema'
 import type { Db } from '../../dominio/db/tipos'
@@ -17,11 +21,15 @@ import { temporadaDe } from '../../dominio/temporada'
 import { ativarVersaoNiveis } from '../../dominio/repositorios/niveis'
 import { executarCiclo } from '../../entrega/fire-live/ciclo'
 import { FilaEmMemoria } from '../../entrega/fila/memoria'
-import { publicarListaSecreta } from '../../entrega/lista-secreta'
+import { lerFeed, publicarListaSecreta } from '../../entrega/lista-secreta'
+import { deltaOscilacao, faixaEstatica } from '../../motor/atributos'
+import { agregar } from '../../motor/odds/agregar'
 import type { Ruleset } from '../../motor/ruleset/schema'
+import { ATRIBUTOS } from '../../motor/tipos'
+import type { Atributo } from '../../motor/tipos'
 import { lerListaDeNiveis } from '../niveis/parser'
 import { importarListaDeNiveis } from '../niveis/importar'
-import { historicoOscilacao, mediaDe, posicaoDe } from './dados'
+import { historicoOscilacao, mediaDe, niveisDoJogador, posicaoDe } from './dados'
 
 export const ARQUIVO_LISTA = 'data/fontes/introducao-ia-nba.md'
 const PROVEDOR_DEMO = 'demo'
@@ -33,6 +41,7 @@ export type ResumoDemo = {
   jogosHoje: number
   itensListaSecreta: number
   apitosFireLive: number
+  linhasComOdd: number
 }
 
 /**
@@ -107,6 +116,35 @@ export async function semearDemo(db: Db, ruleset: Ruleset, agora: Date): Promise
   })
   await ativarVersaoNiveis(db, relatorio.versaoId)
 
+  // 1b · REBOTES e ASSISTÊNCIAS. O importador só sabe classificar PONTOS,
+  //      porque é o único atributo que o CJ enviou. Estas linhas são
+  //      INVENTADAS e entram na MESMA versão de níveis — o motor as trata
+  //      exatamente como trataria a lista real, sem saber a diferença.
+  //      Quando as listas verdadeiras chegarem, elas vêm pelo importador e
+  //      este bloco desaparece.
+  const niveisDerivados: (typeof niveis.$inferInsert)[] = []
+  for (const j of analise.jogadores) {
+    const jogadorId = jaExistentes.get(j.nomeNaLista)
+    const timeId = j.timeSigla ? timePorSigla.get(j.timeSigla) : undefined
+    if (!jogadorId || !timeId) continue
+
+    const derivados = niveisDoJogador(j.nomeNaLista, j.nivel)
+    for (const atributo of ATRIBUTOS) {
+      if (atributo === 'PONTOS') continue
+      niveisDerivados.push({
+        niveisVersaoId: relatorio.versaoId,
+        jogadorId,
+        timeId,
+        atributo,
+        nivel: derivados[atributo],
+        posicaoHierarquia: j.posicaoHierarquia,
+      })
+    }
+  }
+  if (niveisDerivados.length > 0) {
+    await db.insert(niveis).values(niveisDerivados).onConflictDoNothing()
+  }
+
   // 2 · Médias da temporada — a MESMA que montarFatos vai consultar.
   const temporada = temporadaDe(agora, {
     mesInicio: ruleset.temporada.mes_inicio,
@@ -171,12 +209,25 @@ export async function semearDemo(db: Db, ruleset: Ruleset, agora: Date): Promise
   //     oscilação". LeBron, na lista projetada, é SUPORTE no Philadelphia —
   //     então ele precisa de DOIS jogos abaixo para aparecer. Quem demonstra o
   //     nível 1 (amarelo) tem que ser MVP ou All Star.
-  const CENARIOS: { nome: string; jogosAbaixo: number }[] = [
-    { nome: 'Brunson', jogosAbaixo: 1 }, // MVP · 1 jogo abaixo → amarelo
-    { nome: 'LeBron James', jogosAbaixo: 2 }, // Suporte · 2 jogos → laranja
-    { nome: 'stephen Curry', jogosAbaixo: 3 }, // MVP · 3 jogos → verde + turbo
-  ]
-  const abaixoPorNome = new Map(CENARIOS.map((c) => [c.nome, c.jogosAbaixo] as const))
+  //     Cada atributo tem seus próprios protagonistas, e todos jogam HOJE —
+  //     apito de quem não entra em quadra não aparece na lista.
+  const CENARIOS: Record<Atributo, { nome: string; jogosAbaixo: number }[]> = {
+    PONTOS: [
+      { nome: 'Brunson', jogosAbaixo: 1 }, // MVP · 1 jogo abaixo → amarelo
+      { nome: 'LeBron James', jogosAbaixo: 2 }, // Suporte · 2 jogos → laranja
+      { nome: 'stephen Curry', jogosAbaixo: 3 }, // MVP · 3 jogos → verde + turbo
+    ],
+    REBOTES: [
+      { nome: 'Tatum', jogosAbaixo: 2 }, // BOS
+      { nome: 'Jokic', jogosAbaixo: 3 }, // DEN — os 12,9 rpg do documento
+    ],
+    ASSISTENCIAS: [
+      { nome: 'Giannis', jogosAbaixo: 2 }, // MIA
+      { nome: 'Jamal Murray', jogosAbaixo: 3 }, // DEN — os 7 apg do documento
+    ],
+  }
+  const jogosAbaixoDe = (nome: string, atributo: Atributo): number =>
+    CENARIOS[atributo].find((c) => c.nome === nome)?.jogosAbaixo ?? 0
 
   const DIAS = 6
   for (let i = 1; i <= DIAS; i++) {
@@ -186,15 +237,37 @@ export async function semearDemo(db: Db, ruleset: Ruleset, agora: Date): Promise
     if (!jogoId) continue
 
     for (const [nome, jogadorId] of jaExistentes) {
-      const nivel = nivelPorNome.get(nome)
-      if (!nivel) continue
-      const media = mediaDe(nome, nivel).ppg
-      const delta = ruleset.oscilacao.delta[nivel] ?? 5
-      const sequencia = historicoOscilacao(media, delta, abaixoPorNome.get(nome) ?? 0)
-      const pontos = sequencia[i - 1] ?? Math.round(media)
+      const nivelPontos = nivelPorNome.get(nome)
+      if (!nivelPontos) continue
+
+      const derivados = niveisDoJogador(nome, nivelPontos)
+      const m = mediaDe(nome, nivelPontos)
+      const mediaDoAtributo: Record<Atributo, number> = {
+        PONTOS: m.ppg,
+        REBOTES: m.rpg,
+        ASSISTENCIAS: m.apg,
+      }
+
+      // O delta sai do ruleset, por atributo. Sem tabela para o atributo, o
+      // jogador só joga na média — nenhuma sequência de oscilação se forma.
+      const valorNoJogo = (atributo: Atributo): number => {
+        const media = mediaDoAtributo[atributo]
+        const delta = deltaOscilacao(derivados[atributo], atributo, jogadorId, ruleset)
+        if (delta === undefined) return Math.round(media)
+        const sequencia = historicoOscilacao(media, delta, jogosAbaixoDe(nome, atributo))
+        return sequencia[i - 1] ?? Math.round(media)
+      }
+
       await db
         .insert(estatisticasJogo)
-        .values({ jogoId, jogadorId, pontos, rebotesTotal: 4, assistencias: 3, minutos: '30.00' })
+        .values({
+          jogoId,
+          jogadorId,
+          pontos: valorNoJogo('PONTOS'),
+          rebotesTotal: valorNoJogo('REBOTES'),
+          assistencias: valorNoJogo('ASSISTENCIAS'),
+          minutos: '30.00',
+        })
         .onConflictDoNothing()
     }
   }
@@ -263,6 +336,10 @@ export async function semearDemo(db: Db, ruleset: Ruleset, agora: Date): Promise
     if (!ciclo.encerrar) apitosFireLive = ciclo.apitosNovos
   }
 
+  // 6 · Odds. Só depois da lista publicada — a cotação é POR LINHA, e quem
+  //     decide quais linhas existem é o motor.
+  const linhasComOdd = await semearOdds(db, ruleset, dataReferencia, agora)
+
   const contarJogosHoje = await db
     .select({ id: jogos.id })
     .from(jogos)
@@ -275,7 +352,115 @@ export async function semearDemo(db: Db, ruleset: Ruleset, agora: Date): Promise
     jogosHoje: contarJogosHoje.length,
     itensListaSecreta: publicacao.publicou ? publicacao.itens : 0,
     apitosFireLive,
+    linhasComOdd,
   }
+}
+
+/**
+ * CASAS DE APOSTA DA DEMONSTRAÇÃO — nomes fictícios de propósito.
+ *
+ * Usar "Bet365" ou "Betano" numa tela de apresentação insinua um contrato que
+ * não existe (G4 continua aberto). Nomes neutros deixam claro que a integração
+ * é a arquitetura, não o parceiro.
+ */
+const CASAS_DEMO = ['Casa Alfa', 'Casa Beta', 'Casa Gama'] as const
+
+/**
+ * Escreve cotações e deixa a agregação REAL do motor produzir a faixa.
+ *
+ * O documento do CJ é explícito: a plataforma não tem acesso à odd exata da
+ * casa do usuário e trabalha com uma aproximação. Por isso as três casas
+ * discordam entre si dentro da faixa de referência do ruleset — é a discordância
+ * que dá sentido à mediana, e é a mediana que a tela mostra.
+ */
+async function semearOdds(
+  db: Db,
+  ruleset: Ruleset,
+  dataReferencia: string,
+  agora: Date,
+): Promise<number> {
+  const feed = await lerFeed(db, dataReferencia)
+  if (feed === null) return 0
+
+  for (const nome of CASAS_DEMO) {
+    await db
+      .insert(casas)
+      .values({ nome, tipoApi: 'demo', ativa: true })
+      .onConflictDoNothing({ target: casas.nome })
+  }
+  const idPorCasa = new Map((await db.select().from(casas)).map((c) => [c.nome, c.id] as const))
+
+  // `odds_snapshot` é série temporal e não tem UNIQUE — reexecutar o seed
+  // empilharia cotação em cima de cotação. Limpar o dia antes de escrever é o
+  // que mantém a promessa de idempotência do seed.
+  const idsDeHoje = [...new Set(feed.conteudo.itens.map((i) => i.jogoId))]
+  if (idsDeHoje.length > 0) {
+    await db.delete(oddsSnapshot).where(inArray(oddsSnapshot.jogoId, idsDeHoje))
+  }
+
+  let linhas = 0
+  for (const item of feed.conteudo.itens) {
+    if (item.linha === null) continue
+
+    const referencia = faixaEstatica(item.nivelJogador, item.atributo, item.linha, ruleset)
+    if (referencia === undefined) continue
+
+    // Espalha as casas DENTRO da faixa de referência, em passos iguais. Sem
+    // sorteio: reexecutar o seed precisa dar a mesma odd.
+    const [min, max] = referencia
+    const passo = (max - min) / (CASAS_DEMO.length + 1)
+    const cotacoes = CASAS_DEMO.map((casa, k) => ({
+      casa,
+      oddOver: Math.round((min + passo * (k + 1)) * 100) / 100,
+    }))
+
+    for (const c of cotacoes) {
+      const casaId = idPorCasa.get(c.casa)
+      if (!casaId) continue
+      await db.insert(oddsSnapshot).values({
+        casaId,
+        jogoId: item.jogoId,
+        jogadorId: item.jogadorId,
+        atributo: item.atributo,
+        linha: item.linha.toFixed(1),
+        oddOver: c.oddOver.toFixed(3),
+        oddUnder: null,
+        capturadoEm: agora,
+      })
+    }
+
+    const faixa = agregar(cotacoes, item.nivelJogador, item.atributo, item.linha, ruleset)
+    if (faixa === null) continue
+
+    await db
+      .insert(oddsAgregada)
+      .values({
+        jogoId: item.jogoId,
+        jogadorId: item.jogadorId,
+        atributo: item.atributo,
+        linha: item.linha.toFixed(1),
+        oddMin: faixa.min.toFixed(3),
+        oddMax: faixa.max.toFixed(3),
+        oddMediana: faixa.mediana.toFixed(3),
+        qtdCasas: faixa.qtdCasas,
+        origem: faixa.origem,
+        calculadoEm: agora,
+      })
+      .onConflictDoUpdate({
+        target: [oddsAgregada.jogoId, oddsAgregada.jogadorId, oddsAgregada.atributo, oddsAgregada.linha],
+        set: {
+          oddMin: faixa.min.toFixed(3),
+          oddMax: faixa.max.toFixed(3),
+          oddMediana: faixa.mediana.toFixed(3),
+          qtdCasas: faixa.qtdCasas,
+          origem: faixa.origem,
+          calculadoEm: agora,
+        },
+      })
+    linhas += 1
+  }
+
+  return linhas
 }
 
 /**
@@ -283,7 +468,7 @@ export async function semearDemo(db: Db, ruleset: Ruleset, agora: Date): Promise
  * inscrições de push ficam intactas — quem testou o login não perde o acesso.
  */
 export async function limparDemo(db: Db): Promise<Record<string, number>> {
-  const { apitos, greens, feedSnapshot, niveis, niveisVersao, identidadesJogador, identidadesJogo } =
+  const { apitos, greens, feedSnapshot, niveisVersao, identidadesJogador, identidadesJogo } =
     await import('../../dominio/db/schema')
 
   const contagens: Record<string, number> = {}
@@ -292,6 +477,8 @@ export async function limparDemo(db: Db): Promise<Record<string, number>> {
     contagens[nome] = Array.isArray(antes) ? antes.length : 0
   }
 
+  await apagar('odds_agregada', () => db.delete(oddsAgregada).returning({ id: oddsAgregada.id }))
+  await apagar('odds_snapshot', () => db.delete(oddsSnapshot).returning({ id: oddsSnapshot.id }))
   await apagar('feed_snapshot', () => db.delete(feedSnapshot).returning({ id: feedSnapshot.id }))
   await apagar('greens', () => db.delete(greens).returning({ id: greens.id }))
   await apagar('apitos', () => db.delete(apitos).returning({ id: apitos.id }))
@@ -320,6 +507,7 @@ export async function limparDemo(db: Db): Promise<Record<string, number>> {
   await apagar('jogos', () => db.delete(jogos).returning({ id: jogos.id }))
   await apagar('jogadores', () => db.delete(jogadores).returning({ id: jogadores.id }))
   await apagar('times', () => db.delete(times).returning({ id: times.id }))
+  await apagar('casas', () => db.delete(casas).returning({ id: casas.id }))
 
   return contagens
 }

@@ -1,4 +1,5 @@
-import type { Nivel } from '../../motor/tipos'
+import { ATRIBUTOS, NIVEIS } from '../../motor/tipos'
+import type { Atributo, Nivel } from '../../motor/tipos'
 
 /**
  * DADOS DE DEMONSTRAÇÃO — determinísticos por construção.
@@ -86,4 +87,37 @@ export function historicoOscilacao(media: number, delta: number, jogosAbaixo: nu
   return Array.from({ length: 6 }, (_, i) =>
     i < jogosAbaixo ? Math.max(0, Math.round(limiar - 1)) : Math.round(media + 2),
   )
+}
+
+/**
+ * NÍVEL POR ATRIBUTO — inventado, e por isso mora aqui e não no ruleset.
+ *
+ * O CJ classificou só PONTOS. Enquanto ele não manda as listas de rebotes e
+ * assistências, a demo deriva as duas da lista de pontos com um deslocamento
+ * pela posição: pivô sobe em rebotes e cai em assistências, armador o
+ * contrário, ala fica onde está.
+ *
+ * Isto NÃO é estratégia — é matéria-prima falsa, do mesmo naipe das médias e
+ * dos box scores deste arquivo. Quando as listas reais chegarem, elas entram
+ * pelo importador como qualquer versão de níveis e esta função morre.
+ */
+export function nivelDoAtributo(nome: string, nivelPontos: Nivel, atributo: Atributo): Nivel {
+  if (atributo === 'PONTOS') return nivelPontos
+
+  const posicao = posicaoDe(nome)
+  // NIVEIS vai do melhor para o pior, então "subir de nível" é andar para trás.
+  const deslocamento =
+    atributo === 'REBOTES'
+      ? { C: -1, F: 0, G: 1 }[posicao]
+      : { G: -1, F: 0, C: 1 }[posicao]
+
+  const indice = NIVEIS.indexOf(nivelPontos) + deslocamento
+  return NIVEIS[Math.min(Math.max(indice, 0), NIVEIS.length - 1)]!
+}
+
+/** Os três níveis de um jogador, prontos para virar linha em `niveis`. */
+export function niveisDoJogador(nome: string, nivelPontos: Nivel): Record<Atributo, Nivel> {
+  return Object.fromEntries(
+    ATRIBUTOS.map((a) => [a, nivelDoAtributo(nome, nivelPontos, a)]),
+  ) as Record<Atributo, Nivel>
 }

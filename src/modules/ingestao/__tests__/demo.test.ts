@@ -3,14 +3,14 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { eq } from 'drizzle-orm'
 
 import { bancoDeTeste } from '../../dominio/__tests__/ajuda-banco'
-import { feedSnapshot, jogadores, niveisVersao, times, usuarios } from '../../dominio/db/schema'
+import { casas, feedSnapshot, jogadores, niveisVersao, oddsAgregada, times, usuarios } from '../../dominio/db/schema'
 import { carregarRuleset } from '../../motor/ruleset/carregar'
 import { lerFeed } from '../../entrega/lista-secreta'
 import { limparDemo, semearDemo } from '../demo/semear'
 
 const ruleset = carregarRuleset(readFileSync('config/ruleset.v1.yaml', 'utf8'))
 
-import { historicoOscilacao, mediaDe, posicaoDe } from '../demo/dados'
+import { historicoOscilacao, mediaDe, niveisDoJogador, nivelDoAtributo, posicaoDe } from '../demo/dados'
 import type { Nivel } from '../../motor/tipos'
 
 describe('helpers determinísticos da demonstração', () => {
@@ -69,6 +69,38 @@ describe('helpers determinísticos da demonstração', () => {
 
   it('nunca devolve pontuação negativa', () => {
     expect(historicoOscilacao(5, 4, 3).every((p) => p >= 0)).toBe(true)
+  })
+
+  it('a posição desloca o nível de rebotes e assistências em direções opostas', () => {
+    for (const nome of ['Jokic', 'Curry', 'Tatum', 'Sengun', 'Wembayama']) {
+      const posicao = posicaoDe(nome)
+      const rebotes = nivelDoAtributo(nome, 'ALL_STAR', 'REBOTES')
+      const assistencias = nivelDoAtributo(nome, 'ALL_STAR', 'ASSISTENCIAS')
+
+      if (posicao === 'C') {
+        expect(rebotes).toBe('MVP')
+        expect(assistencias).toBe('SUPORTE')
+      } else if (posicao === 'G') {
+        expect(rebotes).toBe('SUPORTE')
+        expect(assistencias).toBe('MVP')
+      } else {
+        expect(rebotes).toBe('ALL_STAR')
+        expect(assistencias).toBe('ALL_STAR')
+      }
+    }
+  })
+
+  it('pontos nunca é derivado — é o único atributo que o CJ classificou', () => {
+    expect(nivelDoAtributo('Jokic', 'SUPORTE', 'PONTOS')).toBe('SUPORTE')
+    expect(niveisDoJogador('Jokic', 'SUPORTE').PONTOS).toBe('SUPORTE')
+  })
+
+  it('o deslocamento não escapa das pontas da escala', () => {
+    // MVP não tem para onde subir; Randola não tem para onde cair.
+    for (const nome of ['Jokic', 'Curry', 'Tatum', 'Sengun', 'Wembayama']) {
+      expect(['MVP', 'ALL_STAR']).toContain(nivelDoAtributo(nome, 'MVP', 'REBOTES'))
+      expect(['SUPORTE', 'RANDOLA']).toContain(nivelDoAtributo(nome, 'RANDOLA', 'REBOTES'))
+    }
   })
 })
 
@@ -153,12 +185,42 @@ describe('semearDemo (PGlite, banco vazio)', () => {
     expect(shai?.modoFire).toBe(true)
   })
 
+  it('a lista sai nos três atributos, não só em pontos', async () => {
+    const feed = await lerFeed(banco.db, HOJE)
+    const porAtributo = new Set(feed!.conteudo.itens.map((i) => i.atributo))
+
+    expect(porAtributo).toEqual(new Set(['PONTOS', 'REBOTES', 'ASSISTENCIAS']))
+  })
+
+  it('as linhas de rebotes são linhas de rebotes, não de pontos', async () => {
+    const feed = await lerFeed(banco.db, HOJE)
+    const jokic = feed!.conteudo.itens.filter((i) => i.nome === 'Jokic' && i.atributo === 'REBOTES')
+
+    // Jokic é MVP em rebotes (os 12,9 rpg do documento) com 3 jogos abaixo.
+    expect(jokic.map((i) => i.linha).sort((a, b) => a! - b!)).toEqual([8, 10, 12])
+    expect(jokic.every((i) => i.nivelApito === 3)).toBe(true)
+  })
+
+  it('cada linha publicada ganha faixa de odds das três casas', async () => {
+    const feed = await lerFeed(banco.db, HOJE)
+    const agregadas = await banco.db.select().from(oddsAgregada)
+
+    expect((await banco.db.select().from(casas)).length).toBe(3)
+    expect(agregadas.length).toBe(feed!.conteudo.itens.length)
+    // Três casas discordando é o que dá sentido à mediana do ruleset.
+    expect(agregadas.every((o) => o.qtdCasas === 3 && o.origem === 'CASAS')).toBe(true)
+    expect(agregadas.every((o) => Number(o.oddMin) < Number(o.oddMax))).toBe(true)
+  })
+
   it('reexecutar o seed não duplica nada', async () => {
     const antes = (await banco.db.select().from(jogadores)).length
     const segundo = await semearDemo(banco.db, ruleset, AGORA)
     const depois = (await banco.db.select().from(jogadores)).length
     expect(depois).toBe(antes)
     expect(segundo.times).toBe(30)
+    // `odds_snapshot` é série temporal e não tem UNIQUE: sem a limpeza do dia,
+    // a segunda execução empilharia cotação em cima de cotação.
+    expect(segundo.linhasComOdd).toBe(resumo.linhasComOdd)
   }, 120_000)
 
   it('limparDemo apaga o domínio e preserva as contas', async () => {
