@@ -2,6 +2,8 @@ import Link from 'next/link'
 
 import { semantico } from '@/design-system/tokens/semantico'
 
+import { IconeAba } from './icones'
+
 /**
  * BARRA DE NAVEGAÇÃO — as abas do produto.
  *
@@ -10,18 +12,28 @@ import { semantico } from '@/design-system/tokens/semantico'
  * é o teto de um polegar em tela de celular — Estatísticas e a aba teórica
  * ficam a um toque de distância dentro de "Conta".
  *
+ * Identidade 02: ícones geométricos em SVG (sem emoji) e rótulos em
+ * `semantico.fonteRotulo`. "Resultados" saiu do nome da aba — a tela de
+ * resultados passa a viver dentro de "Entradas" (redesenho da Task 8); aqui
+ * o tipo já reflete o destino final.
+ *
  * Componente de servidor de propósito: a aba ativa vem por props de quem
  * renderiza, não de `usePathname`. Uma barra de navegação não justifica
  * embarcar JavaScript em todas as páginas do app.
  */
-export type Aba = 'lista' | 'fire-live' | 'resultados' | 'gestao' | 'conta'
+export type Aba = 'lista' | 'fire-live' | 'stats' | 'gestao' | 'conta'
 
-const ABAS: { id: Aba; href: string; rotulo: string; icone: string }[] = [
-  { id: 'lista', href: '/', rotulo: 'Lista', icone: '📋' },
-  { id: 'fire-live', href: '/fire-live', rotulo: 'Ao vivo', icone: '🔥' },
-  { id: 'resultados', href: '/resultados', rotulo: 'Resultados', icone: '✅' },
-  { id: 'gestao', href: '/gestao', rotulo: 'Gestão', icone: '💰' },
-  { id: 'conta', href: '/conta', rotulo: 'Conta', icone: '👤' },
+const ABAS: {
+  id: Aba
+  href: string
+  rotulo: string
+  forma: 'quadrado' | 'quadradoVazado' | 'circulo' | 'losango'
+}[] = [
+  { id: 'lista', href: '/', rotulo: 'ENTRADAS', forma: 'quadrado' },
+  { id: 'fire-live', href: '/fire-live', rotulo: 'AO VIVO', forma: 'quadradoVazado' },
+  { id: 'stats', href: '/estatisticas', rotulo: 'STATS', forma: 'circulo' },
+  { id: 'gestao', href: '/gestao', rotulo: 'GESTÃO', forma: 'losango' },
+  { id: 'conta', href: '/conta', rotulo: 'PERFIL', forma: 'circulo' },
 ]
 
 export function BarraInferior({ atual }: { atual: Aba }) {
@@ -53,19 +65,21 @@ export function BarraInferior({ atual }: { atual: Aba }) {
               display: 'flex',
               flexDirection: 'column',
               alignItems: 'center',
-              gap: 2,
+              gap: 4,
               padding: '8px 2px 10px',
               textDecoration: 'none',
-              fontSize: 10,
+              fontFamily: semantico.fonteRotulo,
+              fontSize: 11,
+              letterSpacing: 1.5,
               fontWeight: ativo ? 700 : 500,
-              color: ativo ? semantico.textoPrimario : semantico.textoSecundario,
-              // Redundância: a aba ativa não se distingue só pela cor.
-              borderTop: `2px solid ${ativo ? semantico.textoPrimario : 'transparent'}`,
+              color: ativo ? semantico.acento : semantico.textoSecundario,
+              // Redundância: a aba ativa não se distingue só pela cor — o
+              // ícone preenchido e o peso da fonte já marcam; o border-top
+              // branco de antes saiu porque colidiria com o preenchimento.
+              borderTop: '2px solid transparent',
             }}
           >
-            <span aria-hidden style={{ fontSize: 17, lineHeight: 1 }}>
-              {aba.icone}
-            </span>
+            <IconeAba forma={aba.forma} ativo={ativo} />
             {aba.rotulo}
           </Link>
         )

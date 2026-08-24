@@ -134,7 +134,7 @@ function Rodada({ dia }: { dia: DiaConferido }) {
 export default async function PaginaResultados() {
   if (!process.env.DATABASE_URL) {
     return (
-      <Moldura aba="resultados">
+      <Moldura aba="lista">
         <h1>Resultados</h1>
         <p style={{ color: semantico.textoSecundario }}>Banco não configurado.</p>
       </Moldura>
@@ -154,7 +154,7 @@ export default async function PaginaResultados() {
   ])
 
   return (
-    <Moldura aba="resultados">
+    <Moldura aba="lista">
       <header style={{ marginBottom: 16 }}>
         <h1 style={{ margin: 0, fontSize: 22 }}>Resultados</h1>
         <p style={{ margin: '4px 0 0', fontSize: 13, color: semantico.textoSecundario }}>
