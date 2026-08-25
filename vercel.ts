@@ -44,11 +44,29 @@ export const config: VercelConfig = {
  * do Fire Live, a reconciliação de pagamento roda a cada 10 min e a saúde a
  * cada 5. Ou seja: EM PRODUÇÃO, o plano Pro é requisito, não luxo (ADR-0003).
  *
- * `CRON_SOMENTE_DIARIO=true` existe só para a fase de homologação numa conta
- * Hobby: o deploy passa com os dois jobs diários e o resto é disparado à mão
- * com o Bearer do CRON_SECRET (ver docs/runbooks). Crons nem rodam em
- * Preview — a variável destrava apenas o deploy. NUNCA a deixe ligada num
- * projeto Pro de produção: ela desligaria o Fire Live inteiro.
+ * O PADRÃO É O CONJUNTO DIÁRIO, e o completo é opt-in por `CRON_COMPLETO`.
+ *
+ * A inversão tem uma razão concreta. A versão anterior era o contrário
+ * (completo por padrão, `CRON_SOMENTE_DIARIO=true` para reduzir) e a flag era
+ * setada pelos scripts `deploy`/`deploy:prod` do package.json. Isso funcionou
+ * enquanto todo deploy saía da CLI. Quando o repositório foi conectado à
+ * Vercel (25/08/2026), o build passou a ser disparado pelo push — sem passar
+ * por script nenhum, lendo o env do PROJETO. O primeiro deploy pelo Git morreu
+ * assim:
+ *
+ *   Hobby accounts are limited to daily cron jobs. This cron expression
+ *   (0 *\/6 * * *) would run more than once per day.
+ *
+ * (A contrabarra na expressão acima é só para não fechar este comentário.)
+ *
+ * Com o padrão invertido, um deploy pelo Git nasce válido sem depender de
+ * variável configurada no painel — e o custo de esquecer é um Fire Live que
+ * não dispara, não um deploy que não existe.
+ *
+ * PARA LIGAR O PRODUTO DE VERDADE: conta Pro + `CRON_COMPLETO=true` nas
+ * Environment Variables do projeto. Sem isso, `ao-vivo` não roda e o Fire Live
+ * não existe; a Lista Secreta também não republica sozinha, e precisa do
+ * disparo manual com o Bearer do CRON_SECRET (ver docs/runbooks).
  */
 function cronsDoPlano(): VercelConfig['crons'] {
   const cronsCompletos = [
@@ -60,7 +78,7 @@ function cronsDoPlano(): VercelConfig['crons'] {
     { path: '/api/cron/reconciliar-pagamentos', schedule: '*/10 * * * *' },
     { path: '/api/cron/saude', schedule: '*/5 * * * *' },
   ]
-  if (process.env.CRON_SOMENTE_DIARIO !== 'true') return cronsCompletos
+  if (process.env.CRON_COMPLETO === 'true') return cronsCompletos
 
   return cronsCompletos.filter((c) =>
     ['/api/cron/sincronizar-elenco', '/api/cron/sincronizar-rodada'].includes(c.path),
