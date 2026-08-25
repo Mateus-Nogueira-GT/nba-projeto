@@ -102,4 +102,12 @@ describe('CardEntrada — identidade 03 (3 zonas)', () => {
     expect(frio).toContain(componente.contextoFrio.cardGradiente)
     expect(quente).toContain(componente.contextoQuente.cardGradiente)
   })
+
+  it('temperatura quente explícita veste o universo quente mesmo sem modo fire', () => {
+    // O Fire Live inteiro é quente — quem cruza alvo sem estar em modo fire
+    // também está na tela ao vivo.
+    const html = render({ ...base, temperatura: 'quente', alvo1Q: 10, progresso1Q: { observado: 4, alvo: 10 } })
+    expect(html).toContain(componente.contextoQuente.cardGradiente)
+    expect(html).toContain('4 / 10')
+  })
 })

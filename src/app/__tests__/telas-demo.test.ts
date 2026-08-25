@@ -32,8 +32,9 @@ const HOJE = dataDeReferencia(AGORA, FUSO)
 
 let banco: Awaited<ReturnType<typeof bancoDeTeste>>
 
+const USUARIO_DEMO = '00000000-0000-4000-8000-000000000001'
 vi.mock('../../modules/plataforma/auth/cookies', () => ({
-  sessaoAtual: async () => ({ usuarioId: 'u1', email: 'demo@teste.com' }),
+  sessaoAtual: async () => ({ usuarioId: '00000000-0000-4000-8000-000000000001', email: 'demo@teste.com' }),
 }))
 vi.mock('../../modules/plataforma/assinatura/direito', () => ({
   avaliarAcesso: async () => ({ permitido: true }),
@@ -47,6 +48,13 @@ beforeAll(async () => {
   process.env.DATABASE_URL = 'postgres://demo'
   banco = await bancoDeTeste()
   await semearDemo(banco.db, await rulesetAtivo(), AGORA)
+  // O usuário da sessão simulada existe de verdade: telas passaram a consultar
+  // preferências por usuarioId (jogadores_ocultos), e uuid inválido quebraria.
+  const { usuarios } = await import('../../modules/dominio/db/schema')
+  await banco.db
+    .insert(usuarios)
+    .values({ id: USUARIO_DEMO, email: 'demo@teste.com', senhaHash: 'x' })
+    .onConflictDoNothing()
 
   // As telas leem o relógio para saber que dia é hoje. Sem congelá-lo, elas
   // pediriam a rodada do dia real e encontrariam um banco semeado para outro.
@@ -318,6 +326,43 @@ describe('regras transversais da identidade', () => {
     expect(htmlResultados).not.toMatch(/(PONTOS|REBOTES|ASSISTÊNCIAS)\s+\d+,\d/)
     expect(htmlResultados).not.toContain('ALTÍSSIMO VALOR')
     expect(htmlResultados).not.toContain('3 PONTOS')
+  }, 60_000)
+})
+
+describe('Fire Live — identidade 03', () => {
+  it('universo quente, barra rumo ao alvo e jogador oculto some da tela', async () => {
+    const { lerFeedFireLive } = await import('../../modules/entrega/fire-live/leitura')
+    const ruleset = await rulesetAtivo()
+    const semRecorte = await lerFeedFireLive(banco.db, HOJE, ruleset.fire_live.quarto)
+    expect(semRecorte.itens.length).toBeGreaterThan(0)
+    const alvo = semRecorte.itens[0]!
+
+    const { default: Pagina } = await import('../(app)/fire-live/page')
+    const antes = renderToStaticMarkup(await Pagina({ searchParams: Promise.resolve({}) }))
+    await gravarConferencia('fire-live', antes)
+    // temperatura quente no card do fire live, mesmo sem modo fire
+    expect(antes).toContain('linear-gradient(135deg, #241A2E, #161226 55%)')
+    expect(antes).toContain('/ ') // contagem da BarraAlvo
+    // no card, o nome é LINK para as estatísticas do jogador
+    expect(antes).toContain(`${alvo.nome}</a>`)
+
+    const { jogadoresOcultos } = await import('../../modules/dominio/db/schema')
+    await banco.db
+      .insert(jogadoresOcultos)
+      .values({ usuarioId: USUARIO_DEMO, jogadorId: alvo.jogadorId })
+      .onConflictDoNothing()
+    try {
+      const depois = renderToStaticMarkup(await Pagina({ searchParams: Promise.resolve({}) }))
+      // o CARD do oculto sai (nome-link some); a seção de gestão entra, com o
+      // nome em texto plano e o desfazer
+      expect(depois).toContain('Jogadores ocultos')
+      expect(depois).not.toContain(`${alvo.nome}</a>`)
+      expect(depois).toContain(`${alvo.nome}</span>`)
+      expect(depois).toContain('mostrar de novo')
+    } finally {
+      const { eq: igual } = await import('drizzle-orm')
+      await banco.db.delete(jogadoresOcultos).where(igual(jogadoresOcultos.jogadorId, alvo.jogadorId))
+    }
   }, 60_000)
 })
 

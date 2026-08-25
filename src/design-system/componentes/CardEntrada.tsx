@@ -64,6 +64,12 @@ export type CardEntradaProps = {
   mediaTemporada?: number | null
   /** Faixa de odds entre casas; com `media`, o rodapé escreve ODD MÉDIA. */
   oddFaixa?: { min: number; max: number; qtdCasas: number; media?: number } | null
+  /**
+   * Temperatura do contexto. O Fire Live INTEIRO é quente — não só o modo
+   * fire: urgência é da tela ao vivo, não do estado do jogador. Pré-live
+   * nunca passa 'quente'; o teste transversal vigia.
+   */
+  temperatura?: 'frio' | 'quente'
 }
 
 /**
@@ -89,7 +95,7 @@ export function CardEntrada(props: CardEntradaProps) {
   const grau = props.grauConfianca
   const corGrau = grau === null ? semantico.divisor : CONFIANCA_GRAU[grau]
   const brilhaConfianca = grau === 5 // regra da identidade: só o máximo brilha
-  const quente = props.modoFire === true
+  const quente = props.temperatura === 'quente' || props.modoFire === true
   const contexto = quente ? componente.contextoQuente : componente.contextoFrio
   const brilhoDoCard = brilhaConfianca
     ? `0 0 16px 1px ${corGrau}55`
