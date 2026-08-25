@@ -268,7 +268,14 @@ async function enriquecer(db: Db, ruleset: Ruleset, apitos: Apito[]): Promise<It
       mediaTemporada: valorMedia !== null ? Number(valorMedia) : null,
       oddFaixa:
         oddRow && oddRow.oddMin !== null && oddRow.oddMax !== null
-          ? { min: Number(oddRow.oddMin), max: Number(oddRow.oddMax), qtdCasas: oddRow.qtdCasas }
+          ? {
+              min: Number(oddRow.oddMin),
+              max: Number(oddRow.oddMax),
+              qtdCasas: oddRow.qtdCasas,
+              // A média entre casas — quando a coleta a calculou, o rodapé do
+              // card troca sozinho de faixa para ODD MÉDIA.
+              ...(oddRow.oddMedia !== null ? { media: Number(oddRow.oddMedia) } : {}),
+            }
           : null,
     }
   })

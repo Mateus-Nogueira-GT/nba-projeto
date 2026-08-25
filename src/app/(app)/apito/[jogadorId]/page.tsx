@@ -404,7 +404,11 @@ export default async function PaginaApito({
                 {item.confianca === null ? '—' : `${item.confianca}%`}
               </span>
               <span style={{ fontSize: 13, color: semantico.textoSecundario }}>
-                {faixaOdd ? `odd ${formatarOdd(faixaOdd[0])} – ${formatarOdd(faixaOdd[1])}` : 'odd —'}
+                {cotada?.media != null
+                  ? `odd média ${formatarOdd(cotada.media)} · ${formatarOdd(cotada.min)}–${formatarOdd(cotada.max)}`
+                  : faixaOdd
+                    ? `odd ${formatarOdd(faixaOdd[0])} – ${formatarOdd(faixaOdd[1])}`
+                    : 'odd —'}
               </span>
             </div>
           )
