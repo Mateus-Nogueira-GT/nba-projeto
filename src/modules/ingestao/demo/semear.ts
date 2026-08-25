@@ -382,21 +382,37 @@ export async function semearDemo(db: Db, ruleset: Ruleset, agora: Date): Promise
         return Math.max(0, sequencia[0] ?? Math.round(media / quartos))
       }
 
-      // O protagonista cruza os 75% da média (modo fire) E o primeiro marco de
-      // green — os dois números saem do ruleset, nenhum é digitado aqui.
-      const primeiroMarco = marcosDoNivel(derivados.PONTOS, 'PONTOS', ruleset)[0]
-      const pontos =
-        j.nomeNaLista === 'Shai'
-          ? Math.max(
-              Math.ceil(m.ppg * ruleset.fire_live.modo_fire.percentual_media),
-              primeiroMarco ?? 0,
-            )
-          : noQuarto(m.ppg, 'PONTOS')
+      // Um protagonista POR ATRIBUTO cruza o primeiro marco de green — os três
+      // canais do push aparecem na demonstração, não só o de pontos. O número
+      // do marco sai sempre do ruleset (`marcosDoNivel`), nunca digitado aqui.
+      //
+      // Os marcos de rebotes e assistências são de JOGO INTEIRO e a demo os faz
+      // acontecer dentro do 1º quarto — irreal de propósito, para o canal ficar
+      // visível. Ver a pergunta ao CJ em docs/specs/README (marco de 1Q).
+      const cruzarMarco = (atributo: Atributo, media: number): number | null => {
+        const marco = marcosDoNivel(derivados[atributo], atributo, ruleset)[0]
+        if (marco === undefined) return null
+        // Pontos ainda precisa passar dos 75% da média: é o que acende o modo
+        // fire do protagonista, e o marco sozinho poderia ficar abaixo disso.
+        return atributo === 'PONTOS'
+          ? Math.max(Math.ceil(media * ruleset.fire_live.modo_fire.percentual_media), marco)
+          : marco
+      }
+
+      const PROTAGONISTA: Record<Atributo, string> = {
+        PONTOS: 'Shai',
+        REBOTES: 'Jokic',
+        ASSISTENCIAS: 'Jamal Murray',
+      }
+      const valorDoQuarto = (atributo: Atributo, media: number): number =>
+        j.nomeNaLista === PROTAGONISTA[atributo]
+          ? (cruzarMarco(atributo, media) ?? noQuarto(media, atributo))
+          : noQuarto(media, atributo)
 
       const valores = {
-        pontos,
-        rebotes: noQuarto(m.rpg, 'REBOTES'),
-        assistencias: noQuarto(m.apg, 'ASSISTENCIAS'),
+        pontos: valorDoQuarto('PONTOS', m.ppg),
+        rebotes: valorDoQuarto('REBOTES', m.rpg),
+        assistencias: valorDoQuarto('ASSISTENCIAS', m.apg),
       }
 
       await db
