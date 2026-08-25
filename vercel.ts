@@ -11,6 +11,30 @@ import type { VercelConfig } from '@vercel/config/v1'
 
 export const config: VercelConfig = {
   framework: 'nextjs',
+  /**
+   * A FUNÇÃO RODA ONDE O BANCO ESTÁ.
+   *
+   * `gru1` é São Paulo (sa-east-1) — a mesma região do Neon
+   * (`...sa-east-1.aws.neon.tech`). Sem esta linha a Vercel usa o padrão
+   * `iad1` (Washington), e foi o que estava em produção: o cabeçalho
+   * `x-vercel-id: gru1::iad1` mostrava a requisição entrando em São Paulo e
+   * a função executando nos EUA.
+   *
+   * O custo disso não é uma travessia por página, é uma POR CONSULTA. Cada
+   * tela autenticada faz de 4 a 6 consultas em sequência (validar sessão,
+   * conferir direito, ler o feed), e a medição de 25/08 mostrou o TTFB
+   * acompanhando o número delas:
+   *
+   *   /offline      0 consultas    ~78ms
+   *   /estatisticas poucas        ~430ms
+   *   /gestao       cadeia toda   ~920ms
+   *
+   * Da mesma região, cada ida e volta cai de ~130ms para a casa de 10ms.
+   *
+   * Hobby permite UMA região (Pro, 5). Se o banco mudar de região, esta linha
+   * muda junto — é a única coisa que as mantém casadas.
+   */
+  regions: ['gru1'],
   functions: {
     'src/app/api/fila/push/route.ts': {
       experimentalTriggers: [
