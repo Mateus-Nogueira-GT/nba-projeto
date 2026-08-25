@@ -220,7 +220,11 @@ odds:
   fonte: casas
   agregacao: mediana # mediana resiste a outlier de uma casa
   casas_minimas: 2 # abaixo disso, cai no fallback
-  exibicao: faixa # sempre faixa (min-max), nunca odd única
+  # Decisão do parceiro (25/08/2026): o card e o detalhe mostram a MÉDIA
+  # entre casas. A redação homologada dizia 'sempre faixa, nunca odd única' —
+  # pergunta reaberta ao CJ (docs/specs/README). Voltar a 'faixa' aqui religa
+  # o comportamento antigo sem tocar código.
+  exibicao: media
   fallback: tabela_estatica
 
   tabela_estatica: # usada quando não há cobertura das casas

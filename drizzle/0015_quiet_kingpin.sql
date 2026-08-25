@@ -1,0 +1,1 @@
+ALTER TABLE "odds_snapshot" ADD CONSTRAINT "odds_snapshot_unico" UNIQUE("casa_id","jogo_id","jogador_id","atributo","linha","capturado_em");

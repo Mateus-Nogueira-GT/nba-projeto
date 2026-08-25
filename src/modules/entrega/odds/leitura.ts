@@ -45,7 +45,10 @@ export async function faixasDoJogador(
     )
 
   return new Map(
-    linhas.map((l) => [
+    // Agregada sem faixa gravada não vira 0,00–0,00 na tela: some.
+    linhas
+      .filter((l) => l.oddMin !== null && l.oddMax !== null)
+      .map((l) => [
       Number(l.linha),
       {
         min: Number(l.oddMin),
