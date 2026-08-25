@@ -17,9 +17,16 @@ describe('fotos da demonstração', () => {
   }, 120_000)
   afterAll(async () => banco.fechar())
 
-  it('todo nome do mapa existe na lista do CJ (grafia exata)', async () => {
-    const nomes = new Set((await banco.db.select().from(jogadores)).map((j) => j.nomeCompleto))
-    for (const nome of Object.keys(MAPA_FOTOS)) expect(nomes.has(nome), nome).toBe(true)
+  it('todo nome do mapa resolve para um jogador semeado', async () => {
+    // O guard continua sendo "nenhuma foto cai no vazio por erro de digitação".
+    // O que mudou é a REGRA de casamento: `nomeCompleto` guarda o nome de
+    // exibição ("Stephen Curry") e as chaves vêm do documento do CJ
+    // ("stephen Curry"), então quem resolve é a caixa baixa — a mesma
+    // comparação que `aplicarFotos` faz.
+    const nomes = new Set(
+      (await banco.db.select().from(jogadores)).map((j) => j.nomeCompleto.toLowerCase()),
+    )
+    for (const nome of Object.keys(MAPA_FOTOS)) expect(nomes.has(nome.toLowerCase()), nome).toBe(true)
   })
 
   it('só grava URL que o verificador aprovou', async () => {

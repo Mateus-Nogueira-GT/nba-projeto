@@ -124,6 +124,25 @@ describe('Lista Secreta', () => {
     expect(html).not.toContain(' · PTS')
   }, 60_000)
 
+  it('trocar a quantidade PRESERVA o recorte de atributo (regressão)', async () => {
+    // O usuário filtrou "Rebotes" e depois pediu "2 vítimas". Os chips de
+    // quantidade montavam `/?quantidade=N` seco e devolviam a lista inteira,
+    // sem aviso — o filtro que ele acabou de escolher sumia no clique.
+    const { default: Pagina } = await import('../(app)/page')
+    const html = renderToStaticMarkup(
+      await Pagina({ searchParams: Promise.resolve({ atributo: 'REBOTES' }) }),
+    )
+
+    const quantidades = [...html.matchAll(/href="(\/\?[^"]*quantidade=\d[^"]*)"/g)].map((m) => m[1]!)
+    expect(quantidades.length).toBeGreaterThan(0)
+    for (const href of quantidades) {
+      expect(href).toContain('atributo=REBOTES')
+    }
+
+    // E "Lista inteira" (quantidade 0, que some da URL) idem.
+    expect(html).toMatch(/href="\/\?atributo=REBOTES"/)
+  }, 60_000)
+
   it('cabeçalho do mockup + seletor Hoje/Resultados + grau na pílula', async () => {
     const { default: Pagina } = await import('../(app)/page')
     const html = renderToStaticMarkup(await Pagina({ searchParams: Promise.resolve({}) }))
@@ -256,6 +275,58 @@ describe('a rodada segue o fuso do cliente', () => {
 })
 
 describe('Estatísticas — identidade 03 (conferência em lote)', () => {
+  it('o box score do time tem NÚMEROS, não uma parede de travessões', async () => {
+    // A demo semeava box score de JOGADOR e nunca o do TIME. A tela de time
+    // lê `estatisticas_time_jogo`, então cada partida encerrada aparecia com
+    // quartos, REB, AST, TO, FG% e 3P% todos em "—". Para o cliente é a tela
+    // mais quebrada do app; para o código, tudo funcionava — só faltava dado.
+    const { times, jogos } = await import('../../modules/dominio/db/schema')
+    const { eq: igual } = await import('drizzle-orm')
+
+    // Um time com jogo ENCERRADO — é sobre esses que a tela promete números.
+    const [encerrado] = await banco.db
+      .select()
+      .from(jogos)
+      .where(igual(jogos.status, 'ENCERRADO'))
+      .limit(1)
+    const [time] = await banco.db.select().from(times).where(igual(times.id, encerrado!.timeCasaId)).limit(1)
+
+    const { telaDoTime } = await import('../../modules/entrega/estatisticas/time')
+    const { temporadaDe, calendarioDoRuleset } = await import('../../modules/dominio/temporada')
+    const ruleset = await rulesetAtivo()
+    const tela = await telaDoTime(banco.db, time!.id, {
+      temporada: temporadaDe(AGORA, calendarioDoRuleset(ruleset)),
+    })
+
+    // Jogo AO VIVO tem placar parcial e NÃO tem box score fechado — a
+    // asserção é sobre os encerrados, que a tela promete completos.
+    const idsEncerrados = new Set(
+      (await banco.db.select().from(jogos).where(igual(jogos.status, 'ENCERRADO'))).map((j) => j.id),
+    )
+    const encerrados = tela!.jogosDoTime.filter((j) => idsEncerrados.has(j.jogoId))
+    expect(encerrados.length).toBeGreaterThan(0)
+    for (const jogo of encerrados) {
+      expect(jogo.nosso).not.toBeNull()
+      expect(jogo.deles).not.toBeNull()
+      // Os quartos FECHAM com o total: um box score que não soma é pior que
+      // um ausente, porque parece dado.
+      const q = jogo.nosso!
+      expect(q.q1 + q.q2 + q.q3 + q.q4 + q.prorrogacao).toBe(q.total)
+      expect(q.total).toBeGreaterThan(0)
+      expect(jogo.rebotesTotal).not.toBeNull()
+      expect(jogo.assistencias).not.toBeNull()
+      expect(jogo.fgPercentual).not.toBeNull()
+    }
+
+    // E o jogo AO VIVO não recebe veredito: a coluna "Res" derivava V/D de
+    // qualquer placar não-nulo, então uma partida no 1º quarto aparecia como
+    // "V 51–32" — a tela declarava vencedor de um jogo em andamento.
+    const aoVivo = tela!.jogosDoTime.filter((j) => !idsEncerrados.has(j.jogoId))
+    for (const jogo of aoVivo) {
+      expect(jogo.resultado).toBeNull()
+    }
+  }, 60_000)
+
   it('as três telas vestem a identidade e o time mostra o boxscore por partida', async () => {
     const { default: Indice } = await import('../(app)/estatisticas/page')
     const htmlIndice = renderToStaticMarkup(await Indice({ searchParams: Promise.resolve({}) }))
@@ -294,6 +365,18 @@ describe('Estatísticas — identidade 03 (conferência em lote)', () => {
 })
 
 describe('tela de Gestão de banca', () => {
+  it('cada linha do plano leva ao detalhe do apito (beco sem saída)', async () => {
+    // A tela dizia "entre R$ 25,00 no Curry PTS 20" e não oferecia nenhum
+    // caminho para descobrir POR QUE aquele apito existe: nenhuma linha era
+    // clicável, e o único jeito de chegar ao detalhe era voltar à lista e
+    // procurar o jogador de novo.
+    const { default: Pagina } = await import('../(app)/gestao/page')
+    const html = renderToStaticMarkup(await Pagina({ searchParams: Promise.resolve({ banca: '1000' }) }))
+
+    const detalhes = [...html.matchAll(/href="\/apito\/[0-9a-f-]+\?atributo=(PONTOS|REBOTES|ASSISTENCIAS)"/g)]
+    expect(detalhes.length).toBeGreaterThan(0)
+  }, 60_000)
+
   it('renderiza o plano do dia com o aviso de modelo de demonstração', async () => {
     const { default: Pagina } = await import('../(app)/gestao/page')
     const html = renderToStaticMarkup(await Pagina({ searchParams: Promise.resolve({ banca: '1000' }) }))

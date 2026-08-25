@@ -143,13 +143,18 @@ export async function telaDoTime(
     const temPlacar = jogo.placarCasa !== null && jogo.placarVisitante !== null
     const meus = emCasa ? jogo.placarCasa : jogo.placarVisitante
     const outros = emCasa ? jogo.placarVisitante : jogo.placarCasa
+    // VEREDITO SÓ DE JOGO ENCERRADO. Um jogo AO VIVO tem placar parcial: a
+    // coluna "Res" derivava V/D de qualquer placar não-nulo e anunciava
+    // vencedor de partida no 1º quarto. O placar parcial continua aparecendo;
+    // o que some é a sentença.
+    const encerrado = jogo.status === 'ENCERRADO'
 
     return {
       jogoId: jogo.id,
       data: jogo.dataHoraUtc,
       adversarioSigla: siglaPorTime.get(adversarioId) ?? '—',
       emCasa,
-      resultado: temPlacar ? (meus! > outros! ? 'V' : 'D') : null,
+      resultado: encerrado && temPlacar ? (meus! > outros! ? 'V' : 'D') : null,
       placar: temPlacar ? `${jogo.placarCasa}–${jogo.placarVisitante}` : null,
       nosso: nosso ? quebra(nosso) : null,
       deles: deles ? quebra(deles) : null,
