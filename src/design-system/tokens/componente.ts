@@ -16,9 +16,6 @@ export const componente = {
   anelDiametro: '56px',
   anelEspessura: '4px',
 
-  historicoAtivo: s.textoPrimario,
-  historicoInativo: s.divisor,
-
   marcadorOpdFundo: s.superficieElevada,
   marcadorOpdTexto: s.textoSecundario,
 

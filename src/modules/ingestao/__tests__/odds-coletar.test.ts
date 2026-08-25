@@ -13,7 +13,12 @@ import {
 } from '../../dominio/db/schema'
 import fixture from '../odds/__fixtures__/balldontlie-player-props.json'
 import { casasBalldontlie } from '../odds/balldontlie-props'
+import { readFileSync } from 'node:fs'
+
+import { carregarRuleset } from '../../motor/ruleset/carregar'
 import { agregarCotacoes, coletarOdds } from '../odds/coletar'
+
+const ruleset = carregarRuleset(readFileSync('config/ruleset.v1.yaml', 'utf8'))
 
 let banco: Awaited<ReturnType<typeof bancoDeTeste>>
 let jogadorPontosId: string
@@ -74,7 +79,7 @@ describe('coletarOdds (ponta a ponta com a fixture)', () => {
     const fabricaCasas = (gameIdExterno: string) =>
       casasBalldontlie(async () => fixture as unknown, gameIdExterno)
 
-    const r1 = await coletarOdds(banco.db, fabricaCasas, 'balldontlie', HOJE, AGORA)
+    const r1 = await coletarOdds(banco.db, fabricaCasas, 'balldontlie', HOJE, AGORA, ruleset)
     // 5 traduzidas; a do player 999 (sem identidade) morre no vínculo
     expect(r1.cotacoes).toBe(4)
     expect(r1.semVinculo).toBe(1)
@@ -91,19 +96,60 @@ describe('coletarOdds (ponta a ponta com a fixture)', () => {
     expect(Number(agregada!.oddMin)).toBe(1.91)
     expect(Number(agregada!.oddMax)).toBe(2.5)
 
-    // caesars cotou 25.5→26: linha separada, média própria
-    const [linha26] = await banco.db
+    // caesars cotou 25.5→26 SOZINHA: abaixo de casas_minimas (2), a linha NÃO
+    // vira agregada 'CASAS' — a ausência é o fallback (tabela estática).
+    const linha26 = await banco.db
       .select()
       .from(oddsAgregada)
       .where(and(eq(oddsAgregada.jogadorId, jogadorPontosId), eq(oddsAgregada.linha, '26.0')))
-    expect(linha26!.qtdCasas).toBe(1)
+    expect(linha26).toHaveLength(0)
 
-    // Reexecução: upsert, não duplicação
+    // Retry no MESMO instante: nem agregada nem snapshot duplicam (regra 5 —
+    // a UNIQUE com capturado_em impede o tique fantasma).
     const antes = (await banco.db.select().from(oddsSnapshot)).length
-    await coletarOdds(banco.db, fabricaCasas, 'balldontlie', HOJE, AGORA)
+    await coletarOdds(banco.db, fabricaCasas, 'balldontlie', HOJE, AGORA, ruleset)
     const agregadas = await banco.db.select().from(oddsAgregada)
-    expect(agregadas.filter((a) => a.jogadorId === jogadorPontosId)).toHaveLength(2)
-    // snapshot é série temporal: cresce a cada coleta, de propósito
+    expect(agregadas.filter((a) => a.jogadorId === jogadorPontosId)).toHaveLength(1)
+    expect((await banco.db.select().from(oddsSnapshot)).length).toBe(antes)
+    // Coleta em instante NOVO: a série temporal cresce, de propósito.
+    await coletarOdds(banco.db, fabricaCasas, 'balldontlie', HOJE, new Date(AGORA.getTime() + 60_000), ruleset)
     expect((await banco.db.select().from(oddsSnapshot)).length).toBeGreaterThan(antes)
   })
 })
+
+describe('errata pós-merge — coleta resiliente e honesta', () => {
+  it('erro em um jogo não derruba os demais: conta em jogosComErro e segue', async () => {
+    // segundo jogo do dia, com identidade — a fábrica explode só para ele
+    const [lal] = await banco.db.select().from(times).limit(1)
+    const [jogo2] = await banco.db
+      .insert(jogos)
+      .values({
+        dataHoraUtc: new Date('2026-08-25T22:00:00.000Z'),
+        dataReferencia: HOJE,
+        timeCasaId: lal!.id,
+        timeVisitanteId: lal!.id,
+      })
+      .returning()
+    await banco.db
+      .insert(identidadesJogo)
+      .values({ jogoId: jogo2!.id, provedor: 'balldontlie', idExterno: 'jogo-que-explode' })
+
+    const fabrica = (gameIdExterno: string) => {
+      if (gameIdExterno === 'jogo-que-explode') throw new Error('HTTP 429')
+      return casasBalldontlie(async () => fixture as unknown, gameIdExterno)
+    }
+    const r = await coletarOdds(banco.db, fabrica, 'balldontlie', HOJE, AGORA, ruleset)
+    expect(r.jogosComErro).toBe(1)
+    expect(r.cotacoes).toBeGreaterThan(0) // o jogo saudável foi coletado
+  })
+
+  it('qtdCasas conta CASAS distintas, não cotações', () => {
+    const r = agregarCotacoes([
+      { oddOver: 1.9, casaNome: 'a' },
+      { oddOver: 2.0, casaNome: 'a' }, // a mesma casa cotando duas vezes
+      { oddOver: 2.1, casaNome: 'b' },
+    ])
+    expect(r.qtdCasas).toBe(2)
+  })
+})
+

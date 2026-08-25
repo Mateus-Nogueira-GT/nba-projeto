@@ -14,7 +14,8 @@ export type BarraAlvoProps = {
  * nunca é o único sinal.
  */
 export function BarraAlvo({ observado, alvo }: BarraAlvoProps) {
-  const proporcao = alvo <= 0 ? 1 : Math.min(1, observado / alvo)
+  // Alvo desconhecido/zero NÃO é alvo batido: barra vazia, nunca cheia.
+  const proporcao = alvo <= 0 ? 0 : Math.min(1, observado / alvo)
   const largura = `${Math.round(proporcao * 100)}%`
 
   return (

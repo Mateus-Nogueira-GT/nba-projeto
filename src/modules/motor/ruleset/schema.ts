@@ -174,7 +174,9 @@ export const rulesetSchema = z.object({
     fonte: z.literal('casas'),
     agregacao: z.enum(['mediana', 'media']),
     casas_minimas: z.number().int().positive(),
-    exibicao: z.literal('faixa'),
+    // 'media' entrou em 25/08 por decisão do parceiro (card ODD MÉDIA);
+    // a redação homologada era 'faixa' — pergunta aberta ao CJ.
+    exibicao: z.enum(['faixa', 'media']),
     fallback: z.literal('tabela_estatica'),
     tabela_estatica: porNivel(porLinhaFaixa),
   }),

@@ -19,6 +19,7 @@ import { arredondar } from '../motor/arredondamento'
 import { faixaDaConfianca } from '../motor/confianca'
 import type { Apito, Atributo, Metodo, Nivel, NivelApito } from '../motor/tipos'
 import type { Ruleset } from '../motor/ruleset/schema'
+import { janelaNoBanco } from '../dominio/janela'
 import { calendarioDoRuleset, temporadaDe } from '../dominio/temporada'
 import { colunaMedia, jogosRecentes, naLinha } from './historico-na-linha'
 
@@ -196,7 +197,16 @@ async function enriquecer(db: Db, ruleset: Ruleset, apitos: Apito[]): Promise<It
     db.select().from(times),
     db.select().from(niveis),
     db.select().from(jogos).where(inArray(jogos.id, idsJogos)),
-    db.select().from(mediasJogador).where(eq(mediasJogador.janela, 'TEMPORADA')),
+    db
+      .select()
+      .from(mediasJogador)
+      .where(
+        and(
+          // A janela vem do RULESET (regra 1) — a mesma tradução da sincronização.
+          eq(mediasJogador.janela, janelaNoBanco(ruleset.media.janela)),
+          inArray(mediasJogador.jogadorId, idsJogadores),
+        ),
+      ),
     db
       .select()
       .from(oddsAgregada)
@@ -217,18 +227,22 @@ async function enriquecer(db: Db, ruleset: Ruleset, apitos: Apito[]): Promise<It
     oddsLinhas.map((o) => [`${o.jogoId}|${o.jogadorId}|${o.atributo}|${Number(o.linha)}`, o] as const),
   )
 
-  // Histórico recente por apito — a MESMA consulta do detalhe. Roda uma vez
-  // por publicação (materialização), nunca por request de tela.
-  const historicoPorApito = new Map<string, { valor: number; bateu: boolean }[]>()
+  // Histórico recente — a MESMA consulta do detalhe, rodando na publicação.
+  // Deduplicada por (jogador, jogo) e em PARALELO: as várias linhas do mesmo
+  // jogador compartilham a consulta em vez de repeti-la em série (errata 25/08).
+  const chavesHistorico = new Map<string, { jogadorId: string; corte: Date }>()
   for (const a of apitos) {
     const jogo = jogoPorId.get(a.jogoId)
-    if (!jogo) {
-      historicoPorApito.set(a.chaveDeduplicacao, [])
-      continue
-    }
-    const rows = await jogosRecentes(db, a.jogadorId, jogo.dataHoraUtc, 5)
-    historicoPorApito.set(a.chaveDeduplicacao, naLinha(rows, a.atributo, a.linha ?? a.alvo1Q))
+    if (jogo) chavesHistorico.set(`${a.jogadorId}|${a.jogoId}`, { jogadorId: a.jogadorId, corte: jogo.dataHoraUtc })
   }
+  const historicoPorChave = new Map(
+    await Promise.all(
+      [...chavesHistorico.entries()].map(
+        async ([chave, { jogadorId, corte }]) =>
+          [chave, await jogosRecentes(db, jogadorId, corte, 5)] as const,
+      ),
+    ),
+  )
 
   return apitos.map((a) => {
     const jogoDoApito = jogoPorId.get(a.jogoId)
@@ -264,7 +278,11 @@ async function enriquecer(db: Db, ruleset: Ruleset, apitos: Apito[]): Promise<It
       alvo1Q: a.alvo1Q,
       metodo: a.metodo,
       posicao: posicaoPorJogador.get(a.jogadorId) ?? null,
-      ultimos5: historicoPorApito.get(a.chaveDeduplicacao) ?? [],
+      ultimos5: naLinha(
+        historicoPorChave.get(`${a.jogadorId}|${a.jogoId}`) ?? [],
+        a.atributo,
+        a.linha ?? a.alvo1Q,
+      ),
       mediaTemporada: valorMedia !== null ? Number(valorMedia) : null,
       oddFaixa:
         oddRow && oddRow.oddMin !== null && oddRow.oddMax !== null
@@ -272,9 +290,12 @@ async function enriquecer(db: Db, ruleset: Ruleset, apitos: Apito[]): Promise<It
               min: Number(oddRow.oddMin),
               max: Number(oddRow.oddMax),
               qtdCasas: oddRow.qtdCasas,
-              // A média entre casas — quando a coleta a calculou, o rodapé do
-              // card troca sozinho de faixa para ODD MÉDIA.
-              ...(oddRow.oddMedia !== null ? { media: Number(oddRow.oddMedia) } : {}),
+              // A média entre casas — SÓ quando o ruleset manda exibi-la
+              // (odds.exibicao). A tela não decide; a materialização decide
+              // pelo ruleset, e voltar a 'faixa' no yaml religa o antigo.
+              ...(ruleset.odds.exibicao === 'media' && oddRow.oddMedia !== null
+                ? { media: Number(oddRow.oddMedia) }
+                : {}),
             }
           : null,
     }
