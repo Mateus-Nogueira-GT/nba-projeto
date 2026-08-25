@@ -249,6 +249,16 @@ describe('os dois caminhos chegam na mesma tela', () => {
     expect(tela!.perfil.nome).toBe('Luka Dončić')
   })
 
+  it('2 pontos deriva de FG − 3P, com percentual próprio (proposta comercial)', async () => {
+    const tela = await telaDoJogador(banco.db, idPorNome.get('Luka Dončić')!, {
+      temporada: TEMPORADA,
+    })
+    // Fixture: cestas 12/22, três 4/9 → dois 8/13 = 61,5%
+    expect(tela!.perfilNumeros.ataque.doisPercentual).toBe(61.5)
+    // E lances livres seguem visíveis: 6/7 = 85,7%
+    expect(tela!.perfilNumeros.ataque.lancePercentual).toBe(85.7)
+  })
+
   it('o card sem href não vira link — a galeria não tem para onde navegar', () => {
     const html = renderToStaticMarkup(
       createElement(CardEntrada, {
