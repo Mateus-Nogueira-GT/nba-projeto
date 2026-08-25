@@ -106,6 +106,7 @@ acrescentou duas:
 | --- | --- |
 | As barrinhas "últ. 5 na linha" do card leem a linha PRINCIPAL do apito (a menor, quando há 2+). É essa a leitura de relance que ele quer? | qual linha alimenta as barrinhas |
 | Ocultar jogador no Fire Live esconde da TELA mas não silencia o push do jogador oculto. É o comportamento desejado, ou o push também cala? | se a preferência entra no fan-out de push |
+| **Marcos de green de rebotes e assistências** (`por_atributo.marcos_green`, hoje `origem: demonstracao`): quais números ele quer? E a pergunta que os números atuais expõem — eles são de JOGO INTEIRO (MVP: 10 rebotes), mas o Fire Live só observa o **1º quarto**, onde um MVP faz 2 ou 3. Ou existem marcos próprios de 1Q, ou o green de rebotes/assistências nunca dispara na vida real. | se o canal GREEN funciona fora da demonstração |
 | **Reaberta (25/08):** a proposta homologada dizia "sempre faixa, nunca odd única" (`odds.exibicao`), mas o parceiro decidiu mostrar a **média entre casas** no card e no detalhe. O CJ valida a média, prefere a faixa, ou as duas? (`config/ruleset.v1.yaml` → `odds.exibicao`: trocar o valor religa qualquer um dos comportamentos sem código) | o rodapé de odd de todo card pré-live |
 
 ---
@@ -135,8 +136,10 @@ Continuam abertas desde o Fire Live:
 - **Green fora do 1º quarto.** O workflow encerra no 1Q por especificação, então
   quem bate 30 pontos no 3º quarto não gera green. Exige um observador que
   ninguém definiu.
-- **Green só em pontos.** `push.marcos_green` é indexado por nível, não por
-  atributo, e os valores são totais de pontos. Rebotes e assistências não têm
-  marco definido.
+- ~~**Green só em pontos.**~~ **Resolvido.** `por_atributo.marcos_green` existe
+  para REBOTES e ASSISTENCIAS, `marcosDoNivel(nivel, atributo, ruleset)` lê por
+  atributo e a demonstração exibe os três canais (25/08/2026). Os valores de
+  rebotes/assistências seguem `origem: demonstracao` — o CJ ainda não os
+  definiu, e trocar é editar o YAML.
 - **Rebotes e assistências.** O modelo já é `(jogador, atributo)`; falta a lista
   do Mestre da NBA. É INSERT, não migration.
