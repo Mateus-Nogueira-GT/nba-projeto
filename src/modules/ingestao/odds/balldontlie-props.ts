@@ -72,26 +72,46 @@ export async function casasBalldontlie(
   const porVendor = new Map<string, CotacaoExterna[]>()
   const descartesPorVendor = new Map<string, number>()
 
-  for (const item of bruta.data) {
-    const prop = esquemaProp.safeParse(item)
-    if (!prop.success) continue
-    const { vendor } = prop.data
+  const garantirVendor = (vendor: string) => {
     if (!porVendor.has(vendor)) {
       porVendor.set(vendor, [])
       descartesPorVendor.set(vendor, 0)
     }
+  }
+  const contarDescarte = (vendor: string) =>
+    descartesPorVendor.set(vendor, (descartesPorVendor.get(vendor) ?? 0) + 1)
+
+  for (const item of bruta.data) {
+    const prop = esquemaProp.safeParse(item)
+    if (!prop.success) {
+      // Shape quebrado ainda é descarte CONTADO — o vendor sai de uma leitura
+      // frouxa; sem nem vendor legível, o item é lixo de verdade e cai fora.
+      const vendorFrouxo = z.object({ vendor: z.string() }).safeParse(item)
+      if (vendorFrouxo.success) {
+        garantirVendor(vendorFrouxo.data.vendor)
+        contarDescarte(vendorFrouxo.data.vendor)
+      }
+      continue
+    }
+    const { vendor } = prop.data
+    garantirVendor(vendor)
 
     const atributo = atributoDoPropType(prop.data.prop_type)
     const linha = linhaDoLadoOver(prop.data.line_value)
     const overAmericana =
       prop.data.market.type === 'over_under' ? (prop.data.market.over_odds ?? null) : null
 
-    if (atributo === null || linha === null || overAmericana === null) {
-      descartesPorVendor.set(vendor, (descartesPorVendor.get(vendor) ?? 0) + 1)
+    // Zero é mercado suspenso no formato americano; a conversão lança de
+    // propósito — aqui, antes dela, vira descarte contado.
+    const americanaValida = (n: number | null): n is number =>
+      n !== null && Number.isFinite(n) && n !== 0
+    if (atributo === null || linha === null || !americanaValida(overAmericana)) {
+      contarDescarte(vendor)
       continue
     }
 
-    const underAmericana = prop.data.market.under_odds ?? null
+    const underBruta = prop.data.market.under_odds ?? null
+    const underAmericana = americanaValida(underBruta) ? underBruta : null
     porVendor.get(vendor)!.push({
       // O nome canônico chega pelo vínculo por id; o campo textual registra o
       // que dá para registrar sem outra chamada.
@@ -118,18 +138,38 @@ export async function casasBalldontlie(
     )
 }
 
-/** O caminho HTTP real — só credencial e transporte; a tradução é a de cima. */
+/**
+ * O caminho HTTP real — só credencial e transporte; a tradução é a de cima.
+ *
+ * O OpenAPI diz que player_props volta inteiro numa resposta ("no pagination
+ * cursors"), mas pede-se per_page=100 e segue-se next_cursor SE ele um dia
+ * aparecer — média calculada sobre página truncada é o pior defeito silencioso
+ * possível deste produto.
+ */
 export function buscarPropsHttp(
   chave: string,
   baseUrl = 'https://api.balldontlie.io/nba',
+  fetchFn: typeof fetch = fetch,
 ): (gameIdExterno: string) => Promise<unknown> {
   return async (gameIdExterno) => {
-    const resposta = await fetch(`${baseUrl}/v2/odds/player_props?game_id=${gameIdExterno}`, {
-      headers: { Authorization: chave },
-    })
-    if (!resposta.ok) {
-      throw new Error(`balldontlie player_props: HTTP ${resposta.status}`)
+    const dados: unknown[] = []
+    let cursor: number | undefined
+    for (let pagina = 0; pagina < 50; pagina++) {
+      const url =
+        `${baseUrl}/v2/odds/player_props?game_id=${gameIdExterno}&per_page=100` +
+        (cursor === undefined ? '' : `&cursor=${cursor}`)
+      const resposta = await fetchFn(url, { headers: { Authorization: chave } })
+      if (!resposta.ok) {
+        throw new Error(`balldontlie player_props: HTTP ${resposta.status}`)
+      }
+      const corpo = (await resposta.json()) as {
+        data?: unknown[]
+        meta?: { next_cursor?: number }
+      }
+      dados.push(...(corpo.data ?? []))
+      cursor = corpo.meta?.next_cursor
+      if (cursor === undefined) break
     }
-    return resposta.json()
+    return { data: dados, meta: { per_page: 100 } }
   }
 }
