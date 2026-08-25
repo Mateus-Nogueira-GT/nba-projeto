@@ -13,6 +13,7 @@ import {
   uuid,
 } from 'drizzle-orm/pg-core'
 import { sql } from 'drizzle-orm'
+import { jogadores } from './dominio'
 import {
   canalNotificacaoEnum,
   papelUsuarioEnum,
@@ -357,4 +358,29 @@ export const eventosConta = pgTable(
     ocorridoEm: timestamp('ocorrido_em', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index('eventos_conta_usuario_idx').on(t.usuarioId, t.ocorridoEm)],
+)
+
+/**
+ * Jogadores que o usuário escolheu NÃO acompanhar no Fire Live — a primeira
+ * preferência por CONTA do produto (sincroniza entre dispositivos, ao
+ * contrário de tudo que vive na URL).
+ *
+ * Aplicada como recorte de LEITURA na tela: o snapshot do feed é por evento,
+ * nunca por usuário, e a materialização não sabe que isto existe. O push
+ * TAMBÉM não filtra por aqui — ocultar cala a tela, não a notificação
+ * (pergunta aberta ao CJ; mexer no fan-out é outra obra).
+ */
+export const jogadoresOcultos = pgTable(
+  'jogadores_ocultos',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    usuarioId: uuid('usuario_id')
+      .notNull()
+      .references(() => usuarios.id, { onDelete: 'cascade' }),
+    jogadorId: uuid('jogador_id')
+      .notNull()
+      .references(() => jogadores.id, { onDelete: 'cascade' }),
+    criadoEm: timestamp('criado_em', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [unique('jogadores_ocultos_unico').on(t.usuarioId, t.jogadorId)],
 )
