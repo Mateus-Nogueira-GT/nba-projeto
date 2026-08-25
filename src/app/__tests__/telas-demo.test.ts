@@ -313,6 +313,18 @@ describe('Estatísticas — identidade 03 (conferência em lote)', () => {
 })
 
 describe('tela de Gestão de banca', () => {
+  it('cada linha do plano leva ao detalhe do apito (beco sem saída)', async () => {
+    // A tela dizia "entre R$ 25,00 no Curry PTS 20" e não oferecia nenhum
+    // caminho para descobrir POR QUE aquele apito existe: nenhuma linha era
+    // clicável, e o único jeito de chegar ao detalhe era voltar à lista e
+    // procurar o jogador de novo.
+    const { default: Pagina } = await import('../(app)/gestao/page')
+    const html = renderToStaticMarkup(await Pagina({ searchParams: Promise.resolve({ banca: '1000' }) }))
+
+    const detalhes = [...html.matchAll(/href="\/apito\/[0-9a-f-]+\?atributo=(PONTOS|REBOTES|ASSISTENCIAS)"/g)]
+    expect(detalhes.length).toBeGreaterThan(0)
+  }, 60_000)
+
   it('renderiza o plano do dia com o aviso de modelo de demonstração', async () => {
     const { default: Pagina } = await import('../(app)/gestao/page')
     const html = renderToStaticMarkup(await Pagina({ searchParams: Promise.resolve({ banca: '1000' }) }))
