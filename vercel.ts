@@ -34,7 +34,7 @@ export const config: VercelConfig = {
    * Hobby permite UMA região (Pro, 5). Se o banco mudar de região, esta linha
    * muda junto — é a única coisa que as mantém casadas.
    */
-  regions: ['gru1'],
+  regions: ['iad1'], // EXPERIMENTO: isolar se o bloqueio é a chave ou o valor
   functions: {
     'src/app/api/fila/push/route.ts': {
       experimentalTriggers: [
