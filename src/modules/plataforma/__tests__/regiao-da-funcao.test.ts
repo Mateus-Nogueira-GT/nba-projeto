@@ -17,7 +17,7 @@ import { config } from '../../../../vercel'
  * Este teste não conversa com a Vercel; ele trava a decisão para que a linha
  * não desapareça num refactor sem alguém precisar reencontrar a medição.
  */
-const REGIAO_DO_BANCO = 'iad1' // sa-east-1 · São Paulo — igual ao host do Neon
+const REGIAO_DO_BANCO = 'gru1' // sa-east-1 · São Paulo — igual ao host do Neon
 
 describe('região da função', () => {
   it('roda na MESMA região do banco', () => {
