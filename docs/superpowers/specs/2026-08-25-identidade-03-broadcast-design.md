@@ -190,6 +190,13 @@ vivo, a versão ao vivo — mesmo padrão do bloco `aoVivo` do perfil do jogador
 
 Ordem de reforma (cada uma: **mockup no navegador → aprovação → código com teste**):
 
+> **Delegação de 25/08 (madrugada):** o parceiro delegou a aprovação por etapa.
+> O critério passa a ser objetivo: cada mockup é conferido contra os dois aprovados
+> em sessão (`linguagem-b.html`) — mesmos tokens, mesma anatomia de card, mesma
+> temperatura por contexto — antes de virar código. Todos os mockups ficam salvos
+> em `.superpowers/brainstorm/` para auditoria do parceiro pela manhã; divergência
+> apontada vira retrabalho da tela, não reabertura da spec.
+
 1. **Tokens + componentes base** (Barrinhas, PlacarMini, BarraAlvo, ChipFiltro,
    CardEntrada novo) — validados na galeria do admin
 2. **Lista Secreta** (é a vitrine; estreia barrinhas e rodapé)
