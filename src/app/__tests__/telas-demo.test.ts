@@ -275,6 +275,58 @@ describe('a rodada segue o fuso do cliente', () => {
 })
 
 describe('Estatísticas — identidade 03 (conferência em lote)', () => {
+  it('o box score do time tem NÚMEROS, não uma parede de travessões', async () => {
+    // A demo semeava box score de JOGADOR e nunca o do TIME. A tela de time
+    // lê `estatisticas_time_jogo`, então cada partida encerrada aparecia com
+    // quartos, REB, AST, TO, FG% e 3P% todos em "—". Para o cliente é a tela
+    // mais quebrada do app; para o código, tudo funcionava — só faltava dado.
+    const { times, jogos } = await import('../../modules/dominio/db/schema')
+    const { eq: igual } = await import('drizzle-orm')
+
+    // Um time com jogo ENCERRADO — é sobre esses que a tela promete números.
+    const [encerrado] = await banco.db
+      .select()
+      .from(jogos)
+      .where(igual(jogos.status, 'ENCERRADO'))
+      .limit(1)
+    const [time] = await banco.db.select().from(times).where(igual(times.id, encerrado!.timeCasaId)).limit(1)
+
+    const { telaDoTime } = await import('../../modules/entrega/estatisticas/time')
+    const { temporadaDe, calendarioDoRuleset } = await import('../../modules/dominio/temporada')
+    const ruleset = await rulesetAtivo()
+    const tela = await telaDoTime(banco.db, time!.id, {
+      temporada: temporadaDe(AGORA, calendarioDoRuleset(ruleset)),
+    })
+
+    // Jogo AO VIVO tem placar parcial e NÃO tem box score fechado — a
+    // asserção é sobre os encerrados, que a tela promete completos.
+    const idsEncerrados = new Set(
+      (await banco.db.select().from(jogos).where(igual(jogos.status, 'ENCERRADO'))).map((j) => j.id),
+    )
+    const encerrados = tela!.jogosDoTime.filter((j) => idsEncerrados.has(j.jogoId))
+    expect(encerrados.length).toBeGreaterThan(0)
+    for (const jogo of encerrados) {
+      expect(jogo.nosso).not.toBeNull()
+      expect(jogo.deles).not.toBeNull()
+      // Os quartos FECHAM com o total: um box score que não soma é pior que
+      // um ausente, porque parece dado.
+      const q = jogo.nosso!
+      expect(q.q1 + q.q2 + q.q3 + q.q4 + q.prorrogacao).toBe(q.total)
+      expect(q.total).toBeGreaterThan(0)
+      expect(jogo.rebotesTotal).not.toBeNull()
+      expect(jogo.assistencias).not.toBeNull()
+      expect(jogo.fgPercentual).not.toBeNull()
+    }
+
+    // E o jogo AO VIVO não recebe veredito: a coluna "Res" derivava V/D de
+    // qualquer placar não-nulo, então uma partida no 1º quarto aparecia como
+    // "V 51–32" — a tela declarava vencedor de um jogo em andamento.
+    const aoVivo = tela!.jogosDoTime.filter((j) => !idsEncerrados.has(j.jogoId))
+    for (const jogo of aoVivo) {
+      expect(jogo.resultado).toBeNull()
+    }
+  }, 60_000)
+
   it('as três telas vestem a identidade e o time mostra o boxscore por partida', async () => {
     const { default: Indice } = await import('../(app)/estatisticas/page')
     const htmlIndice = renderToStaticMarkup(await Indice({ searchParams: Promise.resolve({}) }))

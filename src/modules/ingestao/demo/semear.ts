@@ -48,6 +48,8 @@ export type ResumoDemo = {
   rodadasPublicadas: number
   /** Jogos encerrados que ganharam placar derivado. */
   placares: number
+  /** Linhas de box score de TIME derivadas dos jogadores (2 por jogo). */
+  boxScoresDeTime: number
   /** Times com campanha na tabela de classificação. */
   classificados: number
 }
@@ -499,6 +501,11 @@ export async function semearDemo(db: Db, ruleset: Ruleset, agora: Date): Promise
   //      classificação não tem de onde nascer.
   const placares = await semearPlacares(db)
 
+  // 6d · BOX SCORE DO TIME — a tela de time lê `estatisticas_time_jogo`, que
+  //      a demo nunca escrevia: toda partida encerrada aparecia com quartos,
+  //      REB, AST e percentuais em "—". Derivado da soma dos jogadores.
+  const boxScoresDeTime = await semearBoxScoreDoTime(db, agora)
+
   // 7 · Classificação da temporada — a campanha que a tela do TIME mostra
   //     (posição, vitórias, derrotas, sequência). Sem ela o cliente abre o
   //     time e encontra um cabeçalho sem campanha. Derivada dos jogos
@@ -520,6 +527,7 @@ export async function semearDemo(db: Db, ruleset: Ruleset, agora: Date): Promise
     linhasComOdd,
     rodadasPublicadas,
     placares,
+    boxScoresDeTime,
     classificados,
   }
 }
@@ -711,6 +719,98 @@ async function semearPlacares(db: Db): Promise<number> {
        and casa.jogo_id = j.id and casa.time_id = j.time_casa_id
        and fora.jogo_id = j.id and fora.time_id = j.time_visitante_id
     returning j.id
+  `)
+  const linhas = Array.isArray(resultado)
+    ? (resultado as unknown[])
+    : ((resultado as { rows?: unknown[] }).rows ?? [])
+  return linhas.length
+}
+
+/**
+ * BOX SCORE DO TIME — derivado do box score dos JOGADORES, nunca digitado.
+ *
+ * A tela do time (`estatisticas/time/[id]`) lê `estatisticas_time_jogo`, uma
+ * tabela que a demo nunca escrevia: cada partida encerrada aparecia com
+ * quartos, REB, AST, TO e percentuais todos em "—". Tudo funcionava; só
+ * faltava o dado.
+ *
+ * Soma o que cada elenco (a LISTA do CJ, versão ativa — nunca
+ * `jogadores.time_id`) produziu no jogo. Só jogos ENCERRADOS: partida ao vivo
+ * ou agendada segue sem box score, e a tela mostra a ausência como ausência.
+ *
+ * A QUEBRA POR QUARTO é distribuição de apresentação, não estatística: a demo
+ * não tem parciais por quarto de jogo inteiro (só do 1º, do Fire Live).
+ * Os três primeiros quartos saem de proporções fixas e o QUARTO recebe o
+ * RESTO — é isso que garante `q1+q2+q3+q4 == total` para qualquer número.
+ * Box score que não fecha é pior que box score ausente: parece dado.
+ */
+async function semearBoxScoreDoTime(db: Db, agora: Date): Promise<number> {
+  const resultado = await db.execute(sql`
+    with por_time as (
+      select ej.jogo_id,
+             n.time_id,
+             sum(ej.pontos)::int        as pontos,
+             sum(ej.rebotes_total)::int as rebotes_total,
+             sum(ej.rebotes_of)::int    as rebotes_of,
+             sum(ej.rebotes_def)::int   as rebotes_def,
+             sum(ej.assistencias)::int  as assistencias,
+             sum(ej.cestas_c)::int      as cestas_c,
+             sum(ej.cestas_t)::int      as cestas_t,
+             sum(ej.tres_c)::int        as tres_c,
+             sum(ej.tres_t)::int        as tres_t,
+             sum(ej.lance_c)::int       as lance_c,
+             sum(ej.lance_t)::int       as lance_t,
+             sum(ej.roubos)::int        as roubos,
+             sum(ej.bloqueios)::int     as bloqueios,
+             sum(ej.turnovers)::int     as turnovers,
+             sum(ej.faltas)::int        as faltas
+        from estatisticas_jogo ej
+        join jogos j on j.id = ej.jogo_id and j.status = 'ENCERRADO'
+        join niveis n on n.jogador_id = ej.jogador_id and n.atributo = 'PONTOS'
+        join niveis_versao nv on nv.id = n.niveis_versao_id and nv.ativa = true
+       group by 1, 2
+    ),
+    com_quartos as (
+      select *,
+             floor(pontos * 0.26)::int as q1,
+             floor(pontos * 0.24)::int as q2,
+             floor(pontos * 0.25)::int as q3
+        from por_time
+    )
+    insert into estatisticas_time_jogo (
+      jogo_id, time_id, pontos, pontos_q1, pontos_q2, pontos_q3, pontos_q4,
+      pontos_prorrogacao, rebotes_total, rebotes_of, rebotes_def, assistencias,
+      cestas_c, cestas_t, tres_c, tres_t, lance_c, lance_t,
+      roubos, bloqueios, turnovers, faltas, capturado_em, atualizado_em
+    )
+    select jogo_id, time_id, pontos, q1, q2, q3,
+           pontos - q1 - q2 - q3,  -- o resto fecha a conta, sempre
+           0, rebotes_total, rebotes_of, rebotes_def, assistencias,
+           cestas_c, cestas_t, tres_c, tres_t, lance_c, lance_t,
+           roubos, bloqueios, turnovers, faltas, ${agora}, ${agora}
+      from com_quartos
+    on conflict on constraint estatisticas_time_jogo_unica do update set
+      pontos = excluded.pontos,
+      pontos_q1 = excluded.pontos_q1,
+      pontos_q2 = excluded.pontos_q2,
+      pontos_q3 = excluded.pontos_q3,
+      pontos_q4 = excluded.pontos_q4,
+      rebotes_total = excluded.rebotes_total,
+      rebotes_of = excluded.rebotes_of,
+      rebotes_def = excluded.rebotes_def,
+      assistencias = excluded.assistencias,
+      cestas_c = excluded.cestas_c,
+      cestas_t = excluded.cestas_t,
+      tres_c = excluded.tres_c,
+      tres_t = excluded.tres_t,
+      lance_c = excluded.lance_c,
+      lance_t = excluded.lance_t,
+      roubos = excluded.roubos,
+      bloqueios = excluded.bloqueios,
+      turnovers = excluded.turnovers,
+      faltas = excluded.faltas,
+      atualizado_em = excluded.atualizado_em
+    returning id
   `)
   const linhas = Array.isArray(resultado)
     ? (resultado as unknown[])
