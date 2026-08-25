@@ -21,6 +21,7 @@
     "test:spec04": "vitest run src/modules/plataforma/__tests__/spec04.test.ts src/modules/plataforma/__tests__/pagamento-estabilizacao.test.ts src/modules/plataforma/__tests__/plataforma.test.ts src/modules/plataforma/__tests__/push.test.ts src/app/api/push/__tests__/routes.test.ts src/app/__tests__/paywall.test.ts src/modules/dominio/__tests__/persistencia.test.ts",
     "db:generate": "drizzle-kit generate && node scripts/gerar-down.mjs",
     "db:migrate": "dotenv -e .env.local -- drizzle-kit migrate",
+    "db:status": "vite-node scripts/db-status.ts",
     "db:studio": "dotenv -e .env.local -- drizzle-kit studio",
     "admin:bootstrap": "vite-node scripts/bootstrap-admin.ts",
     "cortesia": "vite-node scripts/conceder-cortesia.ts",
