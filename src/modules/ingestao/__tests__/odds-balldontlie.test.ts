@@ -40,12 +40,11 @@ describe('casas do balldontlie (player props)', () => {
     const todas = (
       await Promise.all(casas.map((c) => c.cotacoes('15908525')))
     ).flat()
-    // sobram: draftkings points + fanduel points + caesars points + draftkings rebounds
-    expect(todas).toHaveLength(4)
+    // sobram: dk points + fd points + caesars points + dk rebounds + betrivers points
+    expect(todas).toHaveLength(5)
 
     const descartadas = casas.reduce((soma, c) => soma + (c.descartadas?.() ?? 0), 0)
-    // double_double (milestone) + points_rebounds_assists (composto) +
-    // betrivers "12" (linha inteira)
-    expect(descartadas).toBe(3)
+    // double_double (milestone) + points_rebounds_assists (composto)
+    expect(descartadas).toBe(2)
   })
 })

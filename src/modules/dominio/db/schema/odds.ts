@@ -53,6 +53,9 @@ export const oddsAgregada = pgTable(
     oddMin: numeric('odd_min', { precision: 7, scale: 3 }),
     oddMax: numeric('odd_max', { precision: 7, scale: 3 }),
     oddMediana: numeric('odd_mediana', { precision: 7, scale: 3 }),
+    // A média simples entre casas — o número que o parceiro pediu no card.
+    // A mediana fica: é mais robusta a outlier e pode voltar à tela um dia.
+    oddMedia: numeric('odd_media', { precision: 7, scale: 3 }),
     qtdCasas: smallint('qtd_casas').notNull().default(0),
     origem: origemOddsEnum('origem').notNull(),
     calculadoEm: timestamp('calculado_em', { withTimezone: true }).notNull().defaultNow(),

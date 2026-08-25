@@ -7,7 +7,11 @@
       "vendor": "draftkings",
       "prop_type": "points",
       "line_value": "24.5",
-      "market": { "type": "over_under", "over_odds": -110, "under_odds": -110 },
+      "market": {
+        "type": "over_under",
+        "over_odds": -110,
+        "under_odds": -110
+      },
       "updated_at": "2026-08-25T14:03:11Z"
     },
     {
@@ -17,7 +21,11 @@
       "vendor": "fanduel",
       "prop_type": "points",
       "line_value": "24.5",
-      "market": { "type": "over_under", "over_odds": 150, "under_odds": -190 },
+      "market": {
+        "type": "over_under",
+        "over_odds": 150,
+        "under_odds": -190
+      },
       "updated_at": "2026-08-25T14:03:40Z"
     },
     {
@@ -27,7 +35,11 @@
       "vendor": "caesars",
       "prop_type": "points",
       "line_value": "25.5",
-      "market": { "type": "over_under", "over_odds": -200, "under_odds": 160 },
+      "market": {
+        "type": "over_under",
+        "over_odds": -200,
+        "under_odds": 160
+      },
       "updated_at": "2026-08-25T14:02:58Z"
     },
     {
@@ -37,7 +49,11 @@
       "vendor": "draftkings",
       "prop_type": "rebounds",
       "line_value": "9.5",
-      "market": { "type": "over_under", "over_odds": 100, "under_odds": -130 },
+      "market": {
+        "type": "over_under",
+        "over_odds": 100,
+        "under_odds": -130
+      },
       "updated_at": "2026-08-25T14:03:11Z"
     },
     {
@@ -47,7 +63,10 @@
       "vendor": "draftkings",
       "prop_type": "double_double",
       "line_value": "1",
-      "market": { "type": "milestone", "odds": -140 },
+      "market": {
+        "type": "milestone",
+        "odds": -140
+      },
       "updated_at": "2026-08-25T14:03:11Z"
     },
     {
@@ -57,7 +76,11 @@
       "vendor": "fanduel",
       "prop_type": "points_rebounds_assists",
       "line_value": "39.5",
-      "market": { "type": "over_under", "over_odds": -115, "under_odds": -105 },
+      "market": {
+        "type": "over_under",
+        "over_odds": -115,
+        "under_odds": -105
+      },
       "updated_at": "2026-08-25T14:03:40Z"
     },
     {
@@ -66,10 +89,16 @@
       "player_id": 999,
       "vendor": "betrivers",
       "prop_type": "points",
-      "line_value": "12",
-      "market": { "type": "over_under", "over_odds": -105, "under_odds": -115 },
+      "line_value": "11.5",
+      "market": {
+        "type": "over_under",
+        "over_odds": -105,
+        "under_odds": -115
+      },
       "updated_at": "2026-08-25T14:01:20Z"
     }
   ],
-  "meta": { "per_page": 25 }
+  "meta": {
+    "per_page": 25
+  }
 }

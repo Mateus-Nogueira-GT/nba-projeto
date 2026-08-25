@@ -1,0 +1,1 @@
+ALTER TABLE "odds_agregada" ADD COLUMN "odd_media" numeric(7, 3);
