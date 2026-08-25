@@ -238,3 +238,43 @@ describe('rampa de confiança (identidade 02)', () => {
     ]).toEqual(degraus)
   })
 })
+
+// ===========================================================================
+// IDENTIDADE 03 · BROADCAST
+// ===========================================================================
+
+describe('identidade 03 — broadcast', () => {
+  it('temperatura por contexto: frio e quente não compartilham gradiente, e o quente é o único com o veu laranja', () => {
+    expect(componente.contextoFrio.cardGradiente).not.toBe(componente.contextoQuente.cardGradiente)
+    expect(componente.contextoQuente.destaque).toBe(semantico.acento)
+    // O universo frio nunca usa o acento quente em nenhuma das suas partes.
+    expect(JSON.stringify(componente.contextoFrio)).not.toContain(semantico.acento)
+  })
+
+  it('o brilho do turbo usa a cor do turbo, que segue sendo a categórica do apito', () => {
+    expect(componente.turboBrilho).toContain('rgba(77,163,255')
+    expect(semantico.apitoTurbo).toBe(primitivo.azul400)
+  })
+
+  it('o selo VIVO tem cor própria, distinta do alerta', () => {
+    expect(semantico.vivoSelo).not.toBe(semantico.alerta)
+  })
+
+  it('barrinhas usam par próprio, fora das cores categóricas dos dois canais', () => {
+    const categoricas = [
+      semantico.apitoNivel1, semantico.apitoNivel2, semantico.apitoNivel3, semantico.apitoTurbo,
+      semantico.nivelMvp, semantico.nivelAllStar, semantico.nivelSuporte, semantico.nivelRandola,
+    ]
+    expect(categoricas).not.toContain(semantico.barrinhaBateu)
+    expect(categoricas).not.toContain(semantico.barrinhaFalhou)
+    // e são legíveis com o valor escrito dentro (texto escuro no verde, claro no vermelho)
+    expect(razaoDeContraste(semantico.textoSobreCor, semantico.barrinhaBateu)).toBeGreaterThanOrEqual(4.5)
+    expect(razaoDeContraste(primitivo.branco, semantico.barrinhaFalhou)).toBeGreaterThanOrEqual(4.5)
+  })
+
+  it('o fundo de tela é gradiente e a borda lateral do card tem 3px', () => {
+    expect(componente.fundoTela).toContain('linear-gradient')
+    expect(componente.cardBordaLateral).toBe('3px')
+  })
+})
+

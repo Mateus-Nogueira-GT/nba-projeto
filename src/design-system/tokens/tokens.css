@@ -26,6 +26,19 @@
   --acento: #FF7A1A;
   --acento-claro: #FFB25E;
   --ao-vivo: #FF6B6B;
+  --superficie-fria1: #16213A;
+  --superficie-fria2: #111A2E;
+  --fundo-tela-fim: #101A2E;
+  --superficie-quente1: #241A2E;
+  --superficie-quente2: #161226;
+  --borda-quente: #3A2A52;
+  --vivo-selo: #E03E3E;
+  --barrinha-bateu: #2FBF71;
+  --barrinha-falhou: #CC3B3B;
+  --veu-frio: rgba(92,224,206,.07);
+  --veu-quente: rgba(255,122,26,.08);
+  --veu-turbo: rgba(77,163,255,.18);
+  --veu-fire: rgba(255,122,26,.22);
   --confianca-grau1: #2FA093;
   --confianca-grau2: #3AB5A6;
   --confianca-grau3: #47CBBA;
@@ -55,4 +68,12 @@
   --avatar-anel-espessura: 2px;
   --faixa-nivel-altura: 3px;
   --cta-fundo: linear-gradient(90deg, #FF7A1A, #FFB25E);
+  --fundo-tela: linear-gradient(175deg, #0B1220 60%, #101A2E);
+  --contexto-frio: [object Object];
+  --contexto-quente: [object Object];
+  --turbo-brilho: 0 0 22px rgba(77,163,255,.18);
+  --card-borda-lateral: 3px;
+  --card-raio: 14px;
+  --barra-alvo-fundo: #241A2E;
+  --barra-alvo-preenchido: linear-gradient(90deg, #FF7A1A, #FFB25E);
 }
