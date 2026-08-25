@@ -124,6 +124,25 @@ describe('Lista Secreta', () => {
     expect(html).not.toContain(' · PTS')
   }, 60_000)
 
+  it('trocar a quantidade PRESERVA o recorte de atributo (regressão)', async () => {
+    // O usuário filtrou "Rebotes" e depois pediu "2 vítimas". Os chips de
+    // quantidade montavam `/?quantidade=N` seco e devolviam a lista inteira,
+    // sem aviso — o filtro que ele acabou de escolher sumia no clique.
+    const { default: Pagina } = await import('../(app)/page')
+    const html = renderToStaticMarkup(
+      await Pagina({ searchParams: Promise.resolve({ atributo: 'REBOTES' }) }),
+    )
+
+    const quantidades = [...html.matchAll(/href="(\/\?[^"]*quantidade=\d[^"]*)"/g)].map((m) => m[1]!)
+    expect(quantidades.length).toBeGreaterThan(0)
+    for (const href of quantidades) {
+      expect(href).toContain('atributo=REBOTES')
+    }
+
+    // E "Lista inteira" (quantidade 0, que some da URL) idem.
+    expect(html).toMatch(/href="\/\?atributo=REBOTES"/)
+  }, 60_000)
+
   it('cabeçalho do mockup + seletor Hoje/Resultados + grau na pílula', async () => {
     const { default: Pagina } = await import('../(app)/page')
     const html = renderToStaticMarkup(await Pagina({ searchParams: Promise.resolve({}) }))
