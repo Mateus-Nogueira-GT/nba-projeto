@@ -3,6 +3,8 @@ import { componente } from '../tokens/componente'
 import { CONFIANCA_GRAU, MODO_FIRE, NIVEL_JOGADOR, TURBO } from '../tokens/css'
 import { semantico } from '../tokens/semantico'
 import { Avatar } from './Avatar'
+import { BarraAlvo } from './BarraAlvo'
+import { Barrinhas } from './Barrinhas'
 import { Pilula } from './Pilula'
 import { Selo } from './Selo'
 
@@ -12,6 +14,9 @@ const ATRIBUTO_ROTULO: Record<Atributo, string> = {
   ASSISTENCIAS: 'ASSISTÊNCIAS',
 }
 const ATRIBUTO_CURTO: Record<Atributo, string> = { PONTOS: 'PTS', REBOTES: 'REB', ASSISTENCIAS: 'AST' }
+
+const decimalPtBr = (n: number, casas: number) =>
+  n.toLocaleString('pt-BR', { minimumFractionDigits: casas, maximumFractionDigits: casas })
 
 export type CardEntradaProps = {
   nome: string
@@ -39,7 +44,7 @@ export type CardEntradaProps = {
   nivelApito: NivelApito
   /** Nota de confiança. Nunca "probabilidade". */
   confianca: number | null
-  /** Grau visual (1..5) calculado por faixaDaConfianca na TELA. */
+  /** Grau visual (1..5), materializado no item do feed. */
   grauConfianca: 1 | 2 | 3 | 4 | 5 | null
   turbo?: boolean
   modoFire?: boolean
@@ -53,33 +58,75 @@ export type CardEntradaProps = {
   vivo?: boolean
   /** Progresso observado no 1º quarto, contra o alvo. */
   progresso1Q?: { observado: number; alvo: number } | null
+  /** Últimos 5 conferidos contra a linha — as barrinhas da zona 2 (pré-live). */
+  ultimos5?: { valor: number; bateu: boolean }[]
+  /** Média da temporada, do item do feed — o rodapé mostra sem chamar o motor. */
+  mediaTemporada?: number | null
+  /** Faixa de odds entre casas; com `media`, o rodapé escreve ODD MÉDIA. */
+  oddFaixa?: { min: number; max: number; qtdCasas: number; media?: number } | null
 }
 
 /**
- * Card de entrada — identidade 02.
+ * Card de entrada — identidade 03 "broadcast", em TRÊS zonas:
+ *   1 · cabeçalho — avatar (anel = nível do APITO), nome, apoio, % grande
+ *   2 · contexto  — barrinhas (pré-live) OU barra rumo ao alvo (fire live)
+ *   3 · rodapé    — faixa translúcida com linha · média · odd
  *
- * QUATRO sinais, QUATRO formas distintas, cada um com redundância escrita:
- *   faixa metálica curta no topo = nível do JOGADOR   (+ rótulo na linha de apoio)
- *   anel do avatar               = nível do APITO      (+ numeral N{n}/T)
- *   pílula de contorno           = faixa de CONFIANÇA  (+ número dentro)
- *   brilho ao redor do card      = SÓ no grau máximo de confiança (grau 5)
+ * Os canais da identidade continuam os de sempre:
+ *   faixa metálica curta = nível do JOGADOR (+ rótulo escrito)
+ *   anel do avatar       = nível do APITO   (+ numeral N{n}/T)
+ *   borda lateral 3px    = grau de CONFIANÇA (+ % escrito na mesma cor)
  *
- * Turbo e modo fire nunca comunicam só por cor ou brilho: os dois carregam
- * selo com ícone e rótulo escrito.
+ * Três brilhos, três donos, nunca o único sinal:
+ *   grau 5 de confiança → brilho do card na cor do grau
+ *   turbo               → turboBrilho (+ selo ⚡ TURBO escrito)
+ *   modo fire           → brilho do universo quente (+ selo 🔥 MODO FIRE)
+ *
+ * Temperatura por contexto: pré-live veste contextoFrio; modo fire, o quente.
  */
 export function CardEntrada(props: CardEntradaProps) {
   const nivel = NIVEL_JOGADOR[props.nivelJogador]
   const grau = props.grauConfianca
-  const corPilula = grau === null ? semantico.divisor : CONFIANCA_GRAU[grau]
-  const brilha = grau === 5 // regra DO MOCKUP: só a faixa máxima brilha
+  const corGrau = grau === null ? semantico.divisor : CONFIANCA_GRAU[grau]
+  const brilhaConfianca = grau === 5 // regra da identidade: só o máximo brilha
+  const quente = props.modoFire === true
+  const contexto = quente ? componente.contextoQuente : componente.contextoFrio
+  const brilhoDoCard = brilhaConfianca
+    ? `0 0 16px 1px ${corGrau}55`
+    : props.turbo
+      ? componente.turboBrilho
+      : quente
+        ? componente.contextoQuente.brilho
+        : undefined
+  const corPercentual = props.turbo ? TURBO.cor : corGrau
+
   const rotuloLinha =
     props.linha != null
       ? `${ATRIBUTO_ROTULO[props.atributo]} ${props.linha}+`
       : props.alvo1Q != null
-        ? `${ATRIBUTO_ROTULO[props.atributo]} · ALVO 1Q ${props.alvo1Q}`
+        ? `ALVO 1Q · ${props.alvo1Q} ${ATRIBUTO_CURTO[props.atributo]}`
         : ATRIBUTO_ROTULO[props.atributo]
   const p = props.progresso1Q
   const faltam = p ? Math.max(0, p.alvo - p.observado) : 0
+
+  const rodapeDireita = quente
+    ? p
+      ? p.observado >= p.alvo
+        ? `LINHA BATIDA · ${p.observado} ${ATRIBUTO_CURTO[props.atributo]}`
+        : `FALTA ${faltam} ${ATRIBUTO_CURTO[props.atributo]}`
+      : null
+    : [
+        props.mediaTemporada != null ? `MÉDIA ${decimalPtBr(props.mediaTemporada, 1)}` : null,
+        props.oddFaixa != null
+          ? props.oddFaixa.media != null
+            ? `ODD MÉDIA ${decimalPtBr(props.oddFaixa.media, 2)}`
+            : `ODD ${decimalPtBr(props.oddFaixa.min, 2)}–${decimalPtBr(props.oddFaixa.max, 2)}`
+          : null,
+      ]
+        .filter(Boolean)
+        .join(' · ') || null
+
+  const barrinhas = !quente && (props.ultimos5?.length ?? 0) > 0
 
   return (
     <div>
@@ -96,18 +143,17 @@ export function CardEntrada(props: CardEntradaProps) {
       />
       <article
         style={{
-          display: 'flex',
-          flexDirection: 'column',
-          gap: 10,
-          padding: 14,
-          borderRadius: 14,
-          background: componente.cardFundo,
+          borderRadius: componente.cardRaio,
+          background: contexto.cardGradiente,
           color: componente.cardTexto,
-          border: `1px solid ${brilha ? corPilula : semantico.divisor}`,
-          boxShadow: brilha ? `0 0 16px 1px ${corPilula}55` : undefined,
+          border: `1px solid ${contexto.borda}`,
+          borderLeft: `${componente.cardBordaLateral} solid ${corGrau}`,
+          boxShadow: brilhoDoCard,
+          overflow: 'hidden',
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        {/* zona 1 · cabeçalho */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '13px 14px 8px' }}>
           <Avatar
             nome={props.nome}
             fotoUrl={props.fotoUrl ?? null}
@@ -120,34 +166,32 @@ export function CardEntrada(props: CardEntradaProps) {
               <strong
                 style={{
                   fontFamily: semantico.fonteTitulo,
-                  fontSize: 18,
-                  letterSpacing: 0.5,
+                  fontSize: 17,
+                  letterSpacing: 0.6,
                   textTransform: 'uppercase',
                 }}
               >
                 {props.jogadorHref ? (
-                  <a
-                    href={props.jogadorHref}
-                    style={{ color: 'inherit', textUnderlineOffset: 3 }}
-                  >
+                  <a href={props.jogadorHref} style={{ color: 'inherit', textUnderlineOffset: 3 }}>
                     {props.nome}
                   </a>
                 ) : (
                   props.nome
                 )}
               </strong>
-              {props.vivo && <Pilula texto="VIVO" cor={semantico.aoVivo} />}
+              {props.vivo && <Pilula texto="VIVO" cor={semantico.vivoSelo} />}
             </div>
             <div
               style={{
                 fontFamily: semantico.fonteRotulo,
                 fontSize: 12,
-                letterSpacing: 1,
+                letterSpacing: 1.2,
                 color: componente.cardTextoApoio,
                 textTransform: 'uppercase',
+                marginTop: 2,
               }}
             >
-              {rotuloLinha} · {nivel.rotulo} · N{props.nivelApito}
+              {nivel.rotulo} · N{props.nivelApito}
               {props.posicao ? ` · ${props.posicao}` : ''} · {props.timeSigla}
               {props.adversarioSigla ? ` · vs ${props.adversarioSigla}` : ''}
             </div>
@@ -159,47 +203,54 @@ export function CardEntrada(props: CardEntradaProps) {
               )}
             </div>
           </div>
-          <Pilula
-            texto={props.confianca === null ? '—' : `${Math.round(props.confianca)}%`}
-            cor={corPilula}
-            brilho={brilha}
-          />
+          <span
+            style={{
+              fontFamily: semantico.fonteTitulo,
+              fontSize: 30,
+              letterSpacing: 0.5,
+              color: corPercentual,
+              fontVariantNumeric: 'tabular-nums',
+              textShadow: brilhaConfianca ? `0 0 18px ${corGrau}73` : undefined,
+            }}
+          >
+            {props.confianca === null ? '—' : `${Math.round(props.confianca)}%`}
+          </span>
         </div>
 
-        {p && (
-          <div>
-            <div
-              aria-hidden
-              style={{
-                height: 5,
-                borderRadius: 3,
-                background: semantico.superficieElevada,
-                overflow: 'hidden',
-              }}
-            >
-              <div
-                style={{
-                  width: `${Math.min(100, (p.observado / Math.max(1, p.alvo)) * 100)}%`,
-                  height: '100%',
-                  background: corPilula,
-                }}
-              />
-            </div>
-            <div
-              style={{
-                fontFamily: semantico.fonteRotulo,
-                fontSize: 11,
-                letterSpacing: 1,
-                marginTop: 4,
-                color: componente.cardTextoApoio,
-              }}
-            >
-              {p.observado >= p.alvo
-                ? `LINHA BATIDA · ${p.observado} ${ATRIBUTO_CURTO[props.atributo]}`
-                : `FALTA ${faltam} ${ATRIBUTO_CURTO[props.atributo]}`}
-            </div>
+        {/* zona 2 · contexto — barrinhas no pré-live, barra rumo ao alvo no fire */}
+        {quente && p && (
+          <div style={{ padding: '0 14px 12px' }}>
+            <BarraAlvo observado={p.observado} alvo={p.alvo} />
           </div>
         )}
+        {barrinhas && (
+          <div style={{ padding: '0 14px 10px' }}>
+            <Barrinhas jogos={props.ultimos5!} rotulo="ÚLT. 5 NA LINHA" />
+          </div>
+        )}
+
+        {/* zona 3 · rodapé — faixa translúcida na temperatura do contexto */}
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            gap: 12,
+            padding: '8px 14px',
+            background: contexto.faixaFundo,
+            borderTop: `1px solid ${contexto.borda}`,
+            fontFamily: semantico.fonteRotulo,
+            letterSpacing: 1.2,
+            textTransform: 'uppercase',
+          }}
+        >
+          <span style={{ fontSize: 13, fontWeight: 600, color: componente.cardTexto }}>
+            {rotuloLinha}
+          </span>
+          {rodapeDireita && (
+            <span style={{ fontSize: 12, color: componente.cardTextoApoio }}>{rodapeDireita}</span>
+          )}
+        </div>
       </article>
     </div>
   )
