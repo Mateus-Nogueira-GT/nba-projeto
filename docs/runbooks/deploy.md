@@ -62,3 +62,23 @@ migração que apaga coluna/tabela:
 | `relation "x" does not exist` no log | `db:migrate` não rodou |
 | Build falha citando cron | `CRON_COMPLETO` ligada em conta Hobby |
 | Tela sem dado, sem erro | banco em dia, mas o feed não foi republicado |
+
+## Antes de apresentar ao cliente
+
+A demonstração é ancorada num DIA: `semearDemo` monta a rodada da data de
+referência de quando roda. **No dia seguinte, o Fire Live abre em "Sem jogos
+hoje"** — aconteceu em 25/08/2026.
+
+```bash
+npx dotenv -e .env.local -- npm run demo:seed      # traz a rodada para HOJE
+npx dotenv -e .env.local -- npm run demo:fotos     # headshots (toca rede)
+npx dotenv -e .env.local -- npm run demo:conferir  # a lista de conferência
+```
+
+`demo:conferir` é somente leitura e percorre tela por tela — Lista Secreta
+(fotos, barrinhas, média, odd, turbo, OPD), Fire Live (placar do 1º quarto,
+modo fire), detalhe do apito, resultados, gestão de banca e as três telas de
+estatísticas. Sai com código 1 e nomeia o que está sem dado. Só apresente com
+`✓ Demonstração pronta para apresentar.`
+
+O seed é reexecutável e faz upsert: rodar de novo não duplica nada.

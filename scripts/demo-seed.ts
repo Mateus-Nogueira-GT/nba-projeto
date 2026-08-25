@@ -24,6 +24,8 @@ async function principal() {
   console.log(`  apitos do Fire Live ... ${resumo.apitosFireLive}`)
   console.log(`  linhas com odd ........ ${resumo.linhasComOdd}`)
   console.log(`  rodadas conferíveis ... ${resumo.rodadasPublicadas}`)
+  console.log(`  placares derivados .. ${resumo.placares}`)
+  console.log(`  times classificados . ${resumo.classificados}`)
 }
 
 principal()

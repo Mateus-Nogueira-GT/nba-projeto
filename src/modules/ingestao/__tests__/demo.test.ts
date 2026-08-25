@@ -295,6 +295,48 @@ describe('semearDemo (PGlite, banco vazio)', () => {
     expect(cards.length).toBe([...porJogador.values()].reduce((s, a) => s + a.size, 0))
   })
 
+  it('a demo nasce apresentável: placar, campanha e odd no card', async () => {
+    // Incidente de 25/08: o cliente ia ver histórico sem resultado, tela de
+    // time sem campanha e card sem odd — três buracos que só apareciam na
+    // apresentação, porque o seed publicava o feed ANTES das odds e nunca
+    // derivava placar nem classificação.
+    const { classificacao, jogos } = await import('../../dominio/db/schema')
+    const { isNotNull, and: e } = await import('drizzle-orm')
+
+    const encerrados = await banco.db
+      .select()
+      .from(jogos)
+      .where(e(eq(jogos.status, 'ENCERRADO'), isNotNull(jogos.placarCasa)))
+    expect(encerrados.length, 'jogo encerrado sem placar deixa a coluna Resultado vazia').toBeGreaterThan(0)
+    // O placar é DERIVADO da soma dos pontos: nunca zero, nunca empate falso.
+    for (const j of encerrados.slice(0, 5)) {
+      expect(Number(j.placarCasa)).toBeGreaterThan(0)
+      expect(Number(j.placarVisitante)).toBeGreaterThan(0)
+    }
+
+    const campanha = await banco.db.select().from(classificacao)
+    expect(campanha.length, 'sem classificação a tela do time abre sem campanha').toBeGreaterThan(0)
+    for (const linha of campanha) {
+      expect(linha.vitorias + linha.derrotas).toBeGreaterThan(0)
+      expect(linha.posicao).not.toBeNull()
+      expect(linha.sequencia).toMatch(/^[VD]\d+$/)
+    }
+    // Posição é por conferência e não se repete dentro dela.
+    const porConferencia = new Map<string, number[]>()
+    for (const l of campanha) {
+      const chave = l.conferencia ?? 'LIGA'
+      porConferencia.set(chave, [...(porConferencia.get(chave) ?? []), l.posicao!])
+    }
+    for (const [chave, posicoes] of porConferencia) {
+      expect(new Set(posicoes).size, `posição repetida em ${chave}`).toBe(posicoes.length)
+    }
+
+    // E o card leva a odd: o feed é republicado depois das odds existirem.
+    const feed = await lerFeed(banco.db, HOJE)
+    const comOdd = (feed?.conteudo.itens ?? []).filter((i) => i.oddFaixa !== null)
+    expect(comOdd.length, 'card sem odd no rodapé — feed publicado antes das odds').toBeGreaterThan(0)
+  })
+
   it('reexecutar o seed não duplica nada', async () => {
     const antes = (await banco.db.select().from(jogadores)).length
     const segundo = await semearDemo(banco.db, ruleset, AGORA)

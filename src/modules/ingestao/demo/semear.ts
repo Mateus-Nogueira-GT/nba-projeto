@@ -1,8 +1,9 @@
+import { and, eq, inArray, isNotNull, sql } from 'drizzle-orm'
 import { readFile } from 'node:fs/promises'
-import { eq, inArray } from 'drizzle-orm'
 
 import {
   casas,
+  classificacao,
   estatisticasJogo,
   estatisticasQuarto,
   fireLiveExecucoes,
@@ -45,6 +46,10 @@ export type ResumoDemo = {
   linhasComOdd: number
   /** Rodadas passadas com lista publicada — o que a aba de Resultados lê. */
   rodadasPublicadas: number
+  /** Jogos encerrados que ganharam placar derivado. */
+  placares: number
+  /** Times com campanha na tabela de classificação. */
+  classificados: number
 }
 
 /**
@@ -459,6 +464,31 @@ export async function semearDemo(db: Db, ruleset: Ruleset, agora: Date): Promise
   //     decide quais linhas existem é o motor.
   const linhasComOdd = await semearOdds(db, ruleset, dataReferencia, agora)
 
+  // 6b · REPUBLICA. A ordem acima é obrigatória (odd depende da linha, linha
+  //      depende do motor), e o efeito colateral era o card sem odd no rodapé:
+  //      o snapshot tinha sido materializado quando `odds_agregada` ainda
+  //      estava vazia. Republicar traz a faixa/média para o item — o hash
+  //      cobre o item inteiro, então só regrava se algo mudou de verdade.
+  if (linhasComOdd > 0) {
+    await publicarListaSecreta(db, ruleset, {
+      dataReferencia,
+      agora,
+      ignorarAntecedencia: true,
+    })
+  }
+
+  // 6c · PLACAR dos jogos encerrados — derivado da soma dos pontos que o laço
+  //      do histórico já gravou, por time. Sem ele, `jogos.placar_casa` fica
+  //      NULL: a coluna "Resultado" do histórico do jogador mostra vazio e a
+  //      classificação não tem de onde nascer.
+  const placares = await semearPlacares(db)
+
+  // 7 · Classificação da temporada — a campanha que a tela do TIME mostra
+  //     (posição, vitórias, derrotas, sequência). Sem ela o cliente abre o
+  //     time e encontra um cabeçalho sem campanha. Derivada dos jogos
+  //     encerrados que a demo já criou; nada digitado.
+  const classificados = await semearClassificacao(db, ruleset, dataReferencia)
+
   const contarJogosHoje = await db
     .select({ id: jogos.id })
     .from(jogos)
@@ -473,6 +503,8 @@ export async function semearDemo(db: Db, ruleset: Ruleset, agora: Date): Promise
     apitosFireLive,
     linhasComOdd,
     rodadasPublicadas,
+    placares,
+    classificados,
   }
 }
 
@@ -617,6 +649,9 @@ export async function limparDemo(db: Db): Promise<Record<string, number>> {
   await apagar('lesoes_escalacao', () =>
     db.delete(lesoesEscalacao).returning({ id: lesoesEscalacao.id }),
   )
+  // A classificação referencia `times`: sem apagá-la aqui, o DELETE de times
+  // abaixo quebra por chave estrangeira (o teste da demo pegou).
+  await apagar('classificacao', () => db.delete(classificacao).returning({ id: classificacao.id }))
   await apagar('medias_jogador', () => db.delete(mediasJogador).returning({ id: mediasJogador.id }))
   await apagar('niveis', () => db.delete(niveis).returning({ id: niveis.id }))
   await apagar('niveis_versao', () => db.delete(niveisVersao).returning({ id: niveisVersao.id }))
@@ -634,3 +669,129 @@ export async function limparDemo(db: Db): Promise<Record<string, number>> {
 
   return contagens
 }
+
+/**
+ * PLACAR DOS JOGOS ENCERRADOS — derivado, nunca digitado.
+ *
+ * Soma os pontos que cada elenco fez no jogo (o vínculo jogador↔time é o da
+ * LISTA do CJ, versão ativa — nunca `jogadores.time_id`, que é o time real do
+ * provedor). Placar baixo é esperado: a lista do CJ tem ~8 jogadores por time,
+ * não os 15 do elenco inteiro.
+ */
+async function semearPlacares(db: Db): Promise<number> {
+  const resultado = await db.execute(sql`
+    with pontos_por_time as (
+      select ej.jogo_id, n.time_id, sum(ej.pontos)::int as pontos
+      from estatisticas_jogo ej
+      join niveis n on n.jogador_id = ej.jogador_id and n.atributo = 'PONTOS'
+      join niveis_versao nv on nv.id = n.niveis_versao_id and nv.ativa = true
+      group by 1, 2
+    )
+    update jogos j
+       set placar_casa = casa.pontos,
+           placar_visitante = fora.pontos
+      from pontos_por_time casa, pontos_por_time fora
+     where j.status = 'ENCERRADO'
+       and casa.jogo_id = j.id and casa.time_id = j.time_casa_id
+       and fora.jogo_id = j.id and fora.time_id = j.time_visitante_id
+    returning j.id
+  `)
+  const linhas = Array.isArray(resultado)
+    ? (resultado as unknown[])
+    : ((resultado as { rows?: unknown[] }).rows ?? [])
+  return linhas.length
+}
+
+/**
+ * CLASSIFICAÇÃO DA DEMONSTRAÇÃO — derivada, nunca digitada.
+ *
+ * Conta vitórias e derrotas a partir dos jogos ENCERRADOS que a própria demo
+ * semeou (placar de casa × visitante) e ordena por aproveitamento dentro de
+ * cada conferência. Reexecutável: o upsert recalcula.
+ */
+async function semearClassificacao(
+  db: Db,
+  ruleset: Ruleset,
+  dataReferencia: string,
+): Promise<number> {
+  const temporada = temporadaDe(
+    intervaloDoDia(dataReferencia, ruleset.rodada.fuso).inicio,
+    calendarioDoRuleset(ruleset),
+  )
+
+  const encerrados = await db
+    .select()
+    .from(jogos)
+    .where(and(eq(jogos.status, 'ENCERRADO'), isNotNull(jogos.placarCasa)))
+
+  const campanha = new Map<string, { v: number; d: number; sequencia: string[] }>()
+  const anotar = (timeId: string, venceu: boolean) => {
+    const atual = campanha.get(timeId) ?? { v: 0, d: 0, sequencia: [] }
+    if (venceu) atual.v += 1
+    else atual.d += 1
+    atual.sequencia.push(venceu ? 'V' : 'D')
+    campanha.set(timeId, atual)
+  }
+  for (const j of encerrados) {
+    if (j.placarCasa === null || j.placarVisitante === null) continue
+    const casaVenceu = j.placarCasa > j.placarVisitante
+    anotar(j.timeCasaId, casaVenceu)
+    anotar(j.timeVisitanteId, !casaVenceu)
+  }
+  if (campanha.size === 0) return 0
+
+  const listaTimes = await db.select().from(times)
+  const conferenciaPorTime = new Map(listaTimes.map((t) => [t.id, t.conferencia] as const))
+
+  const ordenados = [...campanha.entries()]
+    .map(([timeId, c]) => ({
+      timeId,
+      ...c,
+      aproveitamento: c.v + c.d === 0 ? 0 : c.v / (c.v + c.d),
+      conferencia: conferenciaPorTime.get(timeId) ?? null,
+    }))
+    .sort((a, b) => b.aproveitamento - a.aproveitamento)
+
+  // Posição é POR CONFERÊNCIA, como a NBA classifica.
+  const proximaPosicao = new Map<string, number>()
+  for (const time of ordenados) {
+    const chave = time.conferencia ?? 'LIGA'
+    const posicao = (proximaPosicao.get(chave) ?? 0) + 1
+    proximaPosicao.set(chave, posicao)
+
+    // A sequência é o rabo da campanha: "V3" = três vitórias seguidas.
+    const ultimos = [...time.sequencia].reverse()
+    const marca = ultimos[0] ?? 'V'
+    let seguidas = 0
+    for (const r of ultimos) {
+      if (r !== marca) break
+      seguidas += 1
+    }
+
+    await db
+      .insert(classificacao)
+      .values({
+        temporada,
+        timeId: time.timeId,
+        conferencia: time.conferencia,
+        vitorias: time.v,
+        derrotas: time.d,
+        posicao,
+        aproveitamento: time.aproveitamento.toFixed(3),
+        sequencia: `${marca}${seguidas}`,
+        capturadoEm: new Date(0),
+      })
+      .onConflictDoUpdate({
+        target: [classificacao.temporada, classificacao.timeId],
+        set: {
+          vitorias: time.v,
+          derrotas: time.d,
+          posicao,
+          aproveitamento: time.aproveitamento.toFixed(3),
+          sequencia: `${marca}${seguidas}`,
+        },
+      })
+  }
+  return ordenados.length
+}
+
