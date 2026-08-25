@@ -156,6 +156,7 @@ export default async function PaginaApito({
           gap: 14,
           padding: 16,
           borderRadius: 16,
+          background: componente.contextoFrio.cardGradiente,
           border: `1.5px solid ${corFaixa}`,
           boxShadow: brilha ? `0 0 20px 2px ${corFaixa}66` : undefined,
           marginBottom: 12,
@@ -278,7 +279,10 @@ export default async function PaginaApito({
                   borderRadius: 10,
                   display: 'grid',
                   placeItems: 'center',
-                  background: bloco.bateu ? semantico.apitoNivel3 : semantico.superficieElevada,
+                  // Par PRÓPRIO das barrinhas: o verde do apito nível 3
+                  // significa outra coisa. E falhar é vermelho, não neutro —
+                  // com o ✓/· escrito, a cor nunca é o único sinal.
+                  background: bloco.bateu ? semantico.barrinhaBateu : semantico.barrinhaFalhou,
                   color: bloco.bateu ? semantico.textoSobreCor : semantico.textoPrimario,
                   fontFamily: semantico.fonteTitulo,
                   fontSize: 16,

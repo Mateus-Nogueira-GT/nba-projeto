@@ -370,6 +370,36 @@ describe('Fire Live — identidade 03', () => {
 // A FOTO ATRAVESSA AS DUAS TELAS (I3)
 // ===========================================================================
 
+describe('Detalhe do apito — identidade 03', () => {
+  it('hero frio, blocos no par das barrinhas e nunca a palavra probabilidade', async () => {
+    const { lerFeed } = await import('../../modules/entrega/lista-secreta')
+    const item = (await lerFeed(banco.db, HOJE))!.conteudo.itens.find((i) => i.linha !== null)!
+
+    const { default: Detalhe } = await import('../(app)/apito/[jogadorId]/page')
+    const html = renderToStaticMarkup(
+      await Detalhe({
+        params: Promise.resolve({ jogadorId: item.jogadorId }),
+        searchParams: Promise.resolve({ atributo: item.atributo }),
+      }),
+    )
+    await gravarConferencia('detalhe-apito', html)
+
+    // hero no universo frio da identidade 03
+    expect(html).toContain('linear-gradient(135deg, #16213A, #111A2E 55%)')
+    // blocos dos últimos 5 usam o PAR das barrinhas — nunca o verde categórico
+    // do apito nível 3, que significa outra coisa no mesmo produto
+    expect(html).toContain('#2FBF71')
+    // O anel/badge do Avatar PODE ser #3DD37E — é o canal do apito nível 3.
+    // O que não pode é o BLOCO de histórico (place-items… seguido do verde
+    // categórico), que era o defeito.
+    expect(html).not.toMatch(/place-items:center;background:#3DD37E/)
+    // A palavra só pode aparecer NEGADA (rodapé obrigatório: "não uma
+    // probabilidade de acerto"). Como RÓTULO, nunca.
+    expect(html).toContain('nota de confiança')
+    expect(html).not.toContain('PROBABILIDADE')
+  }, 60_000)
+})
+
 describe('a foto do jogador', () => {
   const FOTO = 'https://cdn.nba.com/headshots/nba/latest/1040x760/2544.png'
 
