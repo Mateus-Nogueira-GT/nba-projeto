@@ -1,6 +1,6 @@
 export { CardEntrada, type CardEntradaProps } from './CardEntrada'
 export { Selo, type SeloProps } from './Selo'
-export { Historico, type HistoricoProps } from './Historico'
+export { Barrinhas, type BarrinhasProps } from './Barrinhas'
 export { UltimaAtualizacao, type UltimaAtualizacaoProps } from './UltimaAtualizacao'
 export { Tabela, type TabelaProps, type Coluna } from './Tabela'
 export { Avatar, iniciaisDe, fundoDoTime } from './Avatar'
