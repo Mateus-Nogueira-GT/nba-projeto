@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest'
 import { primitivo } from '../tokens/primitivo'
 import { semantico } from '../tokens/semantico'
 import { componente } from '../tokens/componente'
-import { APITO, MODO_FIRE, NIVEL_JOGADOR, TURBO, gerarCss } from '../tokens/css'
+import { APITO, CONFIANCA_GRAU, MODO_FIRE, NIVEL_JOGADOR, TURBO, gerarCss } from '../tokens/css'
 import { AA, razaoDeContraste } from '../tokens/contraste'
 
 const DIR_COMPONENTES = 'src/design-system/componentes'
@@ -88,10 +88,16 @@ describe('dois canais visuais, e só dois', () => {
     expect(apito.filter((c) => jogador.has(c))).toEqual([])
   })
 
-  it('não existe terceira escala de cor: a confiança não tem cor própria', () => {
-    // Se um dia aparecer algo como `confianca*` ou `escala*` nos tokens
-    // semânticos, a escala de 5 faixas voltou pela porta dos fundos.
-    const suspeitos = Object.keys(semantico).filter((k) => /confianca|escala|faixa/i.test(k))
+  it('a rampa de confiança é a ÚNICA outra escala: nada de "escala*" avulsa', () => {
+    // A escala de 5 faixas MULTI-MATIZ original (a que colidia com o apito)
+    // continua banida. A identidade 02 reintroduz confiança como cor, mas só
+    // como `confianca*` — uma rampa de UM matiz, verificada contra colisão e
+    // contraste no describe 'rampa de confiança (identidade 02)' abaixo. Se
+    // aparecer `escala*`/`faixa*` fora de `confianca*`, é a escala antiga
+    // voltando pela porta dos fundos.
+    const suspeitos = Object.keys(semantico).filter(
+      (k) => /escala|faixa/i.test(k) && !/^confianca/i.test(k),
+    )
     expect(suspeitos).toEqual([])
   })
 })
@@ -186,5 +192,49 @@ describe('escrita da interface', () => {
       .join('\n')
 
     expect(/probabilidade/i.test(comComentarios)).toBe(true)
+  })
+})
+
+// ===========================================================================
+// RAMPA DE CONFIANÇA — IDENTIDADE 02
+// ===========================================================================
+
+describe('rampa de confiança (identidade 02)', () => {
+  const degraus = [
+    semantico.confiancaGrau1,
+    semantico.confiancaGrau2,
+    semantico.confiancaGrau3,
+    semantico.confiancaGrau4,
+    semantico.confiancaGrau5,
+  ]
+
+  it('nenhum degrau colide com as cores do apito ou as metálicas', () => {
+    const categoricas = [
+      semantico.apitoNivel1, semantico.apitoNivel2, semantico.apitoNivel3, semantico.apitoTurbo,
+      semantico.nivelMvp, semantico.nivelAllStar, semantico.nivelSuporte, semantico.nivelRandola,
+    ]
+    for (const d of degraus) expect(categoricas).not.toContain(d)
+    expect(new Set(degraus).size).toBe(5)
+  })
+
+  it('todo degrau é legível como texto sobre a superfície do card (AA)', () => {
+    for (const d of degraus) {
+      expect(razaoDeContraste(d, semantico.superficie)).toBeGreaterThanOrEqual(4.5)
+    }
+  })
+
+  it('o acento laranja é legível sobre superfície e o texto sobre o acento também', () => {
+    expect(razaoDeContraste(semantico.acento, semantico.superficie)).toBeGreaterThanOrEqual(3)
+    expect(razaoDeContraste(semantico.textoSobreCor, semantico.acento)).toBeGreaterThanOrEqual(4.5)
+  })
+
+  it('CONFIANCA_GRAU espelha exatamente os 5 degraus semânticos', () => {
+    expect([
+      CONFIANCA_GRAU[1],
+      CONFIANCA_GRAU[2],
+      CONFIANCA_GRAU[3],
+      CONFIANCA_GRAU[4],
+      CONFIANCA_GRAU[5],
+    ]).toEqual(degraus)
   })
 })

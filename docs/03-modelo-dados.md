@@ -188,8 +188,24 @@ sessoes (
 )
 
 assinaturas (
-  id, usuario_id, mercadopago_id, status, plano,
-  inicio, fim, proxima_cobranca, atualizado_em
+  id, usuario_id, mercadopago_id, referencia_externa, produto,
+  status, plano, inicio, fim, proxima_cobranca,
+  ocorrido_em_origem, cancelamento_solicitado_em, cancelada_em, atualizado_em
+)
+
+cobrancas (
+  id, usuario_id, assinatura_id, provedor, cobranca_externa_id,
+  status, valor_centavos, moeda, aprovado_em, ocorrido_em_origem
+)
+
+direitos_acesso (
+  id, usuario_id, produto, origem, referencia_origem,
+  inicio, fim, revogado_em, motivo_revogacao
+)
+
+tentativas_checkout (
+  id, usuario_id, produto, provedor, referencia_externa, chave_idempotencia,
+  status, assinatura_externa_id, url_checkout, lease_expira_em, erro_codigo
 )
 
 push_inscricoes (

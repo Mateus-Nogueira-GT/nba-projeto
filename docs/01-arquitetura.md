@@ -104,6 +104,21 @@ contínuos, e função serverless tem teto de 300s. A solução não é esticar 
 | Fan-out de push                                               | **Vercel Queues**                                                                                                                                               |
 | App, admin e API                                              | **Next.js App Router** em Fluid Compute                                                                                                                         |
 
+### Conexão transacional com o Neon
+
+O cliente de banco usa `drizzle-orm/neon-serverless` com `Pool` WebSocket. O
+driver HTTP anterior serve bem a consultas isoladas, mas não suporta a API de
+transação interativa que protege sessão, bootstrap e webhook.
+
+A inicialização continua preguiçosa para não abrir conexão durante o build. O
+pool fica limitado a duas conexões por instância, fecha conexões ociosas após
+10 segundos e usa timeout de conexão de 10 segundos. `DATABASE_URL` deve apontar
+para o endpoint pooled do Neon em Preview e produção. Comandos one-shot, como o
+bootstrap do primeiro administrador, chamam `fecharDb()` ao terminar.
+
+Esse WebSocket é somente entre o servidor e o Postgres. Ele não muda a decisão
+abaixo de não manter WebSocket de feed aberto por usuário.
+
 ### A escolha que segura o custo
 
 Não usar WebSocket para o feed. Com 10k conectados, socket aberto por usuário é o item
@@ -184,3 +199,4 @@ está desenhada — quando um dia precisar separar de verdade, ela rompe no luga
 | [0004](adr/0004-odds-somente-leitura.md)  | Odds somente leitura, agregadas; nunca envio de aposta                     |
 | [0005](adr/0005-fusao-badge-confianca.md) | Fusão da badge de confiança com o anel de apito                            |
 | [0006](adr/0006-bloco-de-topo.md)         | Bloco de topo unifica a restrição de presença; dispensa rastreio em quadra |
+| [0007](adr/0007-outbox-de-push.md)        | Outbox de push: a UNIQUE impede duplicata, o outbox impede perda silenciosa |

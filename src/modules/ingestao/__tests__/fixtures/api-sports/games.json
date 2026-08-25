@@ -1,0 +1,64 @@
+{
+  "get": "games",
+  "parameters": { "date": "2026-01-15" },
+  "errors": [],
+  "results": 1,
+  "paging": { "current": 1, "total": 1 },
+  "response": [
+    {
+      "id": 10403,
+      "league": "standard",
+      "season": 2025,
+      "date": {
+        "start": "2026-01-16T00:30:00.000Z",
+        "end": null,
+        "duration": null
+      },
+      "stage": 2,
+      "status": { "clock": "04:22", "halftime": false, "short": 2, "long": "In Play" },
+      "periods": { "current": 1, "total": 4, "endOfPeriod": false },
+      "arena": {
+        "name": "Crypto.com Arena",
+        "city": "Los Angeles",
+        "state": "CA",
+        "country": "USA"
+      },
+      "teams": {
+        "visitors": {
+          "id": 2,
+          "name": "Boston Celtics",
+          "nickname": "Celtics",
+          "code": "BOS",
+          "logo": "https://media.api-sports.io/basketball/teams/2.png"
+        },
+        "home": {
+          "id": 17,
+          "name": "Los Angeles Lakers",
+          "nickname": "Lakers",
+          "code": "LAL",
+          "logo": "https://media.api-sports.io/basketball/teams/17.png"
+        }
+      },
+      "scores": {
+        "visitors": {
+          "win": 0,
+          "loss": 0,
+          "series": { "win": 0, "loss": 0 },
+          "linescore": ["21", "0", "0", "0"],
+          "points": 21
+        },
+        "home": {
+          "win": 0,
+          "loss": 0,
+          "series": { "win": 0, "loss": 0 },
+          "linescore": ["24", "0", "0", "0"],
+          "points": 24
+        }
+      },
+      "officials": [],
+      "timesTied": 2,
+      "leadChanges": 4,
+      "nugget": null
+    }
+  ]
+}

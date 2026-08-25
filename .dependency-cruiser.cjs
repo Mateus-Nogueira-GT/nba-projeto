@@ -39,6 +39,18 @@ module.exports = {
       },
     },
     {
+      name: 'estatisticas-nao-passam-pelo-motor',
+      severity: 'error',
+      comment:
+        'A aba de estatísticas é EXIBIÇÃO DE DADO CANÔNICO, não estratégia ' +
+        '(docs/00-visao.md). Se ela importar o motor, alguém começou a calcular ' +
+        'apito numa tela de consulta — e o número mostrado deixa de ser o que a ' +
+        'liga registrou para virar o que a estratégia deduziu. Nem tipo: aqui a ' +
+        'proibição é total, ao contrário da regra do app.',
+      from: { path: '^src/(modules/entrega/estatisticas|app/\\(app\\)/estatisticas)' },
+      to: { path: '^src/modules/motor' },
+    },
+    {
       name: 'tela-nao-chama-o-motor',
       severity: 'error',
       comment:

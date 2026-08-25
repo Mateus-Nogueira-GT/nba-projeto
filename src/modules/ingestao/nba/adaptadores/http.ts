@@ -4,6 +4,8 @@ import type {
   JogadorExterno,
   JogoExterno,
   LinhaBoxScore,
+  LinhaBoxScoreTimeExterna,
+  LinhaClassificacaoExterna,
   TimeExterno,
 } from '../porta'
 
@@ -99,11 +101,14 @@ export class FonteHttp implements FonteNBA {
   async listarJogos(dataIso: string): Promise<JogoExterno[]> {
     return (await this.buscar(`/games?date=${dataIso}`)).map((g) => ({
       idExterno: String(g['id'] ?? ''),
+      dataReferencia: texto(g['date'])?.slice(0, 10) ?? dataIso,
       dataHoraUtc: texto(g['start_time_utc']) ?? texto(g['date']) ?? dataIso,
       timeCasaSigla: texto(g['home_team_abbreviation']) ?? '',
       timeVisitanteSigla: texto(g['visitor_team_abbreviation']) ?? '',
       status: traduzirStatus(texto(g['status'])),
       quartoAtual: numero(g['period']),
+      relogio: texto(g['clock']) ?? texto(g['time']),
+      intervalo: g['halftime'] === true,
       placarCasa: numero(g['home_team_score']),
       placarVisitante: numero(g['visitor_team_score']),
     }))
@@ -123,7 +128,52 @@ export class FonteHttp implements FonteNBA {
       bloqueios: inteiro(s['blk']),
       turnovers: inteiro(s['turnover']),
       faltas: inteiro(s['pf']),
+      cestasC: inteiro(s['fgm']),
+      cestasT: inteiro(s['fga']),
+      doisC: inteiro(s['fgm']) - inteiro(s['fg3m']),
+      doisT: inteiro(s['fga']) - inteiro(s['fg3a']),
+      tresC: inteiro(s['fg3m']),
+      tresT: inteiro(s['fg3a']),
+      lanceC: inteiro(s['ftm']),
+      lanceT: inteiro(s['fta']),
+      saldoQuadra: numero(s['plus_minus']),
     }))
+  }
+
+  async boxScoreDoTime(jogoIdExterno: string): Promise<LinhaBoxScoreTimeExterna[]> {
+    return (await this.buscar(`/games/${jogoIdExterno}/team-stats`)).map((t) => {
+      // O provedor manda os quartos como lista ordenada; posição = quarto.
+      const porQuarto = Array.isArray(t['line_scores']) ? (t['line_scores'] as unknown[]) : []
+      const quarto = (i: number) => inteiro(porQuarto[i])
+
+      return {
+        timeSigla:
+          texto((t['team'] as Json | undefined)?.['abbreviation']) ??
+          texto(t['team_abbreviation']) ??
+          '',
+        pontos: inteiro(t['pts']),
+        pontosQ1: quarto(0),
+        pontosQ2: quarto(1),
+        pontosQ3: quarto(2),
+        pontosQ4: quarto(3),
+        // Tudo além do 4º quarto é prorrogação, somado.
+        pontosProrrogacao: porQuarto.slice(4).reduce<number>((a, v) => a + inteiro(v), 0),
+        rebotesTotal: inteiro(t['reb']),
+        rebotesOf: inteiro(t['oreb']),
+        rebotesDef: inteiro(t['dreb']),
+        assistencias: inteiro(t['ast']),
+        cestasC: inteiro(t['fgm']),
+        cestasT: inteiro(t['fga']),
+        tresC: inteiro(t['fg3m']),
+        tresT: inteiro(t['fg3a']),
+        lanceC: inteiro(t['ftm']),
+        lanceT: inteiro(t['fta']),
+        roubos: inteiro(t['stl']),
+        bloqueios: inteiro(t['blk']),
+        turnovers: inteiro(t['turnover']),
+        faltas: inteiro(t['pf']),
+      }
+    })
   }
 
   async escalacao(jogoIdExterno: string): Promise<EscalacaoExterna[]> {
@@ -131,6 +181,21 @@ export class FonteHttp implements FonteNBA {
       jogadorIdExterno: String((i['player'] as Json | undefined)?.['id'] ?? i['player_id'] ?? ''),
       status: traduzirEscalacao(texto(i['status'])),
       motivo: texto(i['description']),
+    }))
+  }
+
+  async classificacao(temporada: string): Promise<LinhaClassificacaoExterna[]> {
+    return (await this.buscar(`/standings?season=${encodeURIComponent(temporada)}`)).map((c) => ({
+      timeSigla:
+        texto((c['team'] as Json | undefined)?.['abbreviation']) ??
+        texto(c['team_abbreviation']) ??
+        '',
+      conferencia: texto(c['conference']),
+      vitorias: inteiro(c['wins']),
+      derrotas: inteiro(c['losses']),
+      posicao: numero(c['conference_rank']) ?? numero(c['rank']),
+      aproveitamento: numero(c['win_pct']),
+      sequencia: texto(c['streak']),
     }))
   }
 }

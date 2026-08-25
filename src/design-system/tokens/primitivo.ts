@@ -36,6 +36,33 @@ export const primitivo = {
 
   // Apoio
   vermelho400: '#FF6B6B',
+
+  // Fundos alternativos do monograma do Avatar (sem foto) — variação
+  // determinística por sigla de time, puramente decorativa, sem significado
+  // de estratégia.
+  avatarFundo2: '#243147',
+  avatarFundo3: '#1E2A3E',
+  avatarFundo4: '#2C2438',
+  avatarFundo5: '#1F3038',
+  avatarFundo6: '#332A22',
+
+  // Rampa de confiança — UM matiz, intensidade crescente. Identidade 02.
+  turquesa700: '#2FA093',
+  turquesa600: '#3AB5A6',
+  turquesa500: '#47CBBA',
+  turquesa400: '#5CE0CE',
+  turquesa300: '#79F2E1',
+  // Acento de INTERFACE (chips, aba ativa, CTA). Não é canal de estratégia —
+  // papel diferente do laranja400 do apito nível 2.
+  laranjaAcento: '#FF7A1A',
+  // Ponta clara do degradê dos botões de CTA (VER ESTATÍSTICAS, Entrar,
+  // Criar conta, Continuar no Mercado Pago) — laranjaAcento é o início.
+  laranjaAcentoClaro: '#FFB25E',
+  tinta950: '#05080F',
+  // Fontes — a família vem por variável CSS publicada no layout (next/font).
+  fonteAnton: "var(--fonte-anton), 'Arial Narrow', sans-serif",
+  fonteBarlow: "var(--fonte-barlow), system-ui, sans-serif",
+  fonteBarlowCondensed: "var(--fonte-barlow-condensed), 'Arial Narrow', sans-serif",
 } as const
 
 export type Primitivo = typeof primitivo

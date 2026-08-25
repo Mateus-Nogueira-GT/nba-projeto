@@ -1,6 +1,7 @@
 import { sql } from 'drizzle-orm'
 import {
   boolean,
+  date,
   index,
   integer,
   numeric,
@@ -11,12 +12,7 @@ import {
   unique,
   uuid,
 } from 'drizzle-orm/pg-core'
-import {
-  atributoEnum,
-  janelaMediaEnum,
-  statusEscalacaoEnum,
-  statusJogoEnum,
-} from './enums'
+import { atributoEnum, janelaMediaEnum, statusEscalacaoEnum, statusJogoEnum } from './enums'
 
 // ============================================================================
 // GRUPO 1 · DOMÍNIO CANÔNICO — alimentado pela ingestão
@@ -45,6 +41,32 @@ export const jogadores = pgTable('jogadores', {
 })
 
 /**
+ * IDENTIDADE DO JOGADOR NO PROVEDOR — id externo → jogador canônico.
+ *
+ * Não confundir com `mapa_jogadores`, que resolve outro problema: aquele liga o
+ * NOME ESCRITO PELO CJ ("chmaphagnie") ao jogador, é curadoria humana e cobre
+ * só os ~150 nomes da lista. Este liga o ID do provedor ao jogador, é mecânico
+ * e cobre os ~500 da liga inteira — porque a busca da aba de estatísticas e o
+ * box score precisam de todo mundo, não só de quem o CJ classificou.
+ *
+ * Uma linha por provedor: são DUAS fontes com failover, e o mesmo jogador tem
+ * ids diferentes em cada uma. Uma coluna só em `jogadores` seria sobrescrita
+ * toda vez que o failover trocasse de fonte.
+ */
+export const identidadesJogador = pgTable(
+  'identidades_jogador',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    jogadorId: uuid('jogador_id')
+      .notNull()
+      .references(() => jogadores.id, { onDelete: 'cascade' }),
+    provedor: text('provedor').notNull(),
+    idExterno: text('id_externo').notNull(),
+  },
+  (t) => [unique('identidades_jogador_unica').on(t.provedor, t.idExterno)],
+)
+
+/**
  * Ponte entre a lista do CJ e o provedor. Curadoria HUMANA.
  *
  * Necessária porque os elencos da lista são PROJETADOS: não correspondem à NBA
@@ -70,6 +92,18 @@ export const jogos = pgTable(
   {
     id: uuid('id').primaryKey().defaultRandom(),
     dataHoraUtc: timestamp('data_hora_utc', { withTimezone: true }).notNull(),
+    /**
+     * Data do jogo em UTC, derivada pelo banco.
+     *
+     * Existe como COLUNA GERADA, e não como índice por expressão, para que a
+     * chave natural seja alvo de `ON CONFLICT` — upsert por expressão exige SQL
+     * cru e perde a checagem de tipo do drizzle.
+     */
+    dataJogo: date('data_jogo')
+      .notNull()
+      .generatedAlwaysAs(sql`((data_hora_utc AT TIME ZONE 'UTC')::date)`),
+    /** Rodada oficial da NBA, independente da virada de dia em UTC. */
+    dataReferencia: date('data_referencia').notNull(),
     timeCasaId: uuid('time_casa_id')
       .notNull()
       .references(() => times.id),
@@ -81,8 +115,68 @@ export const jogos = pgTable(
     tempoRestante: text('tempo_restante'),
     placarCasa: smallint('placar_casa'),
     placarVisitante: smallint('placar_visitante'),
+    /** Quando o payload validado foi capturado pela aplicação. */
+    capturadoEm: timestamp('capturado_em', { withTimezone: true }),
+    /** Timestamp informado pela origem; null quando a fonte não o fornece. */
+    origemAtualizadaEm: timestamp('origem_atualizada_em', { withTimezone: true }),
+    /**
+     * Quando a ingestão tocou esta linha pela última vez.
+     *
+     * Requisito de produto, não conveniência: TODA tela da aba de estatísticas
+     * informa o horário do dado que está mostrando (docs/00-visao.md). Sem uma
+     * coluna por tabela, a tela teria que inventar um horário — e um número
+     * velho apresentado como atual é pior do que número nenhum.
+     */
+    atualizadoEm: timestamp('atualizado_em', { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [index('jogos_data_idx').on(t.dataHoraUtc, t.status)],
+  (t) => [
+    index('jogos_data_idx').on(t.dataHoraUtc, t.status),
+    index('jogos_referencia_status_idx').on(t.dataReferencia, t.status, t.dataHoraUtc),
+    /**
+     * CHAVE NATURAL DO JOGO — o que torna a ingestão reexecutável.
+     *
+     * Nenhuma tabela canônica guarda id de provedor, e são DUAS fontes com
+     * failover: os ids delas são diferentes entre si, então indexar por id
+     * externo criaria dois jogos para a mesma partida assim que o failover
+     * trocasse de fonte.
+     *
+     * A data é truncada porque o horário do tipoff MUDA — remarcação é rotina,
+     * e o mesmo confronto reagendado em duas horas não é um jogo novo.
+     *
+     * Assume um confronto por par de times por dia. Verdadeiro na NBA; se um
+     * dia deixar de ser, esta constraint falha alto, que é o comportamento
+     * correto.
+     */
+    unique('jogos_chave_natural').on(t.dataJogo, t.timeCasaId, t.timeVisitanteId),
+    unique('jogos_chave_referencia').on(t.dataReferencia, t.timeCasaId, t.timeVisitanteId),
+  ],
+)
+
+/**
+ * IDENTIDADE DO JOGO NO PROVEDOR — id externo → jogo canônico.
+ *
+ * A chave natural do confronto protege a cardinalidade canônica; esta tabela
+ * preserva o namespace necessário para toda chamada posterior por id. Um id
+ * emitido por uma fonte nunca pode ser enviado a outra.
+ */
+export const identidadesJogo = pgTable(
+  'identidades_jogo',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    jogoId: uuid('jogo_id')
+      .notNull()
+      .references(() => jogos.id, { onDelete: 'cascade' }),
+    provedor: text('provedor').notNull(),
+    idExterno: text('id_externo').notNull(),
+    capturadoEm: timestamp('capturado_em', { withTimezone: true }),
+    origemAtualizadaEm: timestamp('origem_atualizada_em', { withTimezone: true }),
+    criadoEm: timestamp('criado_em', { withTimezone: true }).notNull().defaultNow(),
+    atualizadoEm: timestamp('atualizado_em', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    unique('identidades_jogo_externa_unica').on(t.provedor, t.idExterno),
+    unique('identidades_jogo_provedor_unico').on(t.jogoId, t.provedor),
+  ],
 )
 
 /** Box score fechado, por jogo. */
@@ -115,6 +209,10 @@ export const estatisticasJogo = pgTable(
     turnovers: smallint('turnovers').notNull().default(0),
     faltas: smallint('faltas').notNull().default(0),
     saldoQuadra: smallint('saldo_quadra'),
+    capturadoEm: timestamp('capturado_em', { withTimezone: true }),
+    origemAtualizadaEm: timestamp('origem_atualizada_em', { withTimezone: true }),
+    /** Ver a nota em `jogos.atualizadoEm`. */
+    atualizadoEm: timestamp('atualizado_em', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
     unique('estatisticas_jogo_unica').on(t.jogoId, t.jogadorId),
@@ -139,9 +237,9 @@ export const estatisticasQuarto = pgTable(
     rebotes: smallint('rebotes').notNull().default(0),
     assistencias: smallint('assistencias').notNull().default(0),
     minutos: numeric('minutos', { precision: 5, scale: 2 }),
-    atualizadoEm: timestamp('atualizado_em', { withTimezone: true })
-      .notNull()
-      .defaultNow(),
+    capturadoEm: timestamp('capturado_em', { withTimezone: true }),
+    origemAtualizadaEm: timestamp('origem_atualizada_em', { withTimezone: true }),
+    atualizadoEm: timestamp('atualizado_em', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
     unique('estatisticas_quarto_unica').on(t.jogoId, t.jogadorId, t.quarto),
@@ -184,6 +282,10 @@ export const estatisticasTimeJogo = pgTable(
     bloqueios: smallint('bloqueios').notNull().default(0),
     turnovers: smallint('turnovers').notNull().default(0),
     faltas: smallint('faltas').notNull().default(0),
+    capturadoEm: timestamp('capturado_em', { withTimezone: true }),
+    origemAtualizadaEm: timestamp('origem_atualizada_em', { withTimezone: true }),
+    /** Ver a nota em `jogos.atualizadoEm`. */
+    atualizadoEm: timestamp('atualizado_em', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [unique('estatisticas_time_jogo_unica').on(t.jogoId, t.timeId)],
 )
@@ -202,6 +304,8 @@ export const classificacao = pgTable(
     posicao: smallint('posicao'),
     aproveitamento: numeric('aproveitamento', { precision: 5, scale: 3 }),
     sequencia: text('sequencia'),
+    capturadoEm: timestamp('capturado_em', { withTimezone: true }),
+    origemAtualizadaEm: timestamp('origem_atualizada_em', { withTimezone: true }),
     atualizadoEm: timestamp('atualizado_em', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [unique('classificacao_unica').on(t.temporada, t.timeId)],
@@ -220,6 +324,8 @@ export const lesoesEscalacao = pgTable(
     status: statusEscalacaoEnum('status').notNull(),
     motivo: text('motivo'),
     confirmado: boolean('confirmado').notNull().default(false),
+    capturadoEm: timestamp('capturado_em', { withTimezone: true }),
+    origemAtualizadaEm: timestamp('origem_atualizada_em', { withTimezone: true }),
     atualizadoEm: timestamp('atualizado_em', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [

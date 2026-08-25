@@ -1,3 +1,4 @@
+import { deltaOscilacao } from '../atributos'
 import type { Ruleset } from '../ruleset/schema'
 import { NIVEIS_APITO, valorDoAtributo } from '../tipos'
 import type { Atributo, JogadorFato, Nivel, NivelApito } from '../tipos'
@@ -10,14 +11,19 @@ import type { Atributo, JogadorFato, Nivel, NivelApito } from '../tipos'
  * Ou seja, o <= se aplica ao PLACAR, não ao déficit.
  *
  * A média entra com precisão cheia, sem arredondar.
+ *
+ * O delta é POR ATRIBUTO: quem tira 10 rebotes não cai 6 num jogo ruim. Sem
+ * tabela para o atributo, não há limiar — e o jogador não apita nele.
  */
 export function limiarOscilacao(
   media: number,
   nivel: Nivel,
+  atributo: Atributo,
   jogadorId: string,
   ruleset: Ruleset,
-): number {
-  const delta = ruleset.oscilacao.excecoes_por_jogador[jogadorId] ?? ruleset.oscilacao.delta[nivel]
+): number | null {
+  const delta = deltaOscilacao(nivel, atributo, jogadorId, ruleset)
+  if (delta === undefined) return null
   return media - delta
 }
 
@@ -65,7 +71,9 @@ export function avaliarOscilacao(
   const media = jogador.medias[atributo]
   if (media === undefined) return null
 
-  const limiar = limiarOscilacao(media, nivel, jogador.id, ruleset)
+  const limiar = limiarOscilacao(media, nivel, atributo, jogador.id, ruleset)
+  if (limiar === null) return null
+
   const sequencia = contarSequencia(jogador, atributo, media, limiar, ruleset)
   if (sequencia === 0) return null
 

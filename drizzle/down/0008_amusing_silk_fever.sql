@@ -1,0 +1,35 @@
+-- DESCIDA de 0008_amusing_silk_fever.sql — GERADO por scripts/gerar-down.mjs, não editar à mão.
+
+ALTER TABLE "jogos" DROP CONSTRAINT IF EXISTS "jogos_chave_referencia";
+DROP INDEX IF EXISTS "jogos_referencia_status_idx";
+DROP INDEX IF EXISTS "locks_ingestao_lease_idx";
+DROP INDEX IF EXISTS "execucoes_ingestao_estado_idx";
+DROP INDEX IF EXISTS "execucoes_ingestao_job_janela_idx";
+DROP INDEX IF EXISTS "conflitos_jogo_estado_idx";
+DROP INDEX IF EXISTS "conflitos_jogador_estado_idx";
+ALTER TABLE "locks_ingestao" DROP CONSTRAINT IF EXISTS "locks_ingestao_execucao_id_execucoes_ingestao_id_fk";
+ALTER TABLE "conflitos_identidade_jogo" DROP CONSTRAINT IF EXISTS "conflitos_identidade_jogo_jogo_resolvido_id_jogos_id_fk";
+ALTER TABLE "conflitos_identidade_jogo" DROP CONSTRAINT IF EXISTS "conflitos_identidade_jogo_jogo_candidato_id_jogos_id_fk";
+ALTER TABLE "conflitos_identidade_jogador" DROP CONSTRAINT IF EXISTS "conflitos_identidade_jogador_jogador_resolvido_id_jogadores_id_fk";
+ALTER TABLE "conflitos_identidade_jogador" DROP CONSTRAINT IF EXISTS "conflitos_identidade_jogador_jogador_candidato_id_jogadores_id_fk";
+ALTER TABLE "checkpoints_ingestao" DROP CONSTRAINT IF EXISTS "checkpoints_ingestao_execucao_id_execucoes_ingestao_id_fk";
+ALTER TABLE "identidades_jogo" DROP CONSTRAINT IF EXISTS "identidades_jogo_jogo_id_jogos_id_fk";
+ALTER TABLE "lesoes_escalacao" DROP COLUMN IF EXISTS "origem_atualizada_em";
+ALTER TABLE "lesoes_escalacao" DROP COLUMN IF EXISTS "capturado_em";
+ALTER TABLE "jogos" DROP COLUMN IF EXISTS "origem_atualizada_em";
+ALTER TABLE "jogos" DROP COLUMN IF EXISTS "capturado_em";
+ALTER TABLE "jogos" DROP COLUMN IF EXISTS "data_referencia";
+ALTER TABLE "estatisticas_time_jogo" DROP COLUMN IF EXISTS "origem_atualizada_em";
+ALTER TABLE "estatisticas_time_jogo" DROP COLUMN IF EXISTS "capturado_em";
+ALTER TABLE "estatisticas_quarto" DROP COLUMN IF EXISTS "origem_atualizada_em";
+ALTER TABLE "estatisticas_quarto" DROP COLUMN IF EXISTS "capturado_em";
+ALTER TABLE "estatisticas_jogo" DROP COLUMN IF EXISTS "origem_atualizada_em";
+ALTER TABLE "estatisticas_jogo" DROP COLUMN IF EXISTS "capturado_em";
+ALTER TABLE "classificacao" DROP COLUMN IF EXISTS "origem_atualizada_em";
+ALTER TABLE "classificacao" DROP COLUMN IF EXISTS "capturado_em";
+DROP TABLE IF EXISTS "locks_ingestao" CASCADE;
+DROP TABLE IF EXISTS "execucoes_ingestao" CASCADE;
+DROP TABLE IF EXISTS "conflitos_identidade_jogo" CASCADE;
+DROP TABLE IF EXISTS "conflitos_identidade_jogador" CASCADE;
+DROP TABLE IF EXISTS "checkpoints_ingestao" CASCADE;
+DROP TABLE IF EXISTS "identidades_jogo" CASCADE;

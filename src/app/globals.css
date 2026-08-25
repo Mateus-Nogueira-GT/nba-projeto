@@ -1,0 +1,46 @@
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  min-width: 320px;
+  background: var(--fundo);
+  color-scheme: dark;
+}
+
+body {
+  min-width: 320px;
+  min-height: 100dvh;
+  margin: 0;
+  background: var(--fundo);
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+/*
+ * Ponto pulsante do "ao vivo" (Fire Live). Guardado por
+ * `prefers-reduced-motion`: quem pediu menos movimento vê o ponto fixo, não
+ * piscando — o jogo já está rolando, a animação não pode se impor.
+ */
+@keyframes ponto-ao-vivo-pulso {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.3;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .ponto-ao-vivo {
+    animation: ponto-ao-vivo-pulso 1.6s ease-in-out infinite;
+  }
+}

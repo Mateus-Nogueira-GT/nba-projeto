@@ -151,3 +151,97 @@ um número exato cria expectativa que o produto não controla.
 O produto é lido **em pé, com o jogo rolando, em segundos**. A leitura primária é a cor
 do anel; o número é confirmação; o resto é contexto. Se o usuário precisa ler para
 decidir, o card falhou — ele deve conseguir varrer a lista inteira sem ler nada além dos anéis.
+
+---
+
+## Identidade 02
+
+A seção acima descreve o desenho original, de quando este documento foi escrito, com um
+**anel único** fundindo apito e confiança (ADR-0005). O visual mudou de novo em agosto de
+2026, a partir do mockup de referência do cliente. Esta seção documenta o que está no ar
+hoje — não substitui a anterior, porque a lógica de "um canal por informação" e a
+proibição de reintroduzir a escala multi-matiz continuam valendo integralmente; só a
+forma de aplicá-las mudou. Se você está mantendo o design system daqui a alguns meses,
+leia esta seção primeiro — ela é a que corresponde ao código de `src/design-system/`.
+
+### Tipografia
+
+Três famílias, cada uma com um papel fixo — não são intercambiáveis:
+
+| Token semântico       | Família                        | Papel                                              |
+| ---------------------- | ------------------------------- | --------------------------------------------------- |
+| `semantico.fonteTitulo` | Anton (`--fonte-anton`)        | títulos, nomes de jogador, números grandes (a pílula de confiança, o placar) |
+| `semantico.fonteRotulo` | Barlow Condensed (`--fonte-barlow-condensed`) | rótulos em caixa alta e letter-spacing largo — sobrancelhas, linhas de apoio, chips |
+| `semantico.fonteCorpo`  | Barlow (`--fonte-barlow`)      | texto corrido, quando existe (a identidade 02 é quase toda título+rótulo) |
+
+As três são carregadas via `next/font/google` em `src/app/layout.tsx` e expostas como
+variáveis CSS (`--fonte-anton` etc.); os tokens primitivos (`primitivo.ts`) sempre
+declaram um fallback de sistema depois da variável, então uma falha de rede no Google
+Fonts degrada para `Arial Narrow`/`system-ui`, nunca quebra o layout.
+
+### A pílula de confiança e a rampa turquesa
+
+A pílula (`design-system/componentes/Pilula.tsx`) é o componente de contorno genérico —
+ela não sabe se está mostrando confiança, o selo VIVO ou qualquer outra coisa; quem chama
+decide a cor e o texto. Para a confiança especificamente (`CardEntrada.tsx`), a cor vem
+de `faixaDaConfianca` (`src/modules/motor/confianca.ts`, motor puro — não lê nada, só
+recebe o valor e o ruleset) mapeada para um token `semantico.confiancaGrau{1..5}`.
+
+Os cinco degraus são **um matiz só, turquesa**, de escuro (grau 1, menor confiança) a
+claro (grau 5, maior) — `primitivo.ts`, `turquesa700` → `turquesa300`. Isso é
+deliberado, não estético: uma escala de matizes diferentes (a da proposta comercial
+original, vermelho→azul→verde) colide visualmente com as quatro cores categóricas do
+apito (🟡🟠🟢🔵) e cria o mesmo conflito de leitura que o ADR-0005 eliminou em 18/08. Uma
+rampa de intensidade dentro de um único matiz nunca é confundível com uma cor categórica
+— é sempre "mais ou menos saturado de turquesa", nunca "isto é amarelo ou isto é verde".
+
+Os cinco limiares (não os cinco tons — os **valores de confiança** que definem cada
+degrau) vêm do ruleset, não do código:
+
+```yaml
+# config/ruleset.v1.yaml
+confianca_exibicao:
+  origem: demonstracao # calibração real ainda é pergunta em aberto ao CJ
+  faixas:
+    - { de: 80, grau: 1, rotulo: CONFIANÇA BOA }
+    - { de: 83, grau: 2, rotulo: CONFIANÇA SÓLIDA }
+    - { de: 86, grau: 3, rotulo: CONFIANÇA FORTE }
+    - { de: 89, grau: 4, rotulo: CONFIANÇA MUITO FORTE }
+    - { de: 93, grau: 5, rotulo: CONFIANÇA MÁXIMA }
+```
+
+Note a amplitude: 80 a 93+, porque a confiança calculada pelo motor **só varia de 80 a
+95** na prática (é derivada de nível do jogador + nível do apito, não um número livre).
+Uma escala pensada para 0-99 gastaria a maior parte dos seus degraus em valores que nunca
+ocorrem — o mesmo defeito, na origem, que motivou remover a escala em primeiro lugar.
+Trocar esses cinco valores não exige tocar em código (regra 1 do CLAUDE.md do projeto).
+
+### A regra do brilho: só o grau 5
+
+O card ganha um brilho ao redor (`boxShadow` na cor da pílula) exclusivamente quando
+`grauConfianca === 5` — a faixa máxima. É um sinal deliberadamente raro: se qualquer grau
+brilhasse, o brilho deixaria de significar "isto aqui é excepcional" e viraria decoração.
+`CardEntrada.tsx`, variável `brilha`.
+
+### Colisão de canais — verificada por teste, não por inspeção
+
+`src/design-system/__tests__/tokens.test.ts`, describe `'rampa de confiança (identidade
+02)'`, confere mecanicamente três coisas toda vez que a suíte roda:
+
+1. nenhum dos cinco degraus da rampa turquesa é igual a uma cor categórica do apito ou a
+   uma cor metálica de nível do jogador;
+2. os cinco degraus são todos distintos entre si (a rampa não "achata" em algum ponto);
+3. todo degrau passa em contraste AA (4.5:1) como texto sobre a superfície do card.
+
+Se alguém trocar um valor de `turquesa*` em `primitivo.ts` para algo que colida com uma
+cor do apito, é este teste que quebra — não um comentário lido meses depois.
+
+### O que mudou no anel do apito
+
+O "anel único" do ADR-0005 (um círculo cuja cor era o nível do apito e cujo número era a
+confiança) não existe mais como um único elemento: virou dois. O nível do apito é hoje a
+borda colorida do `Avatar` (um quadrado arredondado, não mais um círculo — ver
+`Avatar.tsx` e os testes de `como-funciona`) mais o selo de canto `N{1,2,3}`/`T`; a
+confiança é a pílula separada descrita acima, com sua própria cor. Ver a nota de
+"superação parcial" em `docs/adr/0005-fusao-badge-confianca.md` para o histórico completo
+dessa mudança e o que da decisão original ainda vale.

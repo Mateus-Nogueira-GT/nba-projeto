@@ -3,12 +3,18 @@ import { primitivo as p } from './primitivo'
 /**
  * CAMADA 2 · SEMÂNTICO — intenção. É aqui que o resto do sistema fala.
  *
- * DOIS canais visuais, e só dois (ADR-0005):
+ * DOIS canais visuais categóricos, e só dois (ADR-0005):
  *   borda metálica = nível do JOGADOR
  *   anel colorido  = nível do APITO, com a confiança como número dentro
  *
- * A escala de 5 faixas da proposta não existe mais. Se aparecer uma terceira
- * codificação por cor aqui, algo saiu errado.
+ * A escala de 5 faixas MULTI-MATIZ da proposta original não existe mais — ela
+ * colidia com as 4 cores categóricas do apito. A rampa de confiança abaixo
+ * (identidade 02) é outra coisa: UM matiz só (turquesa), intensidade
+ * crescente, calibrada para a amplitude real da confiança (80-95). Ver
+ * docs/superpowers/specs/2026-08-24-identidade-rota-transmissao-design.md
+ * ("A rampa de confiança — decisão central de cor") e o teste "colisão de
+ * canais" em __tests__/tokens.test.ts, que garante que ela nunca reusa uma
+ * cor categórica.
  */
 export const semantico = {
   // -- Superfícies (tema escuro é a base) --------------------------------
@@ -39,6 +45,35 @@ export const semantico = {
 
   // -- Estado ------------------------------------------------------------
   alerta: p.vermelho400,
+
+  // -- Tipografia (identidade 02) -----------------------------------------
+  fonteTitulo: p.fonteAnton,
+  fonteRotulo: p.fonteBarlowCondensed,
+  fonteCorpo: p.fonteBarlow,
+
+  // -- Acento de interface --------------------------------------------------
+  acento: p.laranjaAcento,
+  // Ponta clara do degradê de CTA — combinada com `acento` na camada de
+  // componente (ver `componente.ctaFundo`). Fica aqui, e não composta já
+  // como linear-gradient(), porque o teste "todo token semântico aponta para
+  // um valor da paleta primitiva" exige igualdade literal com um valor do
+  // primitivo — um gradiente já montado não seria mais um alias.
+  acentoClaro: p.laranjaAcentoClaro,
+  aoVivo: p.vermelho400,
+
+  // -- Rampa de confiança — grau 1 (menor) ao 5 (maior) ----------------------
+  confiancaGrau1: p.turquesa700,
+  confiancaGrau2: p.turquesa600,
+  confiancaGrau3: p.turquesa500,
+  confiancaGrau4: p.turquesa400,
+  confiancaGrau5: p.turquesa300,
+
+  // -- Fundos alternativos do monograma do Avatar (identidade 03) -----------
+  avatarFundo2: p.avatarFundo2,
+  avatarFundo3: p.avatarFundo3,
+  avatarFundo4: p.avatarFundo4,
+  avatarFundo5: p.avatarFundo5,
+  avatarFundo6: p.avatarFundo6,
 } as const
 
 export type Semantico = typeof semantico

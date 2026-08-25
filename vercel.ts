@@ -1,10 +1,86 @@
+/**
+ * FONTE ÚNICA da configuração da Vercel.
+ *
+ * `@vercel/config` compila este arquivo para `vercel.json` durante
+ * `vercel build`, `vercel dev` e `vercel deploy`. Ter os dois versionados é
+ * erro declarado ("One config file only") e, na prática, foi o que deixou o
+ * cron de reconciliação de pagamento existir em um e faltar no outro.
+ * Por isso `vercel.json` é artefato gerado e está no .gitignore.
+ */
 import type { VercelConfig } from '@vercel/config/v1'
 
 export const config: VercelConfig = {
   framework: 'nextjs',
-  crons: [
-    // De 15 em 15 min: o horário do primeiro jogo é móvel, então quem decide
-    // publicar é o job, não a expressão do cron.
+  functions: {
+    'src/app/api/fila/push/route.ts': {
+      experimentalTriggers: [
+        {
+          type: 'queue/v2beta',
+          topic: 'push-eventos',
+          retryAfterSeconds: 30,
+          maxDeliveries: 20,
+          maxConcurrency: 2,
+        },
+      ],
+    },
+    'src/app/api/fila/push/entregas/route.ts': {
+      experimentalTriggers: [
+        {
+          type: 'queue/v2beta',
+          topic: 'push-entregas',
+          retryAfterSeconds: 30,
+          maxDeliveries: 20,
+          maxConcurrency: 5,
+        },
+      ],
+    },
+  },
+  crons: cronsDoPlano(),
+}
+
+/**
+ * O plano Hobby da Vercel aceita NO MÁXIMO dois crons, ambos diários — e o
+ * produto depende de crons sub-diários: `ao-vivo` a cada minuto é o gatilho
+ * do Fire Live, a reconciliação de pagamento roda a cada 10 min e a saúde a
+ * cada 5. Ou seja: EM PRODUÇÃO, o plano Pro é requisito, não luxo (ADR-0003).
+ *
+ * O PADRÃO É O CONJUNTO DIÁRIO, e o completo é opt-in por `CRON_COMPLETO`.
+ *
+ * A inversão tem uma razão concreta. A versão anterior era o contrário
+ * (completo por padrão, `CRON_SOMENTE_DIARIO=true` para reduzir) e a flag era
+ * setada pelos scripts `deploy`/`deploy:prod` do package.json. Isso funcionou
+ * enquanto todo deploy saía da CLI. Quando o repositório foi conectado à
+ * Vercel (25/08/2026), o build passou a ser disparado pelo push — sem passar
+ * por script nenhum, lendo o env do PROJETO. O primeiro deploy pelo Git morreu
+ * assim:
+ *
+ *   Hobby accounts are limited to daily cron jobs. This cron expression
+ *   (0 *\/6 * * *) would run more than once per day.
+ *
+ * (A contrabarra na expressão acima é só para não fechar este comentário.)
+ *
+ * Com o padrão invertido, um deploy pelo Git nasce válido sem depender de
+ * variável configurada no painel — e o custo de esquecer é um Fire Live que
+ * não dispara, não um deploy que não existe.
+ *
+ * PARA LIGAR O PRODUTO DE VERDADE: conta Pro + `CRON_COMPLETO=true` nas
+ * Environment Variables do projeto. Sem isso, `ao-vivo` não roda e o Fire Live
+ * não existe; a Lista Secreta também não republica sozinha, e precisa do
+ * disparo manual com o Bearer do CRON_SECRET (ver docs/runbooks).
+ */
+function cronsDoPlano(): VercelConfig['crons'] {
+  const cronsCompletos = [
+    { path: '/api/cron/sincronizar-elenco', schedule: '0 9 * * *' },
+    { path: '/api/cron/sincronizar-rodada', schedule: '0 11 * * *' },
+    { path: '/api/cron/sincronizar-escalacao', schedule: '0 */6 * * *' },
+    { path: '/api/cron/ao-vivo', schedule: '* * * * *' },
     { path: '/api/cron/lista-secreta', schedule: '*/15 * * * *' },
-  ],
+    { path: '/api/cron/reconciliar-pagamentos', schedule: '*/10 * * * *' },
+    { path: '/api/cron/saude', schedule: '*/5 * * * *' },
+  ]
+  if (process.env.CRON_COMPLETO === 'true') return cronsCompletos
+
+  return cronsCompletos.filter((c) =>
+    ['/api/cron/sincronizar-elenco', '/api/cron/sincronizar-rodada'].includes(c.path),
+  )
 }

@@ -1,0 +1,57 @@
+import { and, eq, inArray } from 'drizzle-orm'
+
+import { oddsAgregada } from '../../dominio/db/schema'
+import type { Db } from '../../dominio/db/tipos'
+import type { Atributo } from '../../motor/tipos'
+
+/**
+ * FAIXAS DE ODD JÁ AGREGADAS — leitura pura da materialização.
+ *
+ * A agregação (mediana entre casas, mínimo de casas, fallback) acontece uma vez
+ * por coleta, no motor. A tela só lê o resultado: com 10k usuários, recalcular
+ * a mediana por request seria pagar o mesmo custo dez mil vezes pelo mesmo
+ * número.
+ */
+export type FaixaDeLinha = {
+  min: number
+  max: number
+  mediana: number
+  qtdCasas: number
+  origem: string
+}
+
+/** Indexado pela linha: `faixas.get(25)`. */
+export type FaixasPorLinha = Map<number, FaixaDeLinha>
+
+export async function faixasDoJogador(
+  db: Db,
+  jogoIds: string[],
+  jogadorId: string,
+  atributo: Atributo,
+): Promise<FaixasPorLinha> {
+  if (jogoIds.length === 0) return new Map()
+
+  const linhas = await db
+    .select()
+    .from(oddsAgregada)
+    .where(
+      and(
+        inArray(oddsAgregada.jogoId, jogoIds),
+        eq(oddsAgregada.jogadorId, jogadorId),
+        eq(oddsAgregada.atributo, atributo),
+      ),
+    )
+
+  return new Map(
+    linhas.map((l) => [
+      Number(l.linha),
+      {
+        min: Number(l.oddMin),
+        max: Number(l.oddMax),
+        mediana: Number(l.oddMediana),
+        qtdCasas: l.qtdCasas,
+        origem: l.origem,
+      },
+    ]),
+  )
+}

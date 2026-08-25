@@ -1,14 +1,17 @@
 import { readFileSync } from 'node:fs'
+import yamlBruto from '../../../../config/ruleset.v1.yaml?raw'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { eq } from 'drizzle-orm'
 
+import { carregarRuleset } from '../../motor'
 import { bancoDeTeste } from '../../dominio/__tests__/ajuda-banco'
 import { jogadores, mapaJogadores, niveis, niveisVersao } from '../../dominio/db/schema'
 import { ativarVersaoNiveis } from '../../dominio/repositorios/niveis'
 
 import { FonteFake } from '../nba/adaptadores/fake'
-import { FonteComFailover, type EventoSaude } from '../nba/failover'
+import { consultarComOrigem, FonteComFailover, type EventoSaude } from '../nba/failover'
 import { avaliarFrescor, registrarBatimento } from '../health/heartbeat'
+import type { LimitesFrescor } from '../health/heartbeat'
 import { lerListaDeNiveis } from '../niveis/parser'
 import { pontuar, sugerir } from '../niveis/similaridade'
 import {
@@ -54,6 +57,35 @@ function jogadorExterno(id: string, nome: string, ativo = true): JogadorExterno 
 // ===========================================================================
 
 describe('failover — o chamador não sabe qual provedor respondeu', () => {
+  it('devolve explicitamente a identidade da fonte vencedora', async () => {
+    const fonte = new FonteComFailover(
+      new FonteFake('principal', {}, { falhaCom: new Error('HTTP 503') }),
+      new FonteFake('reserva', { jogadores: [jogadorExterno('res-9', 'Reserva')] }),
+      { timeoutMs: 1000 },
+    )
+
+    const resposta = await consultarComOrigem(fonte, (efetiva) => efetiva.listarJogadores())
+
+    expect(resposta.provedor).toBe('reserva')
+    expect(resposta.dados[0]?.idExterno).toBe('res-9')
+  })
+
+  it('id externo fixa a fonte que o emitiu e nunca cai no outro namespace', async () => {
+    const principal = new FonteFake('principal', { boxScore: [] })
+    const reserva = new FonteFake('reserva', { boxScore: [] })
+    const fonte = new FonteComFailover(principal, reserva, { timeoutMs: 1000 })
+
+    const resposta = await consultarComOrigem(
+      fonte,
+      (efetiva) => efetiva.boxScore('id-da-reserva'),
+      'reserva',
+    )
+
+    expect(resposta.provedor).toBe('reserva')
+    expect(principal.chamadas).toBe(0)
+    expect(reserva.chamadas).toBe(1)
+  })
+
   it('principal CAI → chamador recebe o dado do reserva, sem erro', async () => {
     const principal = new FonteFake('principal', {}, { falhaCom: new Error('HTTP 503') })
     const reserva = new FonteFake('reserva', { times: TIMES })
@@ -140,8 +172,15 @@ describe('heartbeat e alerta de dado parado', () => {
     expect(linha?.status).toBe('FALHA')
     // O último sucesso PRECISA sobreviver: é a distância até ele que mede
     // há quanto tempo o dado está parado.
-    expect(linha?.dadoMaisRecenteEm?.toISOString()).toBe(sucesso.toISOString())
+    expect(linha?.ultimaRespostaOk?.toISOString()).toBe(sucesso.toISOString())
+    expect(linha?.dadoMaisRecenteEm).toBeNull()
   })
+
+  const ruleset = carregarRuleset(yamlBruto)
+  const limitesDoRuleset: LimitesFrescor = {
+    foraDeJogoMs: ruleset.avisos.dado_parado.fora_de_jogo_minutos * 60_000,
+    emJanelaDeJogoMs: ruleset.avisos.dado_parado.em_janela_segundos * 1_000,
+  }
 
   it('o limite é mais rígido dentro da janela dos jogos', async () => {
     const agora = new Date('2026-08-18T23:00:00Z')
@@ -149,8 +188,8 @@ describe('heartbeat e alerta de dado parado', () => {
       { provedor: 'p', dadoMaisRecenteEm: new Date('2026-08-18T22:55:00Z') }, // 5 min atrás
     ]
 
-    expect(avaliarFrescor(linhas, agora, false)).toEqual([]) // fora de jogo: tolerável
-    expect(avaliarFrescor(linhas, agora, true)).toHaveLength(1) // em jogo: alerta
+    expect(avaliarFrescor(linhas, agora, false, limitesDoRuleset)).toEqual([]) // fora de jogo: tolerável
+    expect(avaliarFrescor(linhas, agora, true, limitesDoRuleset)).toHaveLength(1) // em jogo: alerta
   })
 
   it('provedor que nunca respondeu conta como parado', () => {
@@ -158,6 +197,7 @@ describe('heartbeat e alerta de dado parado', () => {
       [{ provedor: 'novo', dadoMaisRecenteEm: null }],
       new Date(),
       false,
+      limitesDoRuleset,
     )
     expect(alertas[0]?.paradoHaMs).toBe(Infinity)
   })
@@ -303,10 +343,7 @@ describe('import da lista — reexecutável e não destrutivo', () => {
 
     await ativarVersaoNiveis(banco.db, versao.id)
 
-    const depois = await banco.db
-      .select()
-      .from(niveisVersao)
-      .where(eq(niveisVersao.id, versao.id))
+    const depois = await banco.db.select().from(niveisVersao).where(eq(niveisVersao.id, versao.id))
     expect(depois[0]?.ativa).toBe(true)
   })
 })

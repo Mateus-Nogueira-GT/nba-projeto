@@ -1,0 +1,28 @@
+{
+  "get": "standings",
+  "parameters": { "league": "standard", "season": "2025" },
+  "errors": [],
+  "results": 1,
+  "paging": { "current": 1, "total": 1 },
+  "response": [
+    {
+      "league": "standard",
+      "season": 2025,
+      "team": {
+        "id": 17,
+        "name": "Los Angeles Lakers",
+        "nickname": "Lakers",
+        "code": "LAL",
+        "logo": "https://media.api-sports.io/basketball/teams/17.png"
+      },
+      "conference": { "name": "west", "rank": 4, "win": 29, "loss": 16 },
+      "division": { "name": "pacific", "rank": 1, "win": 7, "loss": 3, "gamesBehind": "0.0" },
+      "win": { "home": 16, "away": 13, "total": 29, "percentage": ".644", "lastTen": 7 },
+      "loss": { "home": 6, "away": 10, "total": 16, "percentage": ".356", "lastTen": 3 },
+      "gamesBehind": "5.0",
+      "streak": 3,
+      "winStreak": true,
+      "tieBreakerPoints": null
+    }
+  ]
+}

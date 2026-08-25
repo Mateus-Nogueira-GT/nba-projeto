@@ -52,6 +52,16 @@ export const apitos = pgTable(
     oddMax: numeric('odd_max', { precision: 7, scale: 3 }),
     alvo1q: smallint('alvo_1q'),
     geradoEm: timestamp('gerado_em', { withTimezone: true }).notNull().defaultNow(),
+    /**
+     * OUTBOX. Null = gravado mas ainda não enfileirado para push.
+     *
+     * Sem esta coluna existe uma perda silenciosa: se o INSERT commita e o
+     * envio à fila falha logo depois, o retry reencontra o apito já gravado,
+     * conclui que "não é novo" e o push nunca sai. Com ela, o ciclo seguinte
+     * varre os pendentes e reenvia — a UNIQUE segue impedindo duplicata na
+     * gravação, e a idempotencyKey da fila cobre o reenvio.
+     */
+    pushEnfileiradoEm: timestamp('push_enfileirado_em', { withTimezone: true }),
   },
   (t) => [
     /**
@@ -69,16 +79,27 @@ export const apitos = pgTable(
   ],
 )
 
-/** Feed materializado. É o que os 10k usuários leem — nunca o motor direto. */
+/**
+ * Feed materializado. É o que os 10k usuários leem — nunca o motor direto.
+ *
+ * A Lista Secreta é publicada uma vez por dia: `jogoId` NULL, uma linha por
+ * dia. O Fire Live muda a cada ciclo e por jogo: uma linha por `jogoId`, para
+ * que dois workflows simultâneos nunca disputem a mesma escrita (spec 05).
+ * `nullsNotDistinct` faz o NULL da Lista Secreta colidir consigo mesmo — o
+ * mesmo mecanismo, pela mesma razão, de `apitos_dedup`.
+ */
 export const feedSnapshot = pgTable(
   'feed_snapshot',
   {
     id: uuid('id').primaryKey().defaultRandom(),
     dataReferencia: text('data_referencia').notNull(),
     estrategia: estrategiaEnum('estrategia').notNull(),
+    jogoId: uuid('jogo_id').references(() => jogos.id, { onDelete: 'cascade' }),
     conteudoJson: jsonb('conteudo_json').notNull(),
     geradoEm: timestamp('gerado_em', { withTimezone: true }).notNull().defaultNow(),
     hash: text('hash').notNull(),
   },
-  (t) => [unique('feed_snapshot_unico').on(t.dataReferencia, t.estrategia)],
+  (t) => [
+    unique('feed_snapshot_unico').on(t.dataReferencia, t.estrategia, t.jogoId).nullsNotDistinct(),
+  ],
 )

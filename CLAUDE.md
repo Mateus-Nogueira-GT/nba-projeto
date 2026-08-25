@@ -114,6 +114,10 @@ de mock, a regra 2 foi violada.
 - **Os elencos da lista não são a NBA real.** São projetados (Giannis no Miami, LeBron no
   Philadelphia, Harden no Cleveland). O vínculo jogador↔time vem da curadoria do CJ, nunca
   da API. Reconciliação via `mapa_jogadores`, com confirmação humana.
+  **Exceção única — a aba de estatísticas.** Ela exibe dado canônico, não estratégia, e por
+  isso usa `jogadores.time_id` (o time REAL do provedor). Usar a lista do CJ ali diria que
+  o LeBron venceu um jogo do Philadelphia do qual ele não participou. A regra acima vale
+  para tudo que alimenta o motor; a aba de consulta é o outro lado da fronteira.
 - **Só existe classificação de PONTOS.** Rebotes e assistências virão depois. O modelo já
   é `(jogador, atributo)` — não assuma pontos em lugar nenhum.
 - **Fire Live é só 1º quarto.** Nada além disso, em nenhuma hipótese.
@@ -127,3 +131,13 @@ de mock, a regra 2 foi violada.
 - **Philadelphia tem dois MVPs** e os dois precisam estar fora para liberar Suporte/Randola.
 - **A lista de níveis é documento vivo** — muda com o mercado, não só por temporada
   (Schröder foi dispensado durante a elaboração). O import precisa ser reexecutável.
+
+<!-- BEGIN:nextjs-agent-rules -->
+
+# This is NOT the Next.js you know
+
+This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` (resolved from this file's directory; in monorepos the `next` package may not be visible from the repo root) before writing any code. Heed deprecation notices.
+
+This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
+
+<!-- END:nextjs-agent-rules -->

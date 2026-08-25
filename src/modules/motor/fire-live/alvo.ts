@@ -30,6 +30,7 @@ export function alvoFireLive(p: ParametrosAlvo, ruleset: Ruleset): number | null
           : fl.multiplicadores.pontos_classificado
 
     const alvo = arredondar(porQuarto * multiplicador, ruleset)
+    if (p.nivel === null) return alvo
     return alvo >= fl.travas.pontos_alvo_minimo ? alvo : null
   }
 

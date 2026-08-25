@@ -19,6 +19,15 @@ export const origemOddsEnum = pgEnum('origem_odds', ['CASAS', 'TABELA_ESTATICA']
 export const statusRulesetEnum = pgEnum('status_ruleset', ['provisorio', 'homologado'])
 
 export const statusUsuarioEnum = pgEnum('status_usuario', ['ATIVO', 'BLOQUEADO'])
+export const papelUsuarioEnum = pgEnum('papel_usuario', ['USUARIO', 'ADMIN'])
+export const tipoEventoContaEnum = pgEnum('tipo_evento_conta', [
+  'LOGIN',
+  'LOGIN_FALHOU',
+  'SESSAO_ENCERRADA',
+  'USO_SIMULTANEO',
+  'BLOQUEIO',
+  'DESBLOQUEIO',
+])
 export const tipoDispositivoEnum = pgEnum('tipo_dispositivo', ['MOBILE', 'DESKTOP'])
 export const canalNotificacaoEnum = pgEnum('canal_notificacao', [
   'FIRE_LIVE_APITO',

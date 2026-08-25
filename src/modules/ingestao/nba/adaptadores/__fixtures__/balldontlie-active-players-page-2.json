@@ -1,0 +1,30 @@
+{
+  "data": [
+    {
+      "id": 246,
+      "first_name": "Nikola",
+      "last_name": "Jokic",
+      "position": "C",
+      "height": "6-11",
+      "weight": "284",
+      "jersey_number": "15",
+      "college": null,
+      "country": "Serbia",
+      "draft_year": 2014,
+      "draft_round": 2,
+      "draft_number": 41,
+      "team": {
+        "id": 8,
+        "conference": "West",
+        "division": "Northwest",
+        "city": "Denver",
+        "name": "Nuggets",
+        "full_name": "Denver Nuggets",
+        "abbreviation": "DEN"
+      }
+    }
+  ],
+  "meta": {
+    "per_page": 100
+  }
+}

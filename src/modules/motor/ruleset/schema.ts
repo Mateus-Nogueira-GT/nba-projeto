@@ -16,6 +16,37 @@ const porLinha = z.record(z.string(), z.number())
 const porLinhaFaixa = z.record(z.string(), z.tuple([z.number(), z.number()]))
 const porNivel = <T extends z.ZodTypeAny>(valor: T) => z.record(nivel, valor)
 
+/**
+ * Bloco POR ATRIBUTO — as tabelas de rebotes e assistências.
+ *
+ * PONTOS nunca aparece aqui: continua nos blocos homologados de topo. Este
+ * bloco existe porque as escalas são incomparáveis — 25 é uma linha de pontos
+ * plausível e uma linha de assistências impossível — e porque o CJ ainda não
+ * enviou os números. Cada atributo declara sua `origem`, e a UI mostra o aviso
+ * quando ela é `demonstracao`.
+ *
+ * Tudo é opcional: atributo sem bloco simplesmente não gera apito, que é
+ * exatamente o comportamento de hoje.
+ */
+const blocoAtributo = z.object({
+  origem: z.enum(['homologado', 'demonstracao']),
+  oscilacao: z
+    .object({
+      delta: porNivel(z.number()),
+    })
+    .optional(),
+  confianca: z
+    .object({
+      base: porNivel(porLinha),
+      bonus_por_nivel_apito: porNivel(porLinha),
+    })
+    .optional(),
+  odds: porNivel(porLinhaFaixa).optional(),
+  marcos_green: porNivel(z.array(z.number())).optional(),
+})
+
+export type BlocoAtributo = z.infer<typeof blocoAtributo>
+
 export const rulesetSchema = z.object({
   version: z.number().int().positive(),
   status: z.enum(['provisorio', 'homologado']),
@@ -24,6 +55,21 @@ export const rulesetSchema = z.object({
   media: z.object({
     janela: z.enum(['temporada', 'ultimos_5', 'ultimos_10']),
     modo: z.enum(['movel', 'congelada_na_rodada']),
+  }),
+
+  /** Rótulo da temporada. Calendário da liga, não estratégia — ver o YAML. */
+  temporada: z.object({
+    mes_inicio: z.number().int().min(1).max(12),
+    formato: z.enum(['dois_anos', 'ano_inicial']),
+  }),
+
+  /**
+   * Fuso que decide a que dia um jogo pertence e em que horário ele aparece.
+   * Calendário e apresentação, não estratégia — mas vive aqui pela mesma razão
+   * que `temporada`: nenhum valor de calendário solto no código.
+   */
+  rodada: z.object({
+    fuso: z.string().min(1),
   }),
 
   arredondamento: z.object({
@@ -85,6 +131,11 @@ export const rulesetSchema = z.object({
       /** alvo válido se > este valor (note a assimetria com pontos) */
       rebotes_alvo_minimo: z.number(),
     }),
+    /** Cadência do loop do 1Q. Operacional, não estratégico — ver ADR-0003. */
+    observacao: z.object({
+      intervalo_segundos: z.number().int().positive(),
+      limite_minutos: z.number().int().positive(),
+    }),
     modo_fire: z.object({
       aplica_a: z.array(nivel),
       percentual_media: z.number().min(0).max(1),
@@ -103,6 +154,20 @@ export const rulesetSchema = z.object({
   confianca: z.object({
     base: porNivel(porLinha),
     bonus_por_nivel_apito: porNivel(porLinha),
+  }),
+
+  /** Tradução do % em intensidade visual. Exibição, não estratégia. */
+  confianca_exibicao: z.object({
+    origem: z.enum(['homologado', 'demonstracao']),
+    faixas: z
+      .array(
+        z.object({
+          de: z.number(),
+          grau: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4), z.literal(5)]),
+          rotulo: z.string().min(1),
+        }),
+      )
+      .min(1),
   }),
 
   odds: z.object({
@@ -126,6 +191,13 @@ export const rulesetSchema = z.object({
   }),
 
   avisos: z.object({
+    /** Alerta de dado parado — operação, não estratégia. Ver o YAML. */
+    dado_parado: z.object({
+      fora_de_jogo_minutos: z.number().positive(),
+      em_janela_segundos: z.number().positive(),
+      janela_antecedencia_minutos: z.number().positive(),
+      realerta_minutos: z.number().positive(),
+    }),
     blowout: z.object({
       quarto: z.number().int().positive(),
       diferenca_pontos: z.number(),
@@ -133,6 +205,26 @@ export const rulesetSchema = z.object({
       local: z.string(),
     }),
   }),
+
+  /** Rebotes e assistências. Ausente = só pontos, o estado homologado. */
+  por_atributo: z.partialRecord(atributo, blocoAtributo).default({}),
+
+  /**
+   * Gestão de banca. Opcional: o modelo do CJ ainda não chegou, e um ruleset
+   * sem este bloco é um ruleset válido — a tela avisa que está sem modelo em
+   * vez de inventar um número na hora de renderizar.
+   */
+  gestao_banca: z
+    .object({
+      origem: z.enum(['homologado', 'demonstracao']),
+      unidade_percentual_banca: z.number().positive(),
+      unidades_por_nivel_apito: z.record(z.string(), z.number().nonnegative()),
+      bonus_turbo_unidades: z.number().nonnegative(),
+      teto_por_entrada_percentual: z.number().positive(),
+      stop_win_percentual: z.number().positive(),
+      stop_loss_percentual: z.number().positive(),
+    })
+    .optional(),
 
   matchup: z.object({
     habilitado: z.boolean(),

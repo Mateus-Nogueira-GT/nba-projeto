@@ -1,3 +1,5 @@
+import { normalizarTexto } from '../../dominio/texto'
+
 /**
  * Nomes informais da lista do CJ -> sigla canônica.
  *
@@ -53,15 +55,10 @@ const MAPA: Record<string, string> = {
   'milwaukee bucks': 'MIL',
 }
 
-export function normalizarTexto(bruto: string): string {
-  return bruto
-    .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
-    .toLowerCase()
-    .replace(/[^a-z0-9\s]/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim()
-}
+// A implementação vive no domínio: a busca da aba de estatísticas usa a MESMA
+// régua de grafia aproximada que a reconciliação de nomes da lista. Ver
+// src/modules/dominio/texto.ts.
+export { normalizarTexto }
 
 export function siglaDoTime(nomeNaLista: string): string | null {
   return MAPA[normalizarTexto(nomeNaLista)] ?? null

@@ -4,6 +4,8 @@ import type {
   JogadorExterno,
   JogoExterno,
   LinhaBoxScore,
+  LinhaBoxScoreTimeExterna,
+  LinhaClassificacaoExterna,
   TimeExterno,
 } from '../porta'
 
@@ -12,7 +14,9 @@ export type Fixture = {
   jogadores?: JogadorExterno[]
   jogos?: JogoExterno[]
   boxScore?: LinhaBoxScore[]
+  boxScoreDoTime?: LinhaBoxScoreTimeExterna[]
   escalacao?: EscalacaoExterna[]
+  classificacao?: LinhaClassificacaoExterna[]
 }
 
 /**
@@ -58,7 +62,13 @@ export class FonteFake implements FonteNBA {
   boxScore(_jogoIdExterno: string) {
     return this.responder(this.fixture.boxScore ?? [])
   }
+  boxScoreDoTime(_jogoIdExterno: string) {
+    return this.responder(this.fixture.boxScoreDoTime ?? [])
+  }
   escalacao(_jogoIdExterno: string) {
     return this.responder(this.fixture.escalacao ?? [])
+  }
+  classificacao(_temporada: string) {
+    return this.responder(this.fixture.classificacao ?? [])
   }
 }
