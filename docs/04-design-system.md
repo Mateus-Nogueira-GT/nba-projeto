@@ -156,6 +156,13 @@ decidir, o card falhou — ele deve conseguir varrer a lista inteira sem ler nad
 
 ## Identidade 02
 
+> **Nota de 25/08/2026 — parcialmente superada pela Identidade 03 (abaixo).**
+> A anatomia do card, o fundo chapado e a pílula como portadora única da cor
+> mudaram de novo. O que esta seção estabelece de DOUTRINA continua integral:
+> um canal por informação, rampa mono-matiz, brilho de confiança só no grau
+> máximo, redundância escrita em todo sinal. A 03 é outra execução das mesmas
+> regras.
+
 A seção acima descreve o desenho original, de quando este documento foi escrito, com um
 **anel único** fundindo apito e confiança (ADR-0005). O visual mudou de novo em agosto de
 2026, a partir do mockup de referência do cliente. Esta seção documenta o que está no ar
@@ -245,3 +252,44 @@ borda colorida do `Avatar` (um quadrado arredondado, não mais um círculo — v
 confiança é a pílula separada descrita acima, com sua própria cor. Ver a nota de
 "superação parcial" em `docs/adr/0005-fusao-badge-confianca.md` para o histórico completo
 dessa mudança e o que da decisão original ainda vale.
+
+## Identidade 03 · Broadcast
+
+Reforma de 25/08/2026 (spec
+[`2026-08-25-identidade-03-broadcast-design.md`](superpowers/specs/2026-08-25-identidade-03-broadcast-design.md),
+brainstorm com mockups aprovados no navegador). O diagnóstico que a motivou: a 02
+acertou a direção "transmissão esportiva" e falhou no acabamento. Tipografia
+intocada (Anton/Barlow Condensed/Barlow).
+
+### O que mudou
+
+- **Fim do fundo chapado.** `componente.fundoTela` é gradiente (175°, tinta800 →
+  marinho850); a `Moldura`, a `MolduraConta`, `/entrar` e `/offline` o usam. O
+  admin fica utilitário de propósito — é ferramenta interna.
+- **Card em 3 zonas:** cabeçalho (avatar · nome · apoio · % em Anton 30px na cor
+  do grau) · contexto (Barrinhas no pré-live, BarraAlvo no Fire Live) · rodapé
+  (faixa translúcida com linha · média · odd). Borda lateral esquerda de 3px na
+  cor do grau de confiança.
+- **Temperatura por contexto.** Pré-live é FRIO (`componente.contextoFrio`); o
+  Fire Live inteiro é QUENTE (`contextoQuente`, roxo/laranja) — a urgência é da
+  tela ao vivo, não só do modo fire. Testes transversais garantem que nenhuma
+  tela pré-live veste o universo quente.
+- **Três brilhos, três donos** (teste nominal em `card.test.ts`): grau 5 de
+  confiança → card na cor do grau · turbo → `turboBrilho` azul · modo fire →
+  brilho do universo quente. O mockup dava brilho no % de grau 4; a doutrina
+  venceu o mockup.
+- **Barrinhas com par próprio.** `barrinhaBateu #2FBF71` / `barrinhaFalhou
+  #CC3B3B` — o verde do mockup era o categórico do apito nível 3 (colisão de
+  canais) e o vermelho reprovou em AA com o valor escrito dentro (3.75 → 4.93).
+- **Componentes novos:** `Barrinhas` (últ. 5 com VALOR), `PlacarMini` (sem
+  cronômetro — decisão da spec 02 mantida), `BarraAlvo`, `ChipFiltro`. Todos na
+  galeria do admin.
+- **Exclusão de jogadores no Fire Live** (`jogadores_ocultos`): preferência por
+  CONTA, recorte de leitura puro; o push não cala (pergunta ao CJ).
+
+### Pendência de lapidação (auditoria da manhã)
+
+O selo PREENCHIDO no topo direito do cabeçalho ("PRÉ-LIVE" laranja / "■ AO
+VIVO" vermelho), presente nos mockups, não foi implementado — o `CabecalhoTela`
+comunica o contexto por sobrancelha + marcador colorido. Reestruturar o
+cabeçalho de todas as telas por um badge ficou para depois da auditoria.

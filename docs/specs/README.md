@@ -98,6 +98,15 @@ com as pendências herdadas abaixo — não uma por vez.
 | Três pontos — o mockup do designer desenhou "3 PONTOS +2,5". Existe, ou vai existir, classificação de três pontos? Se sim, precisa da lista de níveis dele. | se um quarto atributo entra no modelo |
 | Cronômetro no placar ao vivo — depende do provedor entregar relógio de jogo. Ele quer isso no card do Fire Live? | campo novo na ingestão, só quando houver provedor |
 
+A identidade 03 (spec
+[`2026-08-25-identidade-03-broadcast-design.md`](../superpowers/specs/2026-08-25-identidade-03-broadcast-design.md))
+acrescentou duas:
+
+| Pergunta | Bloqueia |
+| --- | --- |
+| As barrinhas "últ. 5 na linha" do card leem a linha PRINCIPAL do apito (a menor, quando há 2+). É essa a leitura de relance que ele quer? | qual linha alimenta as barrinhas |
+| Ocultar jogador no Fire Live esconde da TELA mas não silencia o push do jogador oculto. É o comportamento desejado, ou o push também cala? | se a preferência entra no fan-out de push |
+
 ---
 
 ## Respondidas

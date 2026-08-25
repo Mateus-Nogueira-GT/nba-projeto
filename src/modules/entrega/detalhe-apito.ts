@@ -1,7 +1,6 @@
-import { and, asc, desc, eq, inArray, lt } from 'drizzle-orm'
+import { and, asc, eq, inArray } from 'drizzle-orm'
 
 import {
-  estatisticasJogo,
   jogadores,
   jogos,
   lesoesEscalacao,

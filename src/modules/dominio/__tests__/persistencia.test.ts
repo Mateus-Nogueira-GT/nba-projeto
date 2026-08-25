@@ -42,8 +42,9 @@ afterAll(async () => {
 // ---------------------------------------------------------------------------
 
 describe('migrations sobem e descem limpas', () => {
-  it('a subida cria as 44 tabelas dos grupos persistidos', async () => {
-    expect(await banco.contarTabelas()).toBe(44)
+  it('a subida cria as 45 tabelas dos grupos persistidos', async () => {
+    // 45 desde jogadores_ocultos (identidade 03 — exclusão no Fire Live)
+    expect(await banco.contarTabelas()).toBe(45)
   })
 
   it('desce zerando o schema e sobe de novo sem resíduo', async () => {
@@ -51,7 +52,8 @@ describe('migrations sobem e descem limpas', () => {
     expect(await banco.contarTabelas()).toBe(0)
 
     await banco.subir()
-    expect(await banco.contarTabelas()).toBe(44)
+    // 45 desde jogadores_ocultos (identidade 03 — exclusão no Fire Live)
+    expect(await banco.contarTabelas()).toBe(45)
   })
 })
 

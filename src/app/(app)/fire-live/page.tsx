@@ -3,7 +3,7 @@ import { redirect } from 'next/navigation'
 
 import { getDb } from '@/modules/dominio/db/cliente'
 import { lerFeedFireLive, placaresAoVivo } from '@/modules/entrega/fire-live/leitura'
-import type { FiltroFireLive, PlacarAoVivo } from '@/modules/entrega/fire-live/leitura'
+import type { FiltroFireLive } from '@/modules/entrega/fire-live/leitura'
 import type { EstadoVazio } from '@/modules/entrega/fire-live/leitura'
 import { rulesetAtivo } from '@/modules/entrega/ruleset-ativo'
 import { rotaDoJogador } from '@/modules/entrega/estatisticas/rotas'
