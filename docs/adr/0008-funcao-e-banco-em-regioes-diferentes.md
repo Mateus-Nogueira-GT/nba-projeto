@@ -45,41 +45,59 @@ Rodando a mesma cadeia a partir da região do banco, ela custa **178 ms no total
 
 ## Decisão
 
-**Mover o BANCO para `us-east-1`**, ao lado da função — e não o contrário.
+**Colocar função e banco na mesma região.** Qual das duas se move depende de uma
+resposta que ainda não temos.
 
-A correção natural seria o contrário: `regions: ['gru1']` no `vercel.ts` põe a função
-em São Paulo, junto do banco E junto dos usuários. É a melhor configuração possível
-e continua sendo o destino.
+**Caminho A — mover a FUNÇÃO para São Paulo** (`regions: ['gru1']` no `vercel.ts`).
+É o melhor destino: aproxima a função do banco E dos usuários, matando as duas
+latências de uma vez. A documentação da Vercel lista "Hobby · single region", o que
+sugere que uma região é configurável.
 
-Ela não está no código porque **a Vercel bloqueia o deploy antes do build neste
-plano**. Testado nos dois sentidos, no mesmo dia:
+**Caminho B — mover o BANCO para `us-east-1`**, ao lado da função. Não exige nada do
+plano. Resolve as cinco travessias de consulta, mas mantém os ~200ms de ida e volta
+da requisição do usuário.
 
-| `regions` | Resultado |
-| --- | --- |
-| ausente | deploy ok |
-| `['gru1']` | `Deployment was blocked` |
-| `['iad1']` (o próprio padrão) | `Deployment was blocked` |
+**Testar o A primeiro**: é gratuito tentar e estritamente melhor se passar.
 
-Ou seja: o bloqueio é a **chave**, não o valor. A documentação anuncia "Hobby ·
-single region", mas na prática a configuração é recusada. Enquanto o plano não
-mudar, a única metade movível do par é o banco.
+### O que NÃO se sabe, e por quê
+
+Tentou-se o caminho A em 25/08 e o deploy foi recusado com `Deployment was blocked`.
+A leitura imediata foi "o plano recusa a chave `regions`" — e ela estava **errada**.
+Um deploy de controle, sem a chave, falhou igual:
+
+| Horário (UTC) | `regions` | Resultado |
+| --- | --- | --- |
+| até 12:31 | ausente | deploy ok |
+| 15:54 | `['gru1']` | `Deployment was blocked` |
+| 15:55 | `['iad1']` | `Deployment was blocked` |
+| 16:02 | ausente | `Deployment was blocked` |
+
+O corte é **temporal, não causal**: a partir de ~15:54 UTC todo deploy do projeto é
+bloqueado, com ou sem a chave. A mudança de região foi só o primeiro push depois do
+corte, o que a fez parecer culpada.
+
+`Deployment was blocked` é bloqueio de CONTA, não de build (ele acontece antes do
+build). As causas típicas são limite de uso do plano atingido, limite de gasto ou
+pausa administrativa do projeto — nenhuma delas visível pela API pública do GitHub.
+
+**Portanto:** enquanto o bloqueio da conta não for resolvido no painel da Vercel,
+não dá para afirmar se `regions: ['gru1']` funciona neste plano. A chave está fora
+do `vercel.ts` porque não foi possível validá-la, não porque foi reprovada.
 
 ## Consequências
 
-**O que melhora.** Com banco e função em `us-east-1`, as cinco consultas passam a
-custar ~2 ms cada em vez de ~150 ms. O TTFB previsto cai de ~1000 ms para a casa dos
-**~210 ms** — o piso que `/entrar` já demonstra hoje.
+**Caminho A (função em São Paulo).** As cinco consultas passam a custar ~2 ms cada
+e a requisição deixa de atravessar o Atlântico. TTFB previsto na casa dos
+**60–100 ms**. Nenhum dado sai do Brasil.
 
-**O que fica pior.** Os dados saem do Brasil. Não há dado pessoal sensível no
-modelo (e-mail, hash de senha e preferências), mas isso é uma decisão de
-tratamento de dados, não só de latência — e vale registrar antes de valer para
+**Caminho B (banco nos EUA).** As cinco consultas passam a custar ~2 ms cada, mas os
+~200 ms de travessia da requisição continuam. TTFB previsto **~210 ms** — o piso que
+`/entrar` já demonstra hoje. Em troca, **os dados saem do Brasil**: não há dado
+sensível no modelo (e-mail, hash de senha, preferências), mas é decisão de
+tratamento de dados, não só de latência, e vale registrar antes de existir
 assinante pagante.
 
-**O que não resolve.** Os ~200 ms de travessia Brasil↔EUA da própria requisição
-continuam. Só o plano Pro com `regions: ['gru1']` elimina os dois de uma vez,
-levando o TTFB para a casa dos 60–100 ms.
-
-**Custo da migração.** Baixo hoje, alto depois. O banco atual é quase todo
+**Custo da migração (só no caminho B).** Baixo hoje, alto depois. O banco atual é quase todo
 demonstração, reconstruível por `npm run demo:seed`. O que precisa viajar de
 verdade são `usuarios`, `direitos_acesso` e `push_inscricoes` — poucas linhas. Essa
 janela fecha quando entrar o primeiro assinante pagante.

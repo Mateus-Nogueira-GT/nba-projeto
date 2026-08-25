@@ -12,20 +12,24 @@ import type { VercelConfig } from '@vercel/config/v1'
 export const config: VercelConfig = {
   framework: 'nextjs',
   /**
-   * REGIÃO DA FUNÇÃO — NÃO configurável neste plano. Ver ADR-0008.
+   * REGIÃO DA FUNÇÃO — a chave que falta aqui. Ver ADR-0008.
    *
    * A função executa em `iad1` (Washington), padrão da Vercel, enquanto o
    * Neon vive em `sa-east-1` (São Paulo). Cada consulta atravessa o
    * continente, e cada tela autenticada faz de 4 a 6 em sequência. Medido em
-   * 25/08 na mesma função e mesma região, variando só o número de consultas:
+   * 25/08 na MESMA função e MESMA região, variando só o número de consultas:
    *
    *   /entrar   0 consultas   ~200ms
    *   /gestao   5 consultas  ~1000ms
    *
-   * A correção óbvia seria `regions: ['gru1']`. Ela NÃO está aqui porque a
-   * Vercel bloqueia o deploy antes do build neste plano — testado com 'gru1'
-   * e com 'iad1', ambos "Deployment was blocked"; sem a chave, passa.
-   * O caminho que funciona hoje é mover o BANCO para us-east-1. ADR-0008.
+   * A correção é `regions: ['gru1']`. Ela não está aqui porque não foi
+   * possível VALIDAR: no dia em que se tentou, a conta passou a recusar todo
+   * deploy com `Deployment was blocked` — inclusive um deploy de controle sem
+   * a chave. Não se sabe se o plano aceita a chave; sabe-se que naquele
+   * momento nada subia.
+   *
+   * Quando o deploy voltar: tentar `regions: ['gru1']` PRIMEIRO. Se o plano
+   * recusar, o caminho alternativo é mover o banco para us-east-1 (ADR-0008).
    */
   functions: {
     'src/app/api/fila/push/route.ts': {
