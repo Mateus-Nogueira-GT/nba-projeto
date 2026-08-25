@@ -89,7 +89,7 @@ export default async function PaginaGaleria() {
 
       <Secao
         titulo="Card comum (grau 3) vs. grau máximo (grau 5, brilha)"
-        nota="Só o grau 5 de confiança acende o brilho ao redor do card — os demais graus só mudam a cor da pílula."
+        nota="Só o grau 5 de confiança acende o brilho ao redor do card — os demais graus mudam a cor do % e da borda lateral."
       >
         <CardEntrada
           nome="Austin Reaves"
@@ -101,6 +101,15 @@ export default async function PaginaGaleria() {
           confianca={90}
           grauConfianca={3}
           linha={18}
+          ultimos5={[
+            { valor: 22, bateu: true },
+            { valor: 19, bateu: true },
+            { valor: 15, bateu: false },
+            { valor: 21, bateu: true },
+            { valor: 18, bateu: true },
+          ]}
+          mediaTemporada={19.4}
+          oddFaixa={{ min: 1.47, max: 1.62, qtdCasas: 3 }}
         />
         <CardEntrada
           nome="Jokic"
@@ -112,6 +121,15 @@ export default async function PaginaGaleria() {
           confianca={97}
           grauConfianca={5}
           linha={26}
+          ultimos5={[
+            { valor: 31, bateu: true },
+            { valor: 28, bateu: true },
+            { valor: 27, bateu: true },
+            { valor: 30, bateu: true },
+            { valor: 29, bateu: true },
+          ]}
+          mediaTemporada={27.1}
+          oddFaixa={{ min: 1.38, max: 1.5, qtdCasas: 4, media: 1.42 }}
         />
       </Secao>
 

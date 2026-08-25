@@ -37,6 +37,26 @@ export const primitivo = {
   // Apoio
   vermelho400: '#FF6B6B',
 
+  // Identidade 03 · broadcast — superfícies e estados novos
+  marinho650: '#16213A',
+  marinho750: '#111A2E',
+  marinho850: '#101A2E',
+  roxo700: '#241A2E',
+  roxo800: '#161226',
+  roxoBorda: '#3A2A52',
+  vermelhoVivo: '#E03E3E',
+  // Barrinhas de histórico: par PRÓPRIO — o verde categórico do apito nível 3
+  // (#3DD37E) não pode dizer também "bateu a linha" no mesmo card.
+  verdeBarrinha: '#2FBF71',
+  // #E05555 do mockup reprovou em AA com o valor branco dentro (3.75) —
+  // escurecido até passar (4.93) sem perder o tom.
+  vermelhoBarrinha: '#CC3B3B',
+  // Véus translúcidos (faixas de rodapé e brilhos) — decimais dos hex acima.
+  turquesaVeu: 'rgba(92,224,206,.07)',
+  laranjaVeu: 'rgba(255,122,26,.08)',
+  azulVeuTurbo: 'rgba(77,163,255,.18)',
+  laranjaVeuFire: 'rgba(255,122,26,.22)',
+
   // Fundos alternativos do monograma do Avatar (sem foto) — variação
   // determinística por sigla de time, puramente decorativa, sem significado
   // de estratégia.

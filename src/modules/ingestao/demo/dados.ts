@@ -156,3 +156,43 @@ export function niveisDoJogador(nome: string, nivelPontos: Nivel): Record<Atribu
     ATRIBUTOS.map((a) => [a, nivelDoAtributo(nome, nivelPontos, a)]),
   ) as Record<Atributo, Nivel>
 }
+
+/**
+ * Decompõe os pontos de um jogo da demo em arremessos coerentes:
+ * 2·doisC + 3·tresC + lanceC = pontos, sempre, com tentativas plausíveis.
+ *
+ * Determinística de propósito — o seed é reexecutável, e o teste de soma
+ * varre a identidade para qualquer placar. Não é modelo estatístico: é o
+ * mínimo para as telas de FG%/2P%/3P%/LL% mostrarem número em vez de "—".
+ */
+export function decomporPontos(pontos: number): {
+  doisC: number
+  doisT: number
+  tresC: number
+  tresT: number
+  lanceC: number
+  lanceT: number
+  cestasC: number
+  cestasT: number
+} {
+  const tresC = Math.floor(pontos / 9)
+  const resto = pontos - tresC * 3
+  // Paridade preservada: somar 2 mantém resto − lanceC par e não-negativo.
+  const lanceC = (resto % 2) + (resto >= 6 ? 2 : 0)
+  const doisC = (resto - lanceC) / 2
+
+  const doisT = doisC + Math.ceil(doisC / 2) + (doisC > 0 ? 1 : 0)
+  const tresT = tresC + Math.max(tresC > 0 ? 1 : 0, tresC)
+  const lanceT = lanceC + (lanceC > 0 ? 1 : 0)
+
+  return {
+    doisC,
+    doisT,
+    tresC,
+    tresT,
+    lanceC,
+    lanceT,
+    cestasC: doisC + tresC,
+    cestasT: doisT + tresT,
+  }
+}

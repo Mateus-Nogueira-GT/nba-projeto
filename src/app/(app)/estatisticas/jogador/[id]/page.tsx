@@ -150,6 +150,7 @@ function NumerosCompletos({ n }: { n: Numeros }) {
           ['Pontos', num(n.ataque.pontos)],
           ['Assistências', num(n.ataque.assistencias)],
           ['FG%', pct(n.ataque.fgPercentual)],
+          ['2P%', pct(n.ataque.doisPercentual)],
           ['3P%', pct(n.ataque.tresPercentual)],
           ['LL%', pct(n.ataque.lancePercentual)],
         ]}

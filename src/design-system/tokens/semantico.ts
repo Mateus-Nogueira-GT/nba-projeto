@@ -61,6 +61,24 @@ export const semantico = {
   acentoClaro: p.laranjaAcentoClaro,
   aoVivo: p.vermelho400,
 
+  // -- Identidade 03 · broadcast -------------------------------------------
+  // Superfícies dos dois universos: pré-live FRIO, ao vivo QUENTE. Os
+  // gradientes são compostos na camada de componente (contextoFrio/Quente) —
+  // aqui ficam só os aliases, como o teste de paridade exige.
+  superficieFria1: p.marinho650,
+  superficieFria2: p.marinho750,
+  fundoTelaFim: p.marinho850,
+  superficieQuente1: p.roxo700,
+  superficieQuente2: p.roxo800,
+  bordaQuente: p.roxoBorda,
+  vivoSelo: p.vermelhoVivo,
+  barrinhaBateu: p.verdeBarrinha,
+  barrinhaFalhou: p.vermelhoBarrinha,
+  veuFrio: p.turquesaVeu,
+  veuQuente: p.laranjaVeu,
+  veuTurbo: p.azulVeuTurbo,
+  veuFire: p.laranjaVeuFire,
+
   // -- Rampa de confiança — grau 1 (menor) ao 5 (maior) ----------------------
   confiancaGrau1: p.turquesa700,
   confiancaGrau2: p.turquesa600,

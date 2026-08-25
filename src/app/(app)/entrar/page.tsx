@@ -1,3 +1,4 @@
+import { componente } from '@/design-system/tokens/componente'
 import { semantico } from '@/design-system/tokens/semantico'
 import { FormularioLogin } from './formulario'
 import { configuracaoProdutoPago } from '@/modules/plataforma/assinatura/configuracao'
@@ -19,13 +20,13 @@ export default async function PaginaEntrar({
   return (
     <main
       style={{
-        background: semantico.fundo,
+        background: componente.fundoTela,
         color: semantico.textoPrimario,
         minHeight: '100vh',
         display: 'grid',
         placeItems: 'center',
         padding: 24,
-        fontFamily: 'system-ui, sans-serif',
+        fontFamily: semantico.fonteCorpo,
       }}
     >
       <div style={{ width: '100%', maxWidth: 360 }}>

@@ -3,13 +3,17 @@ import { redirect } from 'next/navigation'
 
 import { getDb } from '@/modules/dominio/db/cliente'
 import { lerFeedFireLive, placaresAoVivo } from '@/modules/entrega/fire-live/leitura'
-import type { FiltroFireLive, PlacarAoVivo } from '@/modules/entrega/fire-live/leitura'
+import type { FiltroFireLive } from '@/modules/entrega/fire-live/leitura'
 import type { EstadoVazio } from '@/modules/entrega/fire-live/leitura'
 import { rulesetAtivo } from '@/modules/entrega/ruleset-ativo'
 import { rotaDoJogador } from '@/modules/entrega/estatisticas/rotas'
-import { CardEntrada } from '@/design-system/componentes'
+import { CardEntrada, PlacarMini } from '@/design-system/componentes'
 import { semantico } from '@/design-system/tokens/semantico'
 import { sessaoAtual } from '@/modules/plataforma/auth/cookies'
+import { filtrarOcultos, jogadoresOcultosDe } from '@/modules/plataforma/jogadores-ocultos'
+import { jogadores } from '@/modules/dominio/db/schema'
+import { inArray } from 'drizzle-orm'
+import { exibir, ocultar } from './acoes'
 import { avaliarAcesso } from '@/modules/plataforma/assinatura/direito'
 import '@/design-system/tokens/tokens.css'
 import { dataHora, horaCurta } from '@/components/formato'
@@ -70,72 +74,6 @@ function TextoVazio({
   )
 }
 
-/**
- * Mini-placar do jogo ao vivo — sempre 1º quarto (a única janela em que esta
- * grade existe). O ponto pulsante é redundante com o texto "ao vivo" ao lado
- * — nunca o único sinal — e para de piscar sozinho quando o navegador pede
- * menos movimento (`globals.css`).
- */
-function PlacarMini({ placar }: { placar: PlacarAoVivo }) {
-  return (
-    <div
-      style={{
-        padding: '10px 14px',
-        borderRadius: 12,
-        border: `1px solid ${semantico.divisor}`,
-        background: semantico.superficie,
-      }}
-    >
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 6,
-          fontFamily: semantico.fonteRotulo,
-          fontSize: 11,
-          letterSpacing: 1.5,
-          textTransform: 'uppercase',
-          color: semantico.textoSecundario,
-        }}
-      >
-        <span>1º Q</span>
-        <span
-          aria-hidden
-          className="ponto-ao-vivo"
-          style={{
-            display: 'inline-block',
-            width: 6,
-            height: 6,
-            borderRadius: '50%',
-            background: semantico.aoVivo,
-          }}
-        />
-        <span style={{ color: semantico.aoVivo }}>ao vivo</span>
-      </div>
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'baseline',
-          justifyContent: 'space-between',
-          gap: 14,
-          marginTop: 4,
-          fontFamily: semantico.fonteTitulo,
-          fontSize: 20,
-          letterSpacing: 0.5,
-        }}
-      >
-        <span>
-          {placar.casaSigla} {placar.casaPlacar}
-        </span>
-        <span style={{ fontSize: 13, color: semantico.textoSecundario }}>×</span>
-        <span>
-          {placar.visitanteSigla} {placar.visitantePlacar}
-        </span>
-      </div>
-    </div>
-  )
-}
-
 function primeiroValor(v: string | string[] | undefined): string | undefined {
   return Array.isArray(v) ? v[0] : v
 }
@@ -181,7 +119,20 @@ export default async function PaginaFireLive({
       ? await lerFeedFireLive(getDb(), hoje, ruleset.fire_live.quarto)
       : feed
   const timesComApito = [...new Set(semFiltro.itens.map((i) => i.timeSigla))].sort()
-  const recorteVazio = feed.itens.length === 0 && feed.estadoVazio === null
+
+  // Preferência por CONTA: recorte de LEITURA puro sobre o snapshot — o feed
+  // é por evento e não sabe quem está olhando.
+  const ocultos = await jogadoresOcultosDe(getDb(), sessao.usuarioId)
+  const itensVisiveis = filtrarOcultos(feed.itens, ocultos)
+  const nomesOcultos =
+    ocultos.size > 0
+      ? await getDb()
+          .select({ id: jogadores.id, nome: jogadores.nomeCompleto })
+          .from(jogadores)
+          .where(inArray(jogadores.id, [...ocultos]))
+      : []
+  const recorteVazio =
+    itensVisiveis.length === 0 && feed.estadoVazio === null && feed.itens.length > 0
 
   return (
     <Moldura aba="fire-live">
@@ -254,7 +205,7 @@ export default async function PaginaFireLive({
       )}
 
       <div style={{ display: 'grid', gap: 10 }}>
-        {feed.itens.map((item) => (
+        {itensVisiveis.map((item) => (
           <div key={item.chave} style={{ opacity: item.encerrado ? 0.75 : 1 }}>
             {/* PROPOSTA aguardando CJ — spec 05, pergunta 2: o item fica até o
                 fim do jogo, marcado como encerrado. */}
@@ -284,10 +235,86 @@ export default async function PaginaFireLive({
               alvo1Q={item.alvo1Q}
               vivo={!item.encerrado}
               progresso1Q={{ observado: item.valorNoQuarto, alvo: item.alvo1Q ?? 0 }}
+              // O Fire Live INTEIRO é o universo quente — urgência é da tela
+              // ao vivo, não só do modo fire.
+              temperatura="quente"
             />
+            <form action={ocultar} style={{ margin: '4px 0 0', textAlign: 'right' }}>
+              <input type="hidden" name="jogadorId" value={item.jogadorId} />
+              <button
+                type="submit"
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  padding: 0,
+                  cursor: 'pointer',
+                  fontSize: 12,
+                  fontFamily: 'inherit',
+                  color: semantico.textoSecundario,
+                }}
+              >
+                não acompanhar este jogador
+              </button>
+            </form>
           </div>
         ))}
       </div>
+
+      {nomesOcultos.length > 0 && (
+        <section style={{ marginTop: 20 }}>
+          <h2
+            style={{
+              margin: '0 0 8px',
+              fontFamily: semantico.fonteRotulo,
+              fontSize: 12,
+              letterSpacing: 1.5,
+              color: semantico.textoSecundario,
+              textTransform: 'uppercase',
+            }}
+          >
+            Jogadores ocultos
+          </h2>
+          <div style={{ display: 'grid', gap: 6 }}>
+            {nomesOcultos.map((j) => (
+              <form
+                key={j.id}
+                action={exibir}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: 12,
+                  padding: '8px 12px',
+                  borderRadius: 10,
+                  border: `1px solid ${semantico.divisor}`,
+                }}
+              >
+                <span style={{ fontSize: 14 }}>{j.nome}</span>
+                <input type="hidden" name="jogadorId" value={j.id} />
+                <button
+                  type="submit"
+                  style={{
+                    background: 'none',
+                    border: `1px solid ${semantico.divisor}`,
+                    borderRadius: 8,
+                    padding: '4px 10px',
+                    cursor: 'pointer',
+                    fontSize: 12,
+                    fontFamily: 'inherit',
+                    color: semantico.textoPrimario,
+                  }}
+                >
+                  mostrar de novo
+                </button>
+              </form>
+            ))}
+          </div>
+          <p style={{ margin: '8px 0 0', fontSize: 12, color: semantico.textoSecundario }}>
+            Ocultar tira o jogador desta tela em todos os seus aparelhos. As notificações continuam
+            — silenciá-las por jogador é decisão que ainda vai ao CJ.
+          </p>
+        </section>
+      )}
 
       <footer
         style={{

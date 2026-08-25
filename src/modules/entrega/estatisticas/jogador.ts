@@ -68,6 +68,7 @@ export type Numeros = {
   ataque: {
     pontos: number | null
     fgPercentual: number | null
+    doisPercentual: number | null
     tresPercentual: number | null
     lancePercentual: number | null
     assistencias: number | null
@@ -222,6 +223,12 @@ export async function telaDoJogador(
       tresPercentual: percentual(
         linhasBox.reduce((a, l) => a + l.box.tresC, 0),
         linhasBox.reduce((a, l) => a + l.box.tresT, 0),
+      ),
+      // 2P = FG − 3P: derivação padrão do basquete. Vale para qualquer
+      // provedor, inclusive os que não separam a coluna de 2 pontos.
+      doisPercentual: percentual(
+        linhasBox.reduce((a, l) => a + (l.box.cestasC - l.box.tresC), 0),
+        linhasBox.reduce((a, l) => a + (l.box.cestasT - l.box.tresT), 0),
       ),
       lancePercentual: percentual(
         linhasBox.reduce((a, l) => a + l.box.lanceC, 0),

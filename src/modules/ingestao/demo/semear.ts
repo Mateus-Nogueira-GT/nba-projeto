@@ -30,7 +30,7 @@ import { ATRIBUTOS } from '../../motor/tipos'
 import type { Atributo } from '../../motor/tipos'
 import { lerListaDeNiveis } from '../niveis/parser'
 import { importarListaDeNiveis } from '../niveis/importar'
-import { historicoOscilacao, mediaDe, niveisDoJogador, posicaoDe } from './dados'
+import { decomporPontos, historicoOscilacao, mediaDe, niveisDoJogador, posicaoDe } from './dados'
 
 export const ARQUIVO_LISTA = 'data/fontes/introducao-ia-nba.md'
 const PROVEDOR_DEMO = 'demo'
@@ -305,6 +305,9 @@ export async function semearDemo(db: Db, ruleset: Ruleset, agora: Date): Promise
           rebotesTotal: valorNoJogo('REBOTES'),
           assistencias: valorNoJogo('ASSISTENCIAS'),
           minutos: '30.00',
+          // Arremessos coerentes com os pontos — sem eles, FG%/2P%/3P%/LL%
+          // das telas de estatística ficariam eternamente em "—" na demo.
+          ...decomporPontos(valorNoJogo('PONTOS')),
         })
         .onConflictDoNothing()
     }

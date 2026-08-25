@@ -1,7 +1,6 @@
-import { and, asc, desc, eq, inArray, lt } from 'drizzle-orm'
+import { and, asc, eq, inArray } from 'drizzle-orm'
 
 import {
-  estatisticasJogo,
   jogadores,
   jogos,
   lesoesEscalacao,
@@ -15,6 +14,7 @@ import { calendarioDoRuleset, temporadaDe } from '../dominio/temporada'
 import { deltaOscilacao } from '../motor/atributos'
 import type { Ruleset } from '../motor/ruleset/schema'
 import type { Atributo } from '../motor/tipos'
+import { colunaMedia, jogosRecentes, valorDoJogo } from './historico-na-linha'
 import type { ItemFeed } from './lista-secreta'
 
 export type BlocoJogo = { adversarioSigla: string; valor: number; bateu: boolean }
@@ -36,31 +36,6 @@ const UNIDADE: Record<Atributo, string> = {
 /** Número no padrão pt-BR: vírgula decimal, uma casa. */
 function fmt(n: number): string {
   return n.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })
-}
-
-function colunaMedia(row: typeof mediasJogador.$inferSelect, atributo: Atributo): string | null {
-  switch (atributo) {
-    case 'PONTOS':
-      return row.ppg
-    case 'REBOTES':
-      return row.rpg
-    case 'ASSISTENCIAS':
-      return row.apg
-  }
-}
-
-function valorHistorico(
-  row: { pontos: number; rebotesTotal: number; assistencias: number },
-  atributo: Atributo,
-): number {
-  switch (atributo) {
-    case 'PONTOS':
-      return row.pontos
-    case 'REBOTES':
-      return row.rebotesTotal
-    case 'ASSISTENCIAS':
-      return row.assistencias
-  }
 }
 
 // Leitura DERIVADA: descreve o que o motor já decidiu, não decide nada novo.
@@ -95,22 +70,10 @@ export async function detalheDoApito(
   const valorMedia = mediaRow ? colunaMedia(mediaRow, item.atributo) : null
   const mediaTemporada = valorMedia !== null ? Number(valorMedia) : null
 
-  // 2 · Últimos 5 jogos anteriores ao jogo do item, do mais recente pro mais antigo.
-  const historico = await db
-    .select({
-      pontos: estatisticasJogo.pontos,
-      rebotesTotal: estatisticasJogo.rebotesTotal,
-      assistencias: estatisticasJogo.assistencias,
-      minutos: estatisticasJogo.minutos,
-      dataHoraUtc: jogos.dataHoraUtc,
-      timeCasaId: jogos.timeCasaId,
-      timeVisitanteId: jogos.timeVisitanteId,
-    })
-    .from(estatisticasJogo)
-    .innerJoin(jogos, eq(estatisticasJogo.jogoId, jogos.id))
-    .where(and(eq(estatisticasJogo.jogadorId, item.jogadorId), lt(jogos.dataHoraUtc, jogo.dataHoraUtc)))
-    .orderBy(desc(jogos.dataHoraUtc))
-    .limit(5)
+  // 2 · Últimos 5 jogos anteriores ao do item — a consulta COMPARTILHADA com a
+  //     materialização do feed (historico-na-linha.ts): card e detalhe nunca
+  //     discordam sobre o que aconteceu nos últimos 5.
+  const historico = await jogosRecentes(db, item.jogadorId, jogo.dataHoraUtc, 5)
 
   const minutosRecentes = historico[0]?.minutos != null ? Number(historico[0].minutos) : null
 
@@ -142,7 +105,7 @@ export async function detalheDoApito(
   //     Sem linha e sem alvo não há o que conferir — não é "0 de 5", é nada.
   const linhaOuAlvo = item.linha ?? item.alvo1Q
   const blocosRecenteParaAntigo: BlocoJogo[] = historico.map((h) => {
-    const valor = valorHistorico(h, item.atributo)
+    const valor = valorDoJogo(h, item.atributo)
     const adversarioId = timeDoJogadorId === h.timeCasaId ? h.timeVisitanteId : h.timeCasaId
     return {
       adversarioSigla: timePorId.get(adversarioId)?.sigla ?? '—',
@@ -185,7 +148,7 @@ async function construirPorque(
     const limiar = mediaTemporada - delta
     let n = 0
     for (const h of historico) {
-      if (valorHistorico(h, item.atributo) <= limiar) n++
+      if (valorDoJogo(h, item.atributo) <= limiar) n++
       else break
     }
 

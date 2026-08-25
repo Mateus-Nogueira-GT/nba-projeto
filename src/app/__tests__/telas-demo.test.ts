@@ -32,8 +32,9 @@ const HOJE = dataDeReferencia(AGORA, FUSO)
 
 let banco: Awaited<ReturnType<typeof bancoDeTeste>>
 
+const USUARIO_DEMO = '00000000-0000-4000-8000-000000000001'
 vi.mock('../../modules/plataforma/auth/cookies', () => ({
-  sessaoAtual: async () => ({ usuarioId: 'u1', email: 'demo@teste.com' }),
+  sessaoAtual: async () => ({ usuarioId: '00000000-0000-4000-8000-000000000001', email: 'demo@teste.com' }),
 }))
 vi.mock('../../modules/plataforma/assinatura/direito', () => ({
   avaliarAcesso: async () => ({ permitido: true }),
@@ -47,6 +48,13 @@ beforeAll(async () => {
   process.env.DATABASE_URL = 'postgres://demo'
   banco = await bancoDeTeste()
   await semearDemo(banco.db, await rulesetAtivo(), AGORA)
+  // O usuário da sessão simulada existe de verdade: telas passaram a consultar
+  // preferências por usuarioId (jogadores_ocultos), e uuid inválido quebraria.
+  const { usuarios } = await import('../../modules/dominio/db/schema')
+  await banco.db
+    .insert(usuarios)
+    .values({ id: USUARIO_DEMO, email: 'demo@teste.com', senhaHash: 'x' })
+    .onConflictDoNothing()
 
   // As telas leem o relógio para saber que dia é hoje. Sem congelá-lo, elas
   // pediriam a rodada do dia real e encontrariam um banco semeado para outro.
@@ -59,6 +67,22 @@ afterAll(async () => {
   vi.useRealTimers()
   await banco.fechar()
 })
+
+// ---------------------------------------------------------------------------
+// CONFERÊNCIA VISUAL (gate delegado da identidade 03): com CONFERENCIA=1, o
+// HTML real de cada tela é gravado para auditoria humana — o mesmo render
+// deste harness, sem simulação paralela. `.superpowers/` está no .gitignore.
+// ---------------------------------------------------------------------------
+async function gravarConferencia(nome: string, html: string) {
+  if (process.env.CONFERENCIA !== '1') return
+  const { mkdirSync, writeFileSync } = await import('node:fs')
+  const dir = '.superpowers/conferencia'
+  mkdirSync(dir, { recursive: true })
+  writeFileSync(
+    `${dir}/${nome}.html`,
+    `<!doctype html><meta charset="utf-8"><link href="https://fonts.googleapis.com/css2?family=Anton&family=Barlow:wght@400;600&family=Barlow+Condensed:wght@500;600;700&display=swap" rel="stylesheet"><style>:root{--fonte-anton:'Anton';--fonte-barlow:'Barlow';--fonte-barlow-condensed:'Barlow Condensed'}body{margin:0;background:#0B1220}</style><body>${html}`,
+  )
+}
 
 describe('Lista Secreta', () => {
   it('mostra um card por jogador e atributo, com o filtro de atributo', async () => {
@@ -74,6 +98,19 @@ describe('Lista Secreta', () => {
     // sozinha qual dos três apitos do jogador mostrar.
     expect(html).toMatch(/\/apito\/[0-9a-f-]+\?atributo=(PONTOS|REBOTES|ASSISTENCIAS)/)
     expect(html).not.toContain('Nenhuma entrada para hoje')
+  }, 60_000)
+
+  it('identidade 03: barrinhas, média no rodapé e nunca a palavra probabilidade', async () => {
+    const { default: Pagina } = await import('../(app)/page')
+    const html = renderToStaticMarkup(await Pagina({ searchParams: Promise.resolve({}) }))
+    await gravarConferencia('lista-secreta', html)
+
+    expect(html).toContain('ÚLT. 5 NA LINHA')
+    expect(html).toContain('MÉDIA')
+    expect(html.toLowerCase()).not.toContain('probabilidade')
+    // a tela veste o universo FRIO — o gradiente quente é só do Fire Live
+    expect(html).not.toContain('#241A2E')
+    expect(html).not.toContain('#241a2e')
   }, 60_000)
 
   it('o recorte por atributo devolve só aquele atributo', async () => {
@@ -218,6 +255,44 @@ describe('a rodada segue o fuso do cliente', () => {
   }, 60_000)
 })
 
+describe('Estatísticas — identidade 03 (conferência em lote)', () => {
+  it('as três telas vestem a identidade e o time mostra o boxscore por partida', async () => {
+    const { default: Indice } = await import('../(app)/estatisticas/page')
+    const htmlIndice = renderToStaticMarkup(await Indice({ searchParams: Promise.resolve({}) }))
+
+    const { jogadores } = await import('../../modules/dominio/db/schema')
+    const [umJogador] = await banco.db.select().from(jogadores).limit(1)
+    const { default: Jogador } = await import('../(app)/estatisticas/jogador/[id]/page')
+    const htmlJogador = renderToStaticMarkup(
+      await Jogador({ params: Promise.resolve({ id: umJogador!.id }) }),
+    )
+
+    const { times } = await import('../../modules/dominio/db/schema')
+    const [umTime] = await banco.db.select().from(times).limit(1)
+    const { default: Time } = await import('../(app)/estatisticas/time/[id]/page')
+    const htmlTime = renderToStaticMarkup(
+      await Time({ params: Promise.resolve({ id: umTime!.id }) }),
+    )
+
+    await gravarConferencia(
+      'estatisticas',
+      `${htmlIndice}<hr style="margin:40px 0">${htmlJogador}<hr style="margin:40px 0">${htmlTime}`,
+    )
+
+    // A identidade chega pela Moldura (gradiente) e pela tipografia
+    for (const html of [htmlIndice, htmlJogador, htmlTime]) {
+      expect(html).toContain('linear-gradient(175deg')
+      expect(html).toContain('var(--fonte-anton)')
+      expect(html).not.toContain('PROBABILIDADE')
+    }
+    // 2P% no perfil (proposta comercial) e o boxscore por partida no time
+    // (colunas 1º..4º + total — o rótulo da tela é ordinal, não 'Q1')
+    expect(htmlJogador).toContain('2P%')
+    expect(htmlTime).toContain('Pontos no 1º quarto')
+    expect(htmlTime).toContain('TOT')
+  }, 60_000)
+})
+
 describe('tela de Gestão de banca', () => {
   it('renderiza o plano do dia com o aviso de modelo de demonstração', async () => {
     const { default: Pagina } = await import('../(app)/gestao/page')
@@ -272,6 +347,29 @@ describe('a aba teórica', () => {
   }, 60_000)
 })
 
+describe('telas restantes — identidade 03 (conferência em lote)', () => {
+  it('resultados, gestão, como-funciona e entrar vestem o gradiente — e nada de universo quente', async () => {
+    const { default: Resultados } = await import('../(app)/resultados/page')
+    const { default: Gestao } = await import('../(app)/gestao/page')
+    const { default: ComoFunciona } = await import('../(app)/como-funciona/page')
+    const { default: Entrar } = await import('../(app)/entrar/page')
+
+    const htmls = [
+      renderToStaticMarkup(await Resultados()),
+      renderToStaticMarkup(await Gestao({ searchParams: Promise.resolve({}) })),
+      renderToStaticMarkup(await ComoFunciona()),
+      renderToStaticMarkup(await Entrar({ searchParams: Promise.resolve({}) })),
+    ]
+    await gravarConferencia('restante', htmls.join('<hr style="margin:40px 0">'))
+
+    for (const html of htmls) {
+      expect(html).toContain('linear-gradient(175deg')
+      expect(html).not.toContain('#241A2E')
+      expect(html).not.toContain('PROBABILIDADE')
+    }
+  }, 60_000)
+})
+
 describe('regras transversais da identidade', () => {
   it('nenhuma tela contém meio ponto, ALTÍSSIMO VALOR ou três pontos', async () => {
     const comSearchParams = ['../(app)/page', '../(app)/fire-live/page', '../(app)/gestao/page']
@@ -292,9 +390,76 @@ describe('regras transversais da identidade', () => {
   }, 60_000)
 })
 
+describe('Fire Live — identidade 03', () => {
+  it('universo quente, barra rumo ao alvo e jogador oculto some da tela', async () => {
+    const { lerFeedFireLive } = await import('../../modules/entrega/fire-live/leitura')
+    const ruleset = await rulesetAtivo()
+    const semRecorte = await lerFeedFireLive(banco.db, HOJE, ruleset.fire_live.quarto)
+    expect(semRecorte.itens.length).toBeGreaterThan(0)
+    const alvo = semRecorte.itens[0]!
+
+    const { default: Pagina } = await import('../(app)/fire-live/page')
+    const antes = renderToStaticMarkup(await Pagina({ searchParams: Promise.resolve({}) }))
+    await gravarConferencia('fire-live', antes)
+    // temperatura quente no card do fire live, mesmo sem modo fire
+    expect(antes).toContain('linear-gradient(135deg, #241A2E, #161226 55%)')
+    expect(antes).toContain('/ ') // contagem da BarraAlvo
+    // no card, o nome é LINK para as estatísticas do jogador
+    expect(antes).toContain(`${alvo.nome}</a>`)
+
+    const { jogadoresOcultos } = await import('../../modules/dominio/db/schema')
+    await banco.db
+      .insert(jogadoresOcultos)
+      .values({ usuarioId: USUARIO_DEMO, jogadorId: alvo.jogadorId })
+      .onConflictDoNothing()
+    try {
+      const depois = renderToStaticMarkup(await Pagina({ searchParams: Promise.resolve({}) }))
+      // o CARD do oculto sai (nome-link some); a seção de gestão entra, com o
+      // nome em texto plano e o desfazer
+      expect(depois).toContain('Jogadores ocultos')
+      expect(depois).not.toContain(`${alvo.nome}</a>`)
+      expect(depois).toContain(`${alvo.nome}</span>`)
+      expect(depois).toContain('mostrar de novo')
+    } finally {
+      const { eq: igual } = await import('drizzle-orm')
+      await banco.db.delete(jogadoresOcultos).where(igual(jogadoresOcultos.jogadorId, alvo.jogadorId))
+    }
+  }, 60_000)
+})
+
 // ===========================================================================
 // A FOTO ATRAVESSA AS DUAS TELAS (I3)
 // ===========================================================================
+
+describe('Detalhe do apito — identidade 03', () => {
+  it('hero frio, blocos no par das barrinhas e nunca a palavra probabilidade', async () => {
+    const { lerFeed } = await import('../../modules/entrega/lista-secreta')
+    const item = (await lerFeed(banco.db, HOJE))!.conteudo.itens.find((i) => i.linha !== null)!
+
+    const { default: Detalhe } = await import('../(app)/apito/[jogadorId]/page')
+    const html = renderToStaticMarkup(
+      await Detalhe({
+        params: Promise.resolve({ jogadorId: item.jogadorId }),
+        searchParams: Promise.resolve({ atributo: item.atributo }),
+      }),
+    )
+    await gravarConferencia('detalhe-apito', html)
+
+    // hero no universo frio da identidade 03
+    expect(html).toContain('linear-gradient(135deg, #16213A, #111A2E 55%)')
+    // blocos dos últimos 5 usam o PAR das barrinhas — nunca o verde categórico
+    // do apito nível 3, que significa outra coisa no mesmo produto
+    expect(html).toContain('#2FBF71')
+    // O anel/badge do Avatar PODE ser #3DD37E — é o canal do apito nível 3.
+    // O que não pode é o BLOCO de histórico (place-items… seguido do verde
+    // categórico), que era o defeito.
+    expect(html).not.toMatch(/place-items:center;background:#3DD37E/)
+    // A palavra só pode aparecer NEGADA (rodapé obrigatório: "não uma
+    // probabilidade de acerto"). Como RÓTULO, nunca.
+    expect(html).toContain('nota de confiança')
+    expect(html).not.toContain('PROBABILIDADE')
+  }, 60_000)
+})
 
 describe('a foto do jogador', () => {
   const FOTO = 'https://cdn.nba.com/headshots/nba/latest/1040x760/2544.png'
