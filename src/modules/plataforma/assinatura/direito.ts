@@ -19,32 +19,45 @@ export async function avaliarAcesso(
 ): Promise<ResultadoAcesso> {
   if (!usuarioId) return { permitido: false, motivo: 'sem-sessao' }
 
-  const [usuario] = await db
-    .select({ status: usuarios.status })
+  // UMA consulta, não duas. Eram dois SELECTs em sequência (o usuário, depois
+  // o direito) e toda tela autenticada pagava os dois. Numa cadeia que
+  // atravessa continente — função em iad1, banco em sa-east-1 — cada ida e
+  // volta custa ~150ms (ADR-0008).
+  //
+  // O LEFT JOIN preserva a distinção que importa: sem LINHA é usuário
+  // inexistente (sem-sessao, leva a /entrar); linha COM direito nulo é
+  // usuário sem assinatura (sem-direito-ativo, leva a /assinar). Colapsar os
+  // dois mandaria quem perdeu a sessão para a tela de pagamento.
+  const [linha] = await db
+    .select({
+      status: usuarios.status,
+      direitoId: direitosAcesso.id,
+      fim: direitosAcesso.fim,
+    })
     .from(usuarios)
-    .where(eq(usuarios.id, usuarioId))
-    .limit(1)
-  if (!usuario) return { permitido: false, motivo: 'sem-sessao' }
-  if (usuario.status === 'BLOQUEADO') {
-    return { permitido: false, motivo: 'bloqueio-administrativo' }
-  }
-
-  const [direito] = await db
-    .select({ id: direitosAcesso.id, fim: direitosAcesso.fim })
-    .from(direitosAcesso)
-    .where(
+    .leftJoin(
+      direitosAcesso,
       and(
-        eq(direitosAcesso.usuarioId, usuarioId),
+        eq(direitosAcesso.usuarioId, usuarios.id),
         eq(direitosAcesso.produto, produto),
         isNull(direitosAcesso.revogadoEm),
         lte(direitosAcesso.inicio, agora),
         or(isNull(direitosAcesso.fim), gt(direitosAcesso.fim, agora)),
       ),
     )
+    .where(eq(usuarios.id, usuarioId))
     .limit(1)
 
-  return direito
-    ? { permitido: true, direitoId: direito.id, validoAte: direito.fim }
+  if (!linha) return { permitido: false, motivo: 'sem-sessao' }
+  // A ORDEM é regra de negócio (Spec 04, princípio 4): bloqueio administrativo
+  // prevalece sobre direito vigente. Com as duas informações chegando juntas,
+  // quem responde primeiro passou a ser escolha explícita do código.
+  if (linha.status === 'BLOQUEADO') {
+    return { permitido: false, motivo: 'bloqueio-administrativo' }
+  }
+
+  return linha.direitoId
+    ? { permitido: true, direitoId: linha.direitoId, validoAte: linha.fim }
     : { permitido: false, motivo: 'sem-direito-ativo' }
 }
 

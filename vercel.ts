@@ -12,29 +12,21 @@ import type { VercelConfig } from '@vercel/config/v1'
 export const config: VercelConfig = {
   framework: 'nextjs',
   /**
-   * A FUNÇÃO RODA ONDE O BANCO ESTÁ.
+   * REGIÃO DA FUNÇÃO — NÃO configurável neste plano. Ver ADR-0008.
    *
-   * `gru1` é São Paulo (sa-east-1) — a mesma região do Neon
-   * (`...sa-east-1.aws.neon.tech`). Sem esta linha a Vercel usa o padrão
-   * `iad1` (Washington), e foi o que estava em produção: o cabeçalho
-   * `x-vercel-id: gru1::iad1` mostrava a requisição entrando em São Paulo e
-   * a função executando nos EUA.
+   * A função executa em `iad1` (Washington), padrão da Vercel, enquanto o
+   * Neon vive em `sa-east-1` (São Paulo). Cada consulta atravessa o
+   * continente, e cada tela autenticada faz de 4 a 6 em sequência. Medido em
+   * 25/08 na mesma função e mesma região, variando só o número de consultas:
    *
-   * O custo disso não é uma travessia por página, é uma POR CONSULTA. Cada
-   * tela autenticada faz de 4 a 6 consultas em sequência (validar sessão,
-   * conferir direito, ler o feed), e a medição de 25/08 mostrou o TTFB
-   * acompanhando o número delas:
+   *   /entrar   0 consultas   ~200ms
+   *   /gestao   5 consultas  ~1000ms
    *
-   *   /offline      0 consultas    ~78ms
-   *   /estatisticas poucas        ~430ms
-   *   /gestao       cadeia toda   ~920ms
-   *
-   * Da mesma região, cada ida e volta cai de ~130ms para a casa de 10ms.
-   *
-   * Hobby permite UMA região (Pro, 5). Se o banco mudar de região, esta linha
-   * muda junto — é a única coisa que as mantém casadas.
+   * A correção óbvia seria `regions: ['gru1']`. Ela NÃO está aqui porque a
+   * Vercel bloqueia o deploy antes do build neste plano — testado com 'gru1'
+   * e com 'iad1', ambos "Deployment was blocked"; sem a chave, passa.
+   * O caminho que funciona hoje é mover o BANCO para us-east-1. ADR-0008.
    */
-  regions: ['gru1'],
   functions: {
     'src/app/api/fila/push/route.ts': {
       experimentalTriggers: [
