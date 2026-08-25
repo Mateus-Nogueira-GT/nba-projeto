@@ -12,25 +12,26 @@ import type { VercelConfig } from '@vercel/config/v1'
 export const config: VercelConfig = {
   framework: 'nextjs',
   /**
-   * REGIÃO DA FUNÇÃO — a chave que falta aqui. Ver ADR-0008.
+   * A FUNÇÃO RODA ONDE O BANCO ESTÁ. Ver ADR-0008.
    *
-   * A função executa em `iad1` (Washington), padrão da Vercel, enquanto o
-   * Neon vive em `sa-east-1` (São Paulo). Cada consulta atravessa o
-   * continente, e cada tela autenticada faz de 4 a 6 em sequência. Medido em
-   * 25/08 na MESMA função e MESMA região, variando só o número de consultas:
+   * `gru1` é São Paulo (sa-east-1) — a mesma região do Neon
+   * (`...sa-east-1.aws.neon.tech`). Sem esta chave a Vercel usa `iad1`
+   * (Washington) por padrão, e era o que estava em produção: o cabeçalho
+   * `x-vercel-id: gru1::iad1` mostrava a requisição entrando em São Paulo e
+   * a função executando nos EUA.
+   *
+   * O custo disso não é uma travessia por página, é uma POR CONSULTA. Medido
+   * em 25/08 na MESMA função e MESMA região, variando só o número delas:
    *
    *   /entrar   0 consultas   ~200ms
    *   /gestao   5 consultas  ~1000ms
    *
-   * A correção é `regions: ['gru1']`. Ela não está aqui porque não foi
-   * possível VALIDAR: no dia em que se tentou, a conta passou a recusar todo
-   * deploy com `Deployment was blocked` — inclusive um deploy de controle sem
-   * a chave. Não se sabe se o plano aceita a chave; sabe-se que naquele
-   * momento nada subia.
+   * Da mesma região, cada ida e volta cai de ~150ms para a casa de 2ms.
    *
-   * Quando o deploy voltar: tentar `regions: ['gru1']` PRIMEIRO. Se o plano
-   * recusar, o caminho alternativo é mover o banco para us-east-1 (ADR-0008).
+   * Se o banco mudar de região, esta linha muda junto — é a única coisa que
+   * mantém as duas casadas.
    */
+  regions: ['gru1'],
   functions: {
     'src/app/api/fila/push/route.ts': {
       experimentalTriggers: [
