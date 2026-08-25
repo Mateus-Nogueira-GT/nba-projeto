@@ -7,7 +7,7 @@ import type { FiltroFireLive, PlacarAoVivo } from '@/modules/entrega/fire-live/l
 import type { EstadoVazio } from '@/modules/entrega/fire-live/leitura'
 import { rulesetAtivo } from '@/modules/entrega/ruleset-ativo'
 import { rotaDoJogador } from '@/modules/entrega/estatisticas/rotas'
-import { CardEntrada } from '@/design-system/componentes'
+import { CardEntrada, PlacarMini } from '@/design-system/componentes'
 import { semantico } from '@/design-system/tokens/semantico'
 import { sessaoAtual } from '@/modules/plataforma/auth/cookies'
 import { avaliarAcesso } from '@/modules/plataforma/assinatura/direito'
@@ -66,72 +66,6 @@ function TextoVazio({
     >
       <p style={{ margin: 0, fontWeight: 700 }}>{t.titulo}</p>
       <p style={{ margin: '8px 0 0', fontSize: 14, color: semantico.textoSecundario }}>{t.corpo}</p>
-    </div>
-  )
-}
-
-/**
- * Mini-placar do jogo ao vivo — sempre 1º quarto (a única janela em que esta
- * grade existe). O ponto pulsante é redundante com o texto "ao vivo" ao lado
- * — nunca o único sinal — e para de piscar sozinho quando o navegador pede
- * menos movimento (`globals.css`).
- */
-function PlacarMini({ placar }: { placar: PlacarAoVivo }) {
-  return (
-    <div
-      style={{
-        padding: '10px 14px',
-        borderRadius: 12,
-        border: `1px solid ${semantico.divisor}`,
-        background: semantico.superficie,
-      }}
-    >
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 6,
-          fontFamily: semantico.fonteRotulo,
-          fontSize: 11,
-          letterSpacing: 1.5,
-          textTransform: 'uppercase',
-          color: semantico.textoSecundario,
-        }}
-      >
-        <span>1º Q</span>
-        <span
-          aria-hidden
-          className="ponto-ao-vivo"
-          style={{
-            display: 'inline-block',
-            width: 6,
-            height: 6,
-            borderRadius: '50%',
-            background: semantico.aoVivo,
-          }}
-        />
-        <span style={{ color: semantico.aoVivo }}>ao vivo</span>
-      </div>
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'baseline',
-          justifyContent: 'space-between',
-          gap: 14,
-          marginTop: 4,
-          fontFamily: semantico.fonteTitulo,
-          fontSize: 20,
-          letterSpacing: 0.5,
-        }}
-      >
-        <span>
-          {placar.casaSigla} {placar.casaPlacar}
-        </span>
-        <span style={{ fontSize: 13, color: semantico.textoSecundario }}>×</span>
-        <span>
-          {placar.visitanteSigla} {placar.visitantePlacar}
-        </span>
-      </div>
     </div>
   )
 }
