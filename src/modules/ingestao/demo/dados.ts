@@ -26,8 +26,89 @@ function semente(nome: string): number {
 const POSICOES = ['G', 'F', 'C'] as const
 export type Posicao = (typeof POSICOES)[number]
 
+/**
+ * NOME DE EXIBIÇÃO — só a caixa alta inicial, nunca a grafia.
+ *
+ * O documento do CJ traz "stephen Curry" e "podzienki" em minúscula. Exibir
+ * isso num produto lê-se como banco de dados quebrado, mas CORRIGIR a grafia
+ * seria inventar identidade que o cliente não definiu: "Porzigins" e
+ * "Kesller" continuam como ele escreveu — são pergunta para o CJ, não palpite
+ * nosso (regra 3 do projeto).
+ *
+ * Só sobe a primeira letra de palavras INTEIRAMENTE minúsculas. Palavra com
+ * maiúscula no meio já foi escrita com intenção e passa intacta — é o que
+ * salva "LeBron" de virar "Lebron".
+ */
+export function nomeDeExibicao(nome: string): string {
+  return nome
+    .split(' ')
+    .map((palavra) =>
+      palavra.length > 0 && palavra === palavra.toLowerCase()
+        ? palavra[0]!.toUpperCase() + palavra.slice(1)
+        : palavra,
+    )
+    .join(' ')
+}
+
+/**
+ * POSIÇÃO REAL dos jogadores nomeados pelo CJ.
+ *
+ * Fato canônico da NBA, não estratégia — a mesma fronteira que faz a aba de
+ * estatísticas usar `jogadores.time_id` em vez da lista curada. O hash abaixo
+ * é determinístico mas cego: escalava o Curry de pivô e o Giannis de armador,
+ * e um cliente que conhece basquete lê isso como banco de dados errado.
+ *
+ * A grafia da chave é a do documento do CJ, minúscula — é por ela que o
+ * jogador chega aqui. Quem não estiver na tabela cai no hash, que continua
+ * servindo para os nomes que ninguém reconhece.
+ */
+const POSICAO_REAL: Record<string, Posicao> = {
+  'stephen curry': 'G',
+  shai: 'G',
+  'jamal murray': 'G',
+  brunson: 'G',
+  'austin reaves': 'G',
+  grimes: 'G',
+  'luka doncic': 'G',
+  giannis: 'F',
+  jokic: 'C',
+  tatum: 'F',
+  'lebron james': 'F',
+  butler: 'F',
+  green: 'F',
+  gordon: 'F',
+  towns: 'C',
+  porzigins: 'F',
+  nurkic: 'C',
+}
+
 export function posicaoDe(nome: string): Posicao {
-  return POSICOES[semente(nome) % POSICOES.length]!
+  return POSICAO_REAL[nome.toLowerCase()] ?? POSICOES[semente(nome) % POSICOES.length]!
+}
+
+/**
+ * A RODADA DO DIA — rodízio round-robin (método do círculo).
+ *
+ * O histórico da demo repetia os MESMOS quatro confrontos todo dia: o GSW
+ * enfrentava o BOS sete vezes seguidas, duas delas com placar idêntico. Uma
+ * temporada assim não existe, e é a primeira coisa que um cliente nota ao
+ * abrir a tela do time.
+ *
+ * Fixa o primeiro time e gira os demais: cada rodada emparelha os oito times
+ * com adversários diferentes, sem repetir confronto dentro de sete rodadas.
+ * Determinístico — mesma rodada, mesmos pares, sempre.
+ */
+export function rodadaDoDia(times: readonly string[], rodada: number): [string, string][] {
+  if (times.length < 2 || times.length % 2 !== 0) {
+    throw new Error(`rodadaDoDia exige um número PAR de times (recebeu ${times.length})`)
+  }
+  const [fixo, ...giro] = times
+  const n = giro.length
+  const na = (i: number) => giro[(((i + rodada) % n) + n) % n]!
+
+  const pares: [string, string][] = [[fixo!, na(0)]]
+  for (let k = 1; k < times.length / 2; k++) pares.push([na(k), na(n - k)])
+  return pares
 }
 
 export type MediaDemo = { ppg: number; rpg: number; apg: number }

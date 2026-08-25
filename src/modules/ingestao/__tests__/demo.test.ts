@@ -156,7 +156,9 @@ describe('semearDemo (PGlite, banco vazio)', () => {
     // Suporte com 2 jogos → laranja (o doc proíbe Suporte de apitar no nível 1)
     expect(itens.find((i) => i.nome === 'LeBron James')?.nivelApito).toBe(2)
     // MVP com 3 jogos → verde, e o turbo do documento
-    const curry = itens.find((i) => i.nome === 'stephen Curry')
+    // O feed mostra o nome de EXIBIÇÃO: o documento do CJ traz "stephen" em
+    // minúscula e a demo sobe só a inicial (sem tocar na grafia).
+    const curry = itens.find((i) => i.nome === 'Stephen Curry')
     expect(curry?.nivelApito).toBe(3)
     expect(curry?.turbo).toBe(true)
   })

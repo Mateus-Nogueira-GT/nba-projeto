@@ -31,7 +31,15 @@ import { ATRIBUTOS } from '../../motor/tipos'
 import type { Atributo } from '../../motor/tipos'
 import { lerListaDeNiveis } from '../niveis/parser'
 import { importarListaDeNiveis } from '../niveis/importar'
-import { decomporPontos, historicoOscilacao, mediaDe, niveisDoJogador, posicaoDe } from './dados'
+import {
+  decomporPontos,
+  historicoOscilacao,
+  mediaDe,
+  niveisDoJogador,
+  nomeDeExibicao,
+  posicaoDe,
+  rodadaDoDia,
+} from './dados'
 
 export const ARQUIVO_LISTA = 'data/fontes/introducao-ia-nba.md'
 const PROVEDOR_DEMO = 'demo'
@@ -82,27 +90,32 @@ export async function semearDemo(db: Db, ruleset: Ruleset, agora: Date): Promise
   }
   const timePorSigla = new Map((await db.select().from(times)).map((t) => [t.sigla, t.id] as const))
 
+  // A CHAVE é o nome do CJ em caixa baixa, não o nome gravado. `nomeCompleto`
+  // recebe a versão de exibição ("Stephen Curry"), então casar por igualdade
+  // exata faria a REEXECUÇÃO inserir todo mundo de novo — o seed precisa ser
+  // idempotente (o cron diário o reexecuta).
+  const chaveDeNome = (nome: string) => nome.toLowerCase()
   const jaExistentes = new Map(
-    (await db.select().from(jogadores)).map((j) => [j.nomeCompleto, j.id] as const),
+    (await db.select().from(jogadores)).map((j) => [chaveDeNome(j.nomeCompleto), j.id] as const),
   )
   for (const j of analise.jogadores) {
-    if (jaExistentes.has(j.nomeNaLista)) continue
+    if (jaExistentes.has(chaveDeNome(j.nomeNaLista))) continue
     const timeId = j.timeSigla ? timePorSigla.get(j.timeSigla) : undefined
     const [novo] = await db
       .insert(jogadores)
       .values({
-        nomeCompleto: j.nomeNaLista,
+        nomeCompleto: nomeDeExibicao(j.nomeNaLista),
         // ATENÇÃO: jogadores.time_id é o time REAL do provedor e alimenta a aba
         // de estatísticas. Na demo não há provedor, então espelha a lista.
         timeId: timeId ?? null,
         posicao: posicaoDe(j.nomeNaLista),
       })
       .returning()
-    if (novo) jaExistentes.set(j.nomeNaLista, novo.id)
+    if (novo) jaExistentes.set(chaveDeNome(j.nomeNaLista), novo.id)
   }
 
   for (const j of analise.jogadores) {
-    const jogadorId = jaExistentes.get(j.nomeNaLista)
+    const jogadorId = jaExistentes.get(chaveDeNome(j.nomeNaLista))
     if (!jogadorId) continue
     await db
       .insert(mapaJogadores)
@@ -134,7 +147,7 @@ export async function semearDemo(db: Db, ruleset: Ruleset, agora: Date): Promise
   //      este bloco desaparece.
   const niveisDerivados: (typeof niveis.$inferInsert)[] = []
   for (const j of analise.jogadores) {
-    const jogadorId = jaExistentes.get(j.nomeNaLista)
+    const jogadorId = jaExistentes.get(chaveDeNome(j.nomeNaLista))
     const timeId = j.timeSigla ? timePorSigla.get(j.timeSigla) : undefined
     if (!jogadorId || !timeId) continue
 
@@ -157,7 +170,10 @@ export async function semearDemo(db: Db, ruleset: Ruleset, agora: Date): Promise
 
   // 2 · Médias da temporada — a MESMA que montarFatos vai consultar.
   const temporada = temporadaDe(agora, calendarioDoRuleset(ruleset))
-  const nivelPorNome = new Map(analise.jogadores.map((j) => [j.nomeNaLista, j.nivel] as const))
+  // Chaveado como `jaExistentes` — o laço abaixo itera as CHAVES dele.
+  const nivelPorNome = new Map(
+    analise.jogadores.map((j) => [chaveDeNome(j.nomeNaLista), j.nivel] as const),
+  )
   for (const [nome, jogadorId] of jaExistentes) {
     const nivel = nivelPorNome.get(nome)
     if (!nivel) continue
@@ -259,13 +275,19 @@ export async function semearDemo(db: Db, ruleset: Ruleset, agora: Date): Promise
     ['MIA', 'NYK'],
   ]
 
+  // O HISTÓRICO gira os adversários (round-robin). Antes eram os mesmos quatro
+  // confrontos todo dia: o GSW enfrentava o BOS sete vezes seguidas, duas com
+  // placar idêntico. A rodada de HOJE segue em CONFRONTOS — ela está ancorada
+  // nos exemplos do documento (OKC × DEN ao vivo, Luka fora em LAL × PHI).
+  const TIMES_DA_DEMO = CONFRONTOS.flat()
+
   const DIAS = 6
   for (let i = 1; i <= DIAS; i++) {
     const dia = new Date(agora.getTime() - i * 24 * 60 * 60_000)
     const diaRef = somarDias(dataReferencia, -i)
 
     const jogoDoTime = new Map<string, string>()
-    for (const [casa, visitante] of CONFRONTOS) {
+    for (const [casa, visitante] of rodadaDoDia(TIMES_DA_DEMO, i)) {
       const jogoId = await criarJogo(casa, visitante, dia, diaRef, { status: 'ENCERRADO' })
       if (jogoId === null) continue
       jogoDoTime.set(casa, jogoId)
@@ -274,11 +296,11 @@ export async function semearDemo(db: Db, ruleset: Ruleset, agora: Date): Promise
 
     for (const j of analise.jogadores) {
       const nome = j.nomeNaLista
-      const jogadorId = jaExistentes.get(nome)
+      const jogadorId = jaExistentes.get(chaveDeNome(nome))
       const jogoId = j.timeSigla === null ? undefined : jogoDoTime.get(j.timeSigla)
       if (jogadorId === undefined || jogoId === undefined) continue
 
-      const nivelPontos = nivelPorNome.get(nome)
+      const nivelPontos = nivelPorNome.get(chaveDeNome(nome))
       if (!nivelPontos) continue
 
       const derivados = niveisDoJogador(nome, nivelPontos)
@@ -345,7 +367,7 @@ export async function semearDemo(db: Db, ruleset: Ruleset, agora: Date): Promise
   const jogoOpd = jogosDeHoje.get('LAL|PHI') ?? null
 
   // Luka FORA — o exemplo literal da OPD no documento do CJ.
-  const lukaId = jaExistentes.get('Luka Doncic')
+  const lukaId = jaExistentes.get(chaveDeNome('Luka Doncic'))
   if (jogoOpd && lukaId) {
     await db
       .insert(lesoesEscalacao)
@@ -370,7 +392,7 @@ export async function semearDemo(db: Db, ruleset: Ruleset, agora: Date): Promise
 
     for (const j of analise.jogadores) {
       if (j.timeSigla !== 'OKC' && j.timeSigla !== 'DEN') continue
-      const jogadorId = jaExistentes.get(j.nomeNaLista)
+      const jogadorId = jaExistentes.get(chaveDeNome(j.nomeNaLista))
       if (jogadorId === undefined) continue
 
       const m = mediaDe(j.nomeNaLista, j.nivel)
@@ -505,6 +527,10 @@ export async function semearDemo(db: Db, ruleset: Ruleset, agora: Date): Promise
   //      a demo nunca escrevia: toda partida encerrada aparecia com quartos,
   //      REB, AST e percentuais em "—". Derivado da soma dos jogadores.
   const boxScoresDeTime = await semearBoxScoreDoTime(db, agora)
+
+  // 6e · A média da temporada nascia com `jogos: 40` fixo e o perfil anunciava
+  //      "40 jogos" sobre um histórico de uma semana. Contado, não digitado.
+  await corrigirJogosDisputados(db)
 
   // 7 · Classificação da temporada — a campanha que a tela do TIME mostra
   //     (posição, vitórias, derrotas, sequência). Sem ela o cliente abre o
@@ -719,6 +745,36 @@ async function semearPlacares(db: Db): Promise<number> {
        and casa.jogo_id = j.id and casa.time_id = j.time_casa_id
        and fora.jogo_id = j.id and fora.time_id = j.time_visitante_id
     returning j.id
+  `)
+  const linhas = Array.isArray(resultado)
+    ? (resultado as unknown[])
+    : ((resultado as { rows?: unknown[] }).rows ?? [])
+  return linhas.length
+}
+
+/**
+ * JOGOS DISPUTADOS na média da temporada — derivado, nunca digitado.
+ *
+ * A média nascia com `jogos: 40` fixo enquanto o histórico semeado tem uma
+ * semana. O perfil do jogador anunciava "Perfil da temporada · 40 jogos" e
+ * logo abaixo listava 7 partidas: dois números da MESMA tela se contradizendo.
+ *
+ * Conta o que a demo realmente gravou. Se `DIAS` mudar, o número acompanha.
+ */
+async function corrigirJogosDisputados(db: Db): Promise<number> {
+  const resultado = await db.execute(sql`
+    update medias_jogador m
+       set jogos = c.n
+      from (
+        select ej.jogador_id, count(*)::int as n
+          from estatisticas_jogo ej
+          join jogos j on j.id = ej.jogo_id and j.status = 'ENCERRADO'
+         group by 1
+      ) c
+     where c.jogador_id = m.jogador_id
+       and m.janela = 'TEMPORADA'
+       and m.jogos is distinct from c.n
+    returning m.id
   `)
   const linhas = Array.isArray(resultado)
     ? (resultado as unknown[])
