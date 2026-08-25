@@ -45,59 +45,59 @@ Rodando a mesma cadeia a partir da região do banco, ela custa **178 ms no total
 
 ## Decisão
 
-**Colocar função e banco na mesma região.** Qual das duas se move depende de uma
-resposta que ainda não temos.
+**Mover a FUNÇÃO para São Paulo** — `regions: ['gru1']` no `vercel.ts`.
 
-**Caminho A — mover a FUNÇÃO para São Paulo** (`regions: ['gru1']` no `vercel.ts`).
-É o melhor destino: aproxima a função do banco E dos usuários, matando as duas
-latências de uma vez. A documentação da Vercel lista "Hobby · single region", o que
-sugere que uma região é configurável.
+É o melhor destino possível: aproxima a função do banco E dos usuários, matando as
+duas latências de uma vez. Nenhum dado sai do Brasil.
 
-**Caminho B — mover o BANCO para `us-east-1`**, ao lado da função. Não exige nada do
-plano. Resolve as cinco travessias de consulta, mas mantém os ~200ms de ida e volta
-da requisição do usuário.
+A alternativa seria mover o banco para `us-east-1`, ao lado da função. Resolve as
+cinco travessias de consulta, mas mantém os ~200 ms da requisição do usuário e tira
+os dados do país. Fica registrada como plano B, não como escolha.
 
-**Testar o A primeiro**: é gratuito tentar e estritamente melhor se passar.
+### O caminho até aqui (duas atribuições erradas, para não se repetirem)
 
-### O que NÃO se sabe, e por quê
+A chave `regions` foi aplicada em 25/08 e o deploy voltou `Deployment was blocked`.
 
-Tentou-se o caminho A em 25/08 e o deploy foi recusado com `Deployment was blocked`.
-A leitura imediata foi "o plano recusa a chave `regions`" — e ela estava **errada**.
-Um deploy de controle, sem a chave, falhou igual:
+**Primeira leitura, errada:** "o plano recusa a chave". Um deploy de controle **sem**
+a chave falhou igual, então a chave não era a causa.
 
-| Horário (UTC) | `regions` | Resultado |
-| --- | --- | --- |
-| até 12:31 | ausente | deploy ok |
-| 15:54 | `['gru1']` | `Deployment was blocked` |
-| 15:55 | `['iad1']` | `Deployment was blocked` |
-| 16:02 | ausente | `Deployment was blocked` |
+**Segunda leitura, errada:** "a conta atingiu algum limite". O histórico completo de
+status do commit no GitHub — e não só o status mais recente — trazia a mensagem real:
 
-O corte é **temporal, não causal**: a partir de ~15:54 UTC todo deploy do projeto é
-bloqueado, com ou sem a chave. A mudança de região foi só o primeiro push depois do
-corte, o que a fez parecer culpada.
+```
+Git author Mateus-Nogueira-GT must have access to the project
+on Vercel to create deployments.
+```
 
-`Deployment was blocked` é bloqueio de CONTA, não de build (ele acontece antes do
-build). As causas típicas são limite de uso do plano atingido, limite de gasto ou
-pausa administrativa do projeto — nenhuma delas visível pela API pública do GitHub.
+**A causa real:** a Vercel verifica o AUTOR do commit. Os commits são assinados com
+`mateusnnogueira451@gmail.com`, que o GitHub resolve para o usuário
+`Mateus-Nogueira-GT`; essa identidade não tem acesso ao projeto na Vercel (escopo
+`plus-green`). Sem isso, nenhum deploy por Git é criado — o build sequer começa.
 
-**Portanto:** enquanto o bloqueio da conta não for resolvido no painel da Vercel,
-não dá para afirmar se `regions: ['gru1']` funciona neste plano. A chave está fora
-do `vercel.ts` porque não foi possível validá-la, não porque foi reprovada.
+Nada disso tem relação com região, plano ou limite de uso. A lição de método: o
+GitHub guarda VÁRIOS status por commit e a API devolve o mais recente por padrão;
+`/statuses` (plural) mostrou a mensagem específica que `/status` escondia.
+
+**Consequência prática:** a região configurada aqui só entra em vigor quando o
+acesso do autor for resolvido no painel da Vercel — ou quando um deploy for
+disparado pelo próprio dono da conta (botão *Redeploy*, ou `vercel deploy` pela
+CLI), que não passa pela verificação de autor.
 
 ## Consequências
 
-**Caminho A (função em São Paulo).** As cinco consultas passam a custar ~2 ms cada
-e a requisição deixa de atravessar o Atlântico. TTFB previsto na casa dos
-**60–100 ms**. Nenhum dado sai do Brasil.
+**Com a função em São Paulo.** As cinco consultas passam a custar ~2 ms cada e a
+requisição deixa de atravessar o Atlântico. TTFB previsto na casa dos
+**60–100 ms**, contra ~1000 ms hoje.
 
-**Caminho B (banco nos EUA).** As cinco consultas passam a custar ~2 ms cada, mas os
+**Se um dia o plano recusar a região** (não foi possível verificar), o plano B é o
+banco nos EUA: As cinco consultas passam a custar ~2 ms cada, mas os
 ~200 ms de travessia da requisição continuam. TTFB previsto **~210 ms** — o piso que
 `/entrar` já demonstra hoje. Em troca, **os dados saem do Brasil**: não há dado
 sensível no modelo (e-mail, hash de senha, preferências), mas é decisão de
 tratamento de dados, não só de latência, e vale registrar antes de existir
 assinante pagante.
 
-**Custo da migração (só no caminho B).** Baixo hoje, alto depois. O banco atual é quase todo
+**Custo da migração (só no plano B).** Baixo hoje, alto depois. O banco atual é quase todo
 demonstração, reconstruível por `npm run demo:seed`. O que precisa viajar de
 verdade são `usuarios`, `direitos_acesso` e `push_inscricoes` — poucas linhas. Essa
 janela fecha quando entrar o primeiro assinante pagante.
