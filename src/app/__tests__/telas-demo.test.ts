@@ -60,6 +60,22 @@ afterAll(async () => {
   await banco.fechar()
 })
 
+// ---------------------------------------------------------------------------
+// CONFERÊNCIA VISUAL (gate delegado da identidade 03): com CONFERENCIA=1, o
+// HTML real de cada tela é gravado para auditoria humana — o mesmo render
+// deste harness, sem simulação paralela. `.superpowers/` está no .gitignore.
+// ---------------------------------------------------------------------------
+async function gravarConferencia(nome: string, html: string) {
+  if (process.env.CONFERENCIA !== '1') return
+  const { mkdirSync, writeFileSync } = await import('node:fs')
+  const dir = '.superpowers/conferencia'
+  mkdirSync(dir, { recursive: true })
+  writeFileSync(
+    `${dir}/${nome}.html`,
+    `<!doctype html><meta charset="utf-8"><link href="https://fonts.googleapis.com/css2?family=Anton&family=Barlow:wght@400;600&family=Barlow+Condensed:wght@500;600;700&display=swap" rel="stylesheet"><style>:root{--fonte-anton:'Anton';--fonte-barlow:'Barlow';--fonte-barlow-condensed:'Barlow Condensed'}body{margin:0;background:#0B1220}</style><body>${html}`,
+  )
+}
+
 describe('Lista Secreta', () => {
   it('mostra um card por jogador e atributo, com o filtro de atributo', async () => {
     const { default: Pagina } = await import('../(app)/page')
@@ -74,6 +90,19 @@ describe('Lista Secreta', () => {
     // sozinha qual dos três apitos do jogador mostrar.
     expect(html).toMatch(/\/apito\/[0-9a-f-]+\?atributo=(PONTOS|REBOTES|ASSISTENCIAS)/)
     expect(html).not.toContain('Nenhuma entrada para hoje')
+  }, 60_000)
+
+  it('identidade 03: barrinhas, média no rodapé e nunca a palavra probabilidade', async () => {
+    const { default: Pagina } = await import('../(app)/page')
+    const html = renderToStaticMarkup(await Pagina({ searchParams: Promise.resolve({}) }))
+    await gravarConferencia('lista-secreta', html)
+
+    expect(html).toContain('ÚLT. 5 NA LINHA')
+    expect(html).toContain('MÉDIA')
+    expect(html.toLowerCase()).not.toContain('probabilidade')
+    // a tela veste o universo FRIO — o gradiente quente é só do Fire Live
+    expect(html).not.toContain('#241A2E')
+    expect(html).not.toContain('#241a2e')
   }, 60_000)
 
   it('o recorte por atributo devolve só aquele atributo', async () => {

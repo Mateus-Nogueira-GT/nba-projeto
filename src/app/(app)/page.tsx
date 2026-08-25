@@ -99,28 +99,11 @@ function Filtros({ atual, base }: { atual: number; base: string }) {
       aria-label="Quantidade de entradas"
       style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}
     >
-      {QUANTIDADES.map((n) => {
-        const ativo = n === atual
-        return (
-          <Link
-            key={n}
-            href={`${base}?quantidade=${n}`}
-            aria-current={ativo ? 'page' : undefined}
-            style={{
-              padding: '6px 14px',
-              borderRadius: 999,
-              fontSize: 13,
-              fontWeight: ativo ? 700 : 500,
-              textDecoration: 'none',
-              color: ativo ? semantico.textoSobreCor : semantico.textoPrimario,
-              background: ativo ? semantico.textoPrimario : semantico.superficie,
-              border: `1px solid ${semantico.divisor}`,
-            }}
-          >
-            {rotuloQuantidade(n)}
-          </Link>
-        )
-      })}
+      {QUANTIDADES.map((n) => (
+        <Chip key={n} href={`${base}?quantidade=${n}`} ativo={n === atual}>
+          {rotuloQuantidade(n)}
+        </Chip>
+      ))}
     </nav>
   )
 }
@@ -383,6 +366,11 @@ export default async function PaginaListaSecreta({
                 modoFire={item.modoFire}
                 opdOrigemNivel={item.opdOrigemNivel}
                 alvo1Q={item.alvo1Q}
+                // Contexto materializado da identidade 03 — o card mostra
+                // barrinhas, média e odd sem nenhuma consulta da tela.
+                ultimos5={item.ultimos5 ?? []}
+                mediaTemporada={item.mediaTemporada ?? null}
+                oddFaixa={item.oddFaixa ?? null}
               />
               <p style={{ margin: '4px 0 0', fontSize: 12 }}>
                 <Link

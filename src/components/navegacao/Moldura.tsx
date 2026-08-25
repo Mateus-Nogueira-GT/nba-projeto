@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 
+import { componente } from '@/design-system/tokens/componente'
 import { semantico } from '@/design-system/tokens/semantico'
 
 import { BarraInferior, type Aba } from './BarraInferior'
@@ -23,11 +24,12 @@ export function Moldura({
     <>
       <main
         style={{
-          background: semantico.fundo,
+          // Identidade 03: fim do fundo chapado — a tela respira num gradiente.
+          background: componente.fundoTela,
           color: semantico.textoPrimario,
           minHeight: '100vh',
           padding: aba === null ? '24px 16px 64px' : '24px 16px 96px',
-          fontFamily: 'system-ui, sans-serif',
+          fontFamily: semantico.fonteCorpo,
         }}
       >
         <div style={{ maxWidth: 640, margin: '0 auto' }}>{children}</div>

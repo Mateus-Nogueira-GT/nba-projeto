@@ -120,9 +120,10 @@ export function Chip({
         letterSpacing: 1,
         textTransform: 'uppercase',
         textDecoration: 'none',
-        color: ativo ? semantico.acento : semantico.textoSecundario,
+        fontWeight: ativo ? 700 : 600,
+        color: ativo ? semantico.textoSobreCor : semantico.textoSecundario,
         border: `1.5px solid ${ativo ? semantico.acento : semantico.divisor}`,
-        background: 'transparent',
+        background: ativo ? semantico.acento : 'transparent',
       }}
     >
       {children}
