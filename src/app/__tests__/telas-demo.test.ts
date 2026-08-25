@@ -347,6 +347,29 @@ describe('a aba teórica', () => {
   }, 60_000)
 })
 
+describe('telas restantes — identidade 03 (conferência em lote)', () => {
+  it('resultados, gestão, como-funciona e entrar vestem o gradiente — e nada de universo quente', async () => {
+    const { default: Resultados } = await import('../(app)/resultados/page')
+    const { default: Gestao } = await import('../(app)/gestao/page')
+    const { default: ComoFunciona } = await import('../(app)/como-funciona/page')
+    const { default: Entrar } = await import('../(app)/entrar/page')
+
+    const htmls = [
+      renderToStaticMarkup(await Resultados()),
+      renderToStaticMarkup(await Gestao({ searchParams: Promise.resolve({}) })),
+      renderToStaticMarkup(await ComoFunciona()),
+      renderToStaticMarkup(await Entrar({ searchParams: Promise.resolve({}) })),
+    ]
+    await gravarConferencia('restante', htmls.join('<hr style="margin:40px 0">'))
+
+    for (const html of htmls) {
+      expect(html).toContain('linear-gradient(175deg')
+      expect(html).not.toContain('#241A2E')
+      expect(html).not.toContain('PROBABILIDADE')
+    }
+  }, 60_000)
+})
+
 describe('regras transversais da identidade', () => {
   it('nenhuma tela contém meio ponto, ALTÍSSIMO VALOR ou três pontos', async () => {
     const comSearchParams = ['../(app)/page', '../(app)/fire-live/page', '../(app)/gestao/page']

@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 import Link from 'next/link'
 
 import { BarraInferior, type Aba } from '@/components/navegacao'
+import { componente } from '@/design-system/tokens/componente'
 import { semantico } from '@/design-system/tokens/semantico'
 
 export function MolduraConta({
@@ -24,10 +25,10 @@ export function MolduraConta({
     <main
       style={{
         minHeight: '100vh',
-        background: semantico.fundo,
+        background: componente.fundoTela,
         color: semantico.textoPrimario,
         padding: aba === null ? '40px 18px' : '40px 18px 96px',
-        fontFamily: 'system-ui, sans-serif',
+        fontFamily: semantico.fonteCorpo,
       }}
     >
       <div style={{ width: '100%', maxWidth: 560, margin: '0 auto' }}>
@@ -55,7 +56,7 @@ export function MolduraConta({
         <section
           style={{
             border: `1px solid ${semantico.divisor}`,
-            background: semantico.superficie,
+            background: componente.contextoFrio.cardGradiente,
             borderRadius: 16,
             padding: 20,
           }}

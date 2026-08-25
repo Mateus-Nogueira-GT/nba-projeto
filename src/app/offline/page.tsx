@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 
+import { componente } from '@/design-system/tokens/componente'
 import { semantico } from '@/design-system/tokens/semantico'
 
 export const metadata: Metadata = {
@@ -16,9 +17,9 @@ export default function PaginaOffline() {
         display: 'grid',
         placeItems: 'center',
         padding: 24,
-        background: semantico.fundo,
+        background: componente.fundoTela,
         color: semantico.textoPrimario,
-        fontFamily: 'system-ui, sans-serif',
+        fontFamily: semantico.fonteCorpo,
       }}
     >
       <section
