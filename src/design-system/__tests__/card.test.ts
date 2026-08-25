@@ -22,11 +22,11 @@ describe('CardEntrada — contratos de conteúdo (desde a identidade 02)', () =>
   })
 
   it('fire live: selo VIVO e o texto do estado do progresso', () => {
-    const batida = render({ ...base, vivo: true, modoFire: true, alvo1Q: 12, progresso1Q: { observado: 14, alvo: 12 } })
+    const batida = render({ ...base, vivo: true, temperatura: 'quente', alvo1Q: 12, progresso1Q: { observado: 14, alvo: 12 } })
     expect(batida).toContain('VIVO')
     expect(batida).toContain('LINHA BATIDA')
 
-    const parcial = render({ ...base, vivo: true, modoFire: true, alvo1Q: 12, progresso1Q: { observado: 9, alvo: 12 } })
+    const parcial = render({ ...base, vivo: true, temperatura: 'quente', alvo1Q: 12, progresso1Q: { observado: 9, alvo: 12 } })
     expect(parcial).toContain('FALTA 3 PTS')
   })
 
@@ -65,9 +65,10 @@ describe('CardEntrada — identidade 03 (3 zonas)', () => {
     expect(html).toContain('>20<')
   })
 
-  it('no modo fire a zona 2 é a barra rumo ao alvo, não as barrinhas', () => {
+  it('na tela quente a zona 2 é a barra rumo ao alvo, não as barrinhas', () => {
     const html = render({
-      ...base, modoFire: true, alvo1Q: 10, progresso1Q: { observado: 9, alvo: 10 },
+      ...base, temperatura: 'quente', modoFire: true, alvo1Q: 10,
+      progresso1Q: { observado: 9, alvo: 10 },
       ultimos5: [{ valor: 30, bateu: true }],
     })
     expect(html).toContain('9 / 10')
@@ -90,17 +91,27 @@ describe('CardEntrada — identidade 03 (3 zonas)', () => {
     expect(render({ ...base, grauConfianca: 5, linha: 20 })).toContain('box-shadow')
     // dono 2 — turbo
     expect(render({ ...base, turbo: true, linha: 20 })).toContain(componente.turboBrilho)
-    // dono 3 — modo fire (universo quente)
-    expect(render({ ...base, modoFire: true, alvo1Q: 10 })).toContain(componente.contextoQuente.brilho)
+    // dono 3 — modo fire (na tela quente)
+    expect(render({ ...base, temperatura: 'quente', modoFire: true, alvo1Q: 10 })).toContain(
+      componente.contextoQuente.brilho,
+    )
     // e a borda lateral existe sempre que há grau
     expect(render({ ...base, linha: 20 })).toContain('border-left:3px solid')
   })
 
-  it('modo fire veste o universo quente; o pré-live, o frio', () => {
+  it('SÓ a temperatura veste o universo quente — modoFire sozinho não muda a pele', () => {
+    // Errata 25/08: quente atrelado a modoFire faria um item pré-live em modo
+    // fire perder barrinhas, média e odd do rodapé. Temperatura é da TELA.
     const frio = render({ ...base, linha: 20 })
-    const quente = render({ ...base, modoFire: true, alvo1Q: 10 })
+    const aindaFrio = render({
+      ...base, modoFire: true, linha: 20,
+      ultimos5: [{ valor: 30, bateu: true }], mediaTemporada: 25.7,
+    })
     expect(frio).toContain(componente.contextoFrio.cardGradiente)
-    expect(quente).toContain(componente.contextoQuente.cardGradiente)
+    expect(aindaFrio).toContain(componente.contextoFrio.cardGradiente)
+    expect(aindaFrio).toContain('ÚLT. 5 NA LINHA')
+    expect(aindaFrio).toContain('MÉDIA 25,7')
+    expect(aindaFrio).toContain('MODO FIRE') // o selo continua — é estado, não pele
   })
 
   it('temperatura quente explícita veste o universo quente mesmo sem modo fire', () => {
@@ -111,3 +122,18 @@ describe('CardEntrada — identidade 03 (3 zonas)', () => {
     expect(html).toContain('4 / 10')
   })
 })
+
+describe('errata pós-merge — alvo desconhecido nunca vira linha batida', () => {
+  it('BarraAlvo com alvo 0 mostra 0%, não 100%', async () => {
+    const { BarraAlvo } = await import('../componentes/BarraAlvo')
+    const html = renderToStaticMarkup(createElement(BarraAlvo, { observado: 3, alvo: 0 }))
+    expect(html).toContain('width:0%')
+    expect(html).not.toContain('width:100%')
+  })
+
+  it('card quente sem progresso não afirma LINHA BATIDA', () => {
+    const html = render({ ...base, temperatura: 'quente', progresso1Q: null })
+    expect(html).not.toContain('LINHA BATIDA')
+  })
+})
+

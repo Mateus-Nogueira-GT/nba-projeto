@@ -1,6 +1,6 @@
 import { and, eq } from 'drizzle-orm'
 
-import { jogadoresOcultos } from '../dominio/db/schema'
+import { jogadores, jogadoresOcultos } from '../dominio/db/schema'
 import type { Db } from '../dominio/db/tipos'
 
 /**
@@ -38,3 +38,16 @@ export function filtrarOcultos<T extends { jogadorId: string }>(
   if (ocultos.size === 0) return itens
   return itens.filter((i) => !ocultos.has(i.jogadorId))
 }
+
+/** Ids E nomes numa consulta só — a tela lista os ocultos sem segunda viagem. */
+export async function jogadoresOcultosComNome(
+  db: Db,
+  usuarioId: string,
+): Promise<{ id: string; nome: string }[]> {
+  return db
+    .select({ id: jogadores.id, nome: jogadores.nomeCompleto })
+    .from(jogadoresOcultos)
+    .innerJoin(jogadores, eq(jogadoresOcultos.jogadorId, jogadores.id))
+    .where(eq(jogadoresOcultos.usuarioId, usuarioId))
+}
+

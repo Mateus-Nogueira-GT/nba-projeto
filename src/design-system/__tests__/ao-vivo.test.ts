@@ -3,7 +3,6 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 
 import { BarraAlvo } from '../componentes/BarraAlvo'
-import { ChipFiltro } from '../componentes/ChipFiltro'
 import { PlacarMini } from '../componentes/PlacarMini'
 import { semantico } from '../tokens/semantico'
 
@@ -45,27 +44,5 @@ describe('BarraAlvo', () => {
     const html = renderToStaticMarkup(createElement(BarraAlvo, { observado: 3, alvo: 0 }))
     expect(html).not.toContain('NaN')
     expect(html).not.toContain('Infinity')
-  })
-})
-
-describe('ChipFiltro', () => {
-  it('ativo preenche com o acento; inativo é contorno discreto', () => {
-    const ativo = renderToStaticMarkup(
-      createElement(ChipFiltro, { ativo: true, href: '/x' }, 'TURBO'),
-    )
-    const inativo = renderToStaticMarkup(
-      createElement(ChipFiltro, { ativo: false, href: '/x' }, 'OPD'),
-    )
-    expect(ativo).toContain(semantico.acento)
-    expect(ativo).toContain('TURBO')
-    expect(inativo).toContain(semantico.divisor)
-    expect(inativo).not.toContain(`background:${semantico.acento}`)
-  })
-
-  it('é um link para o href', () => {
-    const html = renderToStaticMarkup(
-      createElement(ChipFiltro, { ativo: false, href: '/?metodo=OPD' }, 'OPD'),
-    )
-    expect(html).toContain('href="/?metodo=OPD"')
   })
 })

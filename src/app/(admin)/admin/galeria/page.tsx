@@ -166,6 +166,7 @@ export default async function PaginaGaleria() {
           confianca={95}
           grauConfianca={4}
           modoFire
+          temperatura="quente"
           vivo
           alvo1Q={9}
           progresso1Q={{ observado: 11, alvo: 9 }}
@@ -179,6 +180,7 @@ export default async function PaginaGaleria() {
           nivelApito={2}
           confianca={87}
           grauConfianca={2}
+          temperatura="quente"
           vivo
           opdOrigemNivel={3}
           alvo1Q={7}

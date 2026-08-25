@@ -35,6 +35,11 @@ export const oddsSnapshot = pgTable(
     oddUnder: numeric('odd_under', { precision: 7, scale: 3 }),
     capturadoEm: timestamp('capturado_em', { withTimezone: true }).notNull().defaultNow(),
   },
+  // Retry de coleta reexecuta o mesmo instante: sem esta UNIQUE, a série
+  // temporal ganharia tiques fantasmas indistinguíveis de recotação (regra 5).
+  (t) => [
+    unique('odds_snapshot_unico').on(t.casaId, t.jogoId, t.jogadorId, t.atributo, t.linha, t.capturadoEm),
+  ],
 )
 
 /** Materializada: a "média entre casas" que o cliente pediu. */

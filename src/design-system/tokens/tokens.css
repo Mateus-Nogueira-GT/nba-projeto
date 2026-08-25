@@ -59,8 +59,6 @@
   --anel-texto: #080D16;
   --anel-diametro: 56px;
   --anel-espessura: 4px;
-  --historico-ativo: #F5F8FC;
-  --historico-inativo: #2A3852;
   --marcador-opd-fundo: #1B2740;
   --marcador-opd-texto: #8D9AB0;
   --odd-texto: #8D9AB0;
@@ -69,8 +67,6 @@
   --faixa-nivel-altura: 3px;
   --cta-fundo: linear-gradient(90deg, #FF7A1A, #FFB25E);
   --fundo-tela: linear-gradient(175deg, #0B1220 60%, #101A2E);
-  --contexto-frio: [object Object];
-  --contexto-quente: [object Object];
   --turbo-brilho: 0 0 22px rgba(77,163,255,.18);
   --card-borda-lateral: 3px;
   --card-raio: 14px;

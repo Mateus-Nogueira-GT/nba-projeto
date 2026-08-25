@@ -17,7 +17,9 @@ import type { Resumo } from './identidade'
  * `ultimos_10` tem que ser um diff de YAML — regra 1 do CLAUDE.md.
  */
 
-export type JanelaMedia = 'temporada' | 'ultimos_5' | 'ultimos_10'
+import { janelaNoBanco, type JanelaMedia } from '../../dominio/janela'
+
+export type { JanelaMedia }
 
 /** Quantos jogos cada janela considera. `null` = todos os da temporada. */
 function tamanhoDaJanela(janela: JanelaMedia): number | null {
@@ -31,17 +33,6 @@ function tamanhoDaJanela(janela: JanelaMedia): number | null {
   }
 }
 
-/** A coluna `janela` do banco usa o vocabulário em maiúsculas. */
-function rotuloNoBanco(janela: JanelaMedia): 'TEMPORADA' | 'ULTIMOS_5' | 'ULTIMOS_10' {
-  switch (janela) {
-    case 'temporada':
-      return 'TEMPORADA'
-    case 'ultimos_5':
-      return 'ULTIMOS_5'
-    case 'ultimos_10':
-      return 'ULTIMOS_10'
-  }
-}
 
 function media(valores: number[]): string | null {
   if (valores.length === 0) return null
@@ -107,7 +98,7 @@ export async function recalcularMedias(
     valores.push({
       jogadorId,
       temporada,
-      janela: rotuloNoBanco(opcoes.janela),
+      janela: janelaNoBanco(opcoes.janela),
       jogos: considerados.length,
       ppg: media(considerados.map((c) => c.pontos)),
       rpg: media(considerados.map((c) => c.rebotes)),
@@ -116,7 +107,7 @@ export async function recalcularMedias(
     })
   }
 
-  const janelaBanco = rotuloNoBanco(opcoes.janela)
+  const janelaBanco = janelaNoBanco(opcoes.janela)
   if (valores.length === 0) {
     await db
       .delete(mediasJogador)

@@ -278,3 +278,9 @@ describe('identidade 03 — broadcast', () => {
   })
 })
 
+describe('errata pós-merge — o CSS gerado é só de strings', () => {
+  it('nenhum token composto (objeto) vaza como [object Object]', () => {
+    expect(gerarCss()).not.toContain('[object Object]')
+  })
+})
+

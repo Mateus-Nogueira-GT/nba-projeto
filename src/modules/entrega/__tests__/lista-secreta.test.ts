@@ -336,6 +336,64 @@ describe('o card carrega contexto materializado (identidade 03)', () => {
     )
     expect(html).toContain('ODD MÉDIA 1,55')
   })
+
+  it('a janela da média vem do RULESET, não de um literal (regra 1)', async () => {
+    // Com media.janela = ultimos_10, a materialização precisa ler as linhas
+    // ULTIMOS_10 — se 'TEMPORADA' estiver hardcoded, o item sai sem média.
+    const rulesetU10 = structuredClone(ruleset)
+    rulesetU10.media.janela = 'ultimos_10'
+    const feed0 = await lerFeed(banco.db, HOJE)
+    const item = feed0!.conteudo.itens[0]!
+    await banco.db.insert(mediasJogador).values({
+      jogadorId: item.jogadorId,
+      temporada: '2025-26',
+      janela: 'ULTIMOS_10',
+      jogos: 10,
+      ppg: '31.5',
+    })
+
+    await banco.db.delete(feedSnapshot)
+    await publicarListaSecreta(banco.db, rulesetU10, {
+      dataReferencia: HOJE,
+      agora: UMA_HORA_ANTES,
+    })
+    const feed = await lerFeed(banco.db, HOJE)
+    const doItem = feed!.conteudo.itens.find((i) => i.jogadorId === item.jogadorId)!
+    expect(doItem.mediaTemporada).toBe(31.5)
+  })
+
+  it('exibicao: faixa no ruleset SUPRIME a média do item — a tela não decide', async () => {
+    const rulesetFaixa = structuredClone(ruleset)
+    rulesetFaixa.odds.exibicao = 'faixa'
+    const feed0 = await lerFeed(banco.db, HOJE)
+    const item = feed0!.conteudo.itens.find((i) => i.linha !== null)!
+    await banco.db
+      .insert(oddsAgregada)
+      .values({
+        jogoId: item.jogoId,
+        jogadorId: item.jogadorId,
+        atributo: item.atributo,
+        linha: item.linha!.toFixed(1),
+        oddMin: '1.470',
+        oddMax: '1.620',
+        oddMediana: '1.540',
+        oddMedia: '1.550',
+        qtdCasas: 8,
+        origem: 'CASAS',
+      })
+      .onConflictDoNothing()
+
+    await banco.db.delete(feedSnapshot)
+    await publicarListaSecreta(banco.db, rulesetFaixa, {
+      dataReferencia: HOJE,
+      agora: UMA_HORA_ANTES,
+    })
+    const comFaixa = (await lerFeed(banco.db, HOJE))!.conteudo.itens.find(
+      (i) => i.chave === item.chave,
+    )!
+    expect(comFaixa.oddFaixa).not.toBeNull()
+    expect(comFaixa.oddFaixa!.media).toBeUndefined()
+  })
 })
 
 describe('reprocessamento por mudança de escalação', () => {

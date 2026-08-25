@@ -48,3 +48,67 @@ describe('casas do balldontlie (player props)', () => {
     expect(descartadas).toBe(2)
   })
 })
+
+describe('errata pós-merge — a fronteira não derruba a coleta', () => {
+  it('over_odds 0 (mercado suspenso) vira descarte, nunca exceção', async () => {
+    const resposta = {
+      data: [
+        {
+          id: 1, game_id: 1, player_id: 237, vendor: 'draftkings', prop_type: 'points',
+          line_value: '24.5',
+          market: { type: 'over_under', over_odds: 0, under_odds: -110 },
+          updated_at: 'x',
+        },
+      ],
+      meta: { per_page: 25 },
+    }
+    const casas = await casasBalldontlie(async () => resposta as unknown, '1')
+    const dk = casas.find((c) => c.nome === 'balldontlie:draftkings')!
+    expect(await dk.cotacoes('1')).toHaveLength(0)
+    expect(dk.descartadas?.()).toBe(1)
+  })
+
+  it('linha que não parseia (line_value numérico) é CONTADA, não silenciada', async () => {
+    const resposta = {
+      data: [
+        {
+          id: 1, game_id: 1, player_id: 237, vendor: 'fanduel', prop_type: 'points',
+          line_value: 24.5, // número em vez de string: shape quebrado
+          market: { type: 'over_under', over_odds: -110, under_odds: -110 },
+          updated_at: 'x',
+        },
+      ],
+      meta: { per_page: 25 },
+    }
+    const casas = await casasBalldontlie(async () => resposta as unknown, '1')
+    const total = casas.reduce((soma, c) => soma + (c.descartadas?.() ?? 0), 0)
+    expect(total).toBe(1)
+  })
+
+  it('buscarPropsHttp segue next_cursor quando o provedor paginar', async () => {
+    const { buscarPropsHttp } = await import('../odds/balldontlie-props')
+    const paginas: Record<string, unknown> = {
+      sem_cursor: {
+        data: [{ id: 1 }],
+        meta: { per_page: 100, next_cursor: 77 },
+      },
+      '77': { data: [{ id: 2 }], meta: { per_page: 100 } },
+    }
+    const chamadas: string[] = []
+    const fetchFalso = (async (url: string) => {
+      chamadas.push(String(url))
+      const cursor = /cursor=(\d+)/.exec(String(url))?.[1] ?? 'sem_cursor'
+      return {
+        ok: true,
+        status: 200,
+        json: async () => paginas[cursor],
+      }
+    }) as unknown as typeof fetch
+    const buscar = buscarPropsHttp('chave', 'https://x', fetchFalso)
+    const resultado = (await buscar('9')) as { data: unknown[] }
+    expect(resultado.data).toHaveLength(2)
+    expect(chamadas).toHaveLength(2)
+    expect(chamadas[0]).toContain('per_page=100')
+  })
+})
+

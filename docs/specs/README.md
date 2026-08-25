@@ -106,6 +106,7 @@ acrescentou duas:
 | --- | --- |
 | As barrinhas "últ. 5 na linha" do card leem a linha PRINCIPAL do apito (a menor, quando há 2+). É essa a leitura de relance que ele quer? | qual linha alimenta as barrinhas |
 | Ocultar jogador no Fire Live esconde da TELA mas não silencia o push do jogador oculto. É o comportamento desejado, ou o push também cala? | se a preferência entra no fan-out de push |
+| **Reaberta (25/08):** a proposta homologada dizia "sempre faixa, nunca odd única" (`odds.exibicao`), mas o parceiro decidiu mostrar a **média entre casas** no card e no detalhe. O CJ valida a média, prefere a faixa, ou as duas? (`config/ruleset.v1.yaml` → `odds.exibicao`: trocar o valor religa qualquer um dos comportamentos sem código) | o rodapé de odd de todo card pré-live |
 
 ---
 

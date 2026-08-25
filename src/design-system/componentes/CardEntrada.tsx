@@ -95,13 +95,16 @@ export function CardEntrada(props: CardEntradaProps) {
   const grau = props.grauConfianca
   const corGrau = grau === null ? semantico.divisor : CONFIANCA_GRAU[grau]
   const brilhaConfianca = grau === 5 // regra da identidade: só o máximo brilha
-  const quente = props.temperatura === 'quente' || props.modoFire === true
+  // A pele vem SÓ da temperatura (da TELA). modoFire é estado do jogador:
+  // rende selo e brilho, nunca troca a pele — um item pré-live em modo fire
+  // continua mostrando barrinhas, média e odd (errata 25/08).
+  const quente = props.temperatura === 'quente'
   const contexto = quente ? componente.contextoQuente : componente.contextoFrio
   const brilhoDoCard = brilhaConfianca
     ? `0 0 16px 1px ${corGrau}55`
     : props.turbo
       ? componente.turboBrilho
-      : quente
+      : quente || props.modoFire
         ? componente.contextoQuente.brilho
         : undefined
   const corPercentual = props.turbo ? TURBO.cor : corGrau
