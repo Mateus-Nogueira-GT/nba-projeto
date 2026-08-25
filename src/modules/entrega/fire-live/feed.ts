@@ -111,6 +111,12 @@ export async function materializarFeedFireLive(
       timeSigla: time?.sigla ?? '—',
       timeNome: time?.nome ?? '—',
       fotoUrl: jogador?.fotoUrl ?? null,
+      // O card do Fire Live usa a BarraAlvo na zona 2, não as barrinhas — e o
+      // rodapé quente mostra alvo, não média/odd. Os campos existem no tipo
+      // (ItemFireLive herda ItemFeed) e viajam vazios de propósito.
+      ultimos5: [],
+      mediaTemporada: null,
+      oddFaixa: null,
       atributo: a.atributo,
       nivelJogador: a.nivelJogador,
       nivelApito: a.nivelApito as NivelApito,

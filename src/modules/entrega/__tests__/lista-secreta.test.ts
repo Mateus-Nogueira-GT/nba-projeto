@@ -7,6 +7,7 @@ import { eq } from 'drizzle-orm'
 
 import { bancoDeTeste } from '../../dominio/__tests__/ajuda-banco'
 import {
+  estatisticasJogo,
   feedSnapshot,
   jogadores,
   jogos,
@@ -72,6 +73,10 @@ afterAll(async () => {
 })
 
 /** Semeia um dia de jogo dos Lakers com a hierarquia inteira classificada. */
+function somarDiasUtc(base: Date, dias: number): Date {
+  return new Date(base.getTime() + dias * 24 * 60 * 60 * 1000)
+}
+
 async function semear() {
   const db = banco.db
 
@@ -246,6 +251,54 @@ describe('job diário da Lista Secreta', () => {
 })
 
 // ===========================================================================
+
+describe('o card carrega contexto materializado (identidade 03)', () => {
+  beforeEach(async () => {
+    // O harness base não semeia histórico — este describe precisa dele: são
+    // os últimos 5 que as barrinhas do card mostram.
+    const db = banco.db
+    const [lal] = await db.select().from(times).where(eq(times.sigla, 'LAL')).limit(1)
+    const [adv] = await db.select().from(times).where(eq(times.sigla, 'ADV')).limit(1)
+    for (const [i, pontos] of [24, 19, 27].entries()) {
+      const [passado] = await db
+        .insert(jogos)
+        .values({
+          dataHoraUtc: somarDiasUtc(PRIMEIRO_JOGO, -(i + 2)),
+          dataReferencia: `2026-08-${String(17 - i).padStart(2, '0')}`,
+          timeCasaId: lal!.id,
+          timeVisitanteId: adv!.id,
+        })
+        .returning()
+      for (const id of idPorNome.values()) {
+        await db.insert(estatisticasJogo).values({ jogoId: passado!.id, jogadorId: id, pontos })
+      }
+    }
+    await escalar('Luka Doncic', 'FORA')
+    await publicarListaSecreta(banco.db, ruleset, { dataReferencia: HOJE, agora: UMA_HORA_ANTES })
+  })
+
+  it('ultimos5 vem do MESMO cálculo do detalhe — as telas não discordam', async () => {
+    const feed = await lerFeed(banco.db, HOJE)
+    const item = feed!.conteudo.itens[0]!
+    expect(item.ultimos5.length).toBeGreaterThan(0)
+
+    const { detalheDoApito } = await import('../detalhe-apito')
+    const detalhe = await detalheDoApito(banco.db, ruleset, item)
+    // Card: mais recente primeiro. Detalhe: antigo → recente. Mesmo conteúdo.
+    expect(item.ultimos5).toEqual(
+      [...detalhe.blocos].reverse().map((b) => ({ valor: b.valor, bateu: b.bateu })),
+    )
+  })
+
+  it('mediaTemporada é a mesma do detalhe; oddFaixa é null sem coleta', async () => {
+    const feed = await lerFeed(banco.db, HOJE)
+    const item = feed!.conteudo.itens[0]!
+    const { detalheDoApito } = await import('../detalhe-apito')
+    const detalhe = await detalheDoApito(banco.db, ruleset, item)
+    expect(item.mediaTemporada).toBe(detalhe.mediaTemporada)
+    expect(item.oddFaixa).toBeNull() // o semear deste harness não coleta odds
+  })
+})
 
 describe('reprocessamento por mudança de escalação', () => {
   it('nº 1 FORA → os 3 seguintes apitam em OPD, e o snapshot é regravado', async () => {
@@ -530,6 +583,9 @@ describe('filtrarItens e agruparPorJogador (puros)', () => {
     timeSigla: 'LAL',
     timeNome: 'Lakers',
     fotoUrl: null,
+    ultimos5: [],
+    mediaTemporada: null,
+    oddFaixa: null,
     atributo: 'PONTOS',
     nivelJogador: 'MVP',
     nivelApito: 1,

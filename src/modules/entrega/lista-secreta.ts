@@ -1,8 +1,17 @@
 import { createHash } from 'node:crypto'
-import { and, eq } from 'drizzle-orm'
+import { and, eq, inArray } from 'drizzle-orm'
 
 import { montarFatos, primeiroJogoDoDia } from '../dominio/fatos'
-import { feedSnapshot, jogadores, niveis, niveisVersao, times } from '../dominio/db/schema'
+import {
+  feedSnapshot,
+  jogadores,
+  jogos,
+  mediasJogador,
+  niveis,
+  niveisVersao,
+  oddsAgregada,
+  times,
+} from '../dominio/db/schema'
 import type { Db } from '../dominio/db/tipos'
 import { gravarApitos } from '../dominio/repositorios/apitos'
 import { avaliar } from '../motor'
@@ -10,7 +19,8 @@ import { arredondar } from '../motor/arredondamento'
 import { faixaDaConfianca } from '../motor/confianca'
 import type { Apito, Atributo, Metodo, Nivel, NivelApito } from '../motor/tipos'
 import type { Ruleset } from '../motor/ruleset/schema'
-import { calendarioDoRuleset } from '../dominio/temporada'
+import { calendarioDoRuleset, temporadaDe } from '../dominio/temporada'
+import { colunaMedia, jogosRecentes, naLinha } from './historico-na-linha'
 
 /**
  * Item já pronto para a tela.
@@ -59,6 +69,20 @@ export type ItemFeed = {
   metodo: Metodo | null
   /** G/F/C — dado canônico do jogador, usado só como recorte de leitura. */
   posicao: string | null
+  /**
+   * Últimos 5 jogos conferidos contra a linha do apito, mais recente primeiro
+   * — as barrinhas do card. MESMO cálculo do detalhe (historico-na-linha.ts).
+   * Vazio em snapshot antigo ou sem linha/alvo para conferir.
+   */
+  ultimos5: { valor: number; bateu: boolean }[]
+  /** Média da temporada que o motor usou — o card mostra sem chamar o motor. */
+  mediaTemporada: number | null
+  /**
+   * Faixa de odds entre casas para a linha do apito, da última coleta.
+   * `media` chega com a spec da lógica de dados; o card já sabe renderizar os
+   * dois estados. Null sem coleta — o rodapé então omite a odd.
+   */
+  oddFaixa: { min: number; max: number; qtdCasas: number; media?: number } | null
 }
 
 export type ConteudoFeed = {
@@ -165,10 +189,18 @@ export async function publicarListaSecreta(
 async function enriquecer(db: Db, ruleset: Ruleset, apitos: Apito[]): Promise<ItemFeed[]> {
   if (apitos.length === 0) return []
 
-  const [elenco, listaTimes, vinculos] = await Promise.all([
+  const idsJogos = [...new Set(apitos.map((a) => a.jogoId))]
+  const idsJogadores = [...new Set(apitos.map((a) => a.jogadorId))]
+  const [elenco, listaTimes, vinculos, jogosDaLista, medias, oddsLinhas] = await Promise.all([
     db.select().from(jogadores),
     db.select().from(times),
     db.select().from(niveis),
+    db.select().from(jogos).where(inArray(jogos.id, idsJogos)),
+    db.select().from(mediasJogador).where(eq(mediasJogador.janela, 'TEMPORADA')),
+    db
+      .select()
+      .from(oddsAgregada)
+      .where(and(inArray(oddsAgregada.jogoId, idsJogos), inArray(oddsAgregada.jogadorId, idsJogadores))),
   ])
 
   const nomePorJogador = new Map(elenco.map((j) => [j.id, j.nomeCompleto] as const))
@@ -178,7 +210,37 @@ async function enriquecer(db: Db, ruleset: Ruleset, apitos: Apito[]): Promise<It
   // O time vem da LISTA do CJ, não de jogadores.time_id — elencos projetados.
   const timeDoJogador = new Map(vinculos.map((v) => [v.jogadorId, v.timeId] as const))
 
+  const jogoPorId = new Map(jogosDaLista.map((j) => [j.id, j] as const))
+  const calendario = calendarioDoRuleset(ruleset)
+  const mediaPorChave = new Map(medias.map((m) => [`${m.jogadorId}|${m.temporada}`, m] as const))
+  const oddPorChave = new Map(
+    oddsLinhas.map((o) => [`${o.jogoId}|${o.jogadorId}|${o.atributo}|${Number(o.linha)}`, o] as const),
+  )
+
+  // Histórico recente por apito — a MESMA consulta do detalhe. Roda uma vez
+  // por publicação (materialização), nunca por request de tela.
+  const historicoPorApito = new Map<string, { valor: number; bateu: boolean }[]>()
+  for (const a of apitos) {
+    const jogo = jogoPorId.get(a.jogoId)
+    if (!jogo) {
+      historicoPorApito.set(a.chaveDeduplicacao, [])
+      continue
+    }
+    const rows = await jogosRecentes(db, a.jogadorId, jogo.dataHoraUtc, 5)
+    historicoPorApito.set(a.chaveDeduplicacao, naLinha(rows, a.atributo, a.linha ?? a.alvo1Q))
+  }
+
   return apitos.map((a) => {
+    const jogoDoApito = jogoPorId.get(a.jogoId)
+    const temporadaDoApito = jogoDoApito ? temporadaDe(jogoDoApito.dataHoraUtc, calendario) : null
+    const mediaRow = temporadaDoApito
+      ? mediaPorChave.get(`${a.jogadorId}|${temporadaDoApito}`)
+      : undefined
+    const valorMedia = mediaRow ? colunaMedia(mediaRow, a.atributo) : null
+    const oddRow =
+      a.linha !== null
+        ? oddPorChave.get(`${a.jogoId}|${a.jogadorId}|${a.atributo}|${a.linha}`)
+        : undefined
     const time = timePorId.get(timeDoJogador.get(a.jogadorId) ?? '')
     // Mesma conta que a tela imprime: arredonda primeiro, gradua depois.
     const exibido = a.confianca === null ? null : arredondar(a.confianca, ruleset)
@@ -202,6 +264,12 @@ async function enriquecer(db: Db, ruleset: Ruleset, apitos: Apito[]): Promise<It
       alvo1Q: a.alvo1Q,
       metodo: a.metodo,
       posicao: posicaoPorJogador.get(a.jogadorId) ?? null,
+      ultimos5: historicoPorApito.get(a.chaveDeduplicacao) ?? [],
+      mediaTemporada: valorMedia !== null ? Number(valorMedia) : null,
+      oddFaixa:
+        oddRow && oddRow.oddMin !== null && oddRow.oddMax !== null
+          ? { min: Number(oddRow.oddMin), max: Number(oddRow.oddMax), qtdCasas: oddRow.qtdCasas }
+          : null,
     }
   })
 }
