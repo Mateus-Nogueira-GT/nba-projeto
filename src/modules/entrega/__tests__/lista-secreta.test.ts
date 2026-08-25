@@ -218,6 +218,31 @@ describe('job diário da Lista Secreta', () => {
     // geradoEm intacto: nada foi reescrito.
     expect((await lerFeed(banco.db, HOJE))?.geradoEm).toEqual(primeira?.geradoEm)
   })
+
+  it('trocar a foto de um jogador REGRAVA o snapshot', async () => {
+    // O par do teste acima, e o motivo de o hash cobrir o item inteiro.
+    // Com uma tupla escolhida a dedo, `fotoUrl` ficava de fora: a foto entrava
+    // em `jogadores`, a republicação concluia "nada mudou" e o feed seguia
+    // servindo monograma. Foi o que travou o reseed da demo.
+    await escalar('Luka Doncic', 'FORA') // sem desfalque no topo não há apito
+    await publicarListaSecreta(banco.db, ruleset, { dataReferencia: HOJE, agora: UMA_HORA_ANTES })
+    const antes = await lerFeed(banco.db, HOJE)
+    expect(antes!.conteudo.itens.length).toBeGreaterThan(0)
+    expect(antes!.conteudo.itens.every((i) => i.fotoUrl === null)).toBe(true)
+
+    const FOTO = 'https://cdn.nba.com/headshots/nba/latest/1040x760/1629029.png'
+    const alvo = antes!.conteudo.itens[0]!.jogadorId
+    await banco.db.update(jogadores).set({ fotoUrl: FOTO }).where(eq(jogadores.id, alvo))
+
+    const segunda = await publicarListaSecreta(banco.db, ruleset, {
+      dataReferencia: HOJE,
+      agora: new Date(`${HOJE}T22:30:00.000Z`),
+    })
+
+    expect(segunda).toMatchObject({ publicou: true, mudou: true })
+    const depois = await lerFeed(banco.db, HOJE)
+    expect(depois!.conteudo.itens.filter((i) => i.jogadorId === alvo).every((i) => i.fotoUrl === FOTO)).toBe(true)
+  })
 })
 
 // ===========================================================================

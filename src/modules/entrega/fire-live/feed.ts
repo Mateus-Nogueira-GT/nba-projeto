@@ -33,11 +33,16 @@ export type ConteudoFeedFireLive = {
 
 function hashDe(conteudo: ConteudoFeedFireLive): string {
   // geradoEm fica FORA do hash, como na Lista Secreta: senão toda execução
-  // pareceria mudança. valorNoQuarto e encerrado ficam DENTRO — são o que a
-  // tela ao vivo existe para mostrar.
-  const estavel = JSON.stringify(
-    conteudo.itens.map((i) => [i.chave, i.turbo, i.modoFire, i.valorNoQuarto, i.encerrado]),
-  )
+  // pareceria mudança. Ele mora em `conteudo.geradoEm`, fora do item, então
+  // hashear os ITENS INTEIROS já o exclui — e é o que se faz aqui, pelo mesmo
+  // motivo da Lista Secreta: a tupla escolhida a dedo deixava `fotoUrl` de
+  // fora, e todo campo novo entrava mudo.
+  //
+  // `apitadoEm` fica DENTRO e não gera regravação à toa: é o `geradoEm` do
+  // apito, fixo depois de gravado — não o instante desta materialização.
+  // `valorNoQuarto` e `encerrado` seguem dentro; são o que a tela ao vivo
+  // existe para mostrar.
+  const estavel = JSON.stringify(conteudo.itens)
   return createHash('sha256').update(estavel).digest('hex').slice(0, 16)
 }
 

@@ -74,10 +74,16 @@ export type ResultadoPublicacao =
 
 function hashDe(conteudo: ConteudoFeed): string {
   // O horário de geração fica FORA do hash de propósito: senão toda execução
-  // pareceria uma mudança, e o reprocessamento perderia o sentido.
-  const estavel = JSON.stringify(
-    conteudo.itens.map((i) => [i.chave, i.nivelApito, i.turbo, i.modoFire, i.confianca]),
-  )
+  // pareceria uma mudança, e o reprocessamento perderia o sentido. Ele mora em
+  // `conteudo.geradoEm`, e não no item — então hashear os ITENS INTEIROS já o
+  // exclui, sem precisar escolher campos a dedo.
+  //
+  // E escolher a dedo era o bug: a tupla antiga cobria cinco campos, `fotoUrl`
+  // não era um deles. A foto entrava em `jogadores`, a republicação concluía
+  // "nada mudou" e o feed seguia servindo monograma. Todo campo novo de
+  // `ItemFeed` herdava o mesmo silêncio. Nenhum campo do item é volátil, então
+  // o item inteiro é o hash certo.
+  const estavel = JSON.stringify(conteudo.itens)
   return createHash('sha256').update(estavel).digest('hex').slice(0, 16)
 }
 

@@ -1,9 +1,9 @@
-import { and, eq } from 'drizzle-orm'
+import { eq } from 'drizzle-orm'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 
 import { bancoDeTeste } from '../../modules/dominio/__tests__/ajuda-banco'
-import { feedSnapshot, jogadores } from '../../modules/dominio/db/schema'
+import { jogadores } from '../../modules/dominio/db/schema'
 import { dataDeReferencia, somarDias } from '../../modules/dominio/rodada'
 import { rulesetAtivo } from '../../modules/entrega/ruleset-ativo'
 import { semearDemo } from '../../modules/ingestao/demo/semear'
@@ -311,13 +311,8 @@ describe('a foto do jogador', () => {
       .update(jogadores)
       .set({ fotoUrl: FOTO })
       .where(eq(jogadores.nomeCompleto, 'LeBron James'))
-    // O hash do snapshot não olha para a foto: sem apagar, a republicação
-    // veria "nada mudou" e o feed continuaria sem a URL.
-    await banco.db
-      .delete(feedSnapshot)
-      .where(
-        and(eq(feedSnapshot.dataReferencia, HOJE), eq(feedSnapshot.estrategia, 'LISTA_SECRETA')),
-      )
+    // Republicar basta: o hash cobre o item inteiro, então a foto nova conta
+    // como mudança. Antes era preciso apagar o snapshot à mão aqui.
     await publicarListaSecreta(banco.db, ruleset, {
       dataReferencia: HOJE,
       agora: AGORA,
