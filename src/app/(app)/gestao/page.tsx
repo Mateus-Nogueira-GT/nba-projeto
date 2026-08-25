@@ -240,8 +240,12 @@ export default async function PaginaGestao({
           {plano.entradas.map(({ item, entrada }) => {
             const nivel = NIVEL_JOGADOR[item.nivelJogador]
             return (
-              <div
+              // A linha inteira é o alvo do toque: quem está decidindo
+              // quanto entrar precisa de um caminho para o "por que entrou"
+              // sem voltar à lista e procurar o jogador de novo.
+              <Link
                 key={item.chave}
+                href={`/apito/${item.jogadorId}?atributo=${item.atributo}`}
                 style={{
                   display: 'flex',
                   alignItems: 'center',
@@ -250,6 +254,8 @@ export default async function PaginaGestao({
                   borderRadius: 10,
                   background: semantico.superficie,
                   borderLeft: `3px solid ${nivel.cor}`,
+                  color: 'inherit',
+                  textDecoration: 'none',
                 }}
               >
                 <Avatar
@@ -280,7 +286,7 @@ export default async function PaginaGestao({
                         }`}
                   </div>
                 </div>
-              </div>
+              </Link>
             )
           })}
         </div>
