@@ -51,6 +51,11 @@ migração que apaga coluna/tabela:
 - `CRON_COMPLETO=true` libera os 7 crons (conta **Pro**). Sem ela, só os dois
   diários — é o padrão, e é o que mantém o build válido no plano Hobby. Ver a
   nota de 25/08 no [ADR-0003](../adr/0003-runtime-vercel.md).
+- `DEMO_AUTOSSEMEADURA=true` liga o re-seed diário da demonstração
+  (`/api/cron/demo`, 9h UTC / 6h de Brasília). **Sem ela o cron roda e pula** —
+  responde 200 com `executado: false`, de propósito. Ligue enquanto o banco for
+  de demonstração; **desligue antes de conectar provedor real**, senão dado
+  fictício sobrescreve dado verdadeiro todo dia de manhã.
 - `DATABASE_URL` e demais segredos vêm do painel; `vercel env pull` traz para o
   `.env.local`.
 
@@ -68,6 +73,10 @@ migração que apaga coluna/tabela:
 A demonstração é ancorada num DIA: `semearDemo` monta a rodada da data de
 referência de quando roda. **No dia seguinte, o Fire Live abre em "Sem jogos
 hoje"** — aconteceu em 25/08/2026.
+
+Com `DEMO_AUTOSSEMEADURA=true` no painel, o cron das 9h UTC já faz isso todo
+dia. Rode à mão quando quiser garantir agora, ou quando a variável estiver
+desligada:
 
 ```bash
 npx dotenv -e .env.local -- npm run demo:seed      # traz a rodada para HOJE

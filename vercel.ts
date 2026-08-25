@@ -80,7 +80,16 @@ function cronsDoPlano(): VercelConfig['crons'] {
   ]
   if (process.env.CRON_COMPLETO === 'true') return cronsCompletos
 
-  return cronsCompletos.filter((c) =>
-    ['/api/cron/sincronizar-elenco', '/api/cron/sincronizar-rodada'].includes(c.path),
-  )
+  // Dos DOIS diários que o Hobby permite, um vai para o re-seed da
+  // DEMONSTRAÇÃO (decisão do parceiro, 25/08/2026). Sem provedor conectado
+  // `sincronizar-elenco` não tem de onde sincronizar; já a demo abrindo "Sem
+  // jogos hoje" na frente do cliente custa a apresentação. `sincronizar-rodada`
+  // fica: é dele que saem os jogos do dia quando houver provedor.
+  //
+  // O re-seed NÃO entra no conjunto completo: conta Pro trabalha com dado
+  // real. E ele só age com DEMO_AUTOSSEMEADURA=true — a rota é a guarda.
+  return [
+    ...cronsCompletos.filter((c) => c.path === '/api/cron/sincronizar-rodada'),
+    { path: '/api/cron/demo', schedule: '0 9 * * *' },
+  ]
 }

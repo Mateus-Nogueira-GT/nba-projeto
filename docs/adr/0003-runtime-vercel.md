@@ -43,6 +43,15 @@ conta for Hobby, `ao-vivo` não dispara e **o Fire Live não existe em produçã
 mecanismo da segunda linha da tabela fica inerte. A Lista Secreta também não republica
 sozinha; depende de disparo manual com o Bearer do `CRON_SECRET`.
 
+**Dos dois diários, um é o re-seed da DEMONSTRAÇÃO** (`/api/cron/demo`,
+decisão do parceiro em 25/08/2026). A demo é ancorada num dia: sem re-seed, o
+cliente que abre no dia seguinte encontra "Sem jogos hoje" no Fire Live. Sem
+provedor conectado, `sincronizar-elenco` não tem de onde sincronizar — então
+ele cede a vaga, e `sincronizar-rodada` fica. O re-seed **não existe** no
+conjunto completo (conta Pro trabalha com dado real) e só age com
+`DEMO_AUTOSSEMEADURA=true`: esquecer de ligar custa uma demo desatualizada,
+esquecer de desligar custaria dado real sobrescrito por fictício.
+
 Vale para a fase de demonstração, decidida em 25/08/2026. **Plano Pro é pré-requisito de
 lançamento**, não otimização futura: sem ele o produto ao vivo não funciona. Ao migrar,
 ligar `CRON_COMPLETO=true` nas Environment Variables do projeto — a flag é lida no build,

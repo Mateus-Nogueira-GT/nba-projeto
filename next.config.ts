@@ -7,9 +7,13 @@ const nextConfig: NextConfig = {
   // tracing do build não enxerga esse readFile: sem a inclusão explícita, o
   // YAML fica fora do bundle e TODA rota que avalia estratégia responde 500
   // em produção (ENOENT). A chave é glob de ROTA; o valor, do raiz do projeto.
+  // A lista de níveis do CJ é lida do disco pelo seed da demonstração, que o
+  // cron /api/cron/demo executa em runtime — mesma armadilha do ruleset: sem a
+  // inclusão explícita o arquivo fica fora do bundle e a rota responde ENOENT.
   outputFileTracingIncludes: {
     '/*': ['config/ruleset.v1.yaml'],
     '/**': ['config/ruleset.v1.yaml'],
+    '/api/cron/demo': ['config/ruleset.v1.yaml', 'data/fontes/introducao-ia-nba.md'],
   },
   // Fotos dos jogadores vêm do CDN público da NBA (ver
   // src/modules/ingestao/demo/fotos.ts). Sem o domínio liberado aqui o

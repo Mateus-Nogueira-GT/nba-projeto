@@ -35,10 +35,21 @@ describe('crons declarados no vercel.ts', () => {
 
     expect(crons.length).toBeGreaterThan(0)
     expect(crons.every((c) => ehDiario(c.schedule))).toBe(true)
+    // Decisão de 25/08: dos dois diários que o Hobby permite, um é o
+    // re-seed da DEMONSTRAÇÃO. Sem provedor conectado, `sincronizar-elenco`
+    // não faz nada — e a demo abrindo "Sem jogos hoje" na frente do cliente
+    // custa mais do que um job que não tem de onde sincronizar.
     expect(crons.map((c) => c.path)).toEqual([
-      '/api/cron/sincronizar-elenco',
       '/api/cron/sincronizar-rodada',
+      '/api/cron/demo',
     ])
+  })
+
+  it('o re-seed da demo NÃO existe no conjunto completo — Pro não semeia demonstração', async () => {
+    const crons = await cronsCom({ CRON_COMPLETO: 'true' })
+    expect(crons.map((c) => c.path)).not.toContain('/api/cron/demo')
+    // e os dois jobs de sincronização voltam inteiros
+    expect(crons.map((c) => c.path)).toContain('/api/cron/sincronizar-elenco')
   })
 
   it('CRON_COMPLETO=true libera o conjunto inteiro, incluindo o gatilho do Fire Live', async () => {
