@@ -9,6 +9,7 @@ import {
   type ItemFeed,
 } from '@/modules/entrega/lista-secreta'
 import { rotaDoJogador, BASE_ESTATISTICAS } from '@/modules/entrega/estatisticas/rotas'
+import { comFiltro, comQuantidade, type Recorte } from '@/modules/entrega/lista-secreta-rotas'
 import { rulesetAtivo } from '@/modules/entrega/ruleset-ativo'
 import { dataDeReferencia } from '@/modules/dominio/rodada'
 import { dataHora } from '@/components/formato'
@@ -33,7 +34,6 @@ function rotuloQuantidade(n: number): string {
   return n === 0 ? 'Lista inteira' : `${n} vítima${n === 1 ? '' : 's'}`
 }
 
-type Recorte = FiltroLista & { quantidade: number }
 
 const METODOS = [
   { valor: 'OSCILACAO', rotulo: 'Oscilação' },
@@ -61,21 +61,6 @@ function primeiroValor(v: string | string[] | undefined): string | undefined {
   return s === undefined || s === '' ? undefined : s
 }
 
-/** Monta a URL preservando os demais recortes — os filtros combinam entre si. */
-function comFiltro(recorte: Recorte, campo: string, valor: string | undefined): string {
-  const p = new URLSearchParams()
-  if (recorte.quantidade !== 0) p.set('quantidade', String(recorte.quantidade))
-  if (recorte.metodo) p.set('metodo', recorte.metodo)
-  if (recorte.nivel) p.set('nivel', recorte.nivel)
-  if (recorte.time) p.set('time', recorte.time)
-  if (recorte.posicao) p.set('posicao', recorte.posicao)
-  if (recorte.atributo) p.set('atributo', recorte.atributo)
-  if (valor === undefined) p.delete(campo)
-  else p.set(campo, valor)
-  const q = p.toString()
-  return q === '' ? '/' : `/?${q}`
-}
-
 function GrupoFiltro({
   titulo,
   children,
@@ -93,14 +78,16 @@ function GrupoFiltro({
   )
 }
 
-function Filtros({ atual, base }: { atual: number; base: string }) {
+function Filtros({ recorte }: { recorte: Recorte }) {
   return (
     <nav
       aria-label="Quantidade de entradas"
       style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}
     >
       {QUANTIDADES.map((n) => (
-        <Chip key={n} href={`${base}?quantidade=${n}`} ativo={n === atual}>
+        // Pelo MESMO montador dos demais chips: quantidade é um recorte como
+        // os outros e não pode varrer o que o usuário já escolheu.
+        <Chip key={n} href={comQuantidade(recorte, n)} ativo={n === recorte.quantidade}>
           {rotuloQuantidade(n)}
         </Chip>
       ))}
@@ -225,7 +212,7 @@ export default async function PaginaListaSecreta({
         </div>
       )}
 
-      <Filtros atual={quantidade} base="/" />
+      <Filtros recorte={recorte} />
 
       <section style={{ marginBottom: 14 }}>
         {atributosDoDia.length > 1 && (
