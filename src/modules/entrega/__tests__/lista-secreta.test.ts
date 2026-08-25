@@ -9,6 +9,7 @@ import { bancoDeTeste } from '../../dominio/__tests__/ajuda-banco'
 import {
   estatisticasJogo,
   feedSnapshot,
+  oddsAgregada,
   jogadores,
   jogos,
   lesoesEscalacao,
@@ -297,6 +298,43 @@ describe('o card carrega contexto materializado (identidade 03)', () => {
     const detalhe = await detalheDoApito(banco.db, ruleset, item)
     expect(item.mediaTemporada).toBe(detalhe.mediaTemporada)
     expect(item.oddFaixa).toBeNull() // o semear deste harness não coleta odds
+  })
+
+  it('com odd_media agregada, o item leva a média — e o card escreve ODD MÉDIA', async () => {
+    const feed = await lerFeed(banco.db, HOJE)
+    const item = feed!.conteudo.itens.find((i) => i.linha !== null)!
+
+    await banco.db.insert(oddsAgregada).values({
+      jogoId: item.jogoId,
+      jogadorId: item.jogadorId,
+      atributo: item.atributo,
+      linha: item.linha!.toFixed(1),
+      oddMin: '1.470',
+      oddMax: '1.620',
+      oddMediana: '1.540',
+      oddMedia: '1.550',
+      qtdCasas: 8,
+      origem: 'CASAS',
+    })
+    await publicarListaSecreta(banco.db, ruleset, {
+      dataReferencia: HOJE,
+      agora: new Date(`${HOJE}T22:40:00.000Z`),
+    })
+
+    const depois = await lerFeed(banco.db, HOJE)
+    const comMedia = depois!.conteudo.itens.find((i) => i.chave === item.chave)!
+    expect(comMedia.oddFaixa).toEqual({ min: 1.47, max: 1.62, qtdCasas: 8, media: 1.55 })
+
+    const html = renderToStaticMarkup(
+      createElement(CardEntrada, {
+        nome: comMedia.nome, timeSigla: comMedia.timeSigla, posicao: comMedia.posicao,
+        atributo: comMedia.atributo, nivelJogador: comMedia.nivelJogador,
+        nivelApito: comMedia.nivelApito, confianca: comMedia.confianca,
+        grauConfianca: comMedia.grauConfianca, linha: comMedia.linha,
+        oddFaixa: comMedia.oddFaixa,
+      }),
+    )
+    expect(html).toContain('ODD MÉDIA 1,55')
   })
 })
 

@@ -12,9 +12,19 @@ export type CotacaoExterna = {
   linha: number
   oddOver: number | null
   oddUnder: number | null
+  /**
+   * Id do jogador NO PROVEDOR, quando a casa é servida por um provedor que a
+   * ingestão NBA já conhece (balldontlie). Permite vínculo direto por
+   * identidades_jogador, sem curadoria de nome. Ausente nas casas por scraping.
+   */
+  jogadorIdExternoProvedor?: string
+  /** Atributo já traduzido na fronteira, quando o provedor o declara. */
+  atributo?: import('../../motor/tipos').Atributo
 }
 
 export interface CasaDeAposta {
   readonly nome: string
   cotacoes(jogoIdExterno: string): Promise<CotacaoExterna[]>
+  /** Quantas cotações a tradução da fronteira descartou — o job loga, nunca silencia. */
+  descartadas?(): number
 }

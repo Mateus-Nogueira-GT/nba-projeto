@@ -562,6 +562,9 @@ async function semearOdds(
         oddMin: faixa.min.toFixed(3),
         oddMax: faixa.max.toFixed(3),
         oddMediana: faixa.mediana.toFixed(3),
+        // Na demo a média acompanha a mediana — o suficiente para o rodapé
+        // ODD MÉDIA do card existir na apresentação.
+        oddMedia: faixa.mediana.toFixed(3),
         qtdCasas: faixa.qtdCasas,
         origem: faixa.origem,
         calculadoEm: agora,

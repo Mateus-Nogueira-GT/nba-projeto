@@ -16,6 +16,8 @@ export type FaixaDeLinha = {
   min: number
   max: number
   mediana: number
+  /** Média simples entre casas — null em agregada anterior à coleta real. */
+  media: number | null
   qtdCasas: number
   origem: string
 }
@@ -49,6 +51,7 @@ export async function faixasDoJogador(
         min: Number(l.oddMin),
         max: Number(l.oddMax),
         mediana: Number(l.oddMediana),
+        media: l.oddMedia === null ? null : Number(l.oddMedia),
         qtdCasas: l.qtdCasas,
         origem: l.origem,
       },
