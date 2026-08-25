@@ -419,6 +419,15 @@ export default async function PaginaComoFunciona() {
             modoFire={false}
             opdOrigemNivel={3}
             alvo1Q={null}
+            ultimos5={[
+              { valor: 22, bateu: true },
+              { valor: 19, bateu: true },
+              { valor: 15, bateu: false },
+              { valor: 21, bateu: true },
+              { valor: 18, bateu: true },
+            ]}
+            mediaTemporada={19.4}
+            oddFaixa={{ min: 1.47, max: 1.62, qtdCasas: 3, media: 1.55 }}
           />
           <p style={{ margin: '8px 0 0', fontSize: 13, color: semantico.textoSecundario }}>
             Nível do jogador na faixa metálica, força do apito na borda do avatar, e o cruzamento

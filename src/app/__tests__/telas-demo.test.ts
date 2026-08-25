@@ -425,6 +425,38 @@ describe('Fire Live — identidade 03', () => {
       await banco.db.delete(jogadoresOcultos).where(igual(jogadoresOcultos.jogadorId, alvo.jogadorId))
     }
   }, 60_000)
+
+  it('filtro da URL que zera a lista mostra "Nada com esse filtro" — não uma tela em branco', async () => {
+    // Errata 25/08: a cláusula de tudo-oculto tinha engolido este estado.
+    const { default: Pagina } = await import('../(app)/fire-live/page')
+    const html = renderToStaticMarkup(
+      await Pagina({ searchParams: Promise.resolve({ time: 'ZZZ' }) }),
+    )
+    expect(html).toContain('Nada com esse filtro')
+    expect(html).toContain('Ver todos')
+  }, 60_000)
+
+  it('todos os apitados ocultos ganham a explicação própria, não a cópia do filtro', async () => {
+    const { lerFeedFireLive } = await import('../../modules/entrega/fire-live/leitura')
+    const ruleset = await rulesetAtivo()
+    const { itens } = await lerFeedFireLive(banco.db, HOJE, ruleset.fire_live.quarto)
+    const { jogadoresOcultos } = await import('../../modules/dominio/db/schema')
+    const ids = [...new Set(itens.map((i) => i.jogadorId))]
+    await banco.db
+      .insert(jogadoresOcultos)
+      .values(ids.map((jogadorId) => ({ usuarioId: USUARIO_DEMO, jogadorId })))
+      .onConflictDoNothing()
+    try {
+      const { default: Pagina } = await import('../(app)/fire-live/page')
+      const html = renderToStaticMarkup(await Pagina({ searchParams: Promise.resolve({}) }))
+      expect(html).toContain('Todos os apitados estão ocultos')
+      expect(html).not.toContain('Nada com esse filtro')
+      expect(html).toContain('Jogadores ocultos') // a seção de reativar está logo ali
+    } finally {
+      const { inArray: dentro } = await import('drizzle-orm')
+      await banco.db.delete(jogadoresOcultos).where(dentro(jogadoresOcultos.jogadorId, ids))
+    }
+  }, 60_000)
 })
 
 // ===========================================================================

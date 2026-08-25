@@ -10,9 +10,7 @@ import { rotaDoJogador } from '@/modules/entrega/estatisticas/rotas'
 import { CardEntrada, PlacarMini } from '@/design-system/componentes'
 import { semantico } from '@/design-system/tokens/semantico'
 import { sessaoAtual } from '@/modules/plataforma/auth/cookies'
-import { filtrarOcultos, jogadoresOcultosDe } from '@/modules/plataforma/jogadores-ocultos'
-import { jogadores } from '@/modules/dominio/db/schema'
-import { inArray } from 'drizzle-orm'
+import { filtrarOcultos, jogadoresOcultosComNome } from '@/modules/plataforma/jogadores-ocultos'
 import { exibir, ocultar } from './acoes'
 import { avaliarAcesso } from '@/modules/plataforma/assinatura/direito'
 import '@/design-system/tokens/tokens.css'
@@ -121,18 +119,15 @@ export default async function PaginaFireLive({
   const timesComApito = [...new Set(semFiltro.itens.map((i) => i.timeSigla))].sort()
 
   // Preferência por CONTA: recorte de LEITURA puro sobre o snapshot — o feed
-  // é por evento e não sabe quem está olhando.
-  const ocultos = await jogadoresOcultosDe(getDb(), sessao.usuarioId)
+  // é por evento e não sabe quem está olhando. Uma consulta só (id + nome).
+  const nomesOcultos = await jogadoresOcultosComNome(getDb(), sessao.usuarioId)
+  const ocultos = new Set(nomesOcultos.map((j) => j.id))
   const itensVisiveis = filtrarOcultos(feed.itens, ocultos)
-  const nomesOcultos =
-    ocultos.size > 0
-      ? await getDb()
-          .select({ id: jogadores.id, nome: jogadores.nomeCompleto })
-          .from(jogadores)
-          .where(inArray(jogadores.id, [...ocultos]))
-      : []
-  const recorteVazio =
-    itensVisiveis.length === 0 && feed.estadoVazio === null && feed.itens.length > 0
+  // Dois vazios DIFERENTES (errata 25/08): o recorte da URL zerou a lista
+  // (estadoVazio null vem da leitura exatamente para este caso) — ou o próprio
+  // usuário ocultou todos os apitados, que precisa da própria explicação.
+  const recorteVazio = feed.itens.length === 0 && feed.estadoVazio === null
+  const tudoOculto = feed.itens.length > 0 && itensVisiveis.length === 0
 
   return (
     <Moldura aba="fire-live">
@@ -204,6 +199,23 @@ export default async function PaginaFireLive({
         </div>
       )}
 
+      {tudoOculto && (
+        <div
+          style={{
+            padding: '32px 16px',
+            textAlign: 'center',
+            border: `1px dashed ${semantico.divisor}`,
+            borderRadius: 12,
+          }}
+        >
+          <p style={{ margin: 0, fontWeight: 700 }}>Todos os apitados estão ocultos</p>
+          <p style={{ margin: '8px 0 0', fontSize: 14, color: semantico.textoSecundario }}>
+            Há apitos agora, mas você escolheu não acompanhar estes jogadores. Reative quem quiser
+            na lista logo abaixo.
+          </p>
+        </div>
+      )}
+
       <div style={{ display: 'grid', gap: 10 }}>
         {itensVisiveis.map((item) => (
           <div key={item.chave} style={{ opacity: item.encerrado ? 0.75 : 1 }}>
@@ -234,7 +246,13 @@ export default async function PaginaFireLive({
               opdOrigemNivel={item.opdOrigemNivel}
               alvo1Q={item.alvo1Q}
               vivo={!item.encerrado}
-              progresso1Q={{ observado: item.valorNoQuarto, alvo: item.alvo1Q ?? 0 }}
+              // Alvo nulo NÃO vira {alvo: 0}: sem alvo, sem barra — nunca
+              // "LINHA BATIDA · 0" para quem não tem marca (errata 25/08).
+              progresso1Q={
+                item.alvo1Q === null
+                  ? null
+                  : { observado: item.valorNoQuarto, alvo: item.alvo1Q }
+              }
               // O Fire Live INTEIRO é o universo quente — urgência é da tela
               // ao vivo, não só do modo fire.
               temperatura="quente"

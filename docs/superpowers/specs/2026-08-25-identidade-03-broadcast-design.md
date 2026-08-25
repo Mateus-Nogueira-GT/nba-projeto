@@ -125,7 +125,7 @@ perde o papel de portadora única da cor (a borda lateral divide o trabalho).
 | `Barrinhas` | 5 quadrados valor+cor, rótulo opcional | `ultimos5` do item do feed |
 | `PlacarMini` | `LAL · 23 · 19 · DEN` + `1Q · 4:12` | placar do snapshot fire live (já existe) |
 | `BarraAlvo` | barra de progresso com marca do alvo e contagem `9 / 10` | `valorNoQuarto` / `alvo1Q` (já existem) |
-| `ChipFiltro` | pílula de filtro ativo/inativo (laranja/contorno) | estado de URL (como hoje) |
+| ~~`ChipFiltro`~~ | **removido na errata de 25/08**: as telas adotaram o `Chip` da navegação (restilizado nesta mesma spec) e o duplicado ficou morto — um componente, um visual | — |
 
 Todos entram na galeria do admin e ganham teste próprio. A galeria é o catálogo vivo:
 componente que não está nela não existe.

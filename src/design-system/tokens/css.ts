@@ -50,10 +50,16 @@ export function gerarCss(): string {
     '',
     ':root {',
     '  /* semântico */',
-    ...Object.entries(semantico).map(([k, v]) => `  --${kebab(k)}: ${v};`),
+    ...Object.entries(semantico)
+      .filter(([, v]) => typeof v === 'string' || typeof v === 'number')
+      .map(([k, v]) => `  --${kebab(k)}: ${v};`),
     '',
     '  /* componente */',
-    ...Object.entries(componente).map(([k, v]) => `  --${kebab(k)}: ${v};`),
+    // Tokens COMPOSTOS (contextoFrio/contextoQuente são objetos) são vocabulário
+    // de JS, não de CSS: sem o filtro, virariam `--contexto-frio: [object Object]`.
+    ...Object.entries(componente)
+      .filter(([, v]) => typeof v === 'string' || typeof v === 'number')
+      .map(([k, v]) => `  --${kebab(k)}: ${v};`),
     '}',
     '',
   ]
