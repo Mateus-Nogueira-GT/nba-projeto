@@ -44,3 +44,31 @@ textarea {
     animation: ponto-ao-vivo-pulso 1.6s ease-in-out infinite;
   }
 }
+
+/*
+ * ESQUELETO DE CARREGAMENTO.
+ *
+ * Toda tela autenticada é `force-dynamic` e leva de 200ms a 1s para voltar do
+ * servidor (ADR-0008). Sem uma fronteira de Suspense, o roteador do Next
+ * segura a tela ANTERIOR inteira nesse intervalo: o usuário toca e nada muda.
+ * A ausência de resposta lê-se como travamento, que é pior que a espera.
+ *
+ * Guardado por `prefers-reduced-motion` como o ponto do "ao vivo": quem pediu
+ * menos movimento vê a barra parada, e ela continua comunicando "aqui vem
+ * conteúdo" pela forma.
+ */
+@keyframes esqueleto-brilho {
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+  50% {
+    opacity: 0.7;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .esqueleto {
+    animation: esqueleto-brilho 1.4s ease-in-out infinite;
+  }
+}

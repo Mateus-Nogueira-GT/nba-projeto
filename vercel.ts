@@ -11,6 +11,27 @@ import type { VercelConfig } from '@vercel/config/v1'
 
 export const config: VercelConfig = {
   framework: 'nextjs',
+  /**
+   * A FUNÇÃO RODA ONDE O BANCO ESTÁ. Ver ADR-0008.
+   *
+   * `gru1` é São Paulo (sa-east-1) — a mesma região do Neon
+   * (`...sa-east-1.aws.neon.tech`). Sem esta chave a Vercel usa `iad1`
+   * (Washington) por padrão, e era o que estava em produção: o cabeçalho
+   * `x-vercel-id: gru1::iad1` mostrava a requisição entrando em São Paulo e
+   * a função executando nos EUA.
+   *
+   * O custo disso não é uma travessia por página, é uma POR CONSULTA. Medido
+   * em 25/08 na MESMA função e MESMA região, variando só o número delas:
+   *
+   *   /entrar   0 consultas   ~200ms
+   *   /gestao   5 consultas  ~1000ms
+   *
+   * Da mesma região, cada ida e volta cai de ~150ms para a casa de 2ms.
+   *
+   * Se o banco mudar de região, esta linha muda junto — é a única coisa que
+   * mantém as duas casadas.
+   */
+  regions: ['gru1'],
   functions: {
     'src/app/api/fila/push/route.ts': {
       experimentalTriggers: [
