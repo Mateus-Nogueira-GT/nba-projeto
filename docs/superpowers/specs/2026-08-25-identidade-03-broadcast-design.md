@@ -182,9 +182,16 @@ trava a soma).
 
 ### Tela do time — boxscore na partida
 
-`estatisticas_time_jogo` já existe (pontos por quarto, rebotes, etc.). A tela do
-time ganha o bloco "Última partida" com o boxscore do time e, quando houver jogo ao
-vivo, a versão ao vivo — mesmo padrão do bloco `aoVivo` do perfil do jogador.
+**Constatação da execução (25/08, T11):** a tela do time JÁ renderiza o boxscore
+por partida — tabela com 1º..4º quarto, prorrogação, total, FG%, 3P%, rebotes,
+assistências e turnovers (entregue na T10 da identidade 02; o brainstorm
+subestimou o que existia). O item da proposta comercial está coberto.
+
+O "bloco ao vivo do time" desenhado aqui NÃO foi construído, de propósito: seria
+um cano de dado que nem a ingestão fake nem a demo alimentam separadamente — o
+jogo em andamento aparece na MESMA tabela assim que o box do time chega. Se um
+provedor real passar a escrever `estatisticas_time_jogo` durante a partida, a
+tabela o mostra sem código novo. Reabrir só se o CJ pedir um destaque dedicado.
 
 ## 4 · Migração tela a tela
 

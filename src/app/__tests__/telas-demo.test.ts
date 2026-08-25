@@ -255,6 +255,44 @@ describe('a rodada segue o fuso do cliente', () => {
   }, 60_000)
 })
 
+describe('Estatísticas — identidade 03 (conferência em lote)', () => {
+  it('as três telas vestem a identidade e o time mostra o boxscore por partida', async () => {
+    const { default: Indice } = await import('../(app)/estatisticas/page')
+    const htmlIndice = renderToStaticMarkup(await Indice({ searchParams: Promise.resolve({}) }))
+
+    const { jogadores } = await import('../../modules/dominio/db/schema')
+    const [umJogador] = await banco.db.select().from(jogadores).limit(1)
+    const { default: Jogador } = await import('../(app)/estatisticas/jogador/[id]/page')
+    const htmlJogador = renderToStaticMarkup(
+      await Jogador({ params: Promise.resolve({ id: umJogador!.id }) }),
+    )
+
+    const { times } = await import('../../modules/dominio/db/schema')
+    const [umTime] = await banco.db.select().from(times).limit(1)
+    const { default: Time } = await import('../(app)/estatisticas/time/[id]/page')
+    const htmlTime = renderToStaticMarkup(
+      await Time({ params: Promise.resolve({ id: umTime!.id }) }),
+    )
+
+    await gravarConferencia(
+      'estatisticas',
+      `${htmlIndice}<hr style="margin:40px 0">${htmlJogador}<hr style="margin:40px 0">${htmlTime}`,
+    )
+
+    // A identidade chega pela Moldura (gradiente) e pela tipografia
+    for (const html of [htmlIndice, htmlJogador, htmlTime]) {
+      expect(html).toContain('linear-gradient(175deg')
+      expect(html).toContain('var(--fonte-anton)')
+      expect(html).not.toContain('PROBABILIDADE')
+    }
+    // 2P% no perfil (proposta comercial) e o boxscore por partida no time
+    // (colunas 1º..4º + total — o rótulo da tela é ordinal, não 'Q1')
+    expect(htmlJogador).toContain('2P%')
+    expect(htmlTime).toContain('Pontos no 1º quarto')
+    expect(htmlTime).toContain('TOT')
+  }, 60_000)
+})
+
 describe('tela de Gestão de banca', () => {
   it('renderiza o plano do dia com o aviso de modelo de demonstração', async () => {
     const { default: Pagina } = await import('../(app)/gestao/page')
