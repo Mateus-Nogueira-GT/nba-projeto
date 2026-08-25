@@ -136,3 +136,13 @@ licenciado, ou cair de volta no monograma do `Avatar` (que já existe como estad
    casas fictícias somem.
 
 Nenhum dos quatro exige mudança de código.
+
+## Odds: média entre casas (25/08)
+
+A demo grava `odd_media` igual à mediana nas agregadas — o rodapé `ODD MÉDIA`
+do card e a linha "odd média" do detalhe existem na apresentação. Em produção
+o número virá de `coletarOdds` sobre as casas do balldontlie
+(`/v2/odds/player_props`, plano GOAT): 8 vendors por chamada, tradução
+inteira na fronteira (`americana→decimal`, meio-ponto do over→linha do CJ).
+Conectar é criar `BALLDONTLIE_API_KEY` e agendar a coleta — a lógica está
+pronta e testada com fixture no shape literal do OpenAPI.
