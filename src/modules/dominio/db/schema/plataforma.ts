@@ -384,3 +384,52 @@ export const jogadoresOcultos = pgTable(
   },
   (t) => [unique('jogadores_ocultos_unico').on(t.usuarioId, t.jogadorId)],
 )
+
+/**
+ * OBSERVABILIDADE DE LLM — uma linha por chamada, sucesso ou falha.
+ *
+ * É o que responde "quanto isso está custando" e "qual perfil está falhando"
+ * sem depender do painel do provedor. Falha registrada é tão importante
+ * quanto sucesso: um perfil que só erra é invisível se só o sucesso for
+ * gravado.
+ */
+export const llmChamadas = pgTable(
+  'llm_chamadas',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    perfil: text('perfil').notNull(),
+    /** Qual modelo respondeu de fato — null quando a chamada nem chegou lá. */
+    modelo: text('modelo'),
+    tokensEntrada: integer('tokens_entrada').notNull().default(0),
+    tokensSaida: integer('tokens_saida').notNull().default(0),
+    ok: boolean('ok').notNull(),
+    erro: text('erro'),
+    duracaoMs: integer('duracao_ms').notNull().default(0),
+    criadoEm: timestamp('criado_em', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index('llm_chamadas_criado_em_idx').on(t.criadoEm)],
+)
+
+/**
+ * MENSAGENS DO CHAT — cota, histórico e auditoria na MESMA tabela.
+ *
+ * A cota diária é `COUNT(*)` das mensagens do usuário no dia. Um contador
+ * paralelo poderia divergir do histórico; aqui os dois são a mesma coisa por
+ * construção.
+ */
+export const chatMensagens = pgTable(
+  'chat_mensagens',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    usuarioId: uuid('usuario_id')
+      .notNull()
+      .references(() => usuarios.id, { onDelete: 'cascade' }),
+    papel: text('papel', { enum: ['USUARIO', 'ASSISTENTE'] }).notNull(),
+    texto: text('texto').notNull(),
+    modelo: text('modelo'),
+    tokensEntrada: integer('tokens_entrada').notNull().default(0),
+    tokensSaida: integer('tokens_saida').notNull().default(0),
+    criadoEm: timestamp('criado_em', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index('chat_mensagens_usuario_dia_idx').on(t.usuarioId, t.criadoEm)],
+)

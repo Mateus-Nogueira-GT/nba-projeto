@@ -3,6 +3,7 @@ import { executarCronProtegido } from '@/modules/entrega/cron/guarda'
 import { rulesetAtivo } from '@/modules/entrega/ruleset-ativo'
 import { autossemeaduraHabilitada } from '@/modules/ingestao/demo/autossemeadura'
 import { semearDemo } from '@/modules/ingestao/demo/semear'
+import { portaLLMDoAmbiente } from '@/modules/ingestao/llm'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 300
@@ -31,7 +32,7 @@ export async function GET(requisicao: Request): Promise<Response> {
         return { executado: false, motivo: 'DEMO_AUTOSSEMEADURA_DESLIGADA' as const }
       }
       const ruleset = await rulesetAtivo()
-      const resumo = await semearDemo(getDb(), ruleset, new Date())
+      const resumo = await semearDemo(getDb(), ruleset, new Date(), portaLLMDoAmbiente())
       return { executado: true, resumo }
     },
     quantidade: (r) => ('resumo' in r && r.resumo ? r.resumo.itensListaSecreta : 0),

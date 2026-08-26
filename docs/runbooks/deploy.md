@@ -59,6 +59,17 @@ migração que apaga coluna/tabela:
 - `DATABASE_URL` e demais segredos vêm do painel; `vercel env pull` traz para o
   `.env.local`.
 
+## Envs de LLM (todos opcionais)
+
+| Env | Padrão | Efeito |
+| --- | --- | --- |
+| `OPENROUTER_API_KEY` | ausente | Sem ela, todo o subsistema usa o adapter fake e o app funciona normalmente |
+| `CHAT_HABILITADO` | `false` | Só a string `true` liga o endpoint `/api/chat` |
+| `CHAT_COTA_DIARIA` | `20` | Perguntas por assinante por dia |
+
+**Antes de `CHAT_HABILITADO=true` em produção:** configurar o teto de gasto da
+chave no painel do OpenRouter. É o freio que não depende do nosso código.
+
 ## Sintomas e causa provável
 
 | Sintoma | Causa provável |

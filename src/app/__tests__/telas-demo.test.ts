@@ -1,12 +1,14 @@
-import { eq } from 'drizzle-orm'
+import { and, eq } from 'drizzle-orm'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 
 import { bancoDeTeste } from '../../modules/dominio/__tests__/ajuda-banco'
-import { jogadores } from '../../modules/dominio/db/schema'
+import { feedSnapshot, jogadores } from '../../modules/dominio/db/schema'
 import { dataDeReferencia, somarDias } from '../../modules/dominio/rodada'
 import { rulesetAtivo } from '../../modules/entrega/ruleset-ativo'
 import { semearDemo } from '../../modules/ingestao/demo/semear'
+import { LLMFake } from '../../modules/ingestao/llm'
+import type { ConteudoFeed } from '../../modules/entrega/lista-secreta'
 
 /**
  * FUMAÇA DAS TELAS NOVAS.
@@ -47,7 +49,11 @@ vi.mock('../../modules/dominio/db/cliente', () => ({
 beforeAll(async () => {
   process.env.DATABASE_URL = 'postgres://demo'
   banco = await bancoDeTeste()
-  await semearDemo(banco.db, await rulesetAtivo(), AGORA)
+  // Com a porta FAKE: é o que roda no ambiente de demonstração (sem
+  // OPENROUTER_API_KEY) e é o que faz a lista nascer com narrativa nos cards e
+  // resumo no cabeçalho — sem ela, a tela seria testada num estado que o
+  // cliente não vê.
+  await semearDemo(banco.db, await rulesetAtivo(), AGORA, new LLMFake())
   // O usuário da sessão simulada existe de verdade: telas passaram a consultar
   // preferências por usuarioId (jogadores_ocultos), e uuid inválido quebraria.
   const { usuarios } = await import('../../modules/dominio/db/schema')
@@ -222,6 +228,36 @@ describe('tela de Resultados', () => {
 })
 
 describe('a rodada segue o fuso do cliente', () => {
+  it('o resumo do dia aparece no topo — e sem ele a tela não abre buraco', async () => {
+    // Gerado, validado e gravado desde a spec §4.4, e nunca renderizado: o
+    // `grep resumoDoDia` só encontrava o tipo, o escritor e os testes.
+    const onde = and(
+      eq(feedSnapshot.dataReferencia, HOJE),
+      eq(feedSnapshot.estrategia, 'LISTA_SECRETA'),
+    )
+    const [linha] = await banco.db.select().from(feedSnapshot).where(onde).limit(1)
+    const original = linha!.conteudoJson as ConteudoFeed
+    expect(typeof original.resumoDoDia).toBe('string')
+
+    const { default: Pagina } = await import('../(app)/page')
+    const html = renderToStaticMarkup(await Pagina({ searchParams: Promise.resolve({}) }))
+    expect(html).toContain(original.resumoDoDia!)
+
+    // Ausente é caso NORMAL (sem chave, provedor fora, texto reprovado) e não
+    // pode virar um bloco vazio anunciando defeito — mesma regra da narrativa
+    // dentro do card.
+    try {
+      const semResumo: ConteudoFeed = { ...original, resumoDoDia: null }
+      await banco.db.update(feedSnapshot).set({ conteudoJson: semResumo }).where(onde)
+      const semHtml = renderToStaticMarkup(await Pagina({ searchParams: Promise.resolve({}) }))
+      expect(semHtml).not.toContain(original.resumoDoDia!)
+      expect(semHtml).not.toContain('border-left:2px solid')
+      expect(semHtml).toContain('LISTA DO DIA')
+    } finally {
+      await banco.db.update(feedSnapshot).set({ conteudoJson: original }).where(onde)
+    }
+  }, 60_000)
+
   it('às 21h30 de Brasília a lista ainda é a de hoje', async () => {
     // 00:30Z é 21:30 do dia ANTERIOR em Brasília. O cálculo antigo, por UTC,
     // já pedia a lista de amanhã — e o assinante via a tela vazia justamente

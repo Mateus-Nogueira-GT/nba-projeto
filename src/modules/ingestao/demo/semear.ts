@@ -29,6 +29,7 @@ import { agregar } from '../../motor/odds/agregar'
 import type { Ruleset } from '../../motor/ruleset/schema'
 import { ATRIBUTOS } from '../../motor/tipos'
 import type { Atributo } from '../../motor/tipos'
+import type { PortaLLM } from '../llm'
 import { lerListaDeNiveis } from '../niveis/parser'
 import { importarListaDeNiveis } from '../niveis/importar'
 import { decomporPontos, historicoOscilacao, mediaDe, niveisDoJogador, posicaoDe } from './dados'
@@ -65,8 +66,22 @@ export type ResumoDemo = {
  * MVP em nível 3, e um MVP cruzando o alvo do 1º quarto até o modo fire.
  *
  * Idempotente: reexecutar não duplica nada.
+ *
+ * `llm` é opcional e repassado tal-qual a `publicarListaSecreta` nas três
+ * publicações abaixo: sem ele, quem grava o snapshot primeiro decide se
+ * aquele dia terá narrativa — e como a geração só roda na TRANSIÇÃO de hash
+ * (`mudou`), a demo publicando sem `llm` fixaria o hash sem narrativa, e o
+ * cron de lista-secreta que rodasse depois encontraria o mesmo hash e nunca
+ * chamaria a LLM. No ambiente de demonstração — sem `OPENROUTER_API_KEY` —
+ * `portaLLMDoAmbiente()` devolve `LLMFake`, determinístico, exatamente o que
+ * se quer numa demo.
  */
-export async function semearDemo(db: Db, ruleset: Ruleset, agora: Date): Promise<ResumoDemo> {
+export async function semearDemo(
+  db: Db,
+  ruleset: Ruleset,
+  agora: Date,
+  llm?: PortaLLM,
+): Promise<ResumoDemo> {
   const conteudo = await readFile(ARQUIVO_LISTA, 'utf8')
   const analise = lerListaDeNiveis(conteudo)
 
@@ -427,6 +442,7 @@ export async function semearDemo(db: Db, ruleset: Ruleset, agora: Date): Promise
     dataReferencia,
     agora,
     ignorarAntecedencia: true,
+    llm,
   })
 
   let apitosFireLive = 0
@@ -456,6 +472,7 @@ export async function semearDemo(db: Db, ruleset: Ruleset, agora: Date): Promise
       dataReferencia: somarDias(dataReferencia, -i),
       agora: dia,
       ignorarAntecedencia: true,
+      llm,
     })
     if (publicacaoPassada.publicou) rodadasPublicadas += 1
   }
@@ -474,6 +491,7 @@ export async function semearDemo(db: Db, ruleset: Ruleset, agora: Date): Promise
       dataReferencia,
       agora,
       ignorarAntecedencia: true,
+      llm,
     })
   }
 

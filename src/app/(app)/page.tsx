@@ -207,6 +207,26 @@ export default async function PaginaListaSecreta({
         {ordenados.length} entrada{ordenados.length === 1 ? '' : 's'} sugerida
         {ordenados.length === 1 ? '' : 's'} pela estratégia · ordenadas pela escala de confiança
       </p>
+      {/* Resumo editorial da rodada, gerado na materialização junto com as
+          narrativas dos cards. Ausente é caso NORMAL (sem chave de LLM,
+          provedor fora, texto reprovado pelo validador) — e ausência não abre
+          espaço nenhum, mesma regra da narrativa dentro do card. */}
+      {feed.conteudo.resumoDoDia ? (
+        <p
+          style={{
+            margin: '0 0 12px',
+            paddingLeft: 10,
+            borderLeft: `2px solid ${semantico.divisor}`,
+            fontSize: 13,
+            lineHeight: 1.55,
+            fontStyle: 'italic',
+            color: semantico.textoSecundario,
+          }}
+        >
+          {feed.conteudo.resumoDoDia}
+        </p>
+      ) : null}
+
       <p style={{ margin: '0 0 16px', fontSize: 12, display: 'flex', gap: 12 }}>
         <Link href="/como-funciona" style={{ color: semantico.textoSecundario }}>
           Como funciona →
@@ -371,6 +391,7 @@ export default async function PaginaListaSecreta({
                 ultimos5={item.ultimos5 ?? []}
                 mediaTemporada={item.mediaTemporada ?? null}
                 oddFaixa={item.oddFaixa ?? null}
+                narrativa={item.narrativa ?? null}
               />
               <p style={{ margin: '4px 0 0', fontSize: 12 }}>
                 <Link

@@ -69,6 +69,7 @@ config/ruleset.v1.yaml       as estratégias do CJ — o coração
 docs/                        arquitetura, regras, modelo de dados, design system
 docs/adr/                    decisões e seus custos
 src/modules/ingestao/        L0 · adapters NBA e casas (anticorrupção)
+src/modules/ingestao/llm/     L0 · porta de LLM (OpenRouter) — narra, nunca decide
 src/modules/dominio/         L1 · modelo canônico
 src/modules/motor/           L2 · funções puras — SEM I/O
 src/modules/entrega/         L3 · feed, push, API
