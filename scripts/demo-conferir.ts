@@ -133,6 +133,38 @@ async function principal() {
   const tabela = await telaDaClassificacao(db, temporadaDe(new Date(), calendarioDoRuleset(ruleset)))
   registrar('Estatísticas · classificação', tabela.linhas.length > 0, `${tabela.linhas.length} times na campanha`)
 
+  // 7 · Tela de partida — as três variantes de estado.
+  const { telaDoJogo } = await import('../src/modules/entrega/estatisticas/jogo')
+  const { jogos: tabelaJogos } = await import('../src/modules/dominio/db/schema')
+  const { eq: igual } = await import('drizzle-orm')
+
+  for (const [estado, rotulo] of [
+    ['ENCERRADO', 'encerrado'],
+    ['AO_VIVO', 'ao vivo'],
+    ['AGENDADO', 'agendado'],
+  ] as const) {
+    const [linha] = await db.select().from(tabelaJogos).where(igual(tabelaJogos.status, estado)).limit(1)
+    if (!linha) {
+      registrar(`Tela de partida · ${rotulo}`, false, 'nenhum jogo nesse estado na demo')
+      continue
+    }
+    const partida = await telaDoJogo(db, linha.id, {})
+    if (partida === null) {
+      registrar(`Tela de partida · ${rotulo}`, false, 'telaDoJogo devolveu null')
+      continue
+    }
+    const linhas = partida.casa.boxScore.length + partida.visitante.boxScore.length
+    const comNota = [...partida.casa.boxScore, ...partida.visitante.boxScore].filter(
+      (l) => l.nota !== null,
+    ).length
+    const detalhe =
+      estado === 'AGENDADO'
+        ? `${partida.h2h.length} confronto(s) anterior(es), forma ${partida.casa.forma.join('')}`
+        : `${linhas} linha(s) de box, ${comNota} com nota, ${partida.lideres.length} líder(es)`
+    const ok = estado === 'AGENDADO' ? partida.h2h.length > 0 : linhas > 0
+    registrar(`Tela de partida · ${rotulo}`, ok, detalhe)
+  }
+
   // Relatório.
   const largura = Math.max(...itens.map((i) => i.tela.length))
   for (const i of itens) {
