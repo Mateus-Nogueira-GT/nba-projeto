@@ -602,6 +602,23 @@ describe('tela de partida', () => {
     expect(html).toContain('dia anterior')
     expect(html).toContain('dia seguinte')
     expect(html).toMatch(/href="\/estatisticas\/jogo\/[0-9a-f-]+"/)
+
+    // As duas asserções acima não amarram CADA link ao seu PRÓPRIO rótulo:
+    // `nav.anterior`/`nav.seguinte` são dois `string` iguais para o
+    // TypeScript, então trocar os dois no JSX (ou fixar um href velho à mão,
+    // mantendo o rótulo) deixaria as três asserções acima verdes mesmo com
+    // "dia anterior" apontando para amanhã. `ontem`/`amanha` usam a mesma
+    // `somarDias` que `navegacaoDeDatas` usa por baixo, a partir do mesmo
+    // relógio congelado (AGORA/HOJE) que a página lê — não é um valor fixo
+    // que também precisaria ser mantido em dia manualmente.
+    const ontem = somarDias(HOJE, -1)
+    const amanha = somarDias(HOJE, 1)
+    expect(html).toMatch(
+      new RegExp(`<a href="/estatisticas\\?data=${ontem}"[^>]*>\\s*← dia anterior\\s*</a>`),
+    )
+    expect(html).toMatch(
+      new RegExp(`<a href="/estatisticas\\?data=${amanha}"[^>]*>\\s*dia seguinte →\\s*</a>`),
+    )
   })
 
   it('data inválida na URL não quebra a tela', async () => {
