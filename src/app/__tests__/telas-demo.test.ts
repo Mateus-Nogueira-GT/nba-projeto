@@ -595,6 +595,22 @@ describe('tela de partida', () => {
       /<caption[^>]*>Box score de [^<]*<\/caption>[\s\S]*?href="\/estatisticas\/jogador\/[0-9a-f-]+"/,
     )
   })
+
+  it('a aba de stats navega por data e linka para a partida', async () => {
+    const { default: Indice } = await import('../(app)/estatisticas/page')
+    const html = renderToStaticMarkup(await Indice({ searchParams: Promise.resolve({}) }))
+    expect(html).toContain('dia anterior')
+    expect(html).toContain('dia seguinte')
+    expect(html).toMatch(/href="\/estatisticas\/jogo\/[0-9a-f-]+"/)
+  })
+
+  it('data inválida na URL não quebra a tela', async () => {
+    const { default: Indice } = await import('../(app)/estatisticas/page')
+    const html = renderToStaticMarkup(
+      await Indice({ searchParams: Promise.resolve({ data: 'ontem' }) }),
+    )
+    expect(html).toContain('Jogos do dia')
+  })
 })
 
 describe('a foto do jogador', () => {

@@ -5,7 +5,7 @@ import { calendarioDoRuleset, temporadaDe } from '@/modules/dominio/temporada'
 import { exigirAcessoEstatisticasSeConfigurado } from '@/modules/plataforma/assinatura/guarda'
 import { telaDoTime } from '@/modules/entrega/estatisticas/time'
 import type { BoxScoreDoJogo } from '@/modules/entrega/estatisticas/time'
-import { BASE_ESTATISTICAS, rotaDoJogador } from '@/modules/entrega/estatisticas/rotas'
+import { BASE_ESTATISTICAS, rotaDoJogador, rotaDoJogo } from '@/modules/entrega/estatisticas/rotas'
 import { rulesetAtivo } from '@/modules/entrega/ruleset-ativo'
 import { diaCurto } from '@/components/formato'
 import { CabecalhoTela, Moldura } from '@/components/navegacao'
@@ -40,7 +40,9 @@ function colunas(temProrrogacao: boolean, fuso: string): Coluna<BoxScoreDoJogo>[
       fixa: true,
       celula: (l) => (
         <span>
-          {diaCurto(l.data, fuso)}{' '}
+          <a href={rotaDoJogo(l.jogoId)} style={{ color: semantico.textoPrimario }}>
+            {diaCurto(l.data, fuso)}
+          </a>{' '}
           <span style={{ color: semantico.textoSecundario }}>
             {l.emCasa ? 'vs' : '@'} {l.adversarioSigla}
           </span>
