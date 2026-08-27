@@ -7,3 +7,4 @@ export { UltimaAtualizacao, type UltimaAtualizacaoProps } from './UltimaAtualiza
 export { Tabela, type TabelaProps, type Coluna } from './Tabela'
 export { Avatar, iniciaisDe, fundoDoTime } from './Avatar'
 export { Pilula } from './Pilula'
+export { NotaPartida, type NotaPartidaProps } from './NotaPartida'
