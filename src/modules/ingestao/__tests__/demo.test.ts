@@ -156,7 +156,9 @@ describe('semearDemo (PGlite, banco vazio)', () => {
     // Suporte com 2 jogos → laranja (o doc proíbe Suporte de apitar no nível 1)
     expect(itens.find((i) => i.nome === 'LeBron James')?.nivelApito).toBe(2)
     // MVP com 3 jogos → verde, e o turbo do documento
-    const curry = itens.find((i) => i.nome === 'stephen Curry')
+    // O feed mostra o nome de EXIBIÇÃO: o documento do CJ traz "stephen" em
+    // minúscula e a demo sobe só a inicial (sem tocar na grafia).
+    const curry = itens.find((i) => i.nome === 'Stephen Curry')
     expect(curry?.nivelApito).toBe(3)
     expect(curry?.turbo).toBe(true)
   })
@@ -335,6 +337,46 @@ describe('semearDemo (PGlite, banco vazio)', () => {
     const feed = await lerFeed(banco.db, HOJE)
     const comOdd = (feed?.conteudo.itens ?? []).filter((i) => i.oddFaixa !== null)
     expect(comOdd.length, 'card sem odd no rodapé — feed publicado antes das odds').toBeGreaterThan(0)
+  })
+
+  it('o green acontece nos TRÊS atributos, não só em pontos', async () => {
+    // O motor já lia marcos por atributo (`por_atributo.marcos_green`), mas a
+    // demo só forçava o protagonista de PONTOS a cruzar — então o cliente via
+    // a funcionalidade pela metade e a documentação dizia "green só em
+    // pontos", o que deixou de ser verdade quando `por_atributo` nasceu.
+    const { greens } = await import('../../dominio/db/schema')
+    const registrados = await banco.db.select().from(greens)
+    const atributos = new Set(registrados.map((g) => g.atributo))
+
+    expect(atributos).toContain('PONTOS')
+    expect(atributos, 'sem green de rebotes o cliente não vê o canal funcionando').toContain('REBOTES')
+    expect(atributos).toContain('ASSISTENCIAS')
+
+    // E cada green aponta um marco que o RULESET define — nunca um número
+    // digitado no seed.
+    const { marcosDoNivel } = await import('../../motor/atributos')
+    const { niveis, niveisVersao } = await import('../../dominio/db/schema')
+    const { and: e } = await import('drizzle-orm')
+    for (const g of registrados) {
+      const [versao] = await banco.db
+        .select()
+        .from(niveisVersao)
+        .where(eq(niveisVersao.ativa, true))
+        .limit(1)
+      const [linha] = await banco.db
+        .select()
+        .from(niveis)
+        .where(
+          e(
+            eq(niveis.niveisVersaoId, versao!.id),
+            eq(niveis.jogadorId, g.jogadorId),
+            eq(niveis.atributo, g.atributo),
+          ),
+        )
+        .limit(1)
+      const marcos = marcosDoNivel(linha!.nivel, g.atributo, ruleset)
+      expect(marcos, `green de ${g.atributo} com marco ${g.marco} fora do ruleset`).toContain(g.marco)
+    }
   })
 
   it('reexecutar o seed não duplica nada', async () => {

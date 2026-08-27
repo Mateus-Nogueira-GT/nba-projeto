@@ -51,11 +51,15 @@ export async function aplicarFotos(
   verificar: (url: string) => Promise<boolean>,
 ): Promise<ResultadoFotos> {
   const todos = await db.select().from(jogadores)
-  const porNome = new Map(todos.map((j) => [j.nomeCompleto, j.id] as const))
+  // Caixa baixa dos dois lados: `nomeCompleto` guarda o nome de EXIBIÇÃO
+  // ("Stephen Curry") e as chaves aqui vieram do documento do CJ
+  // ("stephen Curry"). Igualdade exata mandaria o Curry para `puladas` — o
+  // rosto mais reconhecível da demonstração sumiria em silêncio.
+  const porNome = new Map(todos.map((j) => [j.nomeCompleto.toLowerCase(), j.id] as const))
   let gravadas = 0
   const puladas: string[] = []
   for (const [nome, personId] of Object.entries(MAPA_FOTOS)) {
-    const id = porNome.get(nome)
+    const id = porNome.get(nome.toLowerCase())
     const url = urlDaFoto(personId)
     if (id === undefined || !(await verificar(url))) {
       puladas.push(nome)

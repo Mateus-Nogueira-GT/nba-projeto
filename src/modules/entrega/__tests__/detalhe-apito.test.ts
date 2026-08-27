@@ -42,8 +42,13 @@ describe('detalhe do apito', () => {
 
   it('cada bloco nomeia o adversário daquele jogo', async () => {
     const d = await detalheDoApito(banco.db, ruleset, await itemDe('LeBron James'))
-    // LeBron é PHI na lista do CJ; a rodada da demo repete LAL x PHI.
-    for (const b of d.blocos) expect(b.adversarioSigla).toBe('LAL')
+    // LeBron é PHI na lista do CJ. O histórico da demo gira os adversários,
+    // então a asserção é a INTENÇÃO — cada bloco nomeia o adversário DAQUELE
+    // jogo — e não um calendário fixo: antes bastava devolver 'LAL' constante
+    // para o teste passar.
+    expect(d.blocos.length).toBeGreaterThan(1)
+    for (const b of d.blocos) expect(b.adversarioSigla).not.toBe('PHI')
+    expect(new Set(d.blocos.map((b) => b.adversarioSigla)).size).toBeGreaterThan(1)
   })
 
   it('oscilação: o porquê nomeia o limiar média − delta do ruleset', async () => {
