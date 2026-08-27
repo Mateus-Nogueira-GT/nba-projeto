@@ -6,6 +6,7 @@ import {
   classificacao,
   estatisticasJogo,
   estatisticasQuarto,
+  estatisticasTimeJogo,
   fireLiveExecucoes,
   jogadores,
   jogos,
@@ -501,6 +502,11 @@ export async function semearDemo(
   //      classificação não tem de onde nascer.
   const placares = await semearPlacares(db)
 
+  // 6d · BOX SCORE DO TIME, quarto a quarto, dos jogos ENCERRADOS — sem ele a
+  //      Tela de Partida (estilo Sofascore) não tem "Pontos por quarto" para
+  //      nenhum jogo passado. Depende do placar acima já estar gravado.
+  await semearBoxScorePorQuarto(db)
+
   // 7 · Classificação da temporada — a campanha que a tela do TIME mostra
   //     (posição, vitórias, derrotas, sequência). Sem ela o cliente abre o
   //     time e encontra um cabeçalho sem campanha. Derivada dos jogos
@@ -718,6 +724,76 @@ async function semearPlacares(db: Db): Promise<number> {
     ? (resultado as unknown[])
     : ((resultado as { rows?: unknown[] }).rows ?? [])
   return linhas.length
+}
+
+/** Divide um total de pontos em 4 quartos que somam exatamente esse total. */
+function quartosDoTotal(total: number): { q1: number; q2: number; q3: number; q4: number } {
+  const base = Math.floor(total / 4)
+  const resto = total % 4
+  // Sem sorteio: reexecutar o seed precisa dar sempre a mesma divisão.
+  return {
+    q1: base + (resto > 0 ? 1 : 0),
+    q2: base + (resto > 1 ? 1 : 0),
+    q3: base + (resto > 2 ? 1 : 0),
+    q4: base,
+  }
+}
+
+/**
+ * BOX SCORE DO TIME, QUARTO A QUARTO, DOS JOGOS ENCERRADOS — derivado do
+ * placar (acima), nunca digitado.
+ *
+ * `estatisticas_time_jogo` é a tabela que a Tela de Partida (estilo
+ * Sofascore) lê para "Pontos por quarto" — sem uma linha por lado aqui, o
+ * placar do jogo aparece mas a quebra por quarto não. A divisão entre os
+ * quartos é só de demonstração (o número real vem do provedor em produção,
+ * `ingestao/sincronizar/partida.ts`); o que importa é que a SOMA fecha com o
+ * placar — um box score que não fecha é pior que nenhum, porque parece dado
+ * errado em vez de ausência de dado.
+ *
+ * Só cobre jogos ENCERRADOS: um jogo AO VIVO só tem o 1º quarto disputado, e
+ * espalhar o placar parcial pelos quatro quartos inventaria pontos em
+ * quartos que ainda não aconteceram.
+ */
+async function semearBoxScorePorQuarto(db: Db): Promise<number> {
+  const encerrados = await db
+    .select()
+    .from(jogos)
+    .where(
+      and(
+        eq(jogos.status, 'ENCERRADO'),
+        isNotNull(jogos.placarCasa),
+        isNotNull(jogos.placarVisitante),
+      ),
+    )
+
+  let linhas = 0
+  for (const jogo of encerrados) {
+    const lados = [
+      { timeId: jogo.timeCasaId, pontos: jogo.placarCasa! },
+      { timeId: jogo.timeVisitanteId, pontos: jogo.placarVisitante! },
+    ]
+    for (const lado of lados) {
+      const q = quartosDoTotal(lado.pontos)
+      const valores = {
+        pontos: lado.pontos,
+        pontosQ1: q.q1,
+        pontosQ2: q.q2,
+        pontosQ3: q.q3,
+        pontosQ4: q.q4,
+        pontosProrrogacao: 0,
+      }
+      await db
+        .insert(estatisticasTimeJogo)
+        .values({ jogoId: jogo.id, timeId: lado.timeId, ...valores })
+        .onConflictDoUpdate({
+          target: [estatisticasTimeJogo.jogoId, estatisticasTimeJogo.timeId],
+          set: valores,
+        })
+      linhas += 1
+    }
+  }
+  return linhas
 }
 
 /**
