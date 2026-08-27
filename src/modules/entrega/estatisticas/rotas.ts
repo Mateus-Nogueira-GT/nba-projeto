@@ -23,6 +23,10 @@ export function rotaDoTime(timeId: string): string {
   return `${BASE_ESTATISTICAS}/time/${encodeURIComponent(timeId)}`
 }
 
+export function rotaDoJogo(jogoId: string): string {
+  return `${BASE_ESTATISTICAS}/jogo/${encodeURIComponent(jogoId)}`
+}
+
 export function rotaDaBusca(termo: string): string {
   return `${BASE_ESTATISTICAS}?q=${encodeURIComponent(termo)}`
 }
