@@ -45,6 +45,15 @@ vi.mock('../../modules/dominio/db/cliente', () => ({
   getDb: () => banco.db,
   fecharDb: async () => {},
 }))
+// `renderToStaticMarkup` não monta o App Router: só a tela de partida usa
+// `useRouter` (AtualizarAoVivo), e sem este mock ela derruba o teste com
+// "invariant expected app router to be mounted". Preserva o resto do módulo
+// de verdade (`redirect`, `notFound`) — várias outras telas deste arquivo
+// dependem deles.
+vi.mock('next/navigation', async (importOriginal) => {
+  const real = await importOriginal<typeof import('next/navigation')>()
+  return { ...real, useRouter: () => ({ refresh: () => {} }) }
+})
 
 beforeAll(async () => {
   process.env.DATABASE_URL = 'postgres://demo'
@@ -527,6 +536,51 @@ describe('Detalhe do apito — identidade 03', () => {
     expect(html).toContain('nota de confiança')
     expect(html).not.toContain('PROBABILIDADE')
   }, 60_000)
+})
+
+describe('tela de partida', () => {
+  async function renderizarJogo(status: 'AGENDADO' | 'AO_VIVO' | 'ENCERRADO') {
+    const { jogos } = await import('../../modules/dominio/db/schema')
+    const { eq: igual } = await import('drizzle-orm')
+    const [j] = await banco.db.select().from(jogos).where(igual(jogos.status, status)).limit(1)
+    const { default: Pagina } = await import('../(app)/estatisticas/jogo/[id]/page')
+    return renderToStaticMarkup(await Pagina({ params: Promise.resolve({ id: j!.id }) }))
+  }
+
+  it('jogo encerrado mostra os dois box scores e a nota', async () => {
+    const html = await renderizarJogo('ENCERRADO')
+    await gravarConferencia('tela-de-partida', html)
+    expect(html).toContain('NOTA')
+    // A nota é impressa com vírgula, como todo decimal do produto.
+    expect(html).toMatch(/[3-9],\d/)
+    expect(html).toContain('Líderes da partida')
+  })
+
+  it('jogo AO VIVO não declara vencedor nem esconde o parcial', async () => {
+    const html = await renderizarJogo('AO_VIVO')
+    expect(html).toContain('AO VIVO')
+  })
+
+  it('pré-jogo mostra H2H e forma, sem tabela de travessões', async () => {
+    // A lição da "parede de travessões": pré-jogo mostra o que EXISTE, não a
+    // ausência do que ainda não aconteceu.
+    const html = await renderizarJogo('AGENDADO')
+    expect(html).toContain('Confrontos anteriores')
+    expect(html).not.toContain('Líderes da partida')
+  })
+
+  it('nenhuma tela de partida escreve "probabilidade" ou "nível"', async () => {
+    for (const status of ['AGENDADO', 'AO_VIVO', 'ENCERRADO'] as const) {
+      const html = (await renderizarJogo(status)).toLowerCase()
+      expect(html, status).not.toContain('probabilidade')
+      expect(html, status).not.toContain('nível')
+    }
+  })
+
+  it('cada linha do box score leva ao perfil do jogador', async () => {
+    const html = await renderizarJogo('ENCERRADO')
+    expect(html).toMatch(/href="\/estatisticas\/jogador\/[0-9a-f-]+"/)
+  })
 })
 
 describe('a foto do jogador', () => {
