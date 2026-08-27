@@ -79,6 +79,26 @@ export const primitivo = {
   // Criar conta, Continuar no Mercado Pago) — laranjaAcento é o início.
   laranjaAcentoClaro: '#FFB25E',
   tinta950: '#05080F',
+
+  // Nota da partida — 5 faixas de desempenho (Game Score normalizado, 3-10).
+  // Paleta PRÓPRIA e deliberadamente distinta do grau de confiança do apito
+  // (ver o comentário em componentes/NotaPartida.tsx) — mas o hex mora AQUI
+  // como todo o resto, nunca solto no componente (achado da revisão: uma
+  // isenção por nome de arquivo no teste "hex direto" não pega um hex NOVO e
+  // não relacionado que alguém cole no mesmo arquivo amanhã).
+  notaFundoExcepcional: '#1F6F4A',
+  notaFundoOtima: '#2E7D62',
+  notaFundoBoa: '#3D5A80',
+  notaFundoMediana: '#4A4E69',
+  notaFundoFraca: '#5C3A3A',
+  // Texto claro de cada faixa. Excepcional e ótima são as duas faixas verdes
+  // e compartilham o mesmo texto — mesmo padrão de reúso de
+  // `apitoNivel2`/`apitoModoFire` em semantico.ts.
+  notaTextoVerde: '#EAFBF2',
+  notaTextoAzul: '#E8EFF7',
+  notaTextoRoxo: '#E9E9F0',
+  notaTextoVermelho: '#F7E9E9',
+
   // Fontes — a família vem por variável CSS publicada no layout (next/font).
   fonteAnton: "var(--fonte-anton), 'Arial Narrow', sans-serif",
   fonteBarlow: "var(--fonte-barlow), system-ui, sans-serif",

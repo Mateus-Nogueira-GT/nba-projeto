@@ -551,14 +551,22 @@ describe('tela de partida', () => {
     const html = await renderizarJogo('ENCERRADO')
     await gravarConferencia('tela-de-partida', html)
     expect(html).toContain('NOTA')
-    // A nota é impressa com vírgula, como todo decimal do produto.
-    expect(html).toMatch(/[3-9],\d/)
+    // A nota é impressa com vírgula, como todo decimal do produto. Ancorado
+    // no `background` de uma das 5 faixas do PRÓPRIO badge da nota
+    // (componente.notaFaixa*) — sem isso, qualquer célula de FG%/3P%/LL%
+    // (que `pct()` também imprime como "45,5%") satisfaria o regex sozinha,
+    // mesmo que a nota regredisse para um formato sem vírgula.
+    expect(html).toMatch(/background:#(1F6F4A|2E7D62|3D5A80|4A4E69|5C3A3A)[^>]*>[3-9],\d/)
     expect(html).toContain('Líderes da partida')
   })
 
   it('jogo AO VIVO não declara vencedor nem esconde o parcial', async () => {
     const html = await renderizarJogo('AO_VIVO')
     expect(html).toContain('AO VIVO')
+    // Ausência do veredito: "Líderes da partida" só renderiza quando
+    // `encerrado` (page.tsx) — é a peça mais próxima de um resultado final
+    // que a tela produz, e um jogo no 1º quarto não pode mostrá-la.
+    expect(html).not.toContain('Líderes da partida')
   })
 
   it('pré-jogo mostra H2H e forma, sem tabela de travessões', async () => {
@@ -579,7 +587,13 @@ describe('tela de partida', () => {
 
   it('cada linha do box score leva ao perfil do jogador', async () => {
     const html = await renderizarJogo('ENCERRADO')
-    expect(html).toMatch(/href="\/estatisticas\/jogador\/[0-9a-f-]+"/)
+    // Ancorado na legenda da TABELA de box score (Tabela.tsx renderiza
+    // `legenda` como <caption>) — sem isso, o mesmo padrão de href também
+    // aparece nos links de "Líderes da partida", e o teste passaria mesmo
+    // com zero links dentro da tabela em si.
+    expect(html).toMatch(
+      /<caption[^>]*>Box score de [^<]*<\/caption>[\s\S]*?href="\/estatisticas\/jogador\/[0-9a-f-]+"/,
+    )
   })
 })
 

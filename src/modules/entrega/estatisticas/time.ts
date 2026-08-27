@@ -10,17 +10,7 @@ import {
 import type { Db } from '../../dominio/db/tipos'
 import { daColuna, maisAntiga } from './atualizacao'
 import type { ComAtualizacao } from './atualizacao'
-
-function numero(v: string | null): number | null {
-  if (v === null) return null
-  const n = Number(v)
-  return Number.isFinite(n) ? n : null
-}
-
-function percentual(convertidas: number, tentadas: number): number | null {
-  if (tentadas === 0) return null
-  return Math.round((convertidas / tentadas) * 1000) / 10
-}
+import { numero, percentual } from './numeros'
 
 export type QuebraPorQuarto = {
   q1: number

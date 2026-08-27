@@ -69,6 +69,7 @@ Nenhuma destas eu posso responder sozinho. Onde o cliente ou o CJ não definiu,
 | --- | --- | --- |
 | 01 | Quem é o provedor NBA primário e o reserva? Credenciais? | tudo |
 | 01 | O provedor entrega quebra por quarto **do time**? | tela do time |
+| 01 | O box score do provedor real traz o time de cada linha (o time daquele jogo específico), ou só o id do jogador? Sem uma coluna `time_id` em `estatisticas_jogo`, a tela de partida usa `jogadores.time_id` (cadastro de HOJE) para decidir de qual lado cada linha aparece, e erra num jogo passado se o jogador foi trocado depois dele (ver `jogo.ts`, `montarLado`) | acurácia do elenco na tela de partida após troca no meio da temporada |
 | 02 | As chaves VAPID são da conta de quem? | push |
 | 03 | Nome comercial, ícones e plataformas mínimas suportadas | instalação |
 | 04 | Cadastro self-service ou criação controlada? | contratação |

@@ -12,6 +12,7 @@ import type { Db } from '../../dominio/db/tipos'
 import { daColuna, maisAntiga } from './atualizacao'
 import type { ComAtualizacao } from './atualizacao'
 import { notaDaPartida } from './nota'
+import { numero, percentual } from './numeros'
 
 /**
  * A TELA DE PARTIDA — o centro de gravidade da aba de estatísticas.
@@ -93,18 +94,6 @@ export type TelaDoJogo = ComAtualizacao & {
 const LIMITE_H2H_PADRAO = 5
 const LIMITE_FORMA = 5
 
-function percentual(convertidas: number, tentadas: number): number | null {
-  if (tentadas === 0) return null
-  return Math.round((convertidas / tentadas) * 1000) / 10
-}
-
-/** `minutos` chega como numeric (string) do Postgres. */
-function numero(v: string | null): number | null {
-  if (v === null) return null
-  const n = Number(v)
-  return Number.isFinite(n) ? n : null
-}
-
 export async function telaDoJogo(
   db: Db,
   jogoId: string,
@@ -126,18 +115,64 @@ export async function telaDoJogo(
   const timePorId = new Map(listaTimes.map((t) => [t.id, t] as const))
   const jogadorPorId = new Map(elenco.map((j) => [j.id, j] as const))
 
-  // Partidas anteriores dos dois times, para forma e H2H numa consulta só.
-  const anteriores = await db
-    .select()
+  // Colunas que forma e H2H de fato leem abaixo — nunca o jogo inteiro
+  // (achado da revisão: `select()` puro sobre todo o histórico ENCERRADO dos
+  // dois times, sem limite, cresce sem fim conforme as temporadas acumulam).
+  const COLUNAS_JOGO_ANTERIOR = {
+    id: jogos.id,
+    dataHoraUtc: jogos.dataHoraUtc,
+    timeCasaId: jogos.timeCasaId,
+    timeVisitanteId: jogos.timeVisitanteId,
+    placarCasa: jogos.placarCasa,
+    placarVisitante: jogos.placarVisitante,
+  }
+
+  // H2H: só jogos ENTRE estes dois times — o filtro já é o universo certo,
+  // então o LIMIT no banco é exato (não corta nenhum confronto relevante).
+  const limiteH2H = opcoes.limiteH2H ?? LIMITE_H2H_PADRAO
+  const h2hBruto = await db
+    .select(COLUNAS_JOGO_ANTERIOR)
     .from(jogos)
     .where(
       and(
         eq(jogos.status, 'ENCERRADO'),
         lt(jogos.dataHoraUtc, jogo.dataHoraUtc),
-        or(inArray(jogos.timeCasaId, idsTimes), inArray(jogos.timeVisitanteId, idsTimes)),
+        or(
+          and(eq(jogos.timeCasaId, jogo.timeCasaId), eq(jogos.timeVisitanteId, jogo.timeVisitanteId)),
+          and(eq(jogos.timeCasaId, jogo.timeVisitanteId), eq(jogos.timeVisitanteId, jogo.timeCasaId)),
+        ),
       ),
     )
     .orderBy(desc(jogos.dataHoraUtc))
+    .limit(limiteH2H)
+
+  // Forma: os LIMITE_FORMA jogos mais recentes de CADA time, uma consulta por
+  // time. Uma única consulta com LIMIT sobre a união dos dois times NÃO
+  // garante os 5 mais recentes de cada lado — se um deles jogou mais jogos
+  // recentes que o outro no combinado, ele consome o limite sozinho e o
+  // outro fica com menos de 5 (achado da revisão).
+  const formaDoTime = (timeId: string) =>
+    db
+      .select(COLUNAS_JOGO_ANTERIOR)
+      .from(jogos)
+      .where(
+        and(
+          eq(jogos.status, 'ENCERRADO'),
+          lt(jogos.dataHoraUtc, jogo.dataHoraUtc),
+          or(eq(jogos.timeCasaId, timeId), eq(jogos.timeVisitanteId, timeId)),
+        ),
+      )
+      .orderBy(desc(jogos.dataHoraUtc))
+      .limit(LIMITE_FORMA)
+
+  const [formaCasaBruta, formaVisitanteBruta] = await Promise.all([
+    formaDoTime(jogo.timeCasaId),
+    formaDoTime(jogo.timeVisitanteId),
+  ])
+  const formaBrutaPorTime = new Map([
+    [jogo.timeCasaId, formaCasaBruta],
+    [jogo.timeVisitanteId, formaVisitanteBruta],
+  ])
 
   const montarLado = (timeId: string): LadoDaPartida => {
     const time = timePorId.get(timeId)
@@ -146,6 +181,20 @@ export async function telaDoJogo(
     // O elenco da tela é quem TEM LINHA no box score — não o elenco cadastrado.
     // Jogador sem linha não entrou em quadra, e listá-lo com tudo zerado diria
     // que jogou mal quando ele nem jogou.
+    //
+    // LIMITAÇÃO CONHECIDA (revisão da Task 3/4, Important 2 — decidido NÃO
+    // corrigir agora): a associação jogador→time aqui é `jogadores.time_id`,
+    // o cadastro ATUAL, não o time que o jogador vestiu NAQUELE jogo
+    // específico. Um jogador trocado no meio da temporada aparece no box
+    // score do time de HOJE ao consultar um jogo PASSADO de antes da troca —
+    // exatamente o erro de atribuição que o resto do projeto guarda contra
+    // (CLAUDE.md, "os elencos da lista não são a NBA real"; aqui o mesmo
+    // risco entra por uma porta diferente, a tabela real do provedor, não a
+    // lista curada). A correção definitiva exige uma coluna `time_id` em
+    // `estatisticas_jogo` (o time daquele jogo, não o cadastro) preenchida
+    // pelo adaptador de ingestão real — hoje não há provedor contratado para
+    // projetar esse contrato. Registrado em docs/specs/README.md, tabela
+    // "Perguntas que bloqueiam" (Spec 01).
     const linhas = boxJogadores
       .filter((l) => jogadorPorId.get(l.jogadorId)?.timeId === timeId)
       .map((l): LinhaDoBoxScore => {
@@ -185,10 +234,8 @@ export async function telaDoJogo(
       })
       .sort((a, b) => b.pontos - a.pontos)
 
-    const forma: ('V' | 'D')[] = anteriores
-      .filter((j) => j.timeCasaId === timeId || j.timeVisitanteId === timeId)
+    const forma: ('V' | 'D')[] = (formaBrutaPorTime.get(timeId) ?? [])
       .filter((j) => j.placarCasa !== null && j.placarVisitante !== null)
-      .slice(0, LIMITE_FORMA)
       .map((j) => {
         const emCasa = j.timeCasaId === timeId
         const meus = emCasa ? j.placarCasa! : j.placarVisitante!
@@ -196,6 +243,10 @@ export async function telaDoJogo(
         return meus > outros ? 'V' : 'D'
       })
 
+    // Mesma limitação de `jogadores.time_id` documentada acima na montagem do
+    // box score — desfalque é sempre de um jogo FUTURO ou em curso, então na
+    // prática o cadastro atual e o time daquele jogo raramente divergem aqui,
+    // mas a fonte é a mesma coluna.
     const desfalques = escalacao
       .filter((e) => e.status === 'FORA' || e.status === 'DUVIDA')
       .filter((e) => jogadorPorId.get(e.jogadorId)?.timeId === timeId)
@@ -257,15 +308,8 @@ export async function telaDoJogo(
     lider('Assistências', (l) => l.assistencias),
   ].filter((l): l is LiderDaPartida => l !== null)
 
-  const h2h: ConfrontoAnterior[] = anteriores
-    .filter(
-      (j) =>
-        idsTimes.includes(j.timeCasaId) &&
-        idsTimes.includes(j.timeVisitanteId) &&
-        j.timeCasaId !== j.timeVisitanteId,
-    )
+  const h2h: ConfrontoAnterior[] = h2hBruto
     .filter((j) => j.placarCasa !== null && j.placarVisitante !== null)
-    .slice(0, opcoes.limiteH2H ?? LIMITE_H2H_PADRAO)
     .map((j) => ({
       jogoId: j.id,
       data: j.dataHoraUtc,

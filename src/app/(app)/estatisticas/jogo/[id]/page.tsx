@@ -75,8 +75,28 @@ function Placar({
         </div>
       ))}
       {aoVivo && (
-        <span className="ponto-ao-vivo" style={{ color: semantico.acento, fontSize: 12 }}>
-          ● AO VIVO
+        <span
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 6,
+            color: semantico.vivoSelo,
+            fontSize: 12,
+            fontWeight: 700,
+          }}
+        >
+          <span
+            aria-hidden
+            className="ponto-ao-vivo"
+            style={{
+              display: 'inline-block',
+              width: 6,
+              height: 6,
+              borderRadius: '50%',
+              background: semantico.vivoSelo,
+            }}
+          />
+          AO VIVO
         </span>
       )}
     </div>
@@ -86,36 +106,42 @@ function Placar({
 function Quartos({ casa, visitante }: { casa: LadoDaPartida; visitante: LadoDaPartida }) {
   if (casa.quartos === null || visitante.quartos === null) return null
   const temProrrogacao = casa.quartos.prorrogacao > 0 || visitante.quartos.prorrogacao > 0
-  const cabecalho = ['1º', '2º', '3º', '4º', ...(temProrrogacao ? ['PR'] : []), 'TOT']
-  const valores = (l: LadoDaPartida) => {
-    const q = l.quartos!
-    return [q.q1, q.q2, q.q3, q.q4, ...(temProrrogacao ? [q.prorrogacao] : []), l.placar ?? 0]
+
+  // Tabela de verdade, não `<table>` na mão: herda legenda, `scope` nos
+  // cabeçalhos e a rolagem horizontal segura em tela estreita de graça — o
+  // mesmo componente que o box score já usa duas seções abaixo (achado da
+  // revisão: a versão manual não tinha `<caption>` nem `scope`).
+  const colunas: Coluna<LadoDaPartida>[] = [
+    { chave: 'time', rotulo: 'Time', alinhamento: 'esquerda', fixa: true, celula: (l) => l.sigla },
+    { chave: 'q1', rotulo: '1º', alinhamento: 'direita', celula: (l) => l.quartos!.q1 },
+    { chave: 'q2', rotulo: '2º', alinhamento: 'direita', celula: (l) => l.quartos!.q2 },
+    { chave: 'q3', rotulo: '3º', alinhamento: 'direita', celula: (l) => l.quartos!.q3 },
+    { chave: 'q4', rotulo: '4º', alinhamento: 'direita', celula: (l) => l.quartos!.q4 },
+  ]
+  if (temProrrogacao) {
+    colunas.push({
+      chave: 'pr',
+      rotulo: 'PR',
+      alinhamento: 'direita',
+      descricao: 'prorrogação',
+      celula: (l) => l.quartos!.prorrogacao,
+    })
   }
+  colunas.push({
+    chave: 'tot',
+    rotulo: 'TOT',
+    alinhamento: 'direita',
+    descricao: 'total de pontos',
+    celula: (l) => l.placar ?? 0,
+  })
+
   return (
-    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-      <thead>
-        <tr style={{ color: semantico.textoSecundario }}>
-          <th style={{ textAlign: 'left' }}>Time</th>
-          {cabecalho.map((c) => (
-            <th key={c} style={{ textAlign: 'right', padding: '4px 6px' }}>
-              {c}
-            </th>
-          ))}
-        </tr>
-      </thead>
-      <tbody>
-        {[casa, visitante].map((lado) => (
-          <tr key={lado.timeId} style={{ borderTop: `1px solid ${semantico.divisor}` }}>
-            <td style={{ padding: '6px 0' }}>{lado.sigla}</td>
-            {valores(lado).map((v, i) => (
-              <td key={i} style={{ textAlign: 'right', padding: '6px' }}>
-                {v}
-              </td>
-            ))}
-          </tr>
-        ))}
-      </tbody>
-    </table>
+    <Tabela
+      legenda={`Pontos por quarto — ${casa.sigla} × ${visitante.sigla}`}
+      colunas={colunas}
+      linhas={[casa, visitante]}
+      chaveDaLinha={(l) => l.timeId}
+    />
   )
 }
 

@@ -31,16 +31,7 @@ describe('camadas de token', () => {
   })
 
   it('nenhum componente escreve hex direto', () => {
-    // NotaPartida é a ÚNICA exceção, e de propósito: sua paleta de 5 faixas
-    // (desempenho 3-10) é deliberadamente PRÓPRIA e distinta do grau de
-    // confiança do apito (ver o comentário no topo do arquivo) — compor com
-    // as camadas primitivo→semântico misturaria duas escalas que o produto
-    // precisa manter visualmente separadas. Registrado como deferido na
-    // revisão da Task 2; qualquer OUTRO componente com hex direto continua
-    // barrado.
-    const ISENTOS = new Set(['NotaPartida.tsx'])
     const infratores = fontesDeComponente()
-      .filter(({ arquivo }) => !ISENTOS.has(arquivo))
       .filter(({ conteudo }) => HEX.test(conteudo))
       .map((f) => f.arquivo)
 

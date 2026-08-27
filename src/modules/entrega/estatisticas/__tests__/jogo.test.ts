@@ -1,8 +1,8 @@
-import { eq } from 'drizzle-orm'
+import { eq, notInArray } from 'drizzle-orm'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
 import { bancoDeTeste } from '../../../dominio/__tests__/ajuda-banco'
-import { jogos } from '../../../dominio/db/schema'
+import { estatisticasJogo, jogadores, jogos, times } from '../../../dominio/db/schema'
 import { semearDemo } from '../../../ingestao/demo/semear'
 import { rulesetAtivo } from '../../ruleset-ativo'
 import { telaDoJogo } from '../jogo'
@@ -59,14 +59,35 @@ describe('tela de partida — jogo encerrado', () => {
     }
   })
 
-  it('o elenco é o do BOX SCORE REAL — jogador sem linha não aparece', async () => {
-    // Fronteira: a aba mostra quem a liga registrou, não quem o CJ curou.
-    const tela = (await umJogo('ENCERRADO'))!
-    for (const lado of [tela.casa, tela.visitante]) {
-      for (const linha of lado.boxScore) {
-        expect(linha.nome.length).toBeGreaterThan(0)
-      }
-    }
+  it('o elenco é o do BOX SCORE REAL — jogador de um TERCEIRO time não aparece', async () => {
+    // Fronteira: `montarLado` filtra as linhas do box por
+    // `jogadores.time_id === timeId` (jogo.ts). Prova real: insere uma linha
+    // de estatisticas_jogo para um jogador de um time que NÃO é nem casa nem
+    // visitante deste jogo, e afirma que ele não aparece em NENHUM dos dois
+    // lados. A versão anterior deste teste só checava
+    // `nome.length > 0` — passaria mesmo lendo a lista curada, porque o
+    // fallback de nome ausente ('—') também tem comprimento 1.
+    const [jogo] = await banco.db.select().from(jogos).where(eq(jogos.status, 'ENCERRADO')).limit(1)
+    const idsDoJogo = [jogo!.timeCasaId, jogo!.timeVisitanteId]
+
+    const [outroTime] = await banco.db.select().from(times).where(notInArray(times.id, idsDoJogo)).limit(1)
+    const [estranho] = await banco.db
+      .select()
+      .from(jogadores)
+      .where(eq(jogadores.timeId, outroTime!.id))
+      .limit(1)
+
+    await banco.db.insert(estatisticasJogo).values({
+      jogoId: jogo!.id,
+      jogadorId: estranho!.id,
+      pontos: 99,
+    })
+
+    const tela = (await telaDoJogo(banco.db, jogo!.id, {}))!
+    const idsNoBox = new Set(
+      [...tela.casa.boxScore, ...tela.visitante.boxScore].map((l) => l.jogadorId),
+    )
+    expect(idsNoBox.has(estranho!.id)).toBe(false)
   })
 })
 

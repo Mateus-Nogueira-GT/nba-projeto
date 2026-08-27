@@ -754,6 +754,24 @@ function quartosDoTotal(total: number): { q1: number; q2: number; q3: number; q4
  * Só cobre jogos ENCERRADOS: um jogo AO VIVO só tem o 1º quarto disputado, e
  * espalhar o placar parcial pelos quatro quartos inventaria pontos em
  * quartos que ainda não aconteceram.
+ *
+ * PROVENIÊNCIA (achado da revisão da Task 3/4): os totais que esta função
+ * divide em quartos vêm de `jogos.placar*`, que `semearPlacares` (acima)
+ * calcula agrupando `estatisticas_jogo` por `niveis.time_id` — a lista
+ * CURADA do CJ, não `jogadores.time_id`. O resto deste arquivo é explícito
+ * sobre nunca tratar a lista curada como o time real (CLAUDE.md, "armadilhas
+ * conhecidas"); aqui isso fica invisível só porque a demo mantém as duas em
+ * espelho. Mesma limitação documentada em `telaDoJogo`
+ * (`entrega/estatisticas/jogo.ts`, `montarLado`), que tem o problema
+ * equivalente em produção e não pode ser corrigida sem uma coluna `time_id`
+ * em `estatisticas_jogo` (ver docs/specs/README.md, tabela "Perguntas que
+ * bloqueiam", Spec 01).
+ *
+ * DUPLICATA ENTRE BRANCHES (achado da revisão): o PR #7, ainda aberto, já
+ * tem uma função equivalente, `semearBoxScoreDoTime`, com implementação
+ * diferente desta. O merge entre as duas branches precisa escolher uma —
+ * não são a mesma função por acaso, são a mesma necessidade resolvida duas
+ * vezes em paralelo.
  */
 async function semearBoxScorePorQuarto(db: Db): Promise<number> {
   const encerrados = await db

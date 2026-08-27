@@ -1,3 +1,4 @@
+import { componente } from '../tokens/componente'
 import { semantico } from '../tokens/semantico'
 
 /**
@@ -7,16 +8,23 @@ import { semantico } from '../tokens/semantico'
  * duas escalas convivem no mesmo app e significam coisas diferentes —
  * desempenho já acontecido de um lado, força de um sinal de estratégia do
  * outro. Cor compartilhada faria o assinante ler as duas como a mesma coisa.
+ *
+ * "Própria" é sobre O SIGNIFICADO, não sobre onde o hex mora: as cores vêm de
+ * `componente.notaFaixa*` (camada 3), que referencia `semantico` (camada 2),
+ * que referencia `primitivo` (camada 1) — as mesmas três camadas de todo o
+ * resto do design system. Rotear por elas não junta a nota com o grau de
+ * confiança; só tira o hex daqui, que é o que o teste "hex direto" cobra de
+ * QUALQUER componente, sem exceção por nome de arquivo.
  */
 export type NotaPartidaProps = { nota: number | null }
 
 /** Faixas da spec: <6 fraca · 6–6.9 mediana · 7–7.9 boa · 8–8.9 ótima · 9+ excepcional. */
 const FAIXAS: { minimo: number; fundo: string; texto: string }[] = [
-  { minimo: 9, fundo: '#1F6F4A', texto: '#EAFBF2' },
-  { minimo: 8, fundo: '#2E7D62', texto: '#EAFBF2' },
-  { minimo: 7, fundo: '#3D5A80', texto: '#E8EFF7' },
-  { minimo: 6, fundo: '#4A4E69', texto: '#E9E9F0' },
-  { minimo: 0, fundo: '#5C3A3A', texto: '#F7E9E9' },
+  { minimo: 9, ...componente.notaFaixaExcepcional },
+  { minimo: 8, ...componente.notaFaixaOtima },
+  { minimo: 7, ...componente.notaFaixaBoa },
+  { minimo: 6, ...componente.notaFaixaMediana },
+  { minimo: 0, ...componente.notaFaixaFraca },
 ]
 
 function faixaDe(nota: number) {

@@ -13,13 +13,27 @@ import { useEffect } from 'react'
  *
  * Monta SOMENTE quando o jogo está ao vivo: o servidor decide, o cliente só
  * obedece. Assim nenhuma outra tela do app paga por este JavaScript.
+ *
+ * Guarda de visibilidade: só atualiza com a aba em primeiro plano. Sem isso,
+ * uma aba esquecida em segundo plano continua batendo, a cada 30s, numa
+ * página `force-dynamic` que faz 6 consultas por render — gasto sem
+ * ninguém olhando (achado da revisão). Ao voltar a ficar visível, atualiza na
+ * hora, em vez de esperar até 30s pra mostrar o placar corrente.
  */
 export function AtualizarAoVivo({ intervaloMs = 30_000 }: { intervaloMs?: number }) {
   const router = useRouter()
 
   useEffect(() => {
-    const id = setInterval(() => router.refresh(), intervaloMs)
-    return () => clearInterval(id)
+    const atualizarSeVisivel = () => {
+      if (document.visibilityState === 'visible') router.refresh()
+    }
+
+    const id = setInterval(atualizarSeVisivel, intervaloMs)
+    document.addEventListener('visibilitychange', atualizarSeVisivel)
+    return () => {
+      clearInterval(id)
+      document.removeEventListener('visibilitychange', atualizarSeVisivel)
+    }
   }, [router, intervaloMs])
 
   return null
