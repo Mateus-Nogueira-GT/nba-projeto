@@ -7,7 +7,7 @@ import { telaJogosDoDia } from '@/modules/entrega/estatisticas/jogos-do-dia'
 import { telaDaClassificacao } from '@/modules/entrega/estatisticas/time'
 import { rotaDoJogador, rotaDoJogo, rotaDoTime } from '@/modules/entrega/estatisticas/rotas'
 import { rulesetAtivo } from '@/modules/entrega/ruleset-ativo'
-import { horaCurta as horaDoJogo } from '@/components/formato'
+import { diaLongo, horaCurta as horaDoJogo } from '@/components/formato'
 import { CabecalhoTela, Moldura } from '@/components/navegacao'
 import { UltimaAtualizacao } from '@/design-system/componentes'
 import { dataDeReferencia } from '@/modules/dominio/rodada'
@@ -59,6 +59,19 @@ const ESTADO_ROTULO: Record<string, string> = {
   AGENDADO: '',
   AO_VIVO: 'AO VIVO',
   ENCERRADO: 'encerrado',
+}
+
+/**
+ * TÍTULO DA SEÇÃO — precisa dizer que dia é esse.
+ *
+ * "Jogos do dia" sozinho é verdade só para hoje. Antes desta função o rótulo
+ * nunca mudava com a navegação por data, e o vazio dizia "Nenhum jogo hoje."
+ * para um dia que não era hoje — uma afirmação falsa sobre o calendário
+ * (achado da revisão). Mesmo precedente de `diaLongo` que `/resultados` já
+ * usa para rotular rodada por rodada.
+ */
+function tituloJogosDoDia(data: string, hoje: string): string {
+  return data === hoje ? 'Jogos do dia' : `Jogos de ${diaLongo(data)}`
 }
 
 export default async function PaginaEstatisticas({
@@ -147,7 +160,7 @@ export default async function PaginaEstatisticas({
         </Secao>
       )}
 
-      <Secao titulo="Jogos do dia">
+      <Secao titulo={tituloJogosDoDia(data, hoje)}>
         {(() => {
           const nav = navegacaoDeDatas(data)
           const estilo = { color: semantico.textoSecundario, fontSize: 13 } as const
@@ -171,7 +184,9 @@ export default async function PaginaEstatisticas({
           )
         })()}
         {doDia.jogos.length === 0 ? (
-          <p style={{ fontSize: 13, color: semantico.textoSecundario }}>Nenhum jogo hoje.</p>
+          <p style={{ fontSize: 13, color: semantico.textoSecundario }}>
+            {data === hoje ? 'Nenhum jogo hoje.' : `Nenhum jogo em ${diaLongo(data)}.`}
+          </p>
         ) : (
           <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'grid', gap: 6 }}>
             {doDia.jogos.map((j) => (
@@ -181,7 +196,7 @@ export default async function PaginaEstatisticas({
                     inválido). O time continua acessível a partir da tela da
                     partida. */}
                 <a
-                  href={rotaDoJogo(j.id)}
+                  href={`${rotaDoJogo(j.id)}?data=${data}`}
                   style={{
                     display: 'flex',
                     alignItems: 'center',

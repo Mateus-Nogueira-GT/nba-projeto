@@ -99,6 +99,38 @@ describe('tela de partida — ao vivo', () => {
     expect(tela.casa.placar).not.toBeNull()
     expect(tela.casa.forma).not.toContain(undefined)
   })
+
+  it('tem BOX SCORE parcial dos dois lados — não "em atualização" para o jogo em destaque', async () => {
+    // Antes desta correção, `estatisticas_jogo` só era escrita dentro do
+    // laço do histórico (jogos ENCERRADOS): o jogo AO VIVO da demo tinha
+    // `estatisticas_quarto` (o Fire Live lê essa tabela), mas NUNCA um box
+    // individual — a própria tela que ganhou o refresh de 30s abria em "Box
+    // score em atualização" logo na demonstração.
+    const tela = (await umJogo('AO_VIVO'))!
+    expect(tela.casa.boxScore.length).toBeGreaterThan(0)
+    expect(tela.visitante.boxScore.length).toBeGreaterThan(0)
+  })
+
+  it('os quartos do TIME cobrem só o que já foi jogado — nada inventado no 2º/3º/4º', async () => {
+    const tela = (await umJogo('AO_VIVO'))!
+    expect(tela.casa.quartos).not.toBeNull()
+    expect(tela.visitante.quartos).not.toBeNull()
+    for (const lado of [tela.casa, tela.visitante]) {
+      expect(lado.quartos!.q2).toBe(0)
+      expect(lado.quartos!.q3).toBe(0)
+      expect(lado.quartos!.q4).toBe(0)
+      // O 1º quarto (o único disputado) é o placar do jogo inteiro até agora.
+      expect(lado.quartos!.q1).toBe(lado.placar)
+    }
+  })
+
+  it('os pontos individuais do 1º quarto SOMAM o placar do time — nunca contradizem', async () => {
+    const tela = (await umJogo('AO_VIVO'))!
+    for (const lado of [tela.casa, tela.visitante]) {
+      const soma = lado.boxScore.reduce((s, l) => s + l.pontos, 0)
+      expect(soma).toBe(lado.placar)
+    }
+  })
 })
 
 describe('tela de partida — pré-jogo', () => {

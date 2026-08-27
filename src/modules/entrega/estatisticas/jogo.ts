@@ -104,17 +104,6 @@ export async function telaDoJogo(
 
   const idsTimes = [jogo.timeCasaId, jogo.timeVisitanteId]
 
-  const [listaTimes, boxTimes, boxJogadores, elenco, escalacao] = await Promise.all([
-    db.select().from(times).where(inArray(times.id, idsTimes)),
-    db.select().from(estatisticasTimeJogo).where(eq(estatisticasTimeJogo.jogoId, jogoId)),
-    db.select().from(estatisticasJogo).where(eq(estatisticasJogo.jogoId, jogoId)),
-    db.select().from(jogadores).where(inArray(jogadores.timeId, idsTimes)),
-    db.select().from(lesoesEscalacao).where(eq(lesoesEscalacao.jogoId, jogoId)),
-  ])
-
-  const timePorId = new Map(listaTimes.map((t) => [t.id, t] as const))
-  const jogadorPorId = new Map(elenco.map((j) => [j.id, j] as const))
-
   // Colunas que forma e H2H de fato leem abaixo — nunca o jogo inteiro
   // (achado da revisão: `select()` puro sobre todo o histórico ENCERRADO dos
   // dois times, sem limite, cresce sem fim conforme as temporadas acumulam).
@@ -126,25 +115,7 @@ export async function telaDoJogo(
     placarCasa: jogos.placarCasa,
     placarVisitante: jogos.placarVisitante,
   }
-
-  // H2H: só jogos ENTRE estes dois times — o filtro já é o universo certo,
-  // então o LIMIT no banco é exato (não corta nenhum confronto relevante).
   const limiteH2H = opcoes.limiteH2H ?? LIMITE_H2H_PADRAO
-  const h2hBruto = await db
-    .select(COLUNAS_JOGO_ANTERIOR)
-    .from(jogos)
-    .where(
-      and(
-        eq(jogos.status, 'ENCERRADO'),
-        lt(jogos.dataHoraUtc, jogo.dataHoraUtc),
-        or(
-          and(eq(jogos.timeCasaId, jogo.timeCasaId), eq(jogos.timeVisitanteId, jogo.timeVisitanteId)),
-          and(eq(jogos.timeCasaId, jogo.timeVisitanteId), eq(jogos.timeVisitanteId, jogo.timeCasaId)),
-        ),
-      ),
-    )
-    .orderBy(desc(jogos.dataHoraUtc))
-    .limit(limiteH2H)
 
   // Forma: os LIMITE_FORMA jogos mais recentes de CADA time, uma consulta por
   // time. Uma única consulta com LIMIT sobre a união dos dois times NÃO
@@ -165,10 +136,42 @@ export async function telaDoJogo(
       .orderBy(desc(jogos.dataHoraUtc))
       .limit(LIMITE_FORMA)
 
-  const [formaCasaBruta, formaVisitanteBruta] = await Promise.all([
-    formaDoTime(jogo.timeCasaId),
-    formaDoTime(jogo.timeVisitanteId),
-  ])
+  // Um só `Promise.all`: `h2hBruto` e as duas `formaDoTime` dependem só de
+  // `jogo` (já lido acima), nunca do resultado de listaTimes/boxTimes/
+  // boxJogadores/elenco/escalacao — não havia motivo para 4 idas e vindas
+  // sequenciais ao banco quando 2 bastam (achado da revisão; esta é a única
+  // tela da aba com refresh automático a cada 30s, então cada round-trip a
+  // menos conta em dobro).
+  const [listaTimes, boxTimes, boxJogadores, elenco, escalacao, h2hBruto, formaCasaBruta, formaVisitanteBruta] =
+    await Promise.all([
+      db.select().from(times).where(inArray(times.id, idsTimes)),
+      db.select().from(estatisticasTimeJogo).where(eq(estatisticasTimeJogo.jogoId, jogoId)),
+      db.select().from(estatisticasJogo).where(eq(estatisticasJogo.jogoId, jogoId)),
+      db.select().from(jogadores).where(inArray(jogadores.timeId, idsTimes)),
+      db.select().from(lesoesEscalacao).where(eq(lesoesEscalacao.jogoId, jogoId)),
+      // H2H: só jogos ENTRE estes dois times — o filtro já é o universo
+      // certo, então o LIMIT no banco é exato (não corta confronto relevante).
+      db
+        .select(COLUNAS_JOGO_ANTERIOR)
+        .from(jogos)
+        .where(
+          and(
+            eq(jogos.status, 'ENCERRADO'),
+            lt(jogos.dataHoraUtc, jogo.dataHoraUtc),
+            or(
+              and(eq(jogos.timeCasaId, jogo.timeCasaId), eq(jogos.timeVisitanteId, jogo.timeVisitanteId)),
+              and(eq(jogos.timeCasaId, jogo.timeVisitanteId), eq(jogos.timeVisitanteId, jogo.timeCasaId)),
+            ),
+          ),
+        )
+        .orderBy(desc(jogos.dataHoraUtc))
+        .limit(limiteH2H),
+      formaDoTime(jogo.timeCasaId),
+      formaDoTime(jogo.timeVisitanteId),
+    ])
+
+  const timePorId = new Map(listaTimes.map((t) => [t.id, t] as const))
+  const jogadorPorId = new Map(elenco.map((j) => [j.id, j] as const))
   const formaBrutaPorTime = new Map([
     [jogo.timeCasaId, formaCasaBruta],
     [jogo.timeVisitanteId, formaVisitanteBruta],

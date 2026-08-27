@@ -33,7 +33,7 @@ import type { Atributo } from '../../motor/tipos'
 import type { PortaLLM } from '../llm'
 import { lerListaDeNiveis } from '../niveis/parser'
 import { importarListaDeNiveis } from '../niveis/importar'
-import { decomporPontos, historicoOscilacao, mediaDe, niveisDoJogador, posicaoDe } from './dados'
+import { boxComplementar, decomporPontos, historicoOscilacao, mediaDe, naFaixa, niveisDoJogador, posicaoDe } from './dados'
 
 export const ARQUIVO_LISTA = 'data/fontes/introducao-ia-nba.md'
 const PROVEDOR_DEMO = 'demo'
@@ -317,20 +317,40 @@ export async function semearDemo(
         return sequencia[i - 1] ?? Math.round(media)
       }
 
+      const pontosValor = valorNoJogo('PONTOS')
+      const rebotesValor = valorNoJogo('REBOTES')
+      const assistenciasValor = valorNoJogo('ASSISTENCIAS')
+      const valoresBox = {
+        pontos: pontosValor,
+        rebotesTotal: rebotesValor,
+        assistencias: assistenciasValor,
+        minutos: '30.00',
+        // Arremessos coerentes com os pontos — sem eles, FG%/2P%/3P%/LL%
+        // das telas de estatística ficariam eternamente em "—" na demo.
+        ...decomporPontos(pontosValor),
+        // ROU/TOC/TO/FALTAS e a divisão ofensivo/defensivo do rebote — sem
+        // isto, essas colunas ficavam no default 0 da tabela para TODO
+        // jogador, e a nota (que lê rebotesOf/rebotesDef, nunca
+        // rebotesTotal — ver nota.ts) contradizia o REB visível na mesma
+        // linha (achado da revisão). Chave por dia (`i`): mesma pessoa, jogo
+        // diferente, sem repetir sempre os mesmos ROU/TOC/TO.
+        ...boxComplementar(`${nome}|dia${i}`, rebotesValor),
+      }
+
       await db
         .insert(estatisticasJogo)
-        .values({
-          jogoId,
-          jogadorId,
-          pontos: valorNoJogo('PONTOS'),
-          rebotesTotal: valorNoJogo('REBOTES'),
-          assistencias: valorNoJogo('ASSISTENCIAS'),
-          minutos: '30.00',
-          // Arremessos coerentes com os pontos — sem eles, FG%/2P%/3P%/LL%
-          // das telas de estatística ficariam eternamente em "—" na demo.
-          ...decomporPontos(valorNoJogo('PONTOS')),
+        .values({ jogoId, jogadorId, ...valoresBox })
+        // DoUpdate, não DoNothing: o MESMO jogoId reaparece em runs futuros
+        // quando a rodada de hoje de um dia vira "i dias atrás" do dia
+        // seguinte (a chave natural do jogo é `dataReferencia` — ver
+        // `criarJogo`). Sem sobrescrever, um jogo que foi o AO VIVO parcial
+        // de ontem ficaria preso no box PARCIAL de ontem depois de virar
+        // ENCERRADO hoje (achado da revisão, motivado pelo box parcial que o
+        // bloco "1º quarto ao vivo", abaixo, passou a gravar).
+        .onConflictDoUpdate({
+          target: [estatisticasJogo.jogoId, estatisticasJogo.jogadorId],
+          set: valoresBox,
         })
-        .onConflictDoNothing()
     }
   }
 
@@ -423,6 +443,32 @@ export async function semearDemo(
           set: valores,
         })
 
+      // BOX PARCIAL DA TELA DE PARTIDA — mesma fonte que acabou de gravar em
+      // `estatisticas_quarto` (`valores`, acima), nunca recalculado: se os
+      // dois discordassem, a tela de partida contradiria a própria tela que
+      // motivou o refresh de 30s. Antes desta linha a tela lia
+      // `estatisticas_jogo`, que o jogo AO VIVO nunca escrevia, e o jogo em
+      // destaque da demo caía sempre em "Box score em atualização" (achado
+      // da revisão). `minutos` é fração de quarto — os outros jogos do seed
+      // usam `'30.00'` (jogo inteiro, mais abaixo); dar isso aqui diria que
+      // a partida já acabou.
+      const minutosParciais = naFaixa(j.nomeNaLista, '1q-min', [4, 11])
+      const valoresBox = {
+        pontos: valores.pontos,
+        rebotesTotal: valores.rebotes,
+        assistencias: valores.assistencias,
+        minutos: minutosParciais.toFixed(2),
+        ...decomporPontos(valores.pontos),
+        ...boxComplementar(`${j.nomeNaLista}|1Q`, valores.rebotes),
+      }
+      await db
+        .insert(estatisticasJogo)
+        .values({ jogoId: jogoAoVivo, jogadorId, ...valoresBox })
+        .onConflictDoUpdate({
+          target: [estatisticasJogo.jogoId, estatisticasJogo.jogadorId],
+          set: valoresBox,
+        })
+
       if (j.timeSigla === 'OKC') pontosOkc += valores.pontos
       else pontosDen += valores.pontos
     }
@@ -431,6 +477,38 @@ export async function semearDemo(
       .update(jogos)
       .set({ placarCasa: pontosOkc, placarVisitante: pontosDen })
       .where(eq(jogos.id, jogoAoVivo))
+
+    // BOX DO TIME, só o 1º quarto — o único que já aconteceu. Espalhar o
+    // placar pelos quatro quartos (como `quartosDoTotal` faz para jogos
+    // ENCERRADOS, mais abaixo) inventaria pontos em quartos que ainda não
+    // existem. Sem isto a Tela de Partida não tinha "Pontos por quarto" nem
+    // TOT para o jogo ao vivo em destaque da demo (achado da revisão).
+    for (const [sigla, pontosTime] of [
+      ['OKC', pontosOkc],
+      ['DEN', pontosDen],
+    ] as const) {
+      const timeId = idDoTime(sigla)
+      if (!timeId) continue
+      // A coluna sai do MESMO `quarto` que `estatisticas_quarto` acabou de
+      // receber — hoje o ruleset diz 1 e sempre dirá (Fire Live é só o 1º
+      // quarto), mas escrever `pontosQ1` à mão faria as duas tabelas
+      // discordarem em silêncio se esse número um dia mudasse.
+      const valoresTime = {
+        pontos: pontosTime,
+        pontosQ1: quarto === 1 ? pontosTime : 0,
+        pontosQ2: quarto === 2 ? pontosTime : 0,
+        pontosQ3: quarto === 3 ? pontosTime : 0,
+        pontosQ4: quarto === 4 ? pontosTime : 0,
+        pontosProrrogacao: 0,
+      }
+      await db
+        .insert(estatisticasTimeJogo)
+        .values({ jogoId: jogoAoVivo, timeId, ...valoresTime })
+        .onConflictDoUpdate({
+          target: [estatisticasTimeJogo.jogoId, estatisticasTimeJogo.timeId],
+          set: valoresTime,
+        })
+    }
 
     await db
       .insert(fireLiveExecucoes)

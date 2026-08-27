@@ -3,7 +3,7 @@ import { notFound } from 'next/navigation'
 import { getDb } from '@/modules/dominio/db/cliente'
 import { telaDoJogo } from '@/modules/entrega/estatisticas/jogo'
 import type { LadoDaPartida, LinhaDoBoxScore } from '@/modules/entrega/estatisticas/jogo'
-import { rotaDoJogador, rotaDoTime } from '@/modules/entrega/estatisticas/rotas'
+import { BASE_ESTATISTICAS, rotaDoJogador, rotaDoTime } from '@/modules/entrega/estatisticas/rotas'
 import { rulesetAtivo } from '@/modules/entrega/ruleset-ativo'
 import { exigirAcessoEstatisticasSeConfigurado } from '@/modules/plataforma/assinatura/guarda'
 import { dataHora, diaCurto } from '@/components/formato'
@@ -132,7 +132,10 @@ function Quartos({ casa, visitante }: { casa: LadoDaPartida; visitante: LadoDaPa
     rotulo: 'TOT',
     alinhamento: 'direita',
     descricao: 'total de pontos',
-    celula: (l) => l.placar ?? 0,
+    // Mesma regra do placar grande, duas seções acima: ausência é '—', nunca
+    // 0 — um 0 aqui lê como "o time fez zero pontos", não como "sem dado"
+    // (achado da revisão: as duas telas discordavam sobre a mesma ausência).
+    celula: (l) => l.placar ?? '—',
   })
 
   return (
@@ -165,11 +168,28 @@ function Desfalques({ lado }: { lado: LadoDaPartida }) {
   )
 }
 
-export default async function PaginaDoJogo({ params }: { params: Promise<{ id: string }> }) {
+export default async function PaginaDoJogo({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>
+  searchParams: Promise<Record<string, string | string[] | undefined>>
+}) {
   if (!process.env.DATABASE_URL) return <SemBanco />
   await exigirAcessoEstatisticasSeConfigurado()
 
   const { id } = await params
+  // Preserva a data que a lista de jogos passou na URL (`?data=`), para o
+  // "voltar" pousar no MESMO dia navegado, não sempre em hoje — sem
+  // validar aqui: `/estatisticas` já sabe cair para hoje diante de
+  // qualquer lixo (`dataValidaOuHoje`), duplicar a regra só duplicaria bug
+  // (achado da revisão). O prefixo vem de `rotas.ts`, como nas telas irmãs —
+  // literal aqui é o que faz "a mesma tela" virar coincidência.
+  const { data: dataBruta } = await searchParams
+  const dataVoltar = Array.isArray(dataBruta) ? dataBruta[0] : dataBruta
+  const voltarHref = dataVoltar
+    ? `${BASE_ESTATISTICAS}?data=${encodeURIComponent(dataVoltar)}`
+    : BASE_ESTATISTICAS
   const agora = new Date()
   const ruleset = await rulesetAtivo()
   const { fuso } = ruleset.rodada
@@ -185,7 +205,7 @@ export default async function PaginaDoJogo({ params }: { params: Promise<{ id: s
       <CabecalhoTela
         sobrancelha={SOBRANCELHA_STATS}
         titulo={`${tela.casa.sigla} × ${tela.visitante.sigla}`}
-        voltarHref="/estatisticas"
+        voltarHref={voltarHref}
       />
       {aoVivo && <AtualizarAoVivo />}
 
@@ -230,6 +250,11 @@ export default async function PaginaDoJogo({ params }: { params: Promise<{ id: s
                 colunas={COLUNAS}
                 linhas={lado.boxScore}
                 chaveDaLinha={(l) => l.jogadorId}
+                // `temBox` é OR: quando só um lado sincronizou, o outro caía
+                // no "Sem dados para exibir." genérico da Tabela — duas
+                // frases para a mesma ausência (achado da revisão). Mesma
+                // frase do bloco "os dois vazios", logo abaixo.
+                vazio="Box score em atualização."
               />
             </Secao>
           ))
@@ -241,8 +266,15 @@ export default async function PaginaDoJogo({ params }: { params: Promise<{ id: s
           </Secao>
         ))}
 
-      {tela.h2h.length > 0 && (
-        <Secao titulo="Confrontos anteriores">
+      {/* Sempre renderiza — h2h vazio é um FATO ("nunca se enfrentaram"), não
+          ausência de seção. Spec §6 promete a frase abaixo; escondida, a
+          seção some de vez em vez de anunciar a ausência (achado da revisão). */}
+      <Secao titulo="Confrontos anteriores">
+        {tela.h2h.length === 0 ? (
+          <p style={{ fontSize: 13, color: semantico.textoSecundario }}>
+            Primeiro confronto da temporada.
+          </p>
+        ) : (
           <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'grid', gap: 4 }}>
             {tela.h2h.map((c) => (
               <li key={c.jogoId} style={{ fontSize: 13 }}>
@@ -251,8 +283,8 @@ export default async function PaginaDoJogo({ params }: { params: Promise<{ id: s
               </li>
             ))}
           </ul>
-        </Secao>
-      )}
+        )}
+      </Secao>
 
       {!encerrado && (tela.casa.desfalques.length > 0 || tela.visitante.desfalques.length > 0) && (
         <Secao titulo="Desfalques">

@@ -337,6 +337,36 @@ describe('semearDemo (PGlite, banco vazio)', () => {
     expect(comOdd.length, 'card sem odd no rodapé — feed publicado antes das odds').toBeGreaterThan(0)
   })
 
+  it('todo box score semeado fecha rebotesOf+rebotesDef e tem ROU/TOC/TO/faltas plausíveis', async () => {
+    // `semearDemo` escrevia pontos/rebotes/assistências/minutos e deixava
+    // roubos, bloqueios, turnovers, faltas e a divisão rebotesOf/rebotesDef
+    // no default 0 da tabela, para TODO jogador em TODO jogo. `nota.ts` lê
+    // rebotesOf/rebotesDef, nunca rebotesTotal — então um jogador com REB 12
+    // na tabela visível valia zero rebote na nota da própria linha (achado
+    // da revisão).
+    const { estatisticasJogo } = await import('../../dominio/db/schema')
+
+    // TODAS as linhas semeadas, de todos os jogos — inclusive o box PARCIAL
+    // do jogo AO VIVO, que passa por outro caminho no `semear.ts`. O
+    // invariante do rebote não pode valer só num deles.
+    const linhas = await banco.db.select().from(estatisticasJogo)
+
+    expect(linhas.length).toBeGreaterThan(0)
+    for (const l of linhas) {
+      // A soma bate por CONSTRUÇÃO (rebotesDef é o complemento de
+      // rebotesOf), não por sorte — é exatamente o invariante que a nota
+      // depende para não contradizer o REB da mesma linha.
+      expect(l.rebotesOf + l.rebotesDef).toBe(l.rebotesTotal)
+    }
+    // roubos/bloqueios podem ser 0 para um jogador específico (é realista);
+    // turnovers/faltas nunca são 0 na demo — a faixa derivada começa em 1.
+    // O que a correção proíbe é o quadro TODO em branco.
+    expect(linhas.some((l) => l.roubos > 0)).toBe(true)
+    expect(linhas.some((l) => l.bloqueios > 0)).toBe(true)
+    expect(linhas.every((l) => l.turnovers > 0)).toBe(true)
+    expect(linhas.every((l) => l.faltas > 0)).toBe(true)
+  })
+
   it('reexecutar o seed não duplica nada', async () => {
     const antes = (await banco.db.select().from(jogadores)).length
     const segundo = await semearDemo(banco.db, ruleset, AGORA)

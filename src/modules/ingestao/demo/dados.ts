@@ -53,8 +53,14 @@ const FAIXA_PPG: Record<Nivel, [number, number]> = {
   RANDOLA: [5, 9],
 }
 
-/** Distribui um valor da semente dentro de [min, max], com uma casa decimal. */
-function naFaixa(nome: string, sufixo: string, [min, max]: [number, number]): number {
+/**
+ * Distribui um valor da semente dentro de [min, max], com uma casa decimal.
+ *
+ * Exportada: além das médias abaixo, `semear.ts` reusa para os minutos
+ * parciais do jogo AO VIVO — mesmo motivo de determinismo, contexto
+ * diferente (ver `semearDemo`, bloco "1º quarto ao vivo").
+ */
+export function naFaixa(nome: string, sufixo: string, [min, max]: [number, number]): number {
   const passos = Math.round((max - min) * 10) + 1
   const v = min + ((semente(nome + sufixo) % passos) / 10)
   return Math.round(v * 10) / 10
@@ -194,5 +200,49 @@ export function decomporPontos(pontos: number): {
     lanceT,
     cestasC: doisC + tresC,
     cestasT: doisT + tresT,
+  }
+}
+
+/**
+ * COMPLEMENTO DO BOX SCORE — colunas que a lista de níveis não classifica
+ * (roubos, tocos, turnovers, faltas) e a divisão de `rebotesTotal` em
+ * ofensivo/defensivo.
+ *
+ * Antes desta função, `estatisticas_jogo` só recebia pontos, rebotes,
+ * assistências e minutos: as demais colunas ficavam no default 0 da tabela
+ * para todo jogador, em todo jogo — e `nota.ts` lê `rebotesOf`/`rebotesDef`,
+ * NUNCA `rebotesTotal` (é a fórmula pública do Game Score). Um jogador com
+ * REB 12 na tabela visível valia zero rebote na nota da própria linha
+ * (achado da revisão).
+ *
+ * Determinística pela CHAVE (nome + contexto do jogo), nunca por sorteio —
+ * mesmo motivo de `naFaixa`, acima: o seed precisa dar o mesmo resultado toda
+ * vez que roda com a mesma entrada.
+ */
+export function boxComplementar(
+  chave: string,
+  rebotesTotal: number,
+): {
+  rebotesOf: number
+  rebotesDef: number
+  roubos: number
+  bloqueios: number
+  turnovers: number
+  faltas: number
+} {
+  // ~30% dos rebotes de um time são ofensivos na NBA — proporção usual do
+  // jogo, não regra do CJ (rebote não é estratégia, é fato de partida).
+  // `rebotesDef` é o COMPLEMENTO, nunca uma segunda conta: a soma bate com
+  // `rebotesTotal` por construção, não por coincidência.
+  const rebotesOf = Math.round(rebotesTotal * 0.3)
+  const entre = (sufixo: string, min: number, max: number) =>
+    min + (semente(`${chave}|${sufixo}`) % (max - min + 1))
+  return {
+    rebotesOf,
+    rebotesDef: rebotesTotal - rebotesOf,
+    roubos: entre('roubos', 0, 3),
+    bloqueios: entre('bloqueios', 0, 2),
+    turnovers: entre('turnovers', 1, 4),
+    faltas: entre('faltas', 1, 4),
   }
 }
