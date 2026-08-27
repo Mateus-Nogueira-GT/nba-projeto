@@ -1,6 +1,5 @@
 import { readFileSync } from 'node:fs'
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
-import { eq } from 'drizzle-orm'
 
 import { bancoDeTeste } from '../../dominio/__tests__/ajuda-banco'
 import { casas, jogadores, mapaJogadores, mapaMercados, times } from '../../dominio/db/schema'

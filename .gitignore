@@ -16,3 +16,9 @@ next-env.d.ts
 vercel.json
 .env*.local
 .superpowers/
+
+# Scripts de diagnóstico descartáveis — nunca no repositório. Um deles chegou
+# à main por um `git add -A` carregando um token de sessão (revogado em
+# 27/08/2026); este padrão fecha a porta.
+scripts/*.tmp.ts
+scripts/*.tmp.mjs

@@ -1,6 +1,6 @@
 import { describe, expect, it, beforeAll, afterAll } from 'vitest'
 import { readFileSync } from 'node:fs'
-import { eq, isNotNull } from 'drizzle-orm'
+import { isNotNull } from 'drizzle-orm'
 import { bancoDeTeste } from '../../dominio/__tests__/ajuda-banco'
 import { jogadores } from '../../dominio/db/schema'
 import { carregarRuleset } from '../../motor/ruleset/carregar'

@@ -1,4 +1,4 @@
-import { eq, like } from 'drizzle-orm'
+import { like } from 'drizzle-orm'
 
 import { getDb } from '@/modules/dominio/db/cliente'
 import { casas, mapaJogadores, mapaMercados } from '@/modules/dominio/db/schema'
