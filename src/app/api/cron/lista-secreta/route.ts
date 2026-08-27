@@ -3,9 +3,16 @@ import { executarCronProtegido } from '@/modules/entrega/cron/guarda'
 import { publicarListaSecreta } from '@/modules/entrega/lista-secreta'
 import { rulesetAtivo } from '@/modules/entrega/ruleset-ativo'
 import { dataDeReferencia } from '@/modules/dominio/rodada'
+import { portaLLMDoAmbiente } from '@/modules/ingestao/llm'
 
 export const dynamic = 'force-dynamic'
-export const maxDuration = 60
+// 300s, como os outros crons pesados (demo, sincronizar-elenco,
+// reconciliar-pagamentos): a publicação agora enriquece com narrativa por
+// item (uma chamada de LLM por entrada da lista), e um provedor lento
+// consumindo 60s derrubaria a função antes de terminar. A publicação em si
+// nunca depende disso — ver o comentário em `publicarListaSecreta` — mas o
+// teto precisa sobrar para a etapa de enriquecimento também completar.
+export const maxDuration = 300
 
 /**
  * Cron da Lista Secreta.
@@ -29,6 +36,7 @@ export async function GET(requisicao: Request): Promise<Response> {
       const resultado = await publicarListaSecreta(getDb(), ruleset, {
         dataReferencia,
         agora,
+        llm: portaLLMDoAmbiente(),
       })
 
       return { dataReferencia, ...resultado }

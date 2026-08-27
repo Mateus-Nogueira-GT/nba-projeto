@@ -69,6 +69,7 @@ Nenhuma destas eu posso responder sozinho. Onde o cliente ou o CJ não definiu,
 | --- | --- | --- |
 | 01 | Quem é o provedor NBA primário e o reserva? Credenciais? | tudo |
 | 01 | O provedor entrega quebra por quarto **do time**? | tela do time |
+| 01 | O box score do provedor real traz o time de cada linha (o time daquele jogo específico), ou só o id do jogador? Sem uma coluna `time_id` em `estatisticas_jogo`, a tela de partida usa `jogadores.time_id` (cadastro de HOJE) para decidir de qual lado cada linha aparece, e erra num jogo passado se o jogador foi trocado depois dele (ver `jogo.ts`, `montarLado`) | acurácia do elenco na tela de partida após troca no meio da temporada |
 | 02 | As chaves VAPID são da conta de quem? | push |
 | 03 | Nome comercial, ícones e plataformas mínimas suportadas | instalação |
 | 04 | Cadastro self-service ou criação controlada? | contratação |
@@ -108,6 +109,8 @@ acrescentou duas:
 | Ocultar jogador no Fire Live esconde da TELA mas não silencia o push do jogador oculto. É o comportamento desejado, ou o push também cala? | se a preferência entra no fan-out de push |
 | **Marcos de green de rebotes e assistências** (`por_atributo.marcos_green`, hoje `origem: demonstracao`): quais números ele quer? E a pergunta que os números atuais expõem — eles são de JOGO INTEIRO (MVP: 10 rebotes), mas o Fire Live só observa o **1º quarto**, onde um MVP faz 2 ou 3. Ou existem marcos próprios de 1Q, ou o green de rebotes/assistências nunca dispara na vida real. | se o canal GREEN funciona fora da demonstração |
 | **Grafia dos nomes na lista** (`data/fontes/introducao-ia-nba.md`): o documento traz "Porzigins" (Porziņģis?), "podzienki" (Podziemski?) e "Kesller" (Kessler?). A demo NÃO corrige — só sobe a inicial de palavra minúscula ("stephen Curry" → "Stephen Curry"), porque adivinhar o jogador certo seria inventar identidade. Quais são os nomes que ele quer ver na tela? | quem é cada jogador da lista, e o vínculo com o provedor real |
+| **Nota da partida na aba de estatísticas** (spec de 26/08): a aba de consulta passará a exibir uma nota de desempenho por jogador por jogo (escala 3–10), calculada por fórmula pública (Game Score de Hollinger) sobre o box score real. Não participa da estratégia, não alimenta o motor, e nunca se chama "nível" para não colidir com o vocabulário do CJ. Registro para ciência; não bloqueia. | nada — é dado canônico da aba de consulta |
+| **Tom das narrativas geradas por LLM** (spec de 25/08): os cards passarão a ter uma frase de análise gerada por IA a partir dos fatos do motor. O tom proposto é sóbrio, de comentarista, em pt-BR. O CJ quer calibrar a voz (mais provocadora? assinada como "análise da IA"?)? Não bloqueia a construção — bloqueia só o ajuste fino do texto. | o tom do texto nos cards, não a estratégia |
 | **Reaberta (25/08):** a proposta homologada dizia "sempre faixa, nunca odd única" (`odds.exibicao`), mas o parceiro decidiu mostrar a **média entre casas** no card e no detalhe. O CJ valida a média, prefere a faixa, ou as duas? (`config/ruleset.v1.yaml` → `odds.exibicao`: trocar o valor religa qualquer um dos comportamentos sem código) | o rodapé de odd de todo card pré-live |
 
 ---

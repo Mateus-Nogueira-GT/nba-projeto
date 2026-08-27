@@ -110,6 +110,38 @@ describe('helpers determinísticos da demonstração', () => {
 // SEED COMPLETO — o motor real calculando sobre os fatos da demonstração
 // ===========================================================================
 
+describe('semearDemo é reexecutável entre dias', () => {
+  /**
+   * O SEED RODA TODO DIA (cron da demo) e o parceiro também o roda à mão.
+   * Rodar de novo no dia seguinte não pode explodir.
+   *
+   * `jogos` tem DUAS uniques: `jogos_chave_natural` sobre (data_jogo, casa,
+   * visitante) e `jogos_chave_referencia` sobre (data_referencia, casa,
+   * visitante). `data_jogo` é GERADA de `data_hora_utc`, e um jogo às 20h em
+   * Brasília cai no dia UTC seguinte — que é justamente o motivo de
+   * `data_referencia` existir separada.
+   *
+   * O upsert do seed mirava só `data_referencia`. Quando a linha existente
+   * tinha outra `data_referencia` mas a MESMA `data_jogo`, o conflito não era
+   * capturado, o insert prosseguia e estourava na outra unique (23505).
+   *
+   * O horário importa: 01:00Z é 22:00 em Brasília do dia ANTERIOR, então a
+   * rodada "de hoje" é ancorada num dia civil diferente do dia UTC. Foi essa
+   * combinação que quebrou em produção.
+   */
+  it('semear à noite e de novo no dia seguinte não viola chave natural', async () => {
+    const banco = await bancoDeTeste()
+    try {
+      await semearDemo(banco.db, ruleset, new Date('2026-08-26T01:00:00.000Z'))
+      await expect(
+        semearDemo(banco.db, ruleset, new Date('2026-08-27T12:00:00.000Z')),
+      ).resolves.toBeDefined()
+    } finally {
+      await banco.fechar()
+    }
+  }, 180_000)
+})
+
 describe('semearDemo (PGlite, banco vazio)', () => {
   let banco: Awaited<ReturnType<typeof bancoDeTeste>>
   let resumo: Awaited<ReturnType<typeof semearDemo>>
@@ -377,6 +409,36 @@ describe('semearDemo (PGlite, banco vazio)', () => {
       const marcos = marcosDoNivel(linha!.nivel, g.atributo, ruleset)
       expect(marcos, `green de ${g.atributo} com marco ${g.marco} fora do ruleset`).toContain(g.marco)
     }
+  })
+
+  it('todo box score semeado fecha rebotesOf+rebotesDef e tem ROU/TOC/TO/faltas plausíveis', async () => {
+    // `semearDemo` escrevia pontos/rebotes/assistências/minutos e deixava
+    // roubos, bloqueios, turnovers, faltas e a divisão rebotesOf/rebotesDef
+    // no default 0 da tabela, para TODO jogador em TODO jogo. `nota.ts` lê
+    // rebotesOf/rebotesDef, nunca rebotesTotal — então um jogador com REB 12
+    // na tabela visível valia zero rebote na nota da própria linha (achado
+    // da revisão).
+    const { estatisticasJogo } = await import('../../dominio/db/schema')
+
+    // TODAS as linhas semeadas, de todos os jogos — inclusive o box PARCIAL
+    // do jogo AO VIVO, que passa por outro caminho no `semear.ts`. O
+    // invariante do rebote não pode valer só num deles.
+    const linhas = await banco.db.select().from(estatisticasJogo)
+
+    expect(linhas.length).toBeGreaterThan(0)
+    for (const l of linhas) {
+      // A soma bate por CONSTRUÇÃO (rebotesDef é o complemento de
+      // rebotesOf), não por sorte — é exatamente o invariante que a nota
+      // depende para não contradizer o REB da mesma linha.
+      expect(l.rebotesOf + l.rebotesDef).toBe(l.rebotesTotal)
+    }
+    // roubos/bloqueios podem ser 0 para um jogador específico (é realista);
+    // turnovers/faltas nunca são 0 na demo — a faixa derivada começa em 1.
+    // O que a correção proíbe é o quadro TODO em branco.
+    expect(linhas.some((l) => l.roubos > 0)).toBe(true)
+    expect(linhas.some((l) => l.bloqueios > 0)).toBe(true)
+    expect(linhas.every((l) => l.turnovers > 0)).toBe(true)
+    expect(linhas.every((l) => l.faltas > 0)).toBe(true)
   })
 
   it('reexecutar o seed não duplica nada', async () => {

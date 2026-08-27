@@ -70,6 +70,13 @@ export type CardEntradaProps = {
    * nunca passa 'quente'; o teste transversal vigia.
    */
   temperatura?: 'frio' | 'quente'
+  /**
+   * Análise gerada por LLM a partir dos fatos do card. Ausente é o caso
+   * NORMAL — sem chave, LLM fora ou texto reprovado pelo validador. Ausência
+   * não abre espaço: um bloco vazio anunciaria defeito onde há degradação
+   * prevista.
+   */
+  narrativa?: string | null
 }
 
 /**
@@ -237,6 +244,20 @@ export function CardEntrada(props: CardEntradaProps) {
             <Barrinhas jogos={props.ultimos5!} rotulo="ÚLT. 5 NA LINHA" />
           </div>
         )}
+
+        {props.narrativa ? (
+          <p
+            style={{
+              margin: '0 14px 10px',
+              fontSize: 12.5,
+              lineHeight: 1.5,
+              color: semantico.textoSecundario,
+              fontStyle: 'italic',
+            }}
+          >
+            {props.narrativa}
+          </p>
+        ) : null}
 
         {/* zona 3 · rodapé — faixa translúcida na temperatura do contexto */}
         <div

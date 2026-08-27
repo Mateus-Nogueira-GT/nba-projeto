@@ -60,6 +60,15 @@ export const componente = {
   // Barra rumo ao alvo (Fire Live)
   barraAlvoFundo: s.superficieQuente1,
   barraAlvoPreenchido: `linear-gradient(90deg, ${s.acento}, ${s.acentoClaro})`,
+
+  // Nota da partida — as 5 faixas como {fundo, texto}, na ordem da maior
+  // nota para a menor. NotaPartida.tsx é dono do `minimo` de cada faixa (não
+  // é cor, é regra de apresentação da UI, fica no componente de React).
+  notaFaixaExcepcional: { fundo: s.notaExcepcionalFundo, texto: s.notaExcepcionalTexto },
+  notaFaixaOtima: { fundo: s.notaOtimaFundo, texto: s.notaOtimaTexto },
+  notaFaixaBoa: { fundo: s.notaBoaFundo, texto: s.notaBoaTexto },
+  notaFaixaMediana: { fundo: s.notaMedianaFundo, texto: s.notaMedianaTexto },
+  notaFaixaFraca: { fundo: s.notaFracaFundo, texto: s.notaFracaTexto },
 } as const
 
 export type Componente = typeof componente

@@ -17,85 +17,37 @@ import { gravarApitos } from '../dominio/repositorios/apitos'
 import { avaliar } from '../motor'
 import { arredondar } from '../motor/arredondamento'
 import { faixaDaConfianca } from '../motor/confianca'
-import type { Apito, Atributo, Metodo, Nivel, NivelApito } from '../motor/tipos'
+import type { Apito, Atributo, Nivel } from '../motor/tipos'
 import type { Ruleset } from '../motor/ruleset/schema'
 import { janelaNoBanco } from '../dominio/janela'
 import { calendarioDoRuleset, temporadaDe } from '../dominio/temporada'
 import { colunaMedia, jogosRecentes, naLinha } from './historico-na-linha'
+import type { PortaLLM } from '../ingestao/llm'
+import { enriquecerComNarrativas } from './narrativa'
+import type { ConteudoFeed, ItemFeed } from './tipos-feed'
 
-/**
- * Item já pronto para a tela.
- *
- * O feed é MATERIALIZADO: o motor roda uma vez por evento, não uma vez por
- * usuário. Com 10k conectados, é essa diferença que decide se a conta fecha.
- * Ver docs/01-arquitetura.md > "10.000 simultâneos".
- */
-export type ItemFeed = {
-  chave: string
-  jogoId: string
-  jogadorId: string
-  nome: string
-  timeSigla: string
-  timeNome: string
-  /** Foto do jogador, quando o provedor tem uma. Ausente em snapshot antigo. */
-  fotoUrl: string | null
-  atributo: Atributo
-  nivelJogador: Nivel
-  nivelApito: NivelApito
-  turbo: boolean
-  modoFire: boolean
-  opdOrigemNivel: NivelApito | null
-  linha: number | null
-  /** Nota de confiança da análise do CJ. Nunca "probabilidade". */
-  confianca: number | null
-  /**
-   * Faixa VISUAL da nota (1..5), calculada UMA vez aqui, na materialização.
-   *
-   * Não é conveniência: `faixaDaConfianca` é função do MOTOR, e a tela não
-   * executa o motor — a avaliação acontece uma vez por evento, não uma vez
-   * por usuário (`tela-nao-chama-o-motor`, docs/01-arquitetura.md). O grau
-   * viaja no feed pelo mesmo motivo que o resto do item viaja.
-   *
-   * Calculado sobre o valor ARREDONDADO, que é o que a tela imprime: com 85,5
-   * a pílula mostra "86%" e a régua de /como-funciona promete grau 3 para 86.
-   * Graduar o valor bruto daria grau 2 e a contradição apareceria em duas
-   * telas. Null em snapshot anterior a este campo.
-   */
-  grauConfianca: 1 | 2 | 3 | 4 | 5 | null
-  alvo1Q: number | null
-  /**
-   * Método que produziu o apito. Viaja no feed porque o documento do CJ pede
-   * filtragem por método. Null em snapshot anterior à spec 08.
-   */
-  metodo: Metodo | null
-  /** G/F/C — dado canônico do jogador, usado só como recorte de leitura. */
-  posicao: string | null
-  /**
-   * Últimos 5 jogos conferidos contra a linha do apito, mais recente primeiro
-   * — as barrinhas do card. MESMO cálculo do detalhe (historico-na-linha.ts).
-   * Vazio em snapshot antigo ou sem linha/alvo para conferir.
-   */
-  ultimos5: { valor: number; bateu: boolean }[]
-  /** Média da temporada que o motor usou — o card mostra sem chamar o motor. */
-  mediaTemporada: number | null
-  /**
-   * Faixa de odds entre casas para a linha do apito, da última coleta.
-   * `media` chega com a spec da lógica de dados; o card já sabe renderizar os
-   * dois estados. Null sem coleta — o rodapé então omite a odd.
-   */
-  oddFaixa: { min: number; max: number; qtdCasas: number; media?: number } | null
-}
-
-export type ConteudoFeed = {
-  dataReferencia: string
-  geradoEm: string
-  rulesetVersao: string
-  itens: ItemFeed[]
-}
+// `ItemFeed`/`ConteudoFeed` moram em `tipos-feed.ts` — ver o comentário lá
+// para o porquê (evita ciclo de import com `narrativa.ts`). Reexportados
+// aqui porque este é o ponto de importação público de sempre.
+export type { ItemFeed, ConteudoFeed } from './tipos-feed'
 
 export type ResultadoPublicacao =
   | { publicou: false; motivo: 'ainda-cedo' | 'sem-jogos' | 'sem-lista-ativa' }
-  | { publicou: true; mudou: boolean; hash: string; itens: number; apitosNovos: number }
+  | {
+      publicou: true
+      mudou: boolean
+      hash: string
+      itens: number
+      apitosNovos: number
+      /** Quantas narrativas passaram pelo validador nesta publicação. */
+      narrativas?: number
+      /**
+       * Quantas o validador RECUSOU. Anda junto com `narrativas` porque
+       * "geradas: 0" sozinho não diz se o provedor caiu ou se o texto foi
+       * recusado — e é o número que a spec §4.2 manda contar.
+       */
+      narrativasReprovadas?: number
+    }
 
 function hashDe(conteudo: ConteudoFeed): string {
   // O horário de geração fica FORA do hash de propósito: senão toda execução
@@ -122,7 +74,13 @@ function hashDe(conteudo: ConteudoFeed): string {
 export async function publicarListaSecreta(
   db: Db,
   ruleset: Ruleset,
-  opcoes: { dataReferencia: string; agora: Date; ignorarAntecedencia?: boolean },
+  opcoes: {
+    dataReferencia: string
+    agora: Date
+    ignorarAntecedencia?: boolean
+    /** Ausente = sem narrativas. A publicação nunca depende da LLM. */
+    llm?: PortaLLM
+  },
 ): Promise<ResultadoPublicacao> {
   const primeiro = await primeiroJogoDoDia(db, opcoes.dataReferencia, ruleset.rodada.fuso)
   if (primeiro === null) return { publicou: false, motivo: 'sem-jogos' }
@@ -166,7 +124,47 @@ export async function publicarListaSecreta(
 
   const mudou = existente?.hash !== hash
 
+  let narrativas = 0
+  let narrativasReprovadas = 0
+
+  /**
+   * Grava SÓ o `conteudo_json` da linha da Lista Secreta.
+   *
+   * Mesmo predicado do SELECT de `existente` acima — dataReferencia +
+   * estrategia identificam a linha (jogoId é sempre NULL nela). `hash` e
+   * `geradoEm` ficam de fora: o hash é a impressão digital da ESTRATÉGIA, e
+   * nada nela mudou por causa de texto.
+   */
+  const gravarConteudo = async (parcial: ConteudoFeed): Promise<void> => {
+    await db
+      .update(feedSnapshot)
+      .set({ conteudoJson: parcial })
+      .where(
+        and(
+          eq(feedSnapshot.dataReferencia, opcoes.dataReferencia),
+          eq(feedSnapshot.estrategia, 'LISTA_SECRETA'),
+        ),
+      )
+  }
+
   if (mudou) {
+    // A NARRATIVA É ANEXADA DEPOIS DO HASH, e só quando algo mudou.
+    //
+    // O hash é a impressão digital do conteúdo de ESTRATÉGIA. Texto de LLM não
+    // é determinístico: se entrasse no hash, cada execução do cron veria
+    // "mudou" e republicaria o snapshot — push repetido e conta de LLM a cada
+    // minuto. Gerando aqui, reexecutar com os mesmos fatos não chama a LLM.
+    //
+    // A PUBLICAÇÃO NUNCA ESPERA A LLM: o insert abaixo grava `conteudo` SEM
+    // narrativa primeiro — a lista já está no ar a partir daqui. Só depois é
+    // que o enriquecimento roda, e o resultado vai para o banco com um UPDATE
+    // que toca só `conteudo_json`; `hash` e `geradoEm` não mudam, porque nada
+    // na estratégia mudou. Se o provedor de LLM travar ou estourar o timeout,
+    // essa segunda etapa morre e a lista fica publicada sem narrativa — que a
+    // spec já trata como estado normal (o campo é opcional). O inverso —
+    // atrasar ou perder a publicação esperando a LLM — não é aceitável: o
+    // cron tem `maxDuration` finito, e sem essa ordem um provedor lento faz a
+    // função morrer ANTES do insert, e a lista simplesmente não sai.
     await db
       .insert(feedSnapshot)
       .values({
@@ -181,9 +179,32 @@ export async function publicarListaSecreta(
         target: [feedSnapshot.dataReferencia, feedSnapshot.estrategia, feedSnapshot.jogoId],
         set: { conteudoJson: conteudo, geradoEm: opcoes.agora, hash },
       })
+
+    if (opcoes.llm) {
+      // O enriquecimento GRAVA PROGRESSO enquanto anda (ver `LOTE_DE_GRAVACAO`
+      // em `narrativa.ts`). Com o `maxDuration` do cron e um provedor lento,
+      // a função morre no meio da lista — e antes disso o que já foi gerado
+      // (e pago) se perdia inteiro, para nunca mais ser tentado, porque o
+      // hash não muda no ciclo seguinte.
+      const enriquecido = await enriquecerComNarrativas(db, opcoes.llm, conteudo, {
+        gravarParcial: gravarConteudo,
+      })
+      narrativas = enriquecido.geradas
+      narrativasReprovadas = enriquecido.reprovadas
+
+      await gravarConteudo(enriquecido.conteudo)
+    }
   }
 
-  return { publicou: true, mudou, hash, itens: conteudo.itens.length, apitosNovos: gravados.length }
+  return {
+    publicou: true,
+    mudou,
+    hash,
+    itens: conteudo.itens.length,
+    apitosNovos: gravados.length,
+    narrativas,
+    narrativasReprovadas,
+  }
 }
 
 /** Junta ao apito o que a tela precisa mostrar: nome, time, sigla. */
@@ -444,7 +465,7 @@ export function ordenarPorConfianca(itens: ItemFeed[]): ItemFeed[] {
 export async function reprocessarPorEscalacao(
   db: Db,
   ruleset: Ruleset,
-  opcoes: { dataReferencia: string; agora: Date },
+  opcoes: { dataReferencia: string; agora: Date; llm?: PortaLLM },
 ): Promise<ResultadoPublicacao> {
   return publicarListaSecreta(db, ruleset, { ...opcoes, ignorarAntecedencia: true })
 }

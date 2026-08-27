@@ -293,3 +293,19 @@ O selo PREENCHIDO no topo direito do cabeçalho ("PRÉ-LIVE" laranja / "■ AO
 VIVO" vermelho), presente nos mockups, não foi implementado — o `CabecalhoTela`
 comunica o contexto por sobrancelha + marcador colorido. Reestruturar o
 cabeçalho de todas as telas por um badge ficou para depois da auditoria.
+
+## Nota da partida
+
+Badge de desempenho por jogador por jogo, escala 3–10, na aba de estatísticas.
+
+**Paleta própria, nunca a do grau de confiança.** As duas escalas convivem no
+app e significam coisas diferentes: a nota é desempenho já acontecido (dado
+canônico), o grau é a força de um sinal de estratégia. Cor compartilhada faria
+o assinante ler as duas como a mesma coisa.
+
+Faixas: `<6` fraca · `6–6.9` mediana · `7–7.9` boa · `8–8.9` ótima · `9+`
+excepcional. Uma casa decimal, vírgula. Sem nota (menos de 5 minutos em
+quadra) imprime `—`, nunca `0`.
+
+**Nome:** "nota da partida" ou "nota". Nunca "nível" — `nível do jogador` e
+`nível do apito` são outra coisa no vocabulário do CJ.

@@ -1,12 +1,15 @@
-import { eq } from 'drizzle-orm'
+import { and, eq } from 'drizzle-orm'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 
 import { bancoDeTeste } from '../../modules/dominio/__tests__/ajuda-banco'
-import { jogadores } from '../../modules/dominio/db/schema'
+import { feedSnapshot, jogadores } from '../../modules/dominio/db/schema'
+import { diaLongo } from '../../components/formato'
 import { dataDeReferencia, somarDias } from '../../modules/dominio/rodada'
 import { rulesetAtivo } from '../../modules/entrega/ruleset-ativo'
 import { semearDemo } from '../../modules/ingestao/demo/semear'
+import { LLMFake } from '../../modules/ingestao/llm'
+import type { ConteudoFeed } from '../../modules/entrega/lista-secreta'
 
 /**
  * FUMAÇA DAS TELAS NOVAS.
@@ -43,11 +46,24 @@ vi.mock('../../modules/dominio/db/cliente', () => ({
   getDb: () => banco.db,
   fecharDb: async () => {},
 }))
+// `renderToStaticMarkup` não monta o App Router: só a tela de partida usa
+// `useRouter` (AtualizarAoVivo), e sem este mock ela derruba o teste com
+// "invariant expected app router to be mounted". Preserva o resto do módulo
+// de verdade (`redirect`, `notFound`) — várias outras telas deste arquivo
+// dependem deles.
+vi.mock('next/navigation', async (importOriginal) => {
+  const real = await importOriginal<typeof import('next/navigation')>()
+  return { ...real, useRouter: () => ({ refresh: () => {} }) }
+})
 
 beforeAll(async () => {
   process.env.DATABASE_URL = 'postgres://demo'
   banco = await bancoDeTeste()
-  await semearDemo(banco.db, await rulesetAtivo(), AGORA)
+  // Com a porta FAKE: é o que roda no ambiente de demonstração (sem
+  // OPENROUTER_API_KEY) e é o que faz a lista nascer com narrativa nos cards e
+  // resumo no cabeçalho — sem ela, a tela seria testada num estado que o
+  // cliente não vê.
+  await semearDemo(banco.db, await rulesetAtivo(), AGORA, new LLMFake())
   // O usuário da sessão simulada existe de verdade: telas passaram a consultar
   // preferências por usuarioId (jogadores_ocultos), e uuid inválido quebraria.
   const { usuarios } = await import('../../modules/dominio/db/schema')
@@ -241,6 +257,36 @@ describe('tela de Resultados', () => {
 })
 
 describe('a rodada segue o fuso do cliente', () => {
+  it('o resumo do dia aparece no topo — e sem ele a tela não abre buraco', async () => {
+    // Gerado, validado e gravado desde a spec §4.4, e nunca renderizado: o
+    // `grep resumoDoDia` só encontrava o tipo, o escritor e os testes.
+    const onde = and(
+      eq(feedSnapshot.dataReferencia, HOJE),
+      eq(feedSnapshot.estrategia, 'LISTA_SECRETA'),
+    )
+    const [linha] = await banco.db.select().from(feedSnapshot).where(onde).limit(1)
+    const original = linha!.conteudoJson as ConteudoFeed
+    expect(typeof original.resumoDoDia).toBe('string')
+
+    const { default: Pagina } = await import('../(app)/page')
+    const html = renderToStaticMarkup(await Pagina({ searchParams: Promise.resolve({}) }))
+    expect(html).toContain(original.resumoDoDia!)
+
+    // Ausente é caso NORMAL (sem chave, provedor fora, texto reprovado) e não
+    // pode virar um bloco vazio anunciando defeito — mesma regra da narrativa
+    // dentro do card.
+    try {
+      const semResumo: ConteudoFeed = { ...original, resumoDoDia: null }
+      await banco.db.update(feedSnapshot).set({ conteudoJson: semResumo }).where(onde)
+      const semHtml = renderToStaticMarkup(await Pagina({ searchParams: Promise.resolve({}) }))
+      expect(semHtml).not.toContain(original.resumoDoDia!)
+      expect(semHtml).not.toContain('border-left:2px solid')
+      expect(semHtml).toContain('LISTA DO DIA')
+    } finally {
+      await banco.db.update(feedSnapshot).set({ conteudoJson: original }).where(onde)
+    }
+  }, 60_000)
+
   it('às 21h30 de Brasília a lista ainda é a de hoje', async () => {
     // 00:30Z é 21:30 do dia ANTERIOR em Brasília. O cálculo antigo, por UTC,
     // já pedia a lista de amanhã — e o assinante via a tela vazia justamente
@@ -574,6 +620,174 @@ describe('Detalhe do apito — identidade 03', () => {
     expect(html).toContain('nota de confiança')
     expect(html).not.toContain('PROBABILIDADE')
   }, 60_000)
+})
+
+describe('tela de partida', () => {
+  async function renderizarJogo(status: 'AGENDADO' | 'AO_VIVO' | 'ENCERRADO') {
+    const { jogos } = await import('../../modules/dominio/db/schema')
+    const { eq: igual } = await import('drizzle-orm')
+    const [j] = await banco.db.select().from(jogos).where(igual(jogos.status, status)).limit(1)
+    const { default: Pagina } = await import('../(app)/estatisticas/jogo/[id]/page')
+    return renderToStaticMarkup(
+      await Pagina({ params: Promise.resolve({ id: j!.id }), searchParams: Promise.resolve({}) }),
+    )
+  }
+
+  it('jogo encerrado mostra os dois box scores e a nota', async () => {
+    const html = await renderizarJogo('ENCERRADO')
+    await gravarConferencia('tela-de-partida', html)
+    expect(html).toContain('NOTA')
+    // A nota é impressa com vírgula, como todo decimal do produto. Ancorado
+    // no `background` de uma das 5 faixas do PRÓPRIO badge da nota
+    // (componente.notaFaixa*) — sem isso, qualquer célula de FG%/3P%/LL%
+    // (que `pct()` também imprime como "45,5%") satisfaria o regex sozinha,
+    // mesmo que a nota regredisse para um formato sem vírgula.
+    expect(html).toMatch(/background:#(1F6F4A|2E7D62|3D5A80|4A4E69|5C3A3A)[^>]*>[3-9],\d/)
+    expect(html).toContain('Líderes da partida')
+  })
+
+  it('jogo AO VIVO não declara vencedor nem esconde o parcial', async () => {
+    const html = await renderizarJogo('AO_VIVO')
+    expect(html).toContain('AO VIVO')
+    // Ausência do veredito: "Líderes da partida" só renderiza quando
+    // `encerrado` (page.tsx) — é a peça mais próxima de um resultado final
+    // que a tela produz, e um jogo no 1º quarto não pode mostrá-la.
+    expect(html).not.toContain('Líderes da partida')
+
+    // ...E O PARCIAL, que o nome do teste prometia e ele não conferia: o
+    // jogo em destaque da demo abria em "Box score em atualização" porque o
+    // seed só escrevia `estatisticas_jogo` no laço dos ENCERRADOS (achado da
+    // revisão). Sem estas linhas o teste passava com a tela vazia.
+    expect(html).toContain('Pontos por quarto')
+    expect(html).not.toContain('Box score em atualização')
+    expect(html).not.toContain('Sem dados para exibir')
+    // A nota da partida na linha de alguém — prova que o box individual
+    // chegou à tela, não só o cabeçalho da seção.
+    expect(html).toMatch(/background:#(1F6F4A|2E7D62|3D5A80|4A4E69|5C3A3A)[^>]*>[3-9],\d/)
+  })
+
+  it('pré-jogo mostra H2H e forma, sem tabela de travessões', async () => {
+    // A lição da "parede de travessões": pré-jogo mostra o que EXISTE, não a
+    // ausência do que ainda não aconteceu.
+    const html = await renderizarJogo('AGENDADO')
+    expect(html).toContain('Confrontos anteriores')
+    expect(html).not.toContain('Líderes da partida')
+  })
+
+  it('nenhuma tela de partida escreve "probabilidade" ou "nível"', async () => {
+    for (const status of ['AGENDADO', 'AO_VIVO', 'ENCERRADO'] as const) {
+      const html = (await renderizarJogo(status)).toLowerCase()
+      expect(html, status).not.toContain('probabilidade')
+      expect(html, status).not.toContain('nível')
+    }
+  })
+
+  it('cada linha do box score leva ao perfil do jogador', async () => {
+    const html = await renderizarJogo('ENCERRADO')
+    // Ancorado na legenda da TABELA de box score (Tabela.tsx renderiza
+    // `legenda` como <caption>) — sem isso, o mesmo padrão de href também
+    // aparece nos links de "Líderes da partida", e o teste passaria mesmo
+    // com zero links dentro da tabela em si.
+    expect(html).toMatch(
+      /<caption[^>]*>Box score de [^<]*<\/caption>[\s\S]*?href="\/estatisticas\/jogador\/[0-9a-f-]+"/,
+    )
+  })
+
+  it('a aba de stats navega por data e linka para a partida', async () => {
+    const { default: Indice } = await import('../(app)/estatisticas/page')
+    const html = renderToStaticMarkup(await Indice({ searchParams: Promise.resolve({}) }))
+    expect(html).toContain('dia anterior')
+    expect(html).toContain('dia seguinte')
+    // O link agora carrega a data navegada (fix da revisão: o "voltar" da
+    // tela de partida precisa saber para qual dia retornar) — o href não
+    // termina mais logo depois do uuid.
+    expect(html).toMatch(/href="\/estatisticas\/jogo\/[0-9a-f-]+\?data=\d{4}-\d{2}-\d{2}"/)
+
+    // As duas asserções acima não amarram CADA link ao seu PRÓPRIO rótulo:
+    // `nav.anterior`/`nav.seguinte` são dois `string` iguais para o
+    // TypeScript, então trocar os dois no JSX (ou fixar um href velho à mão,
+    // mantendo o rótulo) deixaria as três asserções acima verdes mesmo com
+    // "dia anterior" apontando para amanhã. `ontem`/`amanha` usam a mesma
+    // `somarDias` que `navegacaoDeDatas` usa por baixo, a partir do mesmo
+    // relógio congelado (AGORA/HOJE) que a página lê — não é um valor fixo
+    // que também precisaria ser mantido em dia manualmente.
+    const ontem = somarDias(HOJE, -1)
+    const amanha = somarDias(HOJE, 1)
+    expect(html).toMatch(
+      new RegExp(`<a href="/estatisticas\\?data=${ontem}"[^>]*>\\s*← dia anterior\\s*</a>`),
+    )
+    expect(html).toMatch(
+      new RegExp(`<a href="/estatisticas\\?data=${amanha}"[^>]*>\\s*dia seguinte →\\s*</a>`),
+    )
+  })
+
+  it('data inválida na URL não quebra a tela', async () => {
+    const { default: Indice } = await import('../(app)/estatisticas/page')
+    const html = renderToStaticMarkup(
+      await Indice({ searchParams: Promise.resolve({ data: 'ontem' }) }),
+    )
+    expect(html).toContain('Jogos do dia')
+  })
+
+  it('o cabeçalho mostra a data navegada, e o vazio não mente "hoje" de um dia que não é hoje', async () => {
+    // Antes desta correção o título ficava "Jogos do dia" para qualquer
+    // data, e o vazio dizia "Nenhum jogo hoje." — uma afirmação falsa para
+    // um dia que não é hoje (achado da revisão).
+    const { default: Indice } = await import('../(app)/estatisticas/page')
+    const ontem = somarDias(HOJE, -1)
+    const amanha = somarDias(HOJE, 1)
+
+    // Ontem: a rodada histórica da demo garante jogos, então o cabeçalho é
+    // o que prova a data navegada.
+    const htmlOntem = renderToStaticMarkup(
+      await Indice({ searchParams: Promise.resolve({ data: ontem }) }),
+    )
+    expect(htmlOntem).toContain(diaLongo(ontem))
+
+    // Amanhã: a demo não semeia jogo nenhum, então o vazio é genuíno — e
+    // precisa dizer a data, nunca "hoje".
+    const htmlAmanha = renderToStaticMarkup(
+      await Indice({ searchParams: Promise.resolve({ data: amanha }) }),
+    )
+    expect(htmlAmanha).not.toContain('Nenhum jogo hoje')
+    expect(htmlAmanha).toContain(diaLongo(amanha))
+  })
+
+  it('H2H vazio mostra a linha prometida pela spec (§6), não esconde a seção', async () => {
+    // Duas siglas fora do rodízio da demo (as únicas com jogo semeado) nunca
+    // se enfrentaram no histórico — H2H genuinamente vazio, sem precisar
+    // mexer no `limiteH2H` (a página sempre usa o padrão da função).
+    const { jogos, times } = await import('../../modules/dominio/db/schema')
+    const { notInArray } = await import('drizzle-orm')
+    const RODIZIO_DA_DEMO = ['OKC', 'DEN', 'LAL', 'PHI', 'GSW', 'BOS', 'MIA', 'NYK']
+    const [casa, visitante] = await banco.db
+      .select()
+      .from(times)
+      .where(notInArray(times.sigla, RODIZIO_DA_DEMO))
+      .limit(2)
+
+    const amanha = somarDias(HOJE, 1)
+    const [novoJogo] = await banco.db
+      .insert(jogos)
+      .values({
+        dataHoraUtc: new Date(`${amanha}T20:00:00.000Z`),
+        dataReferencia: amanha,
+        timeCasaId: casa!.id,
+        timeVisitanteId: visitante!.id,
+        status: 'AGENDADO',
+      })
+      .returning()
+
+    const { default: Pagina } = await import('../(app)/estatisticas/jogo/[id]/page')
+    const html = renderToStaticMarkup(
+      await Pagina({
+        params: Promise.resolve({ id: novoJogo!.id }),
+        searchParams: Promise.resolve({}),
+      }),
+    )
+    expect(html).toContain('Confrontos anteriores')
+    expect(html).toContain('Primeiro confronto da temporada')
+  })
 })
 
 describe('a foto do jogador', () => {

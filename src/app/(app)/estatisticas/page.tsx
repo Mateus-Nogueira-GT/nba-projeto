@@ -2,11 +2,12 @@ import { getDb } from '@/modules/dominio/db/cliente'
 import { calendarioDoRuleset, temporadaDe } from '@/modules/dominio/temporada'
 import { exigirAcessoEstatisticasSeConfigurado } from '@/modules/plataforma/assinatura/guarda'
 import { buscar } from '@/modules/entrega/estatisticas/busca'
+import { dataValidaOuHoje, navegacaoDeDatas } from '@/modules/entrega/estatisticas/calendario'
 import { telaJogosDoDia } from '@/modules/entrega/estatisticas/jogos-do-dia'
 import { telaDaClassificacao } from '@/modules/entrega/estatisticas/time'
-import { rotaDoJogador, rotaDoTime } from '@/modules/entrega/estatisticas/rotas'
+import { rotaDoJogador, rotaDoJogo, rotaDoTime } from '@/modules/entrega/estatisticas/rotas'
 import { rulesetAtivo } from '@/modules/entrega/ruleset-ativo'
-import { horaCurta as horaDoJogo } from '@/components/formato'
+import { diaLongo, horaCurta as horaDoJogo } from '@/components/formato'
 import { CabecalhoTela, Moldura } from '@/components/navegacao'
 import { UltimaAtualizacao } from '@/design-system/componentes'
 import { dataDeReferencia } from '@/modules/dominio/rodada'
@@ -60,6 +61,19 @@ const ESTADO_ROTULO: Record<string, string> = {
   ENCERRADO: 'encerrado',
 }
 
+/**
+ * TÍTULO DA SEÇÃO — precisa dizer que dia é esse.
+ *
+ * "Jogos do dia" sozinho é verdade só para hoje. Antes desta função o rótulo
+ * nunca mudava com a navegação por data, e o vazio dizia "Nenhum jogo hoje."
+ * para um dia que não era hoje — uma afirmação falsa sobre o calendário
+ * (achado da revisão). Mesmo precedente de `diaLongo` que `/resultados` já
+ * usa para rotular rodada por rodada.
+ */
+function tituloJogosDoDia(data: string, hoje: string): string {
+  return data === hoje ? 'Jogos do dia' : `Jogos de ${diaLongo(data)}`
+}
+
 export default async function PaginaEstatisticas({
   searchParams,
 }: {
@@ -77,10 +91,12 @@ export default async function PaginaEstatisticas({
   const ruleset = await rulesetAtivo()
   const { fuso } = ruleset.rodada
   const hoje = dataDeReferencia(agora, fuso)
+  const bruta = Array.isArray(params.data) ? params.data[0] : params.data
+  const data = dataValidaOuHoje(bruta, hoje)
   const temporada = temporadaDe(agora, calendarioDoRuleset(ruleset))
 
   const [doDia, classificacao, resultados] = await Promise.all([
-    telaJogosDoDia(db, hoje, fuso),
+    telaJogosDoDia(db, data, fuso),
     telaDaClassificacao(db, temporada),
     termo.length > 0 ? buscar(db, termo) : Promise.resolve([]),
   ])
@@ -144,42 +160,70 @@ export default async function PaginaEstatisticas({
         </Secao>
       )}
 
-      <Secao titulo="Jogos do dia">
+      <Secao titulo={tituloJogosDoDia(data, hoje)}>
+        {(() => {
+          const nav = navegacaoDeDatas(data)
+          const estilo = { color: semantico.textoSecundario, fontSize: 13 } as const
+          return (
+            <nav
+              aria-label="Navegar por data"
+              style={{ display: 'flex', gap: 12, alignItems: 'baseline', marginBottom: 8 }}
+            >
+              <a href={`/estatisticas?data=${nav.anterior}`} style={estilo}>
+                ← dia anterior
+              </a>
+              {data !== hoje && (
+                <a href="/estatisticas" style={estilo}>
+                  hoje
+                </a>
+              )}
+              <a href={`/estatisticas?data=${nav.seguinte}`} style={estilo}>
+                dia seguinte →
+              </a>
+            </nav>
+          )
+        })()}
         {doDia.jogos.length === 0 ? (
-          <p style={{ fontSize: 13, color: semantico.textoSecundario }}>Nenhum jogo hoje.</p>
+          <p style={{ fontSize: 13, color: semantico.textoSecundario }}>
+            {data === hoje ? 'Nenhum jogo hoje.' : `Nenhum jogo em ${diaLongo(data)}.`}
+          </p>
         ) : (
           <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'grid', gap: 6 }}>
             {doDia.jogos.map((j) => (
-              <li
-                key={j.id}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  gap: 10,
-                  padding: '10px 12px',
-                  borderRadius: 8,
-                  border: `1px solid ${semantico.divisor}`,
-                  background: semantico.superficie,
-                  fontSize: 14,
-                }}
-              >
-                <span style={{ display: 'flex', gap: 6, alignItems: 'baseline' }}>
-                  <a href={rotaDoTime(j.casa.id)} style={{ color: semantico.textoPrimario }}>
-                    {j.casa.sigla}
-                  </a>
-                  <span style={{ color: semantico.textoSecundario }}>×</span>
-                  <a href={rotaDoTime(j.visitante.id)} style={{ color: semantico.textoPrimario }}>
-                    {j.visitante.sigla}
-                  </a>
-                </span>
-                <span style={{ fontSize: 12, color: semantico.textoSecundario }}>
-                  {j.status === 'AGENDADO'
-                    ? horaDoJogo(j.dataHoraUtc, fuso)
-                    : `${j.casa.placar ?? 0}–${j.visitante.placar ?? 0}`}
-                  {j.status !== 'AGENDADO' && ` · ${ESTADO_ROTULO[j.status]}`}
-                  {j.status === 'AO_VIVO' && j.quartoAtual !== null && ` · ${j.quartoAtual}º Q`}
-                </span>
+              <li key={j.id}>
+                {/* O card inteiro linka para a partida — as siglas dos times não
+                    são mais links próprios (aninhar <a> dentro de <a> é HTML
+                    inválido). O time continua acessível a partir da tela da
+                    partida. */}
+                <a
+                  href={`${rotaDoJogo(j.id)}?data=${data}`}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: 10,
+                    padding: '10px 12px',
+                    borderRadius: 8,
+                    border: `1px solid ${semantico.divisor}`,
+                    background: semantico.superficie,
+                    color: semantico.textoPrimario,
+                    textDecoration: 'none',
+                    fontSize: 14,
+                  }}
+                >
+                  <span style={{ display: 'flex', gap: 6, alignItems: 'baseline' }}>
+                    <span>{j.casa.sigla}</span>
+                    <span style={{ color: semantico.textoSecundario }}>×</span>
+                    <span>{j.visitante.sigla}</span>
+                  </span>
+                  <span style={{ fontSize: 12, color: semantico.textoSecundario }}>
+                    {j.status === 'AGENDADO'
+                      ? horaDoJogo(j.dataHoraUtc, fuso)
+                      : `${j.casa.placar ?? 0}–${j.visitante.placar ?? 0}`}
+                    {j.status !== 'AGENDADO' && ` · ${ESTADO_ROTULO[j.status]}`}
+                    {j.status === 'AO_VIVO' && j.quartoAtual !== null && ` · ${j.quartoAtual}º Q`}
+                  </span>
+                </a>
               </li>
             ))}
           </ul>

@@ -1,4 +1,4 @@
-import { and, eq, inArray, isNotNull, sql } from 'drizzle-orm'
+import { and, eq, inArray, isNotNull, or, sql } from 'drizzle-orm'
 import { readFile } from 'node:fs/promises'
 
 import {
@@ -6,6 +6,7 @@ import {
   classificacao,
   estatisticasJogo,
   estatisticasQuarto,
+  estatisticasTimeJogo,
   fireLiveExecucoes,
   jogadores,
   jogos,
@@ -29,12 +30,15 @@ import { agregar } from '../../motor/odds/agregar'
 import type { Ruleset } from '../../motor/ruleset/schema'
 import { ATRIBUTOS } from '../../motor/tipos'
 import type { Atributo } from '../../motor/tipos'
+import type { PortaLLM } from '../llm'
 import { lerListaDeNiveis } from '../niveis/parser'
 import { importarListaDeNiveis } from '../niveis/importar'
 import {
+  boxComplementar,
   decomporPontos,
   historicoOscilacao,
   mediaDe,
+  naFaixa,
   niveisDoJogador,
   nomeDeExibicao,
   posicaoDe,
@@ -75,8 +79,22 @@ export type ResumoDemo = {
  * MVP em nível 3, e um MVP cruzando o alvo do 1º quarto até o modo fire.
  *
  * Idempotente: reexecutar não duplica nada.
+ *
+ * `llm` é opcional e repassado tal-qual a `publicarListaSecreta` nas três
+ * publicações abaixo: sem ele, quem grava o snapshot primeiro decide se
+ * aquele dia terá narrativa — e como a geração só roda na TRANSIÇÃO de hash
+ * (`mudou`), a demo publicando sem `llm` fixaria o hash sem narrativa, e o
+ * cron de lista-secreta que rodasse depois encontraria o mesmo hash e nunca
+ * chamaria a LLM. No ambiente de demonstração — sem `OPENROUTER_API_KEY` —
+ * `portaLLMDoAmbiente()` devolve `LLMFake`, determinístico, exatamente o que
+ * se quer numa demo.
  */
-export async function semearDemo(db: Db, ruleset: Ruleset, agora: Date): Promise<ResumoDemo> {
+export async function semearDemo(
+  db: Db,
+  ruleset: Ruleset,
+  agora: Date,
+  llm?: PortaLLM,
+): Promise<ResumoDemo> {
   const conteudo = await readFile(ARQUIVO_LISTA, 'utf8')
   const analise = lerListaDeNiveis(conteudo)
 
@@ -210,20 +228,48 @@ export async function semearDemo(db: Db, ruleset: Ruleset, agora: Date): Promise
     const timeCasaId = idDoTime(casa)
     const timeVisitanteId = idDoTime(visitante)
     if (!timeCasaId || !timeVisitanteId) return null
+    const situacao = {
+      status: extra.status ?? ('AGENDADO' as const),
+      quartoAtual: extra.quartoAtual ?? null,
+    }
+
+    // DUAS chaves naturais, não uma. `jogos` tem unique sobre
+    // (data_referencia, casa, visitante) E sobre (data_jogo, casa, visitante),
+    // onde `data_jogo` é GERADA de `data_hora_utc`. Um jogo às 20h em Brasília
+    // acontece no dia UTC seguinte — é exatamente por isso que a rodada
+    // (`data_referencia`) existe separada do dia do calendário (`data_jogo`).
+    //
+    // O upsert daqui mirava só a primeira. Quando a linha existente tinha
+    // outra `data_referencia` mas a MESMA `data_jogo`, o ON CONFLICT não
+    // casava, o insert prosseguia e estourava na segunda (23505) — e o seed
+    // inteiro morria. Acontecia entre execuções de dias diferentes, que é
+    // justamente o que o cron diário faz.
+    //
+    // Procurar antes por QUALQUER uma das duas custa uma consulta por jogo
+    // (28 num seed) e devolve a idempotência que o script promete.
+    const dataJogoUtc = quandoUtc.toISOString().slice(0, 10)
+    const [existente] = await db
+      .select({ id: jogos.id })
+      .from(jogos)
+      .where(
+        and(
+          eq(jogos.timeCasaId, timeCasaId),
+          eq(jogos.timeVisitanteId, timeVisitanteId),
+          or(eq(jogos.dataReferencia, dia), eq(jogos.dataJogo, dataJogoUtc)),
+        ),
+      )
+      .limit(1)
+
+    if (existente) {
+      // A rodada e o horário do jogo NÃO são reescritos: quem manda sobre eles
+      // é a linha que já existe. Só o que muda com o tempo é atualizado.
+      await db.update(jogos).set(situacao).where(eq(jogos.id, existente.id))
+      return existente.id
+    }
+
     const [linha] = await db
       .insert(jogos)
-      .values({
-        dataHoraUtc: quandoUtc,
-        dataReferencia: dia,
-        timeCasaId,
-        timeVisitanteId,
-        status: extra.status ?? 'AGENDADO',
-        quartoAtual: extra.quartoAtual ?? null,
-      })
-      .onConflictDoUpdate({
-        target: [jogos.dataReferencia, jogos.timeCasaId, jogos.timeVisitanteId],
-        set: { status: extra.status ?? 'AGENDADO', quartoAtual: extra.quartoAtual ?? null },
-      })
+      .values({ dataHoraUtc: quandoUtc, dataReferencia: dia, timeCasaId, timeVisitanteId, ...situacao })
       .returning()
     return linha?.id ?? null
   }
@@ -325,20 +371,40 @@ export async function semearDemo(db: Db, ruleset: Ruleset, agora: Date): Promise
         return sequencia[i - 1] ?? Math.round(media)
       }
 
+      const pontosValor = valorNoJogo('PONTOS')
+      const rebotesValor = valorNoJogo('REBOTES')
+      const assistenciasValor = valorNoJogo('ASSISTENCIAS')
+      const valoresBox = {
+        pontos: pontosValor,
+        rebotesTotal: rebotesValor,
+        assistencias: assistenciasValor,
+        minutos: '30.00',
+        // Arremessos coerentes com os pontos — sem eles, FG%/2P%/3P%/LL%
+        // das telas de estatística ficariam eternamente em "—" na demo.
+        ...decomporPontos(pontosValor),
+        // ROU/TOC/TO/FALTAS e a divisão ofensivo/defensivo do rebote — sem
+        // isto, essas colunas ficavam no default 0 da tabela para TODO
+        // jogador, e a nota (que lê rebotesOf/rebotesDef, nunca
+        // rebotesTotal — ver nota.ts) contradizia o REB visível na mesma
+        // linha (achado da revisão). Chave por dia (`i`): mesma pessoa, jogo
+        // diferente, sem repetir sempre os mesmos ROU/TOC/TO.
+        ...boxComplementar(`${nome}|dia${i}`, rebotesValor),
+      }
+
       await db
         .insert(estatisticasJogo)
-        .values({
-          jogoId,
-          jogadorId,
-          pontos: valorNoJogo('PONTOS'),
-          rebotesTotal: valorNoJogo('REBOTES'),
-          assistencias: valorNoJogo('ASSISTENCIAS'),
-          minutos: '30.00',
-          // Arremessos coerentes com os pontos — sem eles, FG%/2P%/3P%/LL%
-          // das telas de estatística ficariam eternamente em "—" na demo.
-          ...decomporPontos(valorNoJogo('PONTOS')),
+        .values({ jogoId, jogadorId, ...valoresBox })
+        // DoUpdate, não DoNothing: o MESMO jogoId reaparece em runs futuros
+        // quando a rodada de hoje de um dia vira "i dias atrás" do dia
+        // seguinte (a chave natural do jogo é `dataReferencia` — ver
+        // `criarJogo`). Sem sobrescrever, um jogo que foi o AO VIVO parcial
+        // de ontem ficaria preso no box PARCIAL de ontem depois de virar
+        // ENCERRADO hoje (achado da revisão, motivado pelo box parcial que o
+        // bloco "1º quarto ao vivo", abaixo, passou a gravar).
+        .onConflictDoUpdate({
+          target: [estatisticasJogo.jogoId, estatisticasJogo.jogadorId],
+          set: valoresBox,
         })
-        .onConflictDoNothing()
     }
   }
 
@@ -447,6 +513,32 @@ export async function semearDemo(db: Db, ruleset: Ruleset, agora: Date): Promise
           set: valores,
         })
 
+      // BOX PARCIAL DA TELA DE PARTIDA — mesma fonte que acabou de gravar em
+      // `estatisticas_quarto` (`valores`, acima), nunca recalculado: se os
+      // dois discordassem, a tela de partida contradiria a própria tela que
+      // motivou o refresh de 30s. Antes desta linha a tela lia
+      // `estatisticas_jogo`, que o jogo AO VIVO nunca escrevia, e o jogo em
+      // destaque da demo caía sempre em "Box score em atualização" (achado
+      // da revisão). `minutos` é fração de quarto — os outros jogos do seed
+      // usam `'30.00'` (jogo inteiro, mais abaixo); dar isso aqui diria que
+      // a partida já acabou.
+      const minutosParciais = naFaixa(j.nomeNaLista, '1q-min', [4, 11])
+      const valoresBox = {
+        pontos: valores.pontos,
+        rebotesTotal: valores.rebotes,
+        assistencias: valores.assistencias,
+        minutos: minutosParciais.toFixed(2),
+        ...decomporPontos(valores.pontos),
+        ...boxComplementar(`${j.nomeNaLista}|1Q`, valores.rebotes),
+      }
+      await db
+        .insert(estatisticasJogo)
+        .values({ jogoId: jogoAoVivo, jogadorId, ...valoresBox })
+        .onConflictDoUpdate({
+          target: [estatisticasJogo.jogoId, estatisticasJogo.jogadorId],
+          set: valoresBox,
+        })
+
       if (j.timeSigla === 'OKC') pontosOkc += valores.pontos
       else pontosDen += valores.pontos
     }
@@ -455,6 +547,37 @@ export async function semearDemo(db: Db, ruleset: Ruleset, agora: Date): Promise
       .update(jogos)
       .set({ placarCasa: pontosOkc, placarVisitante: pontosDen })
       .where(eq(jogos.id, jogoAoVivo))
+
+    // BOX DO TIME, só o 1º quarto — o único que já aconteceu. Espalhar o
+    // placar pelos quatro quartos (como `semearBoxScoreDoTime` faz para os
+    // ENCERRADOS) inventaria pontos em quartos que ainda não existem. Sem isto a Tela de Partida não tinha "Pontos por quarto" nem
+    // TOT para o jogo ao vivo em destaque da demo (achado da revisão).
+    for (const [sigla, pontosTime] of [
+      ['OKC', pontosOkc],
+      ['DEN', pontosDen],
+    ] as const) {
+      const timeId = idDoTime(sigla)
+      if (!timeId) continue
+      // A coluna sai do MESMO `quarto` que `estatisticas_quarto` acabou de
+      // receber — hoje o ruleset diz 1 e sempre dirá (Fire Live é só o 1º
+      // quarto), mas escrever `pontosQ1` à mão faria as duas tabelas
+      // discordarem em silêncio se esse número um dia mudasse.
+      const valoresTime = {
+        pontos: pontosTime,
+        pontosQ1: quarto === 1 ? pontosTime : 0,
+        pontosQ2: quarto === 2 ? pontosTime : 0,
+        pontosQ3: quarto === 3 ? pontosTime : 0,
+        pontosQ4: quarto === 4 ? pontosTime : 0,
+        pontosProrrogacao: 0,
+      }
+      await db
+        .insert(estatisticasTimeJogo)
+        .values({ jogoId: jogoAoVivo, timeId, ...valoresTime })
+        .onConflictDoUpdate({
+          target: [estatisticasTimeJogo.jogoId, estatisticasTimeJogo.timeId],
+          set: valoresTime,
+        })
+    }
 
     await db
       .insert(fireLiveExecucoes)
@@ -467,6 +590,7 @@ export async function semearDemo(db: Db, ruleset: Ruleset, agora: Date): Promise
     dataReferencia,
     agora,
     ignorarAntecedencia: true,
+    llm,
   })
 
   let apitosFireLive = 0
@@ -496,6 +620,7 @@ export async function semearDemo(db: Db, ruleset: Ruleset, agora: Date): Promise
       dataReferencia: somarDias(dataReferencia, -i),
       agora: dia,
       ignorarAntecedencia: true,
+      llm,
     })
     if (publicacaoPassada.publicou) rodadasPublicadas += 1
   }
@@ -514,6 +639,7 @@ export async function semearDemo(db: Db, ruleset: Ruleset, agora: Date): Promise
       dataReferencia,
       agora,
       ignorarAntecedencia: true,
+      llm,
     })
   }
 
@@ -751,6 +877,8 @@ async function semearPlacares(db: Db): Promise<number> {
     : ((resultado as { rows?: unknown[] }).rows ?? [])
   return linhas.length
 }
+
+
 
 /**
  * JOGOS DISPUTADOS na média da temporada — derivado, nunca digitado.

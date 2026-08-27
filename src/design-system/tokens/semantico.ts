@@ -86,6 +86,23 @@ export const semantico = {
   confiancaGrau4: p.turquesa400,
   confiancaGrau5: p.turquesa300,
 
+  // -- Nota da partida — 5 faixas de desempenho (badge da aba de estatísticas) --
+  // Paleta PRÓPRIA e deliberadamente distinta do grau de confiança do apito
+  // acima — as duas convivem no app e significam coisas diferentes (ver
+  // componentes/NotaPartida.tsx). Precisa estar aqui, e não como hex direto
+  // no componente: é o que o teste "hex direto" da camada de token cobra de
+  // qualquer outro token deste arquivo.
+  notaExcepcionalFundo: p.notaFundoExcepcional,
+  notaExcepcionalTexto: p.notaTextoVerde,
+  notaOtimaFundo: p.notaFundoOtima,
+  notaOtimaTexto: p.notaTextoVerde,
+  notaBoaFundo: p.notaFundoBoa,
+  notaBoaTexto: p.notaTextoAzul,
+  notaMedianaFundo: p.notaFundoMediana,
+  notaMedianaTexto: p.notaTextoRoxo,
+  notaFracaFundo: p.notaFundoFraca,
+  notaFracaTexto: p.notaTextoVermelho,
+
   // -- Fundos alternativos do monograma do Avatar (identidade 03) -----------
   avatarFundo2: p.avatarFundo2,
   avatarFundo3: p.avatarFundo3,
