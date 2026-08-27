@@ -110,6 +110,38 @@ describe('helpers determinísticos da demonstração', () => {
 // SEED COMPLETO — o motor real calculando sobre os fatos da demonstração
 // ===========================================================================
 
+describe('semearDemo é reexecutável entre dias', () => {
+  /**
+   * O SEED RODA TODO DIA (cron da demo) e o parceiro também o roda à mão.
+   * Rodar de novo no dia seguinte não pode explodir.
+   *
+   * `jogos` tem DUAS uniques: `jogos_chave_natural` sobre (data_jogo, casa,
+   * visitante) e `jogos_chave_referencia` sobre (data_referencia, casa,
+   * visitante). `data_jogo` é GERADA de `data_hora_utc`, e um jogo às 20h em
+   * Brasília cai no dia UTC seguinte — que é justamente o motivo de
+   * `data_referencia` existir separada.
+   *
+   * O upsert do seed mirava só `data_referencia`. Quando a linha existente
+   * tinha outra `data_referencia` mas a MESMA `data_jogo`, o conflito não era
+   * capturado, o insert prosseguia e estourava na outra unique (23505).
+   *
+   * O horário importa: 01:00Z é 22:00 em Brasília do dia ANTERIOR, então a
+   * rodada "de hoje" é ancorada num dia civil diferente do dia UTC. Foi essa
+   * combinação que quebrou em produção.
+   */
+  it('semear à noite e de novo no dia seguinte não viola chave natural', async () => {
+    const banco = await bancoDeTeste()
+    try {
+      await semearDemo(banco.db, ruleset, new Date('2026-08-26T01:00:00.000Z'))
+      await expect(
+        semearDemo(banco.db, ruleset, new Date('2026-08-27T12:00:00.000Z')),
+      ).resolves.toBeDefined()
+    } finally {
+      await banco.fechar()
+    }
+  }, 180_000)
+})
+
 describe('semearDemo (PGlite, banco vazio)', () => {
   let banco: Awaited<ReturnType<typeof bancoDeTeste>>
   let resumo: Awaited<ReturnType<typeof semearDemo>>

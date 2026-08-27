@@ -1,4 +1,4 @@
-import { and, eq, inArray, isNotNull, sql } from 'drizzle-orm'
+import { and, eq, inArray, isNotNull, or, sql } from 'drizzle-orm'
 import { readFile } from 'node:fs/promises'
 
 import {
@@ -208,20 +208,48 @@ export async function semearDemo(
     const timeCasaId = idDoTime(casa)
     const timeVisitanteId = idDoTime(visitante)
     if (!timeCasaId || !timeVisitanteId) return null
+    const situacao = {
+      status: extra.status ?? ('AGENDADO' as const),
+      quartoAtual: extra.quartoAtual ?? null,
+    }
+
+    // DUAS chaves naturais, não uma. `jogos` tem unique sobre
+    // (data_referencia, casa, visitante) E sobre (data_jogo, casa, visitante),
+    // onde `data_jogo` é GERADA de `data_hora_utc`. Um jogo às 20h em Brasília
+    // acontece no dia UTC seguinte — é exatamente por isso que a rodada
+    // (`data_referencia`) existe separada do dia do calendário (`data_jogo`).
+    //
+    // O upsert daqui mirava só a primeira. Quando a linha existente tinha
+    // outra `data_referencia` mas a MESMA `data_jogo`, o ON CONFLICT não
+    // casava, o insert prosseguia e estourava na segunda (23505) — e o seed
+    // inteiro morria. Acontecia entre execuções de dias diferentes, que é
+    // justamente o que o cron diário faz.
+    //
+    // Procurar antes por QUALQUER uma das duas custa uma consulta por jogo
+    // (28 num seed) e devolve a idempotência que o script promete.
+    const dataJogoUtc = quandoUtc.toISOString().slice(0, 10)
+    const [existente] = await db
+      .select({ id: jogos.id })
+      .from(jogos)
+      .where(
+        and(
+          eq(jogos.timeCasaId, timeCasaId),
+          eq(jogos.timeVisitanteId, timeVisitanteId),
+          or(eq(jogos.dataReferencia, dia), eq(jogos.dataJogo, dataJogoUtc)),
+        ),
+      )
+      .limit(1)
+
+    if (existente) {
+      // A rodada e o horário do jogo NÃO são reescritos: quem manda sobre eles
+      // é a linha que já existe. Só o que muda com o tempo é atualizado.
+      await db.update(jogos).set(situacao).where(eq(jogos.id, existente.id))
+      return existente.id
+    }
+
     const [linha] = await db
       .insert(jogos)
-      .values({
-        dataHoraUtc: quandoUtc,
-        dataReferencia: dia,
-        timeCasaId,
-        timeVisitanteId,
-        status: extra.status ?? 'AGENDADO',
-        quartoAtual: extra.quartoAtual ?? null,
-      })
-      .onConflictDoUpdate({
-        target: [jogos.dataReferencia, jogos.timeCasaId, jogos.timeVisitanteId],
-        set: { status: extra.status ?? 'AGENDADO', quartoAtual: extra.quartoAtual ?? null },
-      })
+      .values({ dataHoraUtc: quandoUtc, dataReferencia: dia, timeCasaId, timeVisitanteId, ...situacao })
       .returning()
     return linha?.id ?? null
   }
