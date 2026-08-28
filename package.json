@@ -32,7 +32,8 @@
     "ingestao:backfill": "vite-node scripts/backfill-ingestao.ts",
     "tokens": "vite-node scripts/gerar-tokens-css.mts",
     "pwa:assets": "vite-node scripts/gerar-assets-pwa.ts",
-    "odds:censo": "vite-node scripts/odds-censo.ts"
+    "odds:censo": "vite-node scripts/odds-censo.ts",
+    "mp:conferir": "dotenv -e .env.local -- vite-node scripts/mp-conferir.ts"
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.1.0",

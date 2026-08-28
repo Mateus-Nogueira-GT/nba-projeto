@@ -58,10 +58,31 @@ Nunca reutilize credenciais de produção no Preview. Configure no Mercado Pago
 os tópicos `subscription_preapproval`, `subscription_authorized_payment` e
 `payment`, apontando para `/api/webhook/mercadopago`.
 
+## Conferir a configuração antes de qualquer coisa
+
+```bash
+npm run mp:conferir
+```
+
+Somente leitura: valida o `MERCADOPAGO_ACCESS_TOKEN` contra a API real
+(`GET /users/me`), imprime a conta, o plano configurado, o estado das flags e
+a URL de webhook a registrar no painel. **Não cria assinatura, não liga flag,
+não escreve no banco.** Avisa quando `MERCADOPAGO_SANDBOX` e o tipo do token
+não combinam — trocar credencial de teste por credencial de produção (ou o
+contrário) é o erro clássico da virada.
+
+Rode antes do passo 3 abaixo e de novo depois de trocar as credenciais para
+produção. Token reprovado ou configuração de produto inválida sai com código
+1: dá para usar como portão.
+
+**A credencial nunca vai para arquivo commitado** — só `.env.local`
+(gitignored) e painel da Vercel. `ACCESS_TOKEN` exposto autoriza cobranças na
+conta: se vazar, rode-o no painel.
+
 ## Ordem de homologação
 
 1. Aplicar a migration `0011_demonic_fat_cobra.sql`.
-2. Manter cadastro e checkout desligados.
+2. Manter cadastro e checkout desligados; `npm run mp:conferir` limpo.
 3. Enviar webhook de teste e confirmar HMAC, consulta autenticada e evento.
 4. Executar `/api/cron/reconciliar-pagamentos` com Bearer do `CRON_SECRET`.
 5. Criar usuário de teste e liberar cadastro apenas no ambiente sandbox.
