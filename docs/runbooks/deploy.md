@@ -61,6 +61,9 @@ migração que apaga coluna/tabela:
 
 ## Envs de LLM (todos opcionais)
 
+> Passo a passo completo (OpenRouter + VAPID):
+> [`openrouter-e-push.md`](openrouter-e-push.md)
+
 | Env | Padrão | Efeito |
 | --- | --- | --- |
 | `OPENROUTER_API_KEY` | ausente | Sem ela, todo o subsistema usa o adapter fake e o app funciona normalmente |
