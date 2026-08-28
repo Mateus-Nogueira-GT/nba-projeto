@@ -12,6 +12,7 @@ import type { Db } from '../../dominio/db/tipos'
 import type { Ruleset } from '../../motor/ruleset/schema'
 import type { Atributo } from '../../motor/tipos'
 import type { CasaDeAposta, CotacaoExterna } from './porta'
+import { vinculosConfirmados } from './vinculo-jogadores'
 
 /**
  * A COLETA de odds — o elo que nunca existiu fora do seed: casas → snapshot
@@ -164,6 +165,8 @@ async function coletarJogo(
     const cotacoes = await casa.cotacoes(jogo.idExterno)
     resultado.descartadas += casa.descartadas?.() ?? 0
     const casaId = await resolverCasa(casa.nome)
+    // Uma leitura por CASA (não por cotação): o mapa de nomes confirmados.
+    const jogadorPorNome = await vinculosConfirmados(db, casaId)
 
     for (const c of cotacoes) {
       if (c.atributo === undefined) {
@@ -172,9 +175,13 @@ async function coletarJogo(
         resultado.aguardandoCuradoria += 1
         continue
       }
+      // DOIS caminhos de vínculo, e só dois: id externo quando a casa é
+      // servida pelo provedor NBA (balldontlie); nome quando é casa de
+      // mercado (BetMGM, Altenar). No caminho por nome SÓ vínculo CONFIRMADO
+      // resolve — pendente de curadoria conta em semVinculo e aparece no job.
       const jogadorId = c.jogadorIdExternoProvedor
         ? jogadorPorIdExterno.get(c.jogadorIdExternoProvedor)
-        : undefined
+        : jogadorPorNome.get(c.jogadorNomeNaCasa)
       if (!jogadorId) {
         resultado.semVinculo += 1
         continue
