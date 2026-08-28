@@ -73,6 +73,21 @@ migração que apaga coluna/tabela:
 **Antes de `CHAT_HABILITADO=true` em produção:** configurar o teto de gasto da
 chave no painel do OpenRouter. É o freio que não depende do nosso código.
 
+## Envs de casas de aposta (todos opcionais)
+
+> Passo a passo completo (contas, censo e curadoria):
+> [`casas-de-aposta.md`](casas-de-aposta.md)
+
+| Env | Fonte | Efeito |
+| --- | --- | --- |
+| `ODDS_BETMGM_BASE_URL` · `_API_KEY` · `_BRAND` · `_LOCATION` | BetMGM | os quatro juntos ligam a fonte; falta um, ela não existe |
+| `ODDS_BETMGM_LANG` · `_AUTH_HEADER` · `_AUTH_PREFIX` | BetMGM | padrões `en` · `Authorization` · `Bearer ` |
+| `ODDS_ALTENAR_GATEWAY_BASE` · `_ORIGIN` · `_INTEGRATION` · `_SPORT_ID` | Altenar | idem: os quatro ligam a fonte |
+| `ODDS_ALTENAR_CHAMP_ID` | Altenar | opcional; filtra a NBA |
+
+Sem nenhuma delas, a coleta de odds do cron é um no-op e as telas seguem no
+fallback da tabela estática. Config pela metade **não** liga meia-fonte.
+
 ## Sintomas e causa provável
 
 | Sintoma | Causa provável |
