@@ -62,6 +62,20 @@ export function agregarCotacoes(cotacoes: { oddOver: number | null; casaNome?: s
   }
 }
 
+/**
+ * O cadastro da casa, idempotente. Exportado porque quem orquestra a coleta
+ * precisa do `casaId` ANTES da coleta (para ler o mapa de mercados e semear o
+ * de jogadores) — e duas formas de criar a mesma casa seriam duas casas.
+ */
+export async function garantirCasa(db: Db, nome: string, tipoApi: string): Promise<string> {
+  const [row] = await db
+    .insert(casas)
+    .values({ nome, tipoApi })
+    .onConflictDoUpdate({ target: casas.nome, set: { ativa: true } })
+    .returning()
+  return row!.id
+}
+
 export type ResultadoColeta = {
   cotacoes: number
   agregadas: number
@@ -122,13 +136,9 @@ export async function coletarOdds(
   const resolverCasa = async (nome: string): Promise<string> => {
     const cacheada = casaIdPorNome.get(nome)
     if (cacheada) return cacheada
-    const [row] = await db
-      .insert(casas)
-      .values({ nome, tipoApi: provedor })
-      .onConflictDoUpdate({ target: casas.nome, set: { ativa: true } })
-      .returning()
-    casaIdPorNome.set(nome, row!.id)
-    return row!.id
+    const id = await garantirCasa(db, nome, provedor)
+    casaIdPorNome.set(nome, id)
+    return id
   }
 
   for (const jogo of jogosDoDia) {

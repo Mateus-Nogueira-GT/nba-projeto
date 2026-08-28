@@ -80,7 +80,12 @@ export async function vincularEventosDoDia(
   provedor: string,
   dataReferencia: string,
   eventos: EventoDaCasa[],
-): Promise<{ vinculados: number; semPar: number; ambiguos: number }> {
+): Promise<{
+  vinculados: number
+  semPar: number
+  ambiguos: number
+  pares: { jogoId: string; idExterno: string }[]
+}> {
   const doDia = await db.select().from(jogos).where(eq(jogos.dataReferencia, dataReferencia))
   const listaTimes = await db.select().from(times)
   const porId = new Map(listaTimes.map((t) => [t.id, t] as const))
@@ -107,5 +112,5 @@ export async function vincularEventosDoDia(
       .values({ jogoId: par.jogoId, provedor, idExterno: par.idExterno })
       .onConflictDoNothing()
   }
-  return { vinculados: pares.length, semPar, ambiguos }
+  return { vinculados: pares.length, semPar, ambiguos, pares }
 }
