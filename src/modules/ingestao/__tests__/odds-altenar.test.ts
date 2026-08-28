@@ -1,6 +1,11 @@
 import { describe, expect, it, vi } from 'vitest'
 
-import { autenticarAltenar, casasAltenar, eventosDoDiaAltenar } from '../odds/altenar'
+import {
+  autenticarAltenar,
+  casasAltenar,
+  censoAltenar,
+  eventosDoDiaAltenar,
+} from '../odds/altenar'
 import type { ConfigAltenar } from '../odds/fontes'
 
 const CONFIG: ConfigAltenar = {
@@ -124,6 +129,21 @@ describe('odds por evento', () => {
     const buscar = vi.fn<typeof fetch>(async () => json(inteira))
     const [casa] = await casasAltenar(CONFIG, 'tok', () => 'PONTOS' as const, buscar, '15979600')
     expect(await casa!.cotacoes('15979600')).toHaveLength(0)
+  })
+
+  it('o censo lista TUDO — inclusive o mercado que o adapter descartaria', async () => {
+    const buscar = vi.fn<typeof fetch>(async () => json(EVENTO))
+    const censo = await censoAltenar(CONFIG, 'tok', '15979600', buscar)
+    expect(censo.mercados.map((m) => m.nome)).toEqual([
+      'Total de Pontos - Stephen Curry',
+      'Vencedor da Partida',
+      'Total de Pontos - Jamal Murray',
+    ])
+    // Sem esta linha, "Vencedor da Partida" nunca chegaria à curadoria.
+    expect(censo.mercados[1]!.cotacoesAtivas).toBe(1)
+    // A suspensa não conta como ativa, mas o mercado aparece.
+    expect(censo.mercados[2]!.cotacoesAtivas).toBe(0)
+    expect(censo.jogadores).toEqual(['Stephen Curry', 'Jamal Murray'])
   })
 
   it('pedir outro evento é bug de quem chama', async () => {

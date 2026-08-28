@@ -3,7 +3,7 @@ import { z } from 'zod'
 import type { Atributo } from '../../motor/tipos'
 import { linhaDoLadoOver } from './conversao'
 import type { ConfigBetmgm } from './fontes'
-import type { CasaDeAposta, CotacaoExterna } from './porta'
+import type { CasaDeAposta, CensoDaCasa, CotacaoExterna } from './porta'
 
 /**
  * Adapter BetMGM Afiliados V2 (migração de 2026).
@@ -236,4 +236,36 @@ export async function casasBetmgm(
   }
 
   return [new CasaBetmgm('betmgm', eventoIdExterno, itens, descartadas)]
+}
+
+/**
+ * Censo de um evento: TODO nome de mercado com a contagem de resultados, mais
+ * os nomes de jogador dos specifiers. Sem mapa e sem descarte — é o que a
+ * curadoria lê no dia da conta, antes de existir mapa nenhum.
+ */
+export async function censoBetmgm(
+  config: ConfigBetmgm,
+  eventoIdExterno: string,
+  buscar: typeof fetch = fetch,
+): Promise<CensoDaCasa> {
+  const brutos = await paginar(
+    config,
+    'events',
+    `&ids=${encodeURIComponent(eventoIdExterno)}&fields=BETMARKETS`,
+    buscar,
+  )
+  const mercados: CensoDaCasa['mercados'] = []
+  const jogadores = new Set<string>()
+  for (const bruto of brutos) {
+    const e = eventoComMercados.safeParse(bruto)
+    if (!e.success || e.data.id !== eventoIdExterno) continue
+    for (const mercadoBruto of e.data.betMarkets) {
+      const m = mercadoSchema.safeParse(mercadoBruto)
+      if (!m.success) continue
+      mercados.push({ nome: m.data.name ?? '(sem nome)', cotacoesAtivas: m.data.outcomes.length })
+      const jogador = doSpecifier(m.data.specifiers, CHAVES_DE_JOGADOR)
+      if (jogador) jogadores.add(jogador)
+    }
+  }
+  return { mercados, jogadores: [...jogadores] }
 }

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 
-import { casasBetmgm, eventosDoDiaBetmgm } from '../odds/betmgm'
+import { casasBetmgm, censoBetmgm, eventosDoDiaBetmgm } from '../odds/betmgm'
 import type { ConfigBetmgm } from '../odds/fontes'
 
 const CONFIG: ConfigBetmgm = {
@@ -155,6 +155,17 @@ describe('odds por evento (V2)', () => {
     const [casa] = await casasBetmgm(CONFIG, () => 'PONTOS' as const, buscar, 'ev1')
     const cotacoes = await casa!.cotacoes('ev1')
     expect(cotacoes.some((c) => c.linha === 25)).toBe(true)
+  })
+
+  it('o censo lista TUDO — inclusive Moneyline e o mercado suspenso', async () => {
+    const buscar = vi.fn<typeof fetch>(async () => json(EVENTO_COM_MERCADOS))
+    const censo = await censoBetmgm(CONFIG, 'ev1', buscar)
+    expect(censo.mercados.map((m) => m.nome)).toEqual([
+      'Player Points',
+      'Moneyline',
+      'Player Points',
+    ])
+    expect(censo.jogadores).toEqual(['Stephen Curry', 'Jamal Murray'])
   })
 
   it('sem o lado Over não há cotação — descarta contado', async () => {

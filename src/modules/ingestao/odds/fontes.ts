@@ -27,6 +27,9 @@ export type ConfigAltenar = {
   champId: string | null
 }
 
+/** `process.env` visto como o que ele é aqui: um mapa de strings opcionais. */
+export type AmbienteDeOdds = Record<string, string | undefined>
+
 export type FonteOdds =
   | { nome: 'betmgm'; config: ConfigBetmgm }
   | { nome: 'altenar'; config: ConfigAltenar }
@@ -36,7 +39,7 @@ const limpo = (v: string | undefined): string | null => {
   return s === '' ? null : s
 }
 
-export function fontesDeOdds(ambiente: NodeJS.ProcessEnv = process.env): FonteOdds[] {
+export function fontesDeOdds(ambiente: AmbienteDeOdds = process.env): FonteOdds[] {
   const fontes: FonteOdds[] = []
 
   const bBase = limpo(ambiente.ODDS_BETMGM_BASE_URL)

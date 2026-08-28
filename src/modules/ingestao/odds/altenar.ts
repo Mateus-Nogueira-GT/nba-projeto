@@ -3,7 +3,7 @@ import { z } from 'zod'
 import type { Atributo } from '../../motor/tipos'
 import { linhaDoLadoOver } from './conversao'
 import type { ConfigAltenar } from './fontes'
-import type { CasaDeAposta, CotacaoExterna } from './porta'
+import type { CasaDeAposta, CensoDaCasa, CotacaoExterna } from './porta'
 
 /**
  * Adapter Altenar — o fluxo do guia: authenticate → X-ApiToken → eventos do
@@ -134,6 +134,20 @@ const eventoDetalheSchema = z.object({
     .default([]),
 })
 
+async function buscarEvento(
+  config: ConfigAltenar,
+  token: string,
+  eventoIdExterno: string,
+  buscar: typeof fetch,
+): Promise<z.infer<typeof eventoDetalheSchema>> {
+  const url =
+    `${config.gatewayBase}/api/v1/events/${eventoIdExterno}?${QUERY_COMUM}` +
+    `&integration=${config.integration}&sportId=${config.sportId}`
+  const resposta = await buscar(url, { headers: cabecalhos(config, token) })
+  if (!resposta.ok) throw new Error(`altenar event ${eventoIdExterno}: HTTP ${resposta.status}`)
+  return eventoDetalheSchema.parse(await resposta.json())
+}
+
 /** "Total de Pontos - Stephen Curry" → o nome depois do último " - ". */
 function jogadorDoNomeDeMercado(nome: string): string | null {
   const partes = nome.split(' - ')
@@ -186,12 +200,7 @@ export async function casasAltenar(
   buscar: typeof fetch = fetch,
   eventoIdExterno = '',
 ): Promise<CasaDeAposta[]> {
-  const url =
-    `${config.gatewayBase}/api/v1/events/${eventoIdExterno}?${QUERY_COMUM}` +
-    `&integration=${config.integration}&sportId=${config.sportId}`
-  const resposta = await buscar(url, { headers: cabecalhos(config, token) })
-  if (!resposta.ok) throw new Error(`altenar event ${eventoIdExterno}: HTTP ${resposta.status}`)
-  const corpo = eventoDetalheSchema.parse(await resposta.json())
+  const corpo = await buscarEvento(config, token, eventoIdExterno, buscar)
 
   let descartadas = 0
   const itens: CotacaoExterna[] = []
@@ -246,4 +255,31 @@ export async function casasAltenar(
   }
 
   return [new CasaAltenar('altenar', eventoIdExterno, itens, descartadas)]
+}
+
+/**
+ * Censo de um evento: TODO nome de mercado, com quantas cotações ativas tem,
+ * mais os nomes de jogador que dá para ler dos mercados. Sem mapa, sem
+ * tradução, sem descarte — é o inverso do adapter, e é o que a curadoria lê
+ * antes de existir mapa nenhum.
+ */
+export async function censoAltenar(
+  config: ConfigAltenar,
+  token: string,
+  eventoIdExterno: string,
+  buscar: typeof fetch = fetch,
+): Promise<CensoDaCasa> {
+  const corpo = await buscarEvento(config, token, eventoIdExterno, buscar)
+  const mercados: CensoDaCasa['mercados'] = []
+  const jogadores = new Set<string>()
+  for (const mercado of corpo.markets) {
+    const nome = mercado.name ?? '(sem nome)'
+    mercados.push({
+      nome,
+      cotacoesAtivas: mercado.odds.filter((o) => o.oddStatus === 0).length,
+    })
+    const jogador = jogadorDoNomeDeMercado(nome)
+    if (jogador) jogadores.add(jogador)
+  }
+  return { mercados, jogadores: [...jogadores] }
 }

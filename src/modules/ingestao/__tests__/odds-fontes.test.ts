@@ -1,20 +1,20 @@
 import { describe, expect, it } from 'vitest'
 
-import { fontesDeOdds } from '../odds/fontes'
+import { fontesDeOdds, type AmbienteDeOdds } from '../odds/fontes'
 
-const vazio = {} as NodeJS.ProcessEnv
+const vazio = {} as AmbienteDeOdds
 const betmgmOk = {
   ODDS_BETMGM_BASE_URL: 'https://afiliados.betmgm.example',
   ODDS_BETMGM_API_KEY: 'k',
   ODDS_BETMGM_BRAND: 'marca',
   ODDS_BETMGM_LOCATION: 'BR',
-} as NodeJS.ProcessEnv
+} as AmbienteDeOdds
 const altenarOk = {
   ODDS_ALTENAR_GATEWAY_BASE: 'https://gw.altenar.example',
   ODDS_ALTENAR_ORIGIN: 'https://nosso.app',
   ODDS_ALTENAR_INTEGRATION: 'nossa',
   ODDS_ALTENAR_SPORT_ID: '67',
-} as NodeJS.ProcessEnv
+} as AmbienteDeOdds
 
 describe('fontes de odds por ambiente', () => {
   it('sem env nenhum, nenhuma fonte — o app segue intacto', () => {
@@ -32,12 +32,12 @@ describe('fontes de odds por ambiente', () => {
   })
 
   it('config INCOMPLETA não liga meia-fonte — falta brand, fica fora', () => {
-    const semBrand = { ...betmgmOk, ODDS_BETMGM_BRAND: undefined } as NodeJS.ProcessEnv
+    const semBrand = { ...betmgmOk, ODDS_BETMGM_BRAND: undefined } as AmbienteDeOdds
     expect(fontesDeOdds(semBrand)).toEqual([])
   })
 
   it('env em branco não conta como preenchido', () => {
-    const brancos = { ...altenarOk, ODDS_ALTENAR_SPORT_ID: '   ' } as NodeJS.ProcessEnv
+    const brancos = { ...altenarOk, ODDS_ALTENAR_SPORT_ID: '   ' } as AmbienteDeOdds
     expect(fontesDeOdds(brancos)).toEqual([])
   })
 
@@ -48,7 +48,7 @@ describe('fontes de odds por ambiente', () => {
   })
 
   it('as duas juntas quando as duas estão completas', () => {
-    const ambos = { ...betmgmOk, ...altenarOk } as NodeJS.ProcessEnv
+    const ambos = { ...betmgmOk, ...altenarOk } as AmbienteDeOdds
     expect(
       fontesDeOdds(ambos)
         .map((f) => f.nome)
