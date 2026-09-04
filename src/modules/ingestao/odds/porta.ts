@@ -23,6 +23,18 @@ export type CotacaoExterna = {
 }
 
 /**
+ * EVENTO como a casa o publica — o que o vínculo evento↔jogo consome. As três
+ * fontes devolvem exatamente esta forma; o casador não sabe de qual veio.
+ */
+export type EventoDaCasa = {
+  idExterno: string
+  nomeCasa: string | null
+  nomeVisitante: string | null
+  /** Início em ISO quando a casa informa — é o que corta o DIA no vínculo. */
+  inicioIso: string | null
+}
+
+/**
  * CENSO de um evento — o retrato CRU do que a casa publica, para a curadoria.
  *
  * Existe porque nenhuma das documentações mostra como a casa grafia os props

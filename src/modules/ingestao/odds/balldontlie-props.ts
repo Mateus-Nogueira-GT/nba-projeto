@@ -1,6 +1,7 @@
 import { z } from 'zod'
 
 import { americanaParaDecimal, atributoDoPropType, linhaDoLadoOver } from './conversao'
+import { CasaFatiada } from './casa-fatiada'
 import type { CasaDeAposta, CotacaoExterna } from './porta'
 
 /**
@@ -32,32 +33,6 @@ const esquemaProp = z.object({
 
 const esquemaResposta = z.object({ data: z.array(z.unknown()) })
 
-class CasaBalldontlie implements CasaDeAposta {
-  #descartadas: number
-
-  constructor(
-    readonly nome: string,
-    private readonly gameIdExterno: string,
-    private readonly itens: CotacaoExterna[],
-    descartadas: number,
-  ) {
-    this.#descartadas = descartadas
-  }
-
-  async cotacoes(jogoIdExterno: string): Promise<CotacaoExterna[]> {
-    // As casas nascem já fatiadas para um jogo — pedir outro é bug de quem chama.
-    if (jogoIdExterno !== this.gameIdExterno) {
-      throw new Error(
-        `${this.nome}: casa fatiada para o jogo ${this.gameIdExterno}, pedido ${jogoIdExterno}`,
-      )
-    }
-    return this.itens.map((c) => ({ ...c }))
-  }
-
-  descartadas(): number {
-    return this.#descartadas
-  }
-}
 
 /**
  * Busca as props do jogo e fatia por vendor. `buscar` é a única fronteira de
@@ -129,7 +104,7 @@ export async function casasBalldontlie(
     .sort(([a], [b]) => a.localeCompare(b))
     .map(
       ([vendor, itens]) =>
-        new CasaBalldontlie(
+        new CasaFatiada(
           `balldontlie:${vendor}`,
           gameIdExterno,
           itens,

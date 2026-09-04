@@ -1,9 +1,11 @@
 import { z } from 'zod'
 
+import { somarDias } from '../../dominio/rodada'
 import type { Atributo } from '../../motor/tipos'
+import { CasaFatiada } from './casa-fatiada'
 import { linhaDoLadoOver } from './conversao'
 import type { ConfigAltenar } from './fontes'
-import type { CasaDeAposta, CensoDaCasa, CotacaoExterna } from './porta'
+import type { CasaDeAposta, CensoDaCasa, CotacaoExterna, EventoDaCasa } from './porta'
 
 /**
  * Adapter Altenar — o fluxo do guia: authenticate → X-ApiToken → eventos do
@@ -15,6 +17,9 @@ import type { CasaDeAposta, CensoDaCasa, CotacaoExterna } from './porta'
  */
 
 const QUERY_COMUM = 'culture=pt-BR&timezoneOffset=180&deviceType=2&numFormat=en-GB&countryCode=BR'
+const TAMANHO_PAGINA = 100
+/** 2.000 eventos de basquete num dia é teto folgado para qualquer feed. */
+const LIMITE_PAGINAS = 20
 
 /**
  * O guia mostra o token em `token`; contas diferentes devolvem o mesmo dado em
@@ -56,13 +61,6 @@ function cabecalhos(config: ConfigAltenar, token: string): Record<string, string
   }
 }
 
-export type EventoAltenar = {
-  idExterno: string
-  nomeCasa: string | null
-  nomeVisitante: string | null
-  inicioIso: string | null
-}
-
 const eventosSchema = z.object({
   data: z
     .array(
@@ -73,7 +71,7 @@ const eventosSchema = z.object({
         startDate: z.string().nullish(),
       }),
     )
-    .default([]),
+    .nullish(),
 })
 
 /** "Lakers vs Celtics" / "Lakers x Celtics" / "Lakers - Celtics" → os dois lados. */
@@ -87,32 +85,44 @@ function participantesDoNome(nome: string | null | undefined): {
   return { casa: lados[0]!.trim(), visitante: lados[1]!.trim() }
 }
 
+/**
+ * Eventos do dia de referência. A janela pedida é de DOIS dias (dia e dia+1)
+ * de propósito: a Altenar corta o dia no fuso da query (UTC-3) e um jogo das
+ * 23h de Nova York já é madrugada do dia seguinte em Brasília — o corte
+ * exato de dia é do vínculo, que conhece o fuso do ruleset. Paginado até o
+ * fim: sem `champId`, a lista traz TODO o basquete da casa e a NBA pode cair
+ * da página 100 para a 101.
+ */
 export async function eventosDoDiaAltenar(
   config: ConfigAltenar,
   token: string,
   dia: string,
   buscar: typeof fetch = fetch,
-): Promise<EventoAltenar[]> {
+): Promise<EventoDaCasa[]> {
   const champ = config.champId ? `&champId=${config.champId}` : ''
-  const url =
-    `${config.gatewayBase}/api/v1/events?${QUERY_COMUM}&integration=${config.integration}` +
-    `&sportId=${config.sportId}${champ}&dateFrom=${dia}&dateTo=${dia}&page=1&pageSize=100`
-  const resposta = await buscar(url, { headers: cabecalhos(config, token) })
-  if (!resposta.ok) throw new Error(`altenar events: HTTP ${resposta.status}`)
-  const corpo = eventosSchema.parse(await resposta.json())
-  return corpo.data
-    .map((e) => {
+  const eventos: EventoDaCasa[] = []
+  for (let pagina = 1; pagina <= LIMITE_PAGINAS; pagina++) {
+    const url =
+      `${config.gatewayBase}/api/v1/events?${QUERY_COMUM}&integration=${config.integration}` +
+      `&sportId=${config.sportId}${champ}&dateFrom=${dia}&dateTo=${somarDias(dia, 1)}` +
+      `&page=${pagina}&pageSize=${TAMANHO_PAGINA}`
+    const resposta = await buscar(url, { headers: cabecalhos(config, token) })
+    if (!resposta.ok) throw new Error(`altenar events: HTTP ${resposta.status}`)
+    const lote = eventosSchema.parse(await resposta.json()).data ?? []
+    for (const e of lote) {
       const id = e.eventId ?? e.id
-      if (!id) return null
+      if (!id) continue
       const { casa, visitante } = participantesDoNome(e.name)
-      return {
+      eventos.push({
         idExterno: id,
         nomeCasa: casa,
         nomeVisitante: visitante,
         inicioIso: e.startDate ?? null,
-      }
-    })
-    .filter((e): e is EventoAltenar => e !== null)
+      })
+    }
+    if (lote.length < TAMANHO_PAGINA) break
+  }
+  return eventos
 }
 
 const eventoDetalheSchema = z.object({
@@ -128,10 +138,10 @@ const eventoDetalheSchema = z.object({
               name: z.string().nullish(),
             }),
           )
-          .default([]),
+          .nullish(),
       }),
     )
-    .default([]),
+    .nullish(),
 })
 
 async function buscarEvento(
@@ -148,10 +158,20 @@ async function buscarEvento(
   return eventoDetalheSchema.parse(await resposta.json())
 }
 
-/** "Total de Pontos - Stephen Curry" → o nome depois do último " - ". */
-function jogadorDoNomeDeMercado(nome: string): string | null {
+/**
+ * "Total de Pontos - Stephen Curry" → modelo "Total de Pontos" + jogador.
+ *
+ * O MODELO é o que a curadoria confirma em `mapa_mercados` — uma linha por
+ * tipo de mercado, não uma por jogador por noite. Sem " - ", o mercado não é
+ * prop de jogador (ex.: "Vencedor da Partida") e o jogador é nulo.
+ */
+export function separarMercado(nome: string): { modelo: string; jogador: string | null } {
   const partes = nome.split(' - ')
-  return partes.length >= 2 ? partes[partes.length - 1]!.trim() : null
+  if (partes.length < 2) return { modelo: nome.trim(), jogador: null }
+  return {
+    modelo: partes.slice(0, -1).join(' - ').trim(),
+    jogador: partes[partes.length - 1]!.trim(),
+  }
 }
 
 /** "Mais de 24.5" / "Menos de 24.5" — o lado e o valor. */
@@ -165,55 +185,32 @@ function ladoEValor(
   return { lado, valor: m[2]!.replace(',', '.') }
 }
 
-class CasaAltenar implements CasaDeAposta {
-  readonly #descartadas: number
-  constructor(
-    readonly nome: string,
-    private readonly eventoIdExterno: string,
-    private readonly itens: CotacaoExterna[],
-    descartadas: number,
-  ) {
-    this.#descartadas = descartadas
-  }
-  async cotacoes(jogoIdExterno: string): Promise<CotacaoExterna[]> {
-    if (jogoIdExterno !== this.eventoIdExterno) {
-      throw new Error(
-        `altenar: casa fatiada para o evento ${this.eventoIdExterno}, pedido ${jogoIdExterno}`,
-      )
-    }
-    return this.itens.map((c) => ({ ...c }))
-  }
-  descartadas(): number {
-    return this.#descartadas
-  }
-}
-
 /**
  * Busca `GET /api/v1/events/{id}` e traduz. `atributoDoMercado` é o mapa de
- * mercados CONFIRMADO, injetado pelo chamador — mercado fora do mapa descarta
- * contado (a curadoria decide depois; o adapter nunca adivinha).
+ * mercados CONFIRMADO, injetado pelo chamador, consultado pelo MODELO do
+ * mercado. Prop de jogador fora do mapa sai SEM atributo — é a coleta que a
+ * conta como `aguardandoCuradoria`, o número que o runbook manda olhar.
+ * `descartadas` fica só para o que não é cotação de prop de forma nenhuma.
  */
 export async function casasAltenar(
   config: ConfigAltenar,
   token: string,
-  atributoDoMercado: (nomeMercado: string) => Atributo | undefined,
+  eventoIdExterno: string,
+  atributoDoMercado: (modeloDeMercado: string) => Atributo | undefined,
   buscar: typeof fetch = fetch,
-  eventoIdExterno = '',
 ): Promise<CasaDeAposta[]> {
   const corpo = await buscarEvento(config, token, eventoIdExterno, buscar)
 
   let descartadas = 0
   const itens: CotacaoExterna[] = []
 
-  for (const mercado of corpo.markets) {
-    const nomeMercado = mercado.name ?? ''
-    const atributo = atributoDoMercado(nomeMercado)
-    const jogador = jogadorDoNomeDeMercado(nomeMercado)
+  for (const mercado of corpo.markets ?? []) {
+    const { modelo, jogador } = separarMercado(mercado.name ?? '')
+    const atributo = atributoDoMercado(modelo)
 
     // Agrupa over/under pela MESMA linha dentro do mercado.
     const porLinha = new Map<string, { over: number | null; under: number | null }>()
-    let ativasNoMercado = 0
-    for (const odd of mercado.odds) {
+    for (const odd of mercado.odds ?? []) {
       // oddStatus 0 é a única cotação ativa do guia; preço não-numérico não é odd.
       if (odd.oddStatus !== 0 || odd.price == null || !Number.isFinite(odd.price)) {
         descartadas += 1
@@ -224,16 +221,14 @@ export async function casasAltenar(
         descartadas += 1
         continue
       }
-      ativasNoMercado += 1
       const atual = porLinha.get(lv.valor) ?? { over: null, under: null }
       atual[lv.lado] = odd.price
       porLinha.set(lv.valor, atual)
     }
 
-    if (atributo === undefined || jogador === null) {
-      // Mercado fora do mapa (ou sem jogador no nome): o que sobrou vira
-      // descarte contado — é o que o censo e a curadoria vão revelar.
-      descartadas += ativasNoMercado
+    if (jogador === null) {
+      // Não é prop de jogador: nada aqui vira cotação, tudo é descarte contado.
+      descartadas += porLinha.size
       continue
     }
 
@@ -245,23 +240,23 @@ export async function casasAltenar(
       }
       itens.push({
         jogadorNomeNaCasa: jogador,
-        nomeMercadoNaCasa: nomeMercado,
+        nomeMercadoNaCasa: modelo,
         linha,
         oddOver: lados.over,
         oddUnder: lados.under,
-        atributo,
+        ...(atributo === undefined ? {} : { atributo }),
       })
     }
   }
 
-  return [new CasaAltenar('altenar', eventoIdExterno, itens, descartadas)]
+  return [new CasaFatiada('altenar', eventoIdExterno, itens, descartadas)]
 }
 
 /**
- * Censo de um evento: TODO nome de mercado, com quantas cotações ativas tem,
- * mais os nomes de jogador que dá para ler dos mercados. Sem mapa, sem
- * tradução, sem descarte — é o inverso do adapter, e é o que a curadoria lê
- * antes de existir mapa nenhum.
+ * Censo de um evento: todo MODELO de mercado com a contagem de cotações
+ * ativas, mais os nomes de jogador que dá para ler. Sem mapa, sem descarte —
+ * é o que a curadoria lê antes de existir mapa nenhum, e o modelo é o que ela
+ * vai gravar em `mapa_mercados`.
  */
 export async function censoAltenar(
   config: ConfigAltenar,
@@ -270,16 +265,16 @@ export async function censoAltenar(
   buscar: typeof fetch = fetch,
 ): Promise<CensoDaCasa> {
   const corpo = await buscarEvento(config, token, eventoIdExterno, buscar)
-  const mercados: CensoDaCasa['mercados'] = []
+  const porModelo = new Map<string, number>()
   const jogadores = new Set<string>()
-  for (const mercado of corpo.markets) {
-    const nome = mercado.name ?? '(sem nome)'
-    mercados.push({
-      nome,
-      cotacoesAtivas: mercado.odds.filter((o) => o.oddStatus === 0).length,
-    })
-    const jogador = jogadorDoNomeDeMercado(nome)
+  for (const mercado of corpo.markets ?? []) {
+    const { modelo, jogador } = separarMercado(mercado.name ?? '(sem nome)')
+    const ativas = (mercado.odds ?? []).filter((o) => o.oddStatus === 0).length
+    porModelo.set(modelo, (porModelo.get(modelo) ?? 0) + ativas)
     if (jogador) jogadores.add(jogador)
   }
-  return { mercados, jogadores: [...jogadores] }
+  return {
+    mercados: [...porModelo].map(([nome, cotacoesAtivas]) => ({ nome, cotacoesAtivas })),
+    jogadores: [...jogadores],
+  }
 }
