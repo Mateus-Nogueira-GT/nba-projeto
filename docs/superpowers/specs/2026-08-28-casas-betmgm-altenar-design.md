@@ -165,11 +165,16 @@ de propósito). Envs: `ACCESS_TOKEN`, `WEBHOOK_SECRET`, `SANDBOX`,
 `PLANO_NOME`, `PLANO_VALOR_CENTAVOS`, `PREAPPROVAL_TYPE`, mais
 `CADASTRO_PUBLICO_HABILITADO`.
 
-**Lacuna real: os dois artefatos operacionais prometidos não existem** —
-`docs/runbooks/mercadopago.md` (dia da virada) e `npm run mp:conferir`
-(valida credenciais no sandbox sem ligar nada). Entram como task do plano
-desta spec para o MP chegar à MESMA barra das casas: conta criada → env →
-conferir → ligar flag.
+**Lacuna real: falta o `npm run mp:conferir`** — validar credenciais contra a
+API sem ligar nada. Entra como task do plano desta spec, para o MP chegar à
+MESMA barra das casas: conta criada → env → conferir → ligar flag.
+
+> **Errata (28/08, durante a execução):** esta seção também dizia faltar o
+> runbook `docs/runbooks/mercadopago.md`. Falso — o runbook de cobrança já
+> existe como [`cobranca-e-acesso.md`](../../runbooks/cobranca-e-acesso.md), e é
+> mais preciso do que seria um novo (traz os três tópicos de webhook e o preço
+> homologado). Criar um segundo documento seria duplicata destinada a divergir.
+> O `mp:conferir` foi encaixado no runbook existente; nenhum arquivo novo.
 
 ## 10 · Fora de escopo
 

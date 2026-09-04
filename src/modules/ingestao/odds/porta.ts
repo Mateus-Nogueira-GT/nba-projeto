@@ -22,6 +22,19 @@ export type CotacaoExterna = {
   atributo?: import('../../motor/tipos').Atributo
 }
 
+/**
+ * CENSO de um evento — o retrato CRU do que a casa publica, para a curadoria.
+ *
+ * Existe porque nenhuma das documentações mostra como a casa grafia os props
+ * de NBA. Sem ele, a única forma de descobrir os nomes seria adivinhar — e
+ * mercado adivinhado é linha errada no card. Diferente de `CotacaoExterna`,
+ * o censo NÃO é traduzido: lista o que veio, com contagem, e para por aí.
+ */
+export type CensoDaCasa = {
+  mercados: { nome: string; cotacoesAtivas: number }[]
+  jogadores: string[]
+}
+
 export interface CasaDeAposta {
   readonly nome: string
   cotacoes(jogoIdExterno: string): Promise<CotacaoExterna[]>

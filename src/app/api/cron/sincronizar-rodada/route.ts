@@ -7,6 +7,8 @@ import {
   deslocarData,
   executarJobRodada,
 } from '@/modules/ingestao/jobs/orquestradores'
+import { coletarOddsDoDia } from '@/modules/ingestao/odds/coleta-do-dia'
+import { fontesDeOdds } from '@/modules/ingestao/odds/fontes'
 import { montarFontes } from '@/modules/ingestao/sincronizar/fonte'
 
 export const dynamic = 'force-dynamic'
@@ -33,7 +35,7 @@ export async function GET(requisicao: Request): Promise<Response> {
         },
         async ({ confirmarLease }) => {
           await confirmarLease()
-          return executarJobRodada(db, fontes, {
+          const contagens = await executarJobRodada(db, fontes, {
             dataReferencia: fim,
             sobreposicaoDias: contexto.config.sobreposicaoDias,
             temporada: contexto.temporada,
@@ -41,6 +43,21 @@ export async function GET(requisicao: Request): Promise<Response> {
             janelaMedia: contexto.ruleset.media.janela,
             configTemporada: contexto.configTemporada,
           })
+
+          // Odds das casas de mercado, DEPOIS da rodada — o vínculo evento↔jogo
+          // precisa dos jogos do dia já sincronizados. Sem env de casa nenhuma,
+          // `fontesDeOdds()` devolve lista vazia e este bloco é um no-op.
+          const odds = await coletarOddsDoDia(
+            db,
+            contexto.ruleset,
+            fim,
+            contexto.agora,
+            fontesDeOdds(),
+          )
+          for (const erro of odds.erros) {
+            console.error(`[odds] fonte ${erro.fonte} falhou: ${erro.mensagem}`)
+          }
+          return { ...contagens, ...odds.contagens }
         },
       )
     },

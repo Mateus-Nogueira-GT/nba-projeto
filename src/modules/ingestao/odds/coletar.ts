@@ -12,6 +12,7 @@ import type { Db } from '../../dominio/db/tipos'
 import type { Ruleset } from '../../motor/ruleset/schema'
 import type { Atributo } from '../../motor/tipos'
 import type { CasaDeAposta, CotacaoExterna } from './porta'
+import { vinculosConfirmados } from './vinculo-jogadores'
 
 /**
  * A COLETA de odds — o elo que nunca existiu fora do seed: casas → snapshot
@@ -59,6 +60,20 @@ export function agregarCotacoes(cotacoes: { oddOver: number | null; casaNome?: s
     qtd: valores.length,
     qtdCasas: casasDistintas,
   }
+}
+
+/**
+ * O cadastro da casa, idempotente. Exportado porque quem orquestra a coleta
+ * precisa do `casaId` ANTES da coleta (para ler o mapa de mercados e semear o
+ * de jogadores) — e duas formas de criar a mesma casa seriam duas casas.
+ */
+export async function garantirCasa(db: Db, nome: string, tipoApi: string): Promise<string> {
+  const [row] = await db
+    .insert(casas)
+    .values({ nome, tipoApi })
+    .onConflictDoUpdate({ target: casas.nome, set: { ativa: true } })
+    .returning()
+  return row!.id
 }
 
 export type ResultadoColeta = {
@@ -121,13 +136,9 @@ export async function coletarOdds(
   const resolverCasa = async (nome: string): Promise<string> => {
     const cacheada = casaIdPorNome.get(nome)
     if (cacheada) return cacheada
-    const [row] = await db
-      .insert(casas)
-      .values({ nome, tipoApi: provedor })
-      .onConflictDoUpdate({ target: casas.nome, set: { ativa: true } })
-      .returning()
-    casaIdPorNome.set(nome, row!.id)
-    return row!.id
+    const id = await garantirCasa(db, nome, provedor)
+    casaIdPorNome.set(nome, id)
+    return id
   }
 
   for (const jogo of jogosDoDia) {
@@ -164,6 +175,8 @@ async function coletarJogo(
     const cotacoes = await casa.cotacoes(jogo.idExterno)
     resultado.descartadas += casa.descartadas?.() ?? 0
     const casaId = await resolverCasa(casa.nome)
+    // Uma leitura por CASA (não por cotação): o mapa de nomes confirmados.
+    const jogadorPorNome = await vinculosConfirmados(db, casaId)
 
     for (const c of cotacoes) {
       if (c.atributo === undefined) {
@@ -172,9 +185,13 @@ async function coletarJogo(
         resultado.aguardandoCuradoria += 1
         continue
       }
+      // DOIS caminhos de vínculo, e só dois: id externo quando a casa é
+      // servida pelo provedor NBA (balldontlie); nome quando é casa de
+      // mercado (BetMGM, Altenar). No caminho por nome SÓ vínculo CONFIRMADO
+      // resolve — pendente de curadoria conta em semVinculo e aparece no job.
       const jogadorId = c.jogadorIdExternoProvedor
         ? jogadorPorIdExterno.get(c.jogadorIdExternoProvedor)
-        : undefined
+        : jogadorPorNome.get(c.jogadorNomeNaCasa)
       if (!jogadorId) {
         resultado.semVinculo += 1
         continue
