@@ -28,6 +28,7 @@ async function principal() {
   // GET /users/me valida o token e mostra a conta, sem efeito colateral.
   const resposta = await fetch('https://api.mercadopago.com/users/me', {
     headers: { Authorization: `Bearer ${config.accessToken}` },
+    signal: AbortSignal.timeout(8_000),
   })
   if (!resposta.ok) {
     console.error(`✗ token REPROVADO: HTTP ${resposta.status}`)

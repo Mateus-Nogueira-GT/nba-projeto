@@ -10,6 +10,18 @@
 
 **Spec:** [`docs/superpowers/specs/2026-08-28-casas-betmgm-altenar-design.md`](../specs/2026-08-28-casas-betmgm-altenar-design.md)
 
+
+> **Erratas da execução (04/09/2026)** — o plano foi executado e depois
+> revisado; onde o código final diverge do texto abaixo, o código manda:
+> (1) **Task 1 não criou tabela.** `mapa_jogadores_casa` foi substituída pelo
+> mecanismo que já existia (`mapa_jogadores`, namespace `casa:<nome>`,
+> `reconciliar.ts`); não há migração 0017. (2) **Task 9 não criou
+> `docs/runbooks/mercadopago.md`** — o runbook de cobrança já existia
+> (`cobranca-e-acesso.md`) e o `mp:conferir` foi encaixado nele. (3) A
+> agregação saiu de `coletarOdds` por fonte para `agregarOddsDoDia`, depois de
+> todas as fontes. (4) Nome de mercado da Altenar é separado em modelo +
+> jogador antes de consultar `mapa_mercados`.
+
 ## Global Constraints
 
 - **ADR-0004:** somente leitura de cotação pública. Nenhum adapter cria conta de apostador, envia aposta ou movimenta dinheiro.

@@ -81,7 +81,7 @@ chave no painel do OpenRouter. É o freio que não depende do nosso código.
 | Env | Fonte | Efeito |
 | --- | --- | --- |
 | `ODDS_BETMGM_BASE_URL` · `_API_KEY` · `_BRAND` · `_LOCATION` | BetMGM | os quatro juntos ligam a fonte; falta um, ela não existe |
-| `ODDS_BETMGM_LANG` · `_AUTH_HEADER` · `_AUTH_PREFIX` | BetMGM | padrões `en` · `Authorization` · `Bearer ` |
+| `ODDS_BETMGM_LANG` · `_AUTH_HEADER` · `_AUTH_PREFIX` | BetMGM | padrões `en` · `Authorization` · `Bearer` (sem espaço; vazio = chave nua) |
 | `ODDS_ALTENAR_GATEWAY_BASE` · `_ORIGIN` · `_INTEGRATION` · `_SPORT_ID` | Altenar | idem: os quatro ligam a fonte |
 | `ODDS_ALTENAR_CHAMP_ID` | Altenar | opcional; filtra a NBA |
 
