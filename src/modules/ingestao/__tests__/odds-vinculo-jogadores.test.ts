@@ -1,17 +1,22 @@
-import { eq } from 'drizzle-orm'
+import { and, eq } from 'drizzle-orm'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
 import { bancoDeTeste } from '../../dominio/__tests__/ajuda-banco'
-import { casas, jogadores, mapaJogadoresCasa } from '../../dominio/db/schema'
-import { semearVinculosDeJogador, vinculosConfirmados } from '../odds/vinculo-jogadores'
+import { jogadores, mapaJogadores } from '../../dominio/db/schema'
+import { provedorDaCasa, vincularJogadorDaCasa, vinculoJogadorDaCasa } from '../odds/reconciliar'
+import {
+  CONFIRMADO_POR_SEMEADURA,
+  semearVinculosDeJogador,
+  vinculosConfirmados,
+} from '../odds/vinculo-jogadores'
+
+const AGORA = new Date('2026-08-28T12:00:00Z')
+const CASA = 'betmgm'
 
 let banco: Awaited<ReturnType<typeof bancoDeTeste>>
-let casaId: string
 
 beforeAll(async () => {
   banco = await bancoDeTeste()
-  const [casa] = await banco.db.insert(casas).values({ nome: 'betmgm', tipoApi: 'betmgm' }).returning()
-  casaId = casa!.id
   await banco.db.insert(jogadores).values([
     { nomeCompleto: 'Stephen Curry' },
     { nomeCompleto: 'Jamal Murray' },
@@ -21,45 +26,78 @@ beforeAll(async () => {
 }, 120_000)
 afterAll(async () => banco.fechar())
 
-describe('vínculo de jogador por nome de casa', () => {
-  it('match exato normalizado e ÚNICO nasce confirmado', async () => {
-    const r = await semearVinculosDeJogador(banco.db, casaId, ['Stephen  CURRY'])
-    expect(r.confirmados).toBe(1)
-    const mapa = await vinculosConfirmados(banco.db, casaId)
-    expect([...mapa.keys()]).toContain('Stephen  CURRY')
+describe('vínculo de jogador por nome de casa — sobre mapa_jogadores', () => {
+  it('match exato normalizado e ÚNICO nasce confirmado, assinado pela semeadura', async () => {
+    const r = await semearVinculosDeJogador(banco.db, CASA, ['Stephen  CURRY'], AGORA)
+    expect(r).toEqual({ confirmados: 1, pendentes: 0 })
+
+    const [linha] = await banco.db
+      .select()
+      .from(mapaJogadores)
+      .where(eq(mapaJogadores.provedor, provedorDaCasa(CASA)))
+    expect(linha).toMatchObject({
+      nomeNaLista: 'Stephen  CURRY',
+      confirmadoPor: CONFIRMADO_POR_SEMEADURA,
+    })
+    expect(linha!.confirmadoEm).not.toBeNull()
+  })
+
+  it('a leitura é por chave NORMALIZADA: a grafia de amanhã resolve pela confirmação de hoje', async () => {
+    const mapa = await vinculosConfirmados(banco.db, CASA)
+    expect(mapa.has('stephen curry')).toBe(true)
+    expect(mapa.has('Stephen  CURRY')).toBe(false)
   })
 
   it('ambíguo ou desconhecido nasce PENDENTE — curadoria, nunca palpite', async () => {
-    const r = await semearVinculosDeJogador(banco.db, casaId, ['Murray', 'Fulano Inexistente'])
-    expect(r.confirmados).toBe(0)
-    expect(r.pendentes).toBe(2)
-    const linhas = await banco.db.select().from(mapaJogadoresCasa)
-    const pendentes = linhas.filter((l) => !l.confirmado)
-    expect(pendentes.length).toBeGreaterThanOrEqual(2)
-    // Pendente NÃO aparece no mapa de resolução.
-    const mapa = await vinculosConfirmados(banco.db, casaId)
-    expect(mapa.has('Murray')).toBe(false)
+    const r = await semearVinculosDeJogador(banco.db, CASA, ['Murray', 'Fulano Inexistente'], AGORA)
+    expect(r).toEqual({ confirmados: 0, pendentes: 2 })
+    const mapa = await vinculosConfirmados(banco.db, CASA)
+    expect(mapa.has('murray')).toBe(false)
   })
 
-  it('reexecutar não duplica nem rebaixa confirmação humana', async () => {
-    await semearVinculosDeJogador(banco.db, casaId, ['Stephen  CURRY'])
-    const linhas = await banco.db.select().from(mapaJogadoresCasa)
-    const curry = linhas.filter((l) => l.nomeNaCasa === 'Stephen  CURRY')
-    expect(curry).toHaveLength(1)
-    expect(curry[0]!.confirmado).toBe(true)
+  it('reexecutar reporta o BACKLOG real, não só o que este insert tocou', async () => {
+    const r = await semearVinculosDeJogador(banco.db, CASA, ['Murray', 'Stephen Curry'], AGORA)
+    expect(r).toEqual({ confirmados: 1, pendentes: 1 })
   })
 
-  it('reexecutar sobre nome pendente já promovido pela curadoria não o rebaixa', async () => {
-    const [jogador] = await banco.db.select().from(jogadores).limit(1)
-    // A curadoria humana resolveu o ambíguo à mão.
-    await banco.db
-      .update(mapaJogadoresCasa)
-      .set({ jogadorId: jogador!.id, confirmado: true })
-      .where(eq(mapaJogadoresCasa.nomeNaCasa, 'Murray'))
+  it('pendente é PROMOVIDO quando a ambiguidade some (o jogador entrou em jogadores)', async () => {
+    await semearVinculosDeJogador(banco.db, CASA, ['Cooper Flagg'], AGORA)
+    expect((await vinculosConfirmados(banco.db, CASA)).has('cooper flagg')).toBe(false)
 
-    await semearVinculosDeJogador(banco.db, casaId, ['Murray'])
+    await banco.db.insert(jogadores).values({ nomeCompleto: 'Cooper Flagg' })
+    const r = await semearVinculosDeJogador(banco.db, CASA, ['Cooper Flagg'], AGORA)
+    expect(r.confirmados).toBe(1)
+    expect((await vinculosConfirmados(banco.db, CASA)).has('cooper flagg')).toBe(true)
+  })
 
-    const mapa = await vinculosConfirmados(banco.db, casaId)
-    expect(mapa.get('Murray')).toBe(jogador!.id)
+  it('confirmação HUMANA do painel é o que a coleta lê — e a semeadura nunca a sobrescreve', async () => {
+    const [keegan] = await banco.db
+      .select({ id: jogadores.id })
+      .from(jogadores)
+      .where(eq(jogadores.nomeCompleto, 'Keegan Murray'))
+    // O curador resolve o ambíguo pelo MESMO caminho do /admin/mercados.
+    await vincularJogadorDaCasa(banco.db, {
+      casaNome: CASA,
+      nomeNaCasa: 'Murray',
+      jogadorId: keegan!.id,
+      score: 0.9,
+      confirmadoPor: 'curador@iadanba.dev',
+      agora: AGORA,
+    })
+    expect(await vinculoJogadorDaCasa(banco.db, CASA, 'Murray')).toBe(keegan!.id)
+
+    await semearVinculosDeJogador(banco.db, CASA, ['Murray'], new Date('2026-08-29T12:00:00Z'))
+
+    const mapa = await vinculosConfirmados(banco.db, CASA)
+    expect(mapa.get('murray')).toBe(keegan!.id)
+    const [linha] = await banco.db
+      .select()
+      .from(mapaJogadores)
+      .where(and(eq(mapaJogadores.provedor, provedorDaCasa(CASA)), eq(mapaJogadores.nomeNaLista, 'Murray')))
+    expect(linha!.confirmadoPor).toBe('curador@iadanba.dev')
+  })
+
+  it('outra casa é outro namespace — confirmar na BetMGM não confirma na Altenar', async () => {
+    expect((await vinculosConfirmados(banco.db, 'altenar')).size).toBe(0)
   })
 })

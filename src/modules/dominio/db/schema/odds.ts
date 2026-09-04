@@ -82,25 +82,3 @@ export const mapaMercados = pgTable(
   },
   (t) => [unique('mapa_mercados_unico').on(t.casaId, t.nomeMercadoNaCasa)],
 )
-
-/**
- * O mesmo problema do mapa_mercados, aplicado a NOMES DE JOGADOR.
- *
- * Casas que só publicam nome (BetMGM, Altenar) não compartilham id com o
- * provedor NBA. O vínculo nasce confirmado SÓ quando o nome normalizado casa
- * com exatamente um jogador canônico; qualquer dúvida vira pendência de
- * curadoria — palpite aqui é a média do card calculada sobre outro jogador.
- */
-export const mapaJogadoresCasa = pgTable(
-  'mapa_jogadores_casa',
-  {
-    id: uuid('id').primaryKey().defaultRandom(),
-    casaId: uuid('casa_id')
-      .notNull()
-      .references(() => casas.id),
-    nomeNaCasa: text('nome_na_casa').notNull(),
-    jogadorId: uuid('jogador_id').references(() => jogadores.id),
-    confirmado: boolean('confirmado').notNull().default(false),
-  },
-  (t) => [unique('mapa_jogadores_casa_unico').on(t.casaId, t.nomeNaCasa)],
-)
