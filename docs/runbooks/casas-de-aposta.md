@@ -43,12 +43,13 @@ para isso no projeto, e não vai existir.
 | `ODDS_BETMGM_LOCATION` | localidade da conta; idem | sim |
 | `ODDS_BETMGM_LANG` | idioma; padrão `en` | não |
 | `ODDS_BETMGM_AUTH_HEADER` | cabeçalho da credencial; padrão `Authorization` | não |
-| `ODDS_BETMGM_AUTH_PREFIX` | prefixo do valor; padrão `Bearer ` (com o espaço) | não |
+| `ODDS_BETMGM_AUTH_PREFIX` | esquema do valor; padrão `Bearer` (o espaço é o código que põe); vazio = chave nua | não |
 
 Os dois últimos existem porque o PDF diz apenas que os mecanismos de
 autenticação "permanecem inalterados", sem especificar o esquema. Se a conta
 usar, por exemplo, `X-Api-Key` sem prefixo, é `ODDS_BETMGM_AUTH_HEADER=X-Api-Key`
-e `ODDS_BETMGM_AUTH_PREFIX=` — sem tocar em código.
+e `ODDS_BETMGM_AUTH_PREFIX=` (vazio) — sem tocar em código. Painel e shell
+costumam apagar espaço no fim do valor; por isso o esquema é gravado sem ele.
 
 ### Altenar
 
@@ -96,38 +97,59 @@ Com a saída na mão:
 
 1. **`mapa_mercados`** — para cada nome de mercado que é prop de PONTOS,
    REBOTES ou ASSISTÊNCIAS, uma linha `(casa, nome_mercado_na_casa, atributo,
-   confirmado=true)`. Mercado fora do mapa não vira cotação: é descarte
-   contado no resultado do job, nunca erro silencioso.
-2. **`mapa_jogadores_casa`** — a coleta semeia sozinha os nomes que casam com
-   **exatamente um** jogador canônico (nascem confirmados). Nome ambíguo
-   ("Murray", com dois na liga) ou desconhecido nasce **pendente** e não
-   resolve cotação até um humano decidir. Reveja os pendentes:
+   confirmado=true)`. **Grave o nome exatamente como o censo imprime**: na
+   Altenar o nome do mercado traz o jogador ("Total de Pontos - Stephen
+   Curry") e o censo já o separa — o que se confirma é o MODELO, `Total de
+   Pontos`, uma vez por casa, e vale para todos os jogadores de todas as
+   noites. Prop fora do mapa não vira cotação: conta em
+   `aguardando_curadoria` no resultado do job, nunca soma em silêncio.
+2. **Vínculos de jogador** — vivem em `mapa_jogadores`, no namespace
+   `casa:<nome>`, a MESMA tabela que o painel `/admin/mercados` lê e escreve.
+   A coleta semeia sozinha, a cada noite, os nomes que a casa cotou: nome que
+   casa com **exatamente um** jogador canônico nasce confirmado (assinado
+   `semeadura:nome-exato` em `confirmado_por`, para ser auditável e
+   reversível); ambíguo ("Murray", com dois na liga) ou desconhecido nasce
+   **pendente** e não resolve cotação até um humano decidir — no painel, ou
+   por SQL:
 
    ```sql
-   SELECT m.nome_na_casa, c.nome AS casa
-   FROM mapa_jogadores_casa m JOIN casas c ON c.id = m.casa_id
-   WHERE m.confirmado = false ORDER BY c.nome, m.nome_na_casa;
+   SELECT nome_na_lista, provedor
+   FROM mapa_jogadores
+   WHERE provedor LIKE 'casa:%' AND confirmado_em IS NULL
+   ORDER BY provedor, nome_na_lista;
    ```
 
-   Confirmar é apontar o `jogador_id` certo e marcar `confirmado = true`.
+   Um pendente cuja ambiguidade sumiu (o jogador entrou no elenco) é promovido
+   sozinho na noite seguinte. Uma confirmação humana nunca é sobrescrita.
 
 ## Passo 4 · Conferir a primeira coleta
 
 Depois do cron diário (ou de uma execução manual), o resultado do job traz,
-por fonte: `vinculados`, `semPar`, `ambiguos`, `cotacoes`, `agregadas`,
-`descartadas`, `semVinculo`, `aguardandoCuradoria`, `abaixoDoMinimo`.
+por fonte, chaves `odds_<fonte>_…`: `vinculados`, `sem_par`, `ambiguos`,
+`fora_do_dia`, `cotacoes`, `descartadas`, `sem_vinculo`,
+`aguardando_curadoria`, `jogadores_confirmados`, `jogadores_pendentes`,
+`jogos_com_erro`; e, do DIA (todas as casas juntas): `odds_agregadas` e
+`odds_abaixo_do_minimo`. Fonte que falhou aparece como `odds_<fonte>_erro=1`
+e soma em `falhas_fontes` — a execução fica **PARCIAL**, não SUCESSO.
 
 Leitura rápida do que cada número quer dizer:
 
-- `semPar` alto → o nome dos times na casa não bate com o nosso (o casador
-  aceita nome completo e sigla, nas duas ordens); vale conferir a grafia.
-- `ambiguos` > 0 → dois jogos do dia com o mesmo confronto; ninguém vinculou,
-  de propósito.
-- `aguardandoCuradoria` alto → falta `mapa_mercados` (passo 3).
-- `semVinculo` alto → falta confirmar jogadores (passo 3).
-- `abaixoDoMinimo` alto → a linha existe, mas em menos casas do que
+- `sem_par` alto → o nome dos times na casa não bate com o nosso (o casador
+  aceita nome completo, sigla e apelido — "Lakers" —, nas duas ordens); vale
+  conferir a grafia.
+- `ambiguos` > 0 → dois jogos do dia com o mesmo confronto, ou dois eventos da
+  casa para o mesmo jogo; ninguém vinculou, de propósito.
+- `fora_do_dia` → eventos que a casa devolveu para OUTRO dia (a BetMGM manda a
+  agenda inteira); esperado, não é defeito.
+- `aguardando_curadoria` alto → falta `mapa_mercados` (passo 3, item 1).
+- `sem_vinculo` / `jogadores_pendentes` alto → falta confirmar jogadores
+  (passo 3, item 2).
+- `odds_abaixo_do_minimo` alto → a linha existe, mas em menos casas do que
   `odds.casas_minimas` exige no ruleset. Não é defeito: é a regra do CJ
-  segurando média de casa única. Com duas casas ligadas, isso cai sozinho.
+  segurando média de casa única. A média nasce quando a SEGUNDA casa cota a
+  mesma linha na mesma noite.
+- `odds_<fonte>_prazo_esgotado` → o cron ficou sem tempo para essa fonte; a
+  próxima execução completa (tudo é idempotente).
 
 E o teste final, no banco:
 
@@ -135,8 +157,9 @@ E o teste final, no banco:
 SELECT qtd_casas, count(*) FROM odds_agregada WHERE origem = 'CASAS' GROUP BY 1;
 ```
 
-`qtd_casas` conta casas **distintas**. Com BetMGM e Altenar ligadas junto do
-provedor, é aqui que a média entre casas do card começa a existir de verdade.
+`qtd_casas` conta casas **distintas**. Com BetMGM e Altenar cotando a mesma
+linha na mesma noite, `qtd_casas = 2` é a média entre casas do card existindo
+de verdade.
 
 ## Passo 5 · Considerar a fonte no ar
 

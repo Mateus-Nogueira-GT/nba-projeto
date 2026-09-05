@@ -6,33 +6,42 @@ import type { Ruleset } from '../../motor/ruleset/schema'
 import type { Atributo } from '../../motor/tipos'
 import { autenticarAltenar, casasAltenar, censoAltenar, eventosDoDiaAltenar } from './altenar'
 import { casasBetmgm, censoBetmgm, eventosDoDiaBetmgm } from './betmgm'
-import { coletarOdds, garantirCasa } from './coletar'
-import type { FonteOdds } from './fontes'
-import type { CasaDeAposta, CensoDaCasa } from './porta'
-import { vincularEventosDoDia, type EventoDaCasa } from './vinculo-eventos'
-import { semearVinculosDeJogador } from './vinculo-jogadores'
+import { agregarOddsDoDia, coletarOdds, garantirCasa } from './coletar'
+import type { FonteOdds, NomeDeFonte } from './fontes'
+import type { CasaDeAposta, CensoDaCasa, EventoDaCasa } from './porta'
+import { comTimeout } from './transporte'
+import { vincularEventosDoDia } from './vinculo-eventos'
 
 /**
  * A COLETA DO DIA — orquestração fina: nenhuma regra nova, só a ordem em que
  * as peças se ligam, por fonte ativa.
  *
- *   eventos do dia → vínculo evento↔jogo → censo de nomes → semeadura do
- *   vínculo jogador↔casa → coletarOdds (snapshot + agregada)
+ *   eventos do dia → vínculo evento↔jogo → coletarOdds (snapshot; a
+ *   semeadura dos nomes acontece dentro dela, a partir das próprias cotações)
+ *   → depois de TODAS as fontes, a agregação do dia sobre o snapshot
  *
- * O censo entra ANTES da coleta de propósito: sem os nomes semeados, a
- * primeira noite de uma casa nova resolveria zero cotação e a média do card
- * ficaria vazia sem ninguém saber por quê.
+ * A agregação fica por último de propósito: cada fonte é UMA casa, e a média
+ * entre casas só existe olhando todas juntas (`agregarOddsDoDia`).
  *
  * UMA FONTE COM ERRO NÃO DERRUBA AS OUTRAS nem o resto do cron: o erro vira
- * uma linha em `erros` e um contador, e a execução seguinte tenta de novo.
+ * uma linha em `erros`, um contador e `falhas_fontes` — a chave que o job já
+ * usa para marcar a execução como PARCIAL. E a próxima execução tenta de novo.
  */
 
-export type TransportesDeOdds = Partial<Record<FonteOdds['nome'], typeof fetch>>
+export type TransportesDeOdds = Partial<Record<NomeDeFonte, typeof fetch>>
 
 export type ResultadoColetaDoDia = {
-  /** Achatado em números para caber nas contagens do job. */
+  /** Achatado em números, snake_case, para caber nas contagens do job. */
   contagens: Record<string, number>
   erros: { fonte: string; mensagem: string }[]
+}
+
+export type OpcoesColetaDoDia = {
+  transportes?: TransportesDeOdds
+  /** Fonte que começaria depois deste instante é pulada e contada — o cron tem teto. */
+  prazo?: Date
+  relogio?: () => Date
+  timeoutMs?: number
 }
 
 /** O mapa de mercados CONFIRMADO da casa — nada fora dele vira cotação. */
@@ -48,33 +57,51 @@ async function atributoPorMercado(
   return (nomeMercado: string) => mapa.get(nomeMercado)
 }
 
-type PecasDaFonte = {
+export type PecasDaFonte = {
   eventos: EventoDaCasa[]
   censo: (eventoIdExterno: string) => Promise<CensoDaCasa>
-  fabricaCasas: (eventoIdExterno: string) => Promise<CasaDeAposta[]>
+  fabricaCasas: (
+    eventoIdExterno: string,
+    atributoDoMercado: (nomeMercado: string) => Atributo | undefined,
+  ) => Promise<CasaDeAposta[]>
 }
 
-/** Autentica (quando a casa exige) e devolve as três operações da fonte. */
-async function prepararFonte(
+/**
+ * Autentica (quando a casa exige), busca os eventos do dia e devolve as
+ * operações da fonte. É o ÚNICO lugar que sabe "como falar com cada casa" —
+ * o censo da linha de comando usa o mesmo. Fonte nova sem braço aqui é erro
+ * de compilação, não fall-through silencioso para a BetMGM.
+ */
+export async function prepararFonte(
   fonte: FonteOdds,
   dia: string,
-  buscar: typeof fetch,
-  atributoDoMercado: (nomeMercado: string) => Atributo | undefined,
+  buscar: typeof fetch = fetch,
 ): Promise<PecasDaFonte> {
-  if (fonte.nome === 'altenar') {
-    const token = await autenticarAltenar(fonte.config, buscar)
-    return {
-      eventos: await eventosDoDiaAltenar(fonte.config, token, dia, buscar),
-      censo: (id) => censoAltenar(fonte.config, token, id, buscar),
-      fabricaCasas: (id) => casasAltenar(fonte.config, token, atributoDoMercado, buscar, id),
+  switch (fonte.nome) {
+    case 'altenar': {
+      const token = await autenticarAltenar(fonte.config, buscar)
+      return {
+        eventos: await eventosDoDiaAltenar(fonte.config, token, dia, buscar),
+        censo: (id) => censoAltenar(fonte.config, token, id, buscar),
+        fabricaCasas: (id, atributoDoMercado) =>
+          casasAltenar(fonte.config, token, id, atributoDoMercado, buscar),
+      }
+    }
+    case 'betmgm':
+      return {
+        eventos: await eventosDoDiaBetmgm(fonte.config, buscar),
+        censo: (id) => censoBetmgm(fonte.config, id, buscar),
+        fabricaCasas: (id, atributoDoMercado) =>
+          casasBetmgm(fonte.config, id, atributoDoMercado, buscar),
+      }
+    default: {
+      const nunca: never = fonte
+      throw new Error(`fonte de odds desconhecida: ${JSON.stringify(nunca)}`)
     }
   }
-  return {
-    eventos: await eventosDoDiaBetmgm(fonte.config, dia, buscar),
-    censo: (id) => censoBetmgm(fonte.config, id, buscar),
-    fabricaCasas: (id) => casasBetmgm(fonte.config, atributoDoMercado, buscar, id),
-  }
 }
+
+const snake = (chave: string) => chave.replace(/[A-Z]/g, (l) => `_${l.toLowerCase()}`)
 
 export async function coletarOddsDoDia(
   db: Db,
@@ -82,51 +109,72 @@ export async function coletarOddsDoDia(
   dataReferencia: string,
   agora: Date,
   fontes: FonteOdds[],
-  transportes: TransportesDeOdds = {},
+  opcoes: OpcoesColetaDoDia = {},
 ): Promise<ResultadoColetaDoDia> {
   const contagens: Record<string, number> = {}
   const erros: { fonte: string; mensagem: string }[] = []
+  const relogio = opcoes.relogio ?? (() => new Date())
+  let falhas = 0
+
+  const registrar = (prefixo: string, valores: Record<string, number>) => {
+    for (const [chave, valor] of Object.entries(valores)) contagens[`${prefixo}_${snake(chave)}`] = valor
+  }
 
   for (const fonte of fontes) {
     const prefixo = `odds_${fonte.nome}`
+    if (opcoes.prazo && relogio() > opcoes.prazo) {
+      contagens[`${prefixo}_prazo_esgotado`] = 1
+      continue
+    }
     try {
-      const buscar = transportes[fonte.nome] ?? fetch
+      const buscar = comTimeout(opcoes.transportes?.[fonte.nome] ?? fetch, opcoes.timeoutMs)
+      // A casa responde ANTES de ganhar linha em `casas`: fonte que falha todo
+      // dia na autenticação não vira casa "ativa" sem nunca ter cotado nada.
+      const pecas = await prepararFonte(fonte, dataReferencia, buscar)
       const casaId = await garantirCasa(db, fonte.nome, fonte.nome)
       const atributoDoMercado = await atributoPorMercado(db, casaId)
-      const pecas = await prepararFonte(fonte, dataReferencia, buscar, atributoDoMercado)
 
-      const vinculo = await vincularEventosDoDia(db, fonte.nome, dataReferencia, pecas.eventos)
-      contagens[`${prefixo}_vinculados`] = vinculo.vinculados
-      contagens[`${prefixo}_sem_par`] = vinculo.semPar
-      contagens[`${prefixo}_ambiguos`] = vinculo.ambiguos
-
-      const nomes = new Set<string>()
-      for (const par of vinculo.pares) {
-        const censo = await pecas.censo(par.idExterno)
-        for (const nome of censo.jogadores) nomes.add(nome)
-      }
-      const semeadura = await semearVinculosDeJogador(db, casaId, [...nomes])
-      contagens[`${prefixo}_jogadores_confirmados`] = semeadura.confirmados
-      contagens[`${prefixo}_jogadores_pendentes`] = semeadura.pendentes
+      const vinculo = await vincularEventosDoDia(
+        db,
+        fonte.nome,
+        dataReferencia,
+        pecas.eventos,
+        ruleset.rodada.fuso,
+      )
+      registrar(prefixo, {
+        vinculados: vinculo.vinculados,
+        semPar: vinculo.semPar,
+        ambiguos: vinculo.ambiguos,
+        foraDoDia: vinculo.foraDoDia,
+      })
 
       const coleta = await coletarOdds(
         db,
-        pecas.fabricaCasas,
+        (id) => pecas.fabricaCasas(id, atributoDoMercado),
         fonte.nome,
         dataReferencia,
         agora,
         ruleset,
+        { agregar: false },
       )
-      for (const [chave, valor] of Object.entries(coleta)) {
-        contagens[`${prefixo}_${chave}`] = valor
-      }
+      // agregadas/abaixoDoMinimo são do DIA, não da fonte — ficam de fora aqui.
+      const { agregadas: _a, abaixoDoMinimo: _b, ...daFonte } = coleta
+      registrar(prefixo, daFonte)
     } catch (erro) {
       // A fonte caiu. O cron segue: as outras fontes e a sincronização da
       // rodada não têm nada a ver com o gateway desta casa.
       contagens[`${prefixo}_erro`] = 1
+      falhas += 1
       erros.push({ fonte: fonte.nome, mensagem: erro instanceof Error ? erro.message : String(erro) })
     }
   }
+
+  if (fontes.length > 0) {
+    const dia = await agregarOddsDoDia(db, dataReferencia, agora, ruleset)
+    contagens.odds_agregadas = dia.agregadas
+    contagens.odds_abaixo_do_minimo = dia.abaixoDoMinimo
+  }
+  if (falhas > 0) contagens.falhas_fontes = falhas
 
   return { contagens, erros }
 }

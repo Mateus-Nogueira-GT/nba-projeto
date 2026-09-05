@@ -3,7 +3,8 @@
  *
  * Fonte só existe com config COMPLETA: meia-config ligaria uma coleta que
  * falha todo dia às 9h em silêncio. Sem env nenhum, lista vazia e o app
- * inteiro segue como hoje (a tabela estática é o fallback das telas).
+ * inteiro segue como hoje (a tabela estática é o fallback das telas). E
+ * meia-config não é silêncio: `fontesIncompletas` diz o que falta.
  *
  * ADR-0004: tudo aqui é credencial de LEITURA de feed público. Não existe env
  * de conta de apostador, e nunca vai existir.
@@ -13,6 +14,7 @@ export type ConfigBetmgm = {
   apiKey: string
   /** O PDF não fixa o esquema de credencial — header e prefixo são config. */
   authHeader: string
+  /** Esquema SEM o espaço ('Bearer'); vazio manda a chave nua. O adapter junta. */
   authPrefix: string
   brand: string
   location: string
@@ -34,49 +36,79 @@ export type FonteOdds =
   | { nome: 'betmgm'; config: ConfigBetmgm }
   | { nome: 'altenar'; config: ConfigAltenar }
 
+export type NomeDeFonte = FonteOdds['nome']
+
+const OBRIGATORIAS: Record<NomeDeFonte, string[]> = {
+  betmgm: ['ODDS_BETMGM_BASE_URL', 'ODDS_BETMGM_API_KEY', 'ODDS_BETMGM_BRAND', 'ODDS_BETMGM_LOCATION'],
+  altenar: [
+    'ODDS_ALTENAR_GATEWAY_BASE',
+    'ODDS_ALTENAR_ORIGIN',
+    'ODDS_ALTENAR_INTEGRATION',
+    'ODDS_ALTENAR_SPORT_ID',
+  ],
+}
+
 const limpo = (v: string | undefined): string | null => {
   const s = (v ?? '').trim()
   return s === '' ? null : s
 }
 
+function faltando(ambiente: AmbienteDeOdds, nome: NomeDeFonte): string[] {
+  return OBRIGATORIAS[nome].filter((chave) => limpo(ambiente[chave]) === null)
+}
+
 export function fontesDeOdds(ambiente: AmbienteDeOdds = process.env): FonteOdds[] {
   const fontes: FonteOdds[] = []
 
-  const bBase = limpo(ambiente.ODDS_BETMGM_BASE_URL)
-  const bKey = limpo(ambiente.ODDS_BETMGM_API_KEY)
-  const bBrand = limpo(ambiente.ODDS_BETMGM_BRAND)
-  const bLocation = limpo(ambiente.ODDS_BETMGM_LOCATION)
-  if (bBase && bKey && bBrand && bLocation) {
+  if (faltando(ambiente, 'betmgm').length === 0) {
     fontes.push({
       nome: 'betmgm',
       config: {
-        baseUrl: bBase.replace(/\/+$/, ''),
-        apiKey: bKey,
+        baseUrl: limpo(ambiente.ODDS_BETMGM_BASE_URL)!.replace(/\/+$/, ''),
+        apiKey: limpo(ambiente.ODDS_BETMGM_API_KEY)!,
         authHeader: limpo(ambiente.ODDS_BETMGM_AUTH_HEADER) ?? 'Authorization',
-        authPrefix: ambiente.ODDS_BETMGM_AUTH_PREFIX ?? 'Bearer ',
-        brand: bBrand,
-        location: bLocation,
+        // Definida-e-vazia é uma escolha ('sem prefixo'); ausente é o padrão.
+        authPrefix:
+          ambiente.ODDS_BETMGM_AUTH_PREFIX === undefined
+            ? 'Bearer'
+            : ambiente.ODDS_BETMGM_AUTH_PREFIX.trim(),
+        brand: limpo(ambiente.ODDS_BETMGM_BRAND)!,
+        location: limpo(ambiente.ODDS_BETMGM_LOCATION)!,
         lang: limpo(ambiente.ODDS_BETMGM_LANG) ?? 'en',
       },
     })
   }
 
-  const aBase = limpo(ambiente.ODDS_ALTENAR_GATEWAY_BASE)
-  const aOrigin = limpo(ambiente.ODDS_ALTENAR_ORIGIN)
-  const aIntegration = limpo(ambiente.ODDS_ALTENAR_INTEGRATION)
-  const aSport = limpo(ambiente.ODDS_ALTENAR_SPORT_ID)
-  if (aBase && aOrigin && aIntegration && aSport) {
+  if (faltando(ambiente, 'altenar').length === 0) {
     fontes.push({
       nome: 'altenar',
       config: {
-        gatewayBase: aBase.replace(/\/+$/, ''),
-        origin: aOrigin,
-        integration: aIntegration,
-        sportId: aSport,
+        gatewayBase: limpo(ambiente.ODDS_ALTENAR_GATEWAY_BASE)!.replace(/\/+$/, ''),
+        origin: limpo(ambiente.ODDS_ALTENAR_ORIGIN)!,
+        integration: limpo(ambiente.ODDS_ALTENAR_INTEGRATION)!,
+        sportId: limpo(ambiente.ODDS_ALTENAR_SPORT_ID)!,
         champId: limpo(ambiente.ODDS_ALTENAR_CHAMP_ID),
       },
     })
   }
 
   return fontes
+}
+
+/**
+ * Fontes que alguém COMEÇOU a configurar e não terminou — pelo menos uma env
+ * obrigatória preenchida, pelo menos uma faltando. É a diferença entre
+ * "desligada de propósito" e "esqueci o brand": a segunda merece um aviso.
+ */
+export function fontesIncompletas(
+  ambiente: AmbienteDeOdds = process.env,
+): { nome: NomeDeFonte; faltam: string[] }[] {
+  const incompletas: { nome: NomeDeFonte; faltam: string[] }[] = []
+  for (const nome of Object.keys(OBRIGATORIAS) as NomeDeFonte[]) {
+    const faltam = faltando(ambiente, nome)
+    if (faltam.length > 0 && faltam.length < OBRIGATORIAS[nome].length) {
+      incompletas.push({ nome, faltam })
+    }
+  }
+  return incompletas
 }

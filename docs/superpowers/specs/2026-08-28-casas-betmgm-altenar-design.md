@@ -97,12 +97,29 @@ mapa_jogadores_casa (casa_id, nome_na_casa, jogador_id, confirmado)
 UNIQUE (casa_id, nome_na_casa)
 ```
 
+> **Errata (04/09, revisão de código):** a tabela nova NÃO foi criada. O repo já
+> tinha o mecanismo exato em `reconciliar.ts` — `mapa_jogadores` com o
+> namespace `casa:<nome>`, `confirmado_por`/`confirmado_em` como trilha de
+> auditoria — e o painel `/admin/mercados` lê e escreve ALI. Uma segunda tabela
+> seria um segundo lugar para o mesmo fato: a confirmação feita no painel nunca
+> chegaria à coleta. A semeadura descrita abaixo vale igual, sobre
+> `mapa_jogadores`, com `confirmado_por = 'semeadura:nome-exato'`.
+
 Semeadura automática CONSERVADORA: se `normalizarTexto(nome_na_casa)` casa com
 **exatamente um** jogador canônico, a linha nasce `confirmado=true`; zero ou
 mais de um → nasce pendente (`confirmado=false`) e a cotação espera curadoria
 (contada em `aguardandoCuradoria`, como o mapa de mercados já faz). Mesmo
 princípio do `identidade.ts` da ingestão NBA: match exato normalizado ou
 curadoria humana — nunca palpite.
+
+> **Errata (04/09):** a agregação NÃO acontece dentro de cada coleta. Cada
+> fonte de mercado é uma casa só; agregar por fonte daria `qtdCasas = 1` para
+> sempre, abaixo do `casas_minimas` homologado, e a média entre casas nunca
+> existiria. A coleta por fonte só grava snapshot; a agregação do dia
+> (`agregarOddsDoDia`) roda depois de TODAS as fontes, sobre o snapshot do
+> mesmo instante, contando casas distintas de verdade. E o nome de mercado da
+> Altenar é separado em MODELO + jogador antes do mapa: a curadoria confirma
+> "Total de Pontos" uma vez, não uma linha por jogador por noite.
 
 ### Pipeline única
 
