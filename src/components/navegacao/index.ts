@@ -1,6 +1,7 @@
 export { BarraInferior, type Aba } from './BarraInferior'
 export { Moldura } from './Moldura'
 export { Esqueleto } from './Esqueleto'
-export { CabecalhoTela, Chip } from './CabecalhoTela'
+export { CabecalhoTela, Chip, type GrupoDeOpcoes, type OpcaoDeNavegacao } from './CabecalhoTela'
+export { FolhaDeFiltros, type RecorteAtivo } from './FolhaDeFiltros'
 export { FaixaDemonstracao } from './FaixaDemonstracao'
 export { IconeAba } from './icones'

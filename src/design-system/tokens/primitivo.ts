@@ -110,6 +110,9 @@ export const primitivo = {
   // (PRÉ · 1º Q · FIM 1º Q · FT), derivadas do vermelho400 do ao vivo.
   vermelhoVeu14: 'rgba(255,107,107,.14)',
   vermelhoVeu45: 'rgba(255,107,107,.45)',
+  // Tinta do verde do nível 3 (verde400) para o FUNDO da aba de atributo ativa
+  // no rodapé do card: a borda é o verde cheio, o fundo é ele a 12%.
+  verdeVeu12: 'rgba(61,211,126,.12)',
   // Par do azul do turbo (azul400) para brilho e fundo — nunca no lugar do
   // categórico.
   azul300: '#8CC4FF',
@@ -121,7 +124,7 @@ export const primitivo = {
 
   // Fontes — a família vem por variável CSS publicada no layout (next/font).
   fonteAnton: "var(--fonte-anton), 'Arial Narrow', sans-serif",
-  fonteBarlow: "var(--fonte-barlow), system-ui, sans-serif",
+  fonteBarlow: 'var(--fonte-barlow), system-ui, sans-serif',
   fonteBarlowCondensed: "var(--fonte-barlow-condensed), 'Arial Narrow', sans-serif",
 } as const
 

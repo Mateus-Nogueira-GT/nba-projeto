@@ -99,6 +99,23 @@ export const componente = {
     bordaNeutra: s.divisor,
     textoNeutro: s.texto55,
   },
+  // Abas de atributo no rodapé do card — um jogador com dois ou três
+  // atributos vira UM card, e as abas trocam o mercado sem repetir o card.
+  abaAtributo: {
+    fundoAtiva: s.apitoNivel3Tinta,
+    bordaAtiva: s.apitoNivel3,
+    textoAtiva: s.texto100,
+    bordaInativa: s.divisor,
+    textoInativa: s.textoSecundario,
+    raio: '6px',
+  },
+  // Veredito do card CONFERIDO: "fez N" na cor das barrinhas — bateu, falhou —
+  // e o neutro do DNP em texto40. Quem não jogou não ganha ✓ nem ✗.
+  conferido: {
+    bateu: s.barrinhaBateu,
+    falhou: s.barrinhaFalhou,
+    neutro: s.texto40,
+  },
 } as const
 
 export type Componente = typeof componente

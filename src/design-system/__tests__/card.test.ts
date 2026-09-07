@@ -137,3 +137,141 @@ describe('errata pós-merge — alvo desconhecido nunca vira linha batida', () =
   })
 })
 
+
+// ===========================================================================
+// IDENTIDADE 04 — o card fecha o ciclo, ganha abas de atributo e lente
+// ===========================================================================
+
+describe('CardEntrada — identidade 04: o card fecha o ciclo (PRÉ → CONFERIDO)', () => {
+  const conferido = {
+    ...base, linha: 25, mediaTemporada: 25.7,
+    oddFaixa: { min: 1.47, max: 1.62, qtdCasas: 3 },
+  }
+
+  it('CONFERIDO e bateu: o rodapé direito vira "fez 27" com o ✓ nomeado, na cor de bateu', () => {
+    const html = render({ ...conferido, estado: 'CONFERIDO', fez: 27, bateu: true })
+    expect(html).toContain('fez 27')
+    expect(html).toContain('aria-label="Bateu a linha"')
+    expect(html).toContain(componente.conferido.bateu)
+    // média e odd saem do rodapé: o veredito ocupa o lugar deles
+    expect(html).not.toContain('MÉDIA 25,7')
+    expect(html).not.toContain('ODD 1,47')
+  })
+
+  it('CONFERIDO e não bateu: "fez 19" com o ✗ nomeado, na cor de falhou', () => {
+    const html = render({ ...conferido, estado: 'CONFERIDO', fez: 19, bateu: false })
+    expect(html).toContain('fez 19')
+    expect(html).toContain('aria-label="Não bateu a linha"')
+    expect(html).toContain(componente.conferido.falhou)
+  })
+
+  it('CONFERIDO sem jogar é NEUTRO: "não jogou · neutro", nem ✓ nem ✗, badge DNP', () => {
+    const html = render({ ...conferido, estado: 'CONFERIDO', fez: null, bateu: null })
+    expect(html).toContain('não jogou · neutro')
+    expect(html).not.toContain('aria-label="Bateu a linha"')
+    expect(html).not.toContain('aria-label="Não bateu a linha"')
+    expect(html).toContain(componente.conferido.neutro)
+    expect(html).toContain('>DNP<')
+  })
+
+  it('badge de status de largura FIXA com o rótulo escrito: PRÉ · 1º Q · FIM 1º Q · FT', () => {
+    const casos = [
+      ['PRE', 'PRÉ'],
+      ['Q1', '1º Q'],
+      ['FIM_Q1', 'FIM 1º Q'],
+      ['AGUARDANDO_OFICIAL', 'FT'],
+      ['CONFERIDO', 'FT'],
+    ] as const
+    for (const [estado, rotulo] of casos) {
+      const html = render({ ...conferido, estado, fez: 27, bateu: true })
+      expect(html, estado).toContain(`width:${componente.statusCiclo.largura};box-sizing:border-box`)
+      expect(html, estado).toContain(`>${rotulo}<`)
+    }
+  })
+
+  it('só o 1º Q em andamento veste a tinta do ao vivo; os outros estados são neutros', () => {
+    const vivo = render({ ...base, linha: 20, estado: 'Q1' })
+    expect(vivo).toContain(componente.statusCiclo.fundoAoVivo)
+    for (const estado of ['PRE', 'FIM_Q1', 'AGUARDANDO_OFICIAL'] as const) {
+      const html = render({ ...base, linha: 20, estado })
+      expect(html, estado).toContain(componente.statusCiclo.fundoNeutro)
+      expect(html, estado).not.toContain(componente.statusCiclo.fundoAoVivo)
+    }
+  })
+
+  it('sem as props novas nada muda: nem badge, nem aba, nem veredito', () => {
+    const html = render({ ...conferido })
+    // o Avatar também mede 52px; a assinatura do badge é largura fixa + box-sizing
+    expect(html).not.toContain(`width:${componente.statusCiclo.largura};box-sizing:border-box`)
+    expect(html).not.toMatch(/>(PRÉ|1º Q|FIM 1º Q|FT|DNP)</)
+    expect(html).not.toContain('aria-current')
+    expect(html).not.toContain('fez ')
+    expect(html).toContain('MÉDIA 25,7')
+  })
+})
+
+describe('CardEntrada — identidade 04: abas de atributo e lente da zona 2', () => {
+  const abas = [
+    { atributo: 'PONTOS' as const, linha: 10, ativo: true, href: '/?atributo=PONTOS' },
+    { atributo: 'REBOTES' as const, linha: 3, ativo: false, href: '/?atributo=REBOTES' },
+    { atributo: 'ASSISTENCIAS' as const, linha: 4, ativo: false, href: '/?atributo=ASSISTENCIAS' },
+  ]
+
+  it('três atributos viram três abas no rodapé, uma ativa com aria-current, no lugar do rótulo longo', () => {
+    const html = render({ ...base, linha: 10, atributos: abas })
+    for (const rotulo of ['PTS 10+', 'REB 3+', 'AST 4+']) expect(html).toContain(rotulo)
+    expect(html.match(/aria-current="true"/g)).toHaveLength(1)
+    expect(html).toContain('href="/?atributo=REBOTES"')
+    expect(html).toContain(componente.abaAtributo.bordaAtiva)
+    expect(html).toContain(componente.abaAtributo.fundoAtiva)
+    expect(html).not.toContain('PONTOS 10+')
+  })
+
+  it('lente MEDIA_LINHA troca a zona 2: sem Barrinhas, média × linha em texto', () => {
+    const html = render({
+      ...base, linha: 4, lente: 'MEDIA_LINHA', mediaTemporada: 4.9,
+      ultimos5: [{ valor: 2, bateu: false }, { valor: 7, bateu: true }],
+    })
+    expect(html).not.toContain('ÚLT. 5 NA LINHA')
+    expect(html).not.toContain('>7<')
+    expect(html).toContain('4,9 × 4+')
+  })
+
+  it('lente ULT5 é o padrão de hoje; ODDS mostra a faixa e as casas; HIERARQUIA, a posição no time', () => {
+    const ult5 = render({ ...base, linha: 4, lente: 'ULT5', ultimos5: [{ valor: 7, bateu: true }] })
+    expect(ult5).toContain('ÚLT. 5 NA LINHA')
+
+    const odds = render({ ...base, linha: 4, lente: 'ODDS', oddFaixa: { min: 1.49, max: 1.66, qtdCasas: 3 } })
+    expect(odds).toContain('1,49–1,66')
+    expect(odds).toContain('3 CASAS')
+    expect(odds).not.toContain('ÚLT. 5 NA LINHA')
+
+    const hierarquia = render({ ...base, linha: 4, lente: 'HIERARQUIA', hierarquia: { posicao: 2, total: 8 } })
+    expect(hierarquia).toContain('Nº 2 DE 8')
+    expect(hierarquia).toContain('HIERARQUIA')
+  })
+
+  it('lente sem dado mostra o rótulo com "—", nunca um número inventado', () => {
+    const semOdd = render({ ...base, linha: 4, lente: 'ODDS', oddFaixa: null })
+    expect(semOdd).toContain('ODD')
+    expect(semOdd).toContain('—')
+    expect(semOdd).not.toMatch(/\d,\d\d–\d,\d\d/)
+
+    const semHierarquia = render({ ...base, linha: 4, lente: 'HIERARQUIA' })
+    expect(semHierarquia).toContain('HIERARQUIA')
+    expect(semHierarquia).toContain('—')
+    expect(semHierarquia).not.toContain('Nº ')
+  })
+
+  it('nunca escreve "probabilidade", em nenhum estado nem lente', () => {
+    const todos = [
+      render({ ...base, linha: 25, estado: 'CONFERIDO', fez: 27, bateu: true }),
+      render({ ...base, linha: 25, estado: 'CONFERIDO', fez: null, bateu: null }),
+      render({ ...base, linha: 10, estado: 'Q1', atributos: abas }),
+      render({ ...base, linha: 4, lente: 'MEDIA_LINHA', mediaTemporada: 4.9 }),
+      render({ ...base, linha: 4, lente: 'ODDS', oddFaixa: { min: 1.49, max: 1.66, qtdCasas: 3 } }),
+      render({ ...base, linha: 4, lente: 'HIERARQUIA', hierarquia: { posicao: 1, total: 5 } }),
+    ].join('\n')
+    expect(todos.toLowerCase()).not.toContain('probabilidade')
+  })
+})
