@@ -23,6 +23,11 @@ export type GrupoDeOpcoes = {
  * é de transmissão ao vivo — sinal redundante ao texto da própria sobrancelha,
  * nunca o único.
  *
+ * `titulo` é OPCIONAL: o perfil do jogador põe o nome no hero, ao lado do
+ * rosto (Anton 26, o desenho do artboard), e ali o nome é o `<h1>` da tela —
+ * repeti-lo aqui em 30 px seria o mesmo nome duas vezes. Sem `titulo` este
+ * cabeçalho é só a sobrancelha.
+ *
  * Identidade 04 — quatro slots OPCIONAIS, todos ausentes nas telas que não os
  * pedem (a saída sem eles é a de sempre):
  *   `selo`     o SeloContexto preenchido no canto direito, na altura do título
@@ -45,7 +50,7 @@ export function CabecalhoTela({
   children,
 }: {
   sobrancelha: string
-  titulo: string
+  titulo?: string
   contexto?: 'padrao' | 'aoVivo'
   voltarHref?: string
   selo?: ReactNode
@@ -110,17 +115,19 @@ export function CabecalhoTela({
             )}
             {sobrancelha}
           </p>
-          <h1
-            style={{
-              margin: '6px 0 0',
-              fontFamily: semantico.fonteTitulo,
-              fontSize: 30,
-              letterSpacing: 0.5,
-              textTransform: 'uppercase',
-            }}
-          >
-            {titulo}
-          </h1>
+          {titulo && (
+            <h1
+              style={{
+                margin: '6px 0 0',
+                fontFamily: semantico.fonteTitulo,
+                fontSize: 30,
+                letterSpacing: 0.5,
+                textTransform: 'uppercase',
+              }}
+            >
+              {titulo}
+            </h1>
+          )}
         </div>
         {selo}
       </div>

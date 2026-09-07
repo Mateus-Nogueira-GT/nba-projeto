@@ -16,7 +16,16 @@ import { semantico } from '../tokens/semantico'
  * confiança; só tira o hex daqui, que é o que o teste "hex direto" cobra de
  * QUALQUER componente, sem exceção por nome de arquivo.
  */
-export type NotaPartidaProps = { nota: number | null }
+export type NotaPartidaProps = {
+  nota: number | null
+  /**
+   * O badge no DESTAQUE dos quatro números do perfil, onde a nota é "o
+   * número" do jogador: maior e sem largura mínima. Sem isso ele saía do
+   * mesmo tamanho da célula de tabela e perdia a hierarquia ao lado dos três
+   * números em Anton (duas medidas no artboard, `.nota` e `.n`).
+   */
+  destaque?: boolean
+}
 
 /** Faixas da spec: <6 fraca · 6–6.9 mediana · 7–7.9 boa · 8–8.9 ótima · 9+ excepcional. */
 const FAIXAS: { minimo: number; fundo: string; texto: string }[] = [
@@ -31,7 +40,7 @@ function faixaDe(nota: number) {
   return FAIXAS.find((f) => nota >= f.minimo) ?? FAIXAS[FAIXAS.length - 1]!
 }
 
-export function NotaPartida({ nota }: NotaPartidaProps) {
+export function NotaPartida({ nota, destaque = false }: NotaPartidaProps) {
   if (nota === null) {
     return <span>—</span>
   }
@@ -41,14 +50,14 @@ export function NotaPartida({ nota }: NotaPartidaProps) {
     <span
       style={{
         display: 'inline-block',
-        minWidth: 34,
+        minWidth: destaque ? undefined : 34,
         textAlign: 'center',
-        padding: '2px 6px',
+        padding: destaque ? '2px 8px' : '2px 6px',
         borderRadius: 6,
         background: faixa.fundo,
         color: faixa.texto,
         fontFamily: semantico.fonteRotulo,
-        fontSize: 12,
+        fontSize: destaque ? 14 : 12,
         fontWeight: 700,
         letterSpacing: 0.3,
       }}

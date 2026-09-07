@@ -119,6 +119,9 @@ export const semantico = {
   texto70: p.tinta50Veu70,
   texto55: p.tinta50Veu55,
   texto40: p.tinta50Veu40,
+  // Régua fina entre linhas de tabela — o `divisor` a meia força. Alias de um
+  // primitivo, como o teste de paridade exige.
+  divisorSuave: p.tinta500Veu50,
   // Ao vivo com forma própria DENTRO do quente: o sólido é o mesmo `aoVivo`
   // (o ponto e o texto); tinta e borda vestem o badge de status de largura
   // fixa. Distinto do amarelo do nível 1 e do laranja do nível 2 por teste.

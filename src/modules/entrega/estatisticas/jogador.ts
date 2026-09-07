@@ -17,6 +17,8 @@ import { daColuna, maisAntiga } from './atualizacao'
 // A aba de estatísticas NÃO importa do motor (regra `estatisticas-nao-passam-
 // pelo-motor`). O atributo aqui é o do dado canônico — o enum do schema.
 type Atributo = (typeof apitos.$inferSelect)['atributo']
+/** Nível do JOGADOR (MVP · All Star · Suporte · Randola) — enum do schema. */
+type NivelDoJogador = (typeof niveis.$inferSelect)['nivel']
 import type { ComAtualizacao } from './atualizacao'
 import { notaDaPartida } from './nota'
 import { numero, percentual } from './numeros'
@@ -36,6 +38,12 @@ export type LinhaHistorico = {
   assistencias: number
   fgPercentual: number | null
   tresPercentual: number | null
+  /**
+   * A nota da partida (3–10) daquele jogo — "o número" do jogador na
+   * identidade 04. null quando o box não sustenta nota (menos de
+   * `MINUTOS_MINIMOS`). Nunca "nível": nível é do jogador e do apito.
+   */
+  nota: number | null
 }
 
 export type BlocoAoVivo = {
@@ -115,23 +123,52 @@ export type TelaJogador = ComAtualizacao & {
    * Giannis no Miami), rotulado à parte de `perfil.timeSigla`, que é o time
    * REAL do provedor. As duas visões convivem na tela com rótulo explícito;
    * sem rótulo, a divergência é lida como bug.
+   *
+   * `nivel` é o NÍVEL DO JOGADOR em pontos, o único atributo que o CJ
+   * classificou — vem junto porque é a mesma linha de `niveis` e a tela mostra
+   * os dois no mesmo fôlego ("na lista do CJ MIA · Suporte em pontos").
    */
-  timeNaListaDoCj: { id: string; sigla: string; nome: string } | null
+  timeNaListaDoCj: { id: string; sigla: string; nome: string; nivel: NivelDoJogador } | null
 }
+
+/**
+ * Em que ponto do ciclo está o apito, do ponto de vista do perfil.
+ *
+ * É a MESMA regra de `estadoDoCiclo` (`../lista-por-jogo.ts`), com os estados
+ * anteriores ao veredito colapsados num só — o perfil não desenha o 1º quarto,
+ * ele só precisa saber se já dá para dizer ✓/✗:
+ *
+ *   AGUARDANDO_OFICIAL  jogo por acontecer, em andamento, ou ENCERRADO com o
+ *                       box score do jogador ainda não recebido
+ *   NAO_JOGOU           box score recebido com MINUTO ZERO — o DNP de verdade
+ *   CONFERIDO           box score com minutos: há veredito
+ *
+ * A distinção entre os dois primeiros é o que a spec §5.1 exige ("nunca
+ * inferir de parcial"): ausência de linha é dado que não chegou, nunca um
+ * jogador que não entrou em quadra.
+ */
+export type EstadoDoApito = 'AGUARDANDO_OFICIAL' | 'NAO_JOGOU' | 'CONFERIDO'
 
 /** Um apito conferido do jogador — a linha da nossa "aba Games" com ✓/✗. */
 export type ApitoDoJogador = {
-  dataReferencia: string
+  /**
+   * O INSTANTE da partida (`jogos.data_hora_utc`), o mesmo que a tabela jogo a
+   * jogo formata. Não é `data_referencia`: o rótulo de calendário do provedor e
+   * o instante caem em dias diferentes para todo jogo que começa às 22h ET, e a
+   * mesma partida saía com duas datas na mesma tela.
+   */
+  data: Date
   jogoId: string
   adversarioSigla: string
   emCasa: boolean
   atributo: Atributo
   /** A linha mais baixa que a lista ofereceu — a que a conferência usa. */
   linhaMaisBaixa: number
-  /** O que ele fez no atributo; null = não jogou. */
+  /** O que ele fez no atributo; null fora de `CONFERIDO`. */
   fez: number | null
-  /** null quando não jogou (neutro). */
+  /** null quando não há veredito (não jogou, ou dado que não chegou). */
   bateu: boolean | null
+  estado: EstadoDoApito
 }
 
 /**
@@ -149,7 +186,12 @@ export type ApitoDoJogador = {
  */
 function resultadoDoJogo(
   timeDoJogador: string | null,
-  jogo: { timeCasaId: string; timeVisitanteId: string; placarCasa: number | null; placarVisitante: number | null },
+  jogo: {
+    timeCasaId: string
+    timeVisitanteId: string
+    placarCasa: number | null
+    placarVisitante: number | null
+  },
 ): { resultado: 'V' | 'D' | null; emCasa: boolean; adversarioId: string } {
   const emCasa = timeDoJogador === jogo.timeCasaId
   const adversarioId = emCasa ? jogo.timeVisitanteId : jogo.timeCasaId
@@ -164,10 +206,35 @@ function resultadoDoJogo(
   return { resultado: meus > deles ? 'V' : 'D', emCasa, adversarioId }
 }
 
+/**
+ * A nota da partida a partir de uma linha de box score.
+ *
+ * Uma função só para o histórico e para a média recente: se cada um montasse
+ * a chamada, a nota da tabela e a nota do cabeçalho poderiam divergir — duas
+ * respostas para "quanto ele foi bem naquele jogo".
+ */
+function notaDoBox(box: typeof estatisticasJogo.$inferSelect): number | null {
+  return notaDaPartida({
+    minutos: numero(box.minutos),
+    pontos: box.pontos,
+    cestasC: box.cestasC,
+    cestasT: box.cestasT,
+    lanceC: box.lanceC,
+    lanceT: box.lanceT,
+    rebotesOf: box.rebotesOf,
+    rebotesDef: box.rebotesDef,
+    roubos: box.roubos,
+    assistencias: box.assistencias,
+    bloqueios: box.bloqueios,
+    faltas: box.faltas,
+    turnovers: box.turnovers,
+  })
+}
+
 export async function telaDoJogador(
   db: Db,
   jogadorId: string,
-  opcoes: { temporada: string; limiteHistorico?: number } ,
+  opcoes: { temporada: string; limiteHistorico?: number },
 ): Promise<TelaJogador | null> {
   const [jogador] = await db.select().from(jogadores).where(eq(jogadores.id, jogadorId)).limit(1)
   if (!jogador) return null
@@ -201,6 +268,7 @@ export async function telaDoJogador(
   const historico: LinhaHistorico[] = linhasBox.map(({ box, jogo }) => {
     const { resultado, emCasa, adversarioId } = resultadoDoJogo(jogador.timeId, jogo)
     return {
+      nota: notaDoBox(box),
       jogoId: jogo.id,
       data: jogo.dataHoraUtc,
       adversarioSigla: timePorId.get(adversarioId)?.sigla ?? '—',
@@ -280,28 +348,14 @@ export async function telaDoJogador(
 
   // Nota média recente: as últimas 5 partidas COM nota (menos de 5 minutos não
   // tem nota — ver nota.ts). O histórico já vem do mais recente para o mais antigo.
-  const notas = linhasBox
-    .map(({ box }) =>
-      notaDaPartida({
-        minutos: numero(box.minutos),
-        pontos: box.pontos,
-        cestasC: box.cestasC,
-        cestasT: box.cestasT,
-        lanceC: box.lanceC,
-        lanceT: box.lanceT,
-        rebotesOf: box.rebotesOf,
-        rebotesDef: box.rebotesDef,
-        roubos: box.roubos,
-        assistencias: box.assistencias,
-        bloqueios: box.bloqueios,
-        faltas: box.faltas,
-        turnovers: box.turnovers,
-      }),
-    )
+  const notas = historico
+    .map((l) => l.nota)
     .filter((n): n is number => n !== null)
     .slice(0, 5)
   const notaMediaRecente =
-    notas.length === 0 ? null : Math.round((notas.reduce((a, v) => a + v, 0) / notas.length) * 10) / 10
+    notas.length === 0
+      ? null
+      : Math.round((notas.reduce((a, v) => a + v, 0) / notas.length) * 10) / 10
 
   const timeNaListaDoCj = await timeNaListaDoCjDe(db, jogadorId, timePorId)
 
@@ -344,16 +398,24 @@ async function timeNaListaDoCjDe(
   db: Db,
   jogadorId: string,
   timePorId: Map<string, { id: string; sigla: string; nome: string }>,
-): Promise<{ id: string; sigla: string; nome: string } | null> {
+): Promise<{ id: string; sigla: string; nome: string; nivel: NivelDoJogador } | null> {
   const [versao] = await db.select().from(niveisVersao).where(eq(niveisVersao.ativa, true)).limit(1)
   if (!versao) return null
   const [vinculo] = await db
-    .select({ timeId: niveis.timeId })
+    .select({ timeId: niveis.timeId, nivel: niveis.nivel })
     .from(niveis)
-    .where(and(eq(niveis.niveisVersaoId, versao.id), eq(niveis.jogadorId, jogadorId), eq(niveis.atributo, 'PONTOS')))
+    .where(
+      and(
+        eq(niveis.niveisVersaoId, versao.id),
+        eq(niveis.jogadorId, jogadorId),
+        eq(niveis.atributo, 'PONTOS'),
+      ),
+    )
     .limit(1)
   const time = vinculo ? timePorId.get(vinculo.timeId) : undefined
-  return time ? { id: time.id, sigla: time.sigla, nome: time.nome } : null
+  return time && vinculo
+    ? { id: time.id, sigla: time.sigla, nome: time.nome, nivel: vinculo.nivel }
+    : null
 }
 
 /**
@@ -367,16 +429,21 @@ async function timeNaListaDoCjDe(
  * não pelo `jogadores.time_id`: é a estratégia que apitou, e ela enxerga o
  * elenco projetado.
  */
-export async function apitosDoJogador(db: Db, jogadorId: string, limite: number): Promise<ApitoDoJogador[]> {
+export async function apitosDoJogador(
+  db: Db,
+  jogadorId: string,
+  limite: number,
+): Promise<ApitoDoJogador[]> {
   const linhas = await db
     .select({
-      dataReferencia: jogos.dataReferencia,
+      data: jogos.dataHoraUtc,
       jogoId: apitos.jogoId,
       atributo: apitos.atributo,
       linha: apitos.linha,
       timeCasaId: jogos.timeCasaId,
       timeVisitanteId: jogos.timeVisitanteId,
       status: jogos.status,
+      minutos: estatisticasJogo.minutos,
       pontos: estatisticasJogo.pontos,
       rebotes: estatisticasJogo.rebotesTotal,
       assistencias: estatisticasJogo.assistencias,
@@ -385,14 +452,19 @@ export async function apitosDoJogador(db: Db, jogadorId: string, limite: number)
     .innerJoin(jogos, eq(apitos.jogoId, jogos.id))
     .leftJoin(
       estatisticasJogo,
-      and(eq(estatisticasJogo.jogoId, apitos.jogoId), eq(estatisticasJogo.jogadorId, apitos.jogadorId)),
+      and(
+        eq(estatisticasJogo.jogoId, apitos.jogoId),
+        eq(estatisticasJogo.jogadorId, apitos.jogadorId),
+      ),
     )
     .where(and(eq(apitos.estrategia, 'LISTA_SECRETA'), eq(apitos.jogadorId, jogadorId)))
-    .orderBy(desc(jogos.dataReferencia), asc(apitos.atributo), asc(apitos.linha))
+    .orderBy(desc(jogos.dataHoraUtc), asc(apitos.atributo), asc(apitos.linha))
 
   if (linhas.length === 0) return []
 
-  const listaTimes = await db.select({ id: times.id, sigla: times.sigla, nome: times.nome }).from(times)
+  const listaTimes = await db
+    .select({ id: times.id, sigla: times.sigla, nome: times.nome })
+    .from(times)
   const timePorId = new Map(listaTimes.map((t) => [t.id, t] as const))
   const meuTime = (await timeNaListaDoCjDe(db, jogadorId, timePorId))?.id ?? null
 
@@ -402,20 +474,33 @@ export async function apitosDoJogador(db: Db, jogadorId: string, limite: number)
     const chave = `${l.jogoId}|${l.atributo}`
     const emCasa = meuTime === l.timeCasaId
     const adversarioId = emCasa ? l.timeVisitanteId : l.timeCasaId
-    const valor =
-      l.pontos === null
+    // TRÊS estados, nunca dois. "Não jogou" é MINUTO ZERO — o provedor manda
+    // também a linha do reserva que não entrou (0 min, 0 pts) e a sincronização
+    // insere toda linha recebida. AUSÊNCIA de linha é outra coisa: é dado que
+    // ainda não chegou, e chamar isso de DNP é inferir veredito de ausência de
+    // dado — o jogo acabou às 23h, o job de box score ainda não rodou, e o
+    // perfil dizia que o jogador não entrou em quadra.
+    const temBox = l.pontos !== null
+    const encerrado = l.status === 'ENCERRADO'
+    const estado: EstadoDoApito =
+      !encerrado || !temBox
+        ? 'AGUARDANDO_OFICIAL'
+        : numero(l.minutos) === 0
+          ? 'NAO_JOGOU'
+          : 'CONFERIDO'
+    const fez =
+      estado !== 'CONFERIDO'
         ? null
         : l.atributo === 'PONTOS'
           ? l.pontos
           : l.atributo === 'REBOTES'
             ? l.rebotes
             : l.assistencias
-    // Jogo ainda não encerrado não é "não jogou": é ainda não conferido.
-    const fez = l.status === 'ENCERRADO' ? valor : null
     const atual = porCard.get(chave)
     if (!atual) {
       porCard.set(chave, {
-        dataReferencia: l.dataReferencia,
+        estado,
+        data: l.data,
         jogoId: l.jogoId,
         adversarioSigla: timePorId.get(adversarioId)?.sigla ?? '—',
         emCasa,
@@ -457,9 +542,7 @@ async function blocoAoVivo(
   const quartos = await db
     .select()
     .from(estatisticasQuarto)
-    .where(
-      and(eq(estatisticasQuarto.jogoId, jogo.id), eq(estatisticasQuarto.jogadorId, jogadorId)),
-    )
+    .where(and(eq(estatisticasQuarto.jogoId, jogo.id), eq(estatisticasQuarto.jogadorId, jogadorId)))
 
   const emCasa = jogo.timeCasaId === timeDoJogador
   const adversarioId = emCasa ? jogo.timeVisitanteId : jogo.timeCasaId
@@ -495,10 +578,7 @@ async function blocoAoVivo(
 }
 
 /** Ids de jogadores citados em cards — usado para montar os links do feed. */
-export async function nomesDeJogadores(
-  db: Db,
-  ids: string[],
-): Promise<Map<string, string>> {
+export async function nomesDeJogadores(db: Db, ids: string[]): Promise<Map<string, string>> {
   if (ids.length === 0) return new Map()
   const linhas = await db.select().from(jogadores).where(inArray(jogadores.id, ids))
   return new Map(linhas.map((j) => [j.id, j.nomeCompleto] as const))
