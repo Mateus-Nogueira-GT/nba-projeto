@@ -284,3 +284,76 @@ describe('errata pós-merge — o CSS gerado é só de strings', () => {
   })
 })
 
+// ===========================================================================
+// IDENTIDADE 04 — varredura e análise (acabamento)
+// ===========================================================================
+
+describe('identidade 04 — acabamento', () => {
+  it('texto em cinco opacidades, todas derivadas da mesma tinta clara', () => {
+    // É assim que o Sofascore obtém densidade sem borda: número em texto100,
+    // rótulo em texto55, apoio em texto40 — uma cor, várias intensidades.
+    expect(semantico.texto100).toBe(primitivo.tinta50)
+    for (const [nome, esperado] of [
+      ['texto70', '.7'],
+      ['texto55', '.55'],
+      ['texto40', '.4'],
+    ] as const) {
+      const valor = semantico[nome]
+      expect(valor, nome).toMatch(/^rgba\(245,248,252,\.\d+\)$/)
+      expect(valor.endsWith(`${esperado})`), `${nome} termina em ${esperado}`).toBe(true)
+    }
+  })
+
+  it('ao vivo tem forma sólida e tinta próprias, legíveis DENTRO do universo quente', () => {
+    // O Fire Live inteiro é quente; o ao vivo precisa se destacar dentro do
+    // quente, não do frio. Sólido para o ponto e o texto, tinta para o fundo
+    // do badge de status e borda para o contorno.
+    expect(semantico.aoVivoSolido).toBe(semantico.aoVivo)
+    expect(semantico.aoVivoTinta).toMatch(/^rgba\(255,107,107,\.\d+\)$/)
+    expect(semantico.aoVivoBorda).toMatch(/^rgba\(255,107,107,\.\d+\)$/)
+    expect(razaoDeContraste(semantico.aoVivoSolido, semantico.superficieQuente1)).toBeGreaterThanOrEqual(AA.grafico)
+    // nunca colide com o amarelo do nível 1 nem com o laranja do nível 2
+    expect([semantico.apitoNivel1, semantico.apitoNivel2, semantico.apitoNivel3]).not.toContain(semantico.aoVivoSolido)
+  })
+
+  it('durações curtas: estado em ≤ 200 ms, entrada de card novo em 400 ms', () => {
+    expect(semantico.duracaoEstado).toBe('200ms')
+    expect(semantico.duracaoEntrada).toBe('400ms')
+  })
+
+  it('o turbo ganha par claro/escuro sem deixar de ser o azul categórico', () => {
+    expect(semantico.apitoTurbo).toBe(primitivo.azul400)
+    // `toBeDefined` primeiro: sem isto, um token inexistente passaria por
+    // "diferente do categórico" de graça (foi o que aconteceu no vermelho).
+    expect(semantico.turboClaro).toMatch(HEX)
+    expect(semantico.turboEscuro).toMatch(HEX)
+    expect(semantico.turboClaro).not.toBe(semantico.apitoTurbo)
+    expect(semantico.turboEscuro).not.toBe(semantico.apitoTurbo)
+    // o par não invade nenhuma cor categórica dos dois canais
+    const categoricas = [
+      semantico.apitoNivel1, semantico.apitoNivel2, semantico.apitoNivel3, semantico.apitoTurbo,
+      semantico.nivelMvp, semantico.nivelAllStar, semantico.nivelSuporte, semantico.nivelRandola,
+    ]
+    expect(categoricas).not.toContain(semantico.turboClaro)
+    expect(categoricas).not.toContain(semantico.turboEscuro)
+  })
+
+  it('componentes novos: selo de contexto, cabeçalho de jogo e status do ciclo', () => {
+    expect(componente.seloContexto.preLive.fundo).toBe(semantico.acento)
+    expect(componente.seloContexto.preLive.texto).toBe(semantico.textoSobreCor)
+    expect(componente.seloContexto.aoVivo.fundo).toBe(semantico.vivoSelo)
+    expect(componente.seloContexto.aoVivo.texto).toBe(semantico.textoSobreCor)
+    expect(componente.cabecalhoJogo.fundoFrio).toBe(componente.contextoFrio.cardGradiente)
+    expect(componente.cabecalhoJogo.fundoQuente).toBe(componente.contextoQuente.cardGradiente)
+    // largura FIXA: o badge PRÉ · 1º Q · FIM 1º Q · FT nunca faz o card pular a cada refresh
+    expect(componente.statusCiclo.largura).toBe('52px')
+  })
+
+  it('os tokens novos chegam ao CSS gerado', () => {
+    const css = gerarCss()
+    for (const nome of ['--texto70', '--texto55', '--texto40', '--ao-vivo-tinta', '--duracao-estado', '--turbo-claro']) {
+      expect(css, nome).toContain(nome)
+    }
+  })
+})
+

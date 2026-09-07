@@ -69,6 +69,36 @@ export const componente = {
   notaFaixaBoa: { fundo: s.notaBoaFundo, texto: s.notaBoaTexto },
   notaFaixaMediana: { fundo: s.notaMedianaFundo, texto: s.notaMedianaTexto },
   notaFaixaFraca: { fundo: s.notaFracaFundo, texto: s.notaFracaTexto },
+
+  // -- Identidade 04 · varredura e análise ---------------------------------
+  // Selo de contexto no canto do cabeçalho — PRÉ-LIVE laranja, ■ AO VIVO
+  // vermelho. Pendência anotada desde a 03; aqui vira token para os dois
+  // universos vestirem o mesmo componente.
+  seloContexto: {
+    preLive: { fundo: s.acento, texto: s.textoSobreCor },
+    aoVivo: { fundo: s.vivoSelo, texto: s.textoSobreCor },
+  },
+  // Cabeçalho de jogo — a ÚNICA fronteira de seção da Lista e do Fire Live.
+  // Veste o gradiente do universo da tela; o de dentro é sigla forte, nada de
+  // escudo.
+  cabecalhoJogo: {
+    fundoFrio: `linear-gradient(135deg, ${s.superficieFria1}, ${s.superficieFria2} 55%)`,
+    fundoQuente: `linear-gradient(135deg, ${s.superficieQuente1}, ${s.superficieQuente2} 55%)`,
+    bordaFria: s.divisor,
+    bordaQuente: s.bordaQuente,
+  },
+  // Badge de status do ciclo do card (PRÉ · 1º Q · FIM 1º Q · FT · —). A
+  // largura é FIXA para o card não pular a cada refresh de 30 s — e é isso, não
+  // uma animação, que faz o ao vivo parecer estável.
+  statusCiclo: {
+    largura: '52px',
+    fundoAoVivo: s.aoVivoTinta,
+    bordaAoVivo: s.aoVivoBorda,
+    textoAoVivo: s.aoVivoSolido,
+    fundoNeutro: s.superficieElevada,
+    bordaNeutra: s.divisor,
+    textoNeutro: s.texto55,
+  },
 } as const
 
 export type Componente = typeof componente
