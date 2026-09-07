@@ -58,6 +58,47 @@ describe('detalhe do apito', () => {
     expect(texto).toContain('25,7')
   })
 
+  it('identidade 04: os fatores saem ESTRUTURADOS, em ordem fixa, com o fato e sem os pesos do ruleset', async () => {
+    // "Por que entrou" vira uma lista de fatores — nível do jogador primeiro,
+    // depois o método com o FATO que o sustenta, depois o nível do apito. A
+    // narrativa é legenda dessa lista, não substituto. Nenhum peso do ruleset
+    // (bônus de nível, +N do turbo) e nenhum percentual: mostrar a fórmula
+    // expõe o CJ e faz o % parecer soma de probabilidades.
+    const d = await detalheDoApito(banco.db, ruleset, await itemDe('LeBron James', 'OSCILACAO'))
+    expect(d.fatores.length).toBeGreaterThanOrEqual(3)
+    expect(d.fatores[0]!.chave).toBe('NIVEL')
+    expect(d.fatores[0]!.texto).toContain('Suporte')
+    const oscilacao = d.fatores.find((f) => f.chave === 'OSCILACAO')!
+    expect(oscilacao.texto).toContain('20,7')
+    expect(oscilacao.texto).toContain('25,7')
+    expect(d.fatores.at(-1)!.chave).toBe('NIVEL_APITO')
+    for (const f of d.fatores) {
+      expect(f.titulo.length).toBeGreaterThan(0)
+      expect(f.texto).not.toMatch(/%|probabilidad|prov[áa]ve|bônus|peso|\+\s?\d/i)
+    }
+    // O texto plano continua existindo, derivado dos fatores — quem já lê
+    // `porQueEntrou` não quebra.
+    expect(d.porQueEntrou.length).toBeGreaterThan(0)
+  })
+
+  it('identidade 04: OPD vira fator com quem está fora e a hierarquia', async () => {
+    const d = await detalheDoApito(banco.db, ruleset, await itemDe('Austin Reaves', 'OPD'))
+    const opd = d.fatores.find((f) => f.chave === 'OPD')!
+    expect(opd.texto).toContain('Luka')
+    expect(opd.texto).toMatch(/hierarquia|topo/i)
+  })
+
+  it('identidade 04: a forma no atributo pode pedir até 10 jogos — o padrão continua 5', async () => {
+    const item = await itemDe('LeBron James')
+    const padrao = await detalheDoApito(banco.db, ruleset, item)
+    expect(padrao.blocos).toHaveLength(5)
+    const dez = await detalheDoApito(banco.db, ruleset, item, { blocos: 10 })
+    // A fixture tem 6 dias de história: pede 10, vêm 6 — nunca inventa.
+    expect(dez.blocos.length).toBeGreaterThan(5)
+    expect(dez.blocos.length).toBeLessThanOrEqual(10)
+    expect(dez.bateu.total).toBe(dez.blocos.length)
+  })
+
   it('OPD: o porquê nomeia quem está fora', async () => {
     const d = await detalheDoApito(banco.db, ruleset, await itemDe('Austin Reaves', 'OPD'))
     expect(d.porQueEntrou.join(' ')).toContain('Luka')

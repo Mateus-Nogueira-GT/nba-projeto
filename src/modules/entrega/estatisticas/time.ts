@@ -1,13 +1,22 @@
-import { and, desc, eq, inArray, or } from 'drizzle-orm'
+import { and, asc, desc, eq, inArray, or } from 'drizzle-orm'
 
 import {
   classificacao,
   estatisticasTimeJogo,
   jogadores,
   jogos,
+  lesoesEscalacao,
+  niveis,
+  niveisVersao,
   times,
 } from '../../dominio/db/schema'
 import type { Db } from '../../dominio/db/tipos'
+
+// A aba de estatísticas NÃO importa do motor (regra `estatisticas-nao-passam-
+// pelo-motor`). Atributo e nível vêm do schema — é a lista do CJ como dado
+// gravado, não como regra.
+type Atributo = (typeof niveis.$inferSelect)['atributo']
+type Nivel = (typeof niveis.$inferSelect)['nivel']
 import { daColuna, maisAntiga } from './atualizacao'
 import type { ComAtualizacao } from './atualizacao'
 import { numero, percentual } from './numeros'
@@ -190,6 +199,58 @@ export async function telaDoTime(
       daColuna(partidas, 'partidas'),
     ]),
   }
+}
+
+/** Uma posição da hierarquia do CJ no atributo, e se está fora do jogo dado. */
+export type LinhaHierarquia = {
+  posicao: number
+  jogadorId: string
+  nome: string
+  nivel: Nivel
+  /** FORA em `lesoes_escalacao` para `jogoId`; sempre false sem jogo. */
+  fora: boolean
+}
+
+/**
+ * A HIERARQUIA DO CJ POR ATRIBUTO — o depth chart do Sofascore com a regra do
+ * CJ em cima (identidade 04). É a OPD visualizada: a tela marca o PREFIXO
+ * desfalcado em destaque, porque é só ele que abre a regra (se o nº 2 falta e
+ * o nº 1 joga, não há apito).
+ *
+ * Vem de `niveis` (versão ativa), a curadoria — rotulada na tela como "lista
+ * do CJ", à parte do elenco real de `jogadores.time_id`. Sem rótulo, a
+ * divergência (Giannis no Miami) seria lida como bug.
+ */
+export async function hierarquiaDoTime(
+  db: Db,
+  timeId: string,
+  atributo: Atributo,
+  jogoId: string | null,
+): Promise<LinhaHierarquia[]> {
+  const [versao] = await db.select().from(niveisVersao).where(eq(niveisVersao.ativa, true)).limit(1)
+  if (!versao) return []
+
+  const [linhas, fora] = await Promise.all([
+    db
+      .select({
+        posicao: niveis.posicaoHierarquia,
+        jogadorId: niveis.jogadorId,
+        nome: jogadores.nomeCompleto,
+        nivel: niveis.nivel,
+      })
+      .from(niveis)
+      .innerJoin(jogadores, eq(niveis.jogadorId, jogadores.id))
+      .where(and(eq(niveis.niveisVersaoId, versao.id), eq(niveis.timeId, timeId), eq(niveis.atributo, atributo)))
+      .orderBy(asc(niveis.posicaoHierarquia)),
+    jogoId === null
+      ? Promise.resolve([] as { jogadorId: string }[])
+      : db
+          .select({ jogadorId: lesoesEscalacao.jogadorId })
+          .from(lesoesEscalacao)
+          .where(and(eq(lesoesEscalacao.jogoId, jogoId), eq(lesoesEscalacao.status, 'FORA'))),
+  ])
+  const desfalcados = new Set(fora.map((f) => f.jogadorId))
+  return linhas.map((l) => ({ ...l, fora: desfalcados.has(l.jogadorId) }))
 }
 
 export type TelaClassificacao = ComAtualizacao & {

@@ -1,16 +1,24 @@
-import { and, desc, eq, inArray } from 'drizzle-orm'
+import { and, asc, desc, eq, inArray } from 'drizzle-orm'
 
 import {
+  apitos,
   estatisticasJogo,
   estatisticasQuarto,
   jogadores,
   jogos,
   mediasJogador,
+  niveis,
+  niveisVersao,
   times,
 } from '../../dominio/db/schema'
 import type { Db } from '../../dominio/db/tipos'
 import { daColuna, maisAntiga } from './atualizacao'
+
+// A aba de estatísticas NÃO importa do motor (regra `estatisticas-nao-passam-
+// pelo-motor`). O atributo aqui é o do dado canônico — o enum do schema.
+type Atributo = (typeof apitos.$inferSelect)['atributo']
 import type { ComAtualizacao } from './atualizacao'
+import { notaDaPartida } from './nota'
 import { numero, percentual } from './numeros'
 
 export type LinhaHistorico = {
@@ -96,6 +104,34 @@ export type TelaJogador = ComAtualizacao & {
   historico: LinhaHistorico[]
   /** Presente só enquanto o jogador está em jogo. */
   aoVivo: BlocoAoVivo | null
+  /**
+   * "O número" do jogador na identidade 04: a média das notas da partida dos
+   * últimos 5 jogos com nota (3–10, uma casa). Dado canônico — nunca aparece
+   * no card do apito, só nesta aba. null sem jogo com nota.
+   */
+  notaMediaRecente: number | null
+  /**
+   * O time do jogador NA LISTA DO CJ (curadoria, `niveis` da versão ativa —
+   * Giannis no Miami), rotulado à parte de `perfil.timeSigla`, que é o time
+   * REAL do provedor. As duas visões convivem na tela com rótulo explícito;
+   * sem rótulo, a divergência é lida como bug.
+   */
+  timeNaListaDoCj: { id: string; sigla: string; nome: string } | null
+}
+
+/** Um apito conferido do jogador — a linha da nossa "aba Games" com ✓/✗. */
+export type ApitoDoJogador = {
+  dataReferencia: string
+  jogoId: string
+  adversarioSigla: string
+  emCasa: boolean
+  atributo: Atributo
+  /** A linha mais baixa que a lista ofereceu — a que a conferência usa. */
+  linhaMaisBaixa: number
+  /** O que ele fez no atributo; null = não jogou. */
+  fez: number | null
+  /** null quando não jogou (neutro). */
+  bateu: boolean | null
 }
 
 /**
@@ -242,7 +278,36 @@ export async function telaDoJogador(
 
   const aoVivo = await blocoAoVivo(db, jogadorId, jogador.timeId, timePorId)
 
+  // Nota média recente: as últimas 5 partidas COM nota (menos de 5 minutos não
+  // tem nota — ver nota.ts). O histórico já vem do mais recente para o mais antigo.
+  const notas = linhasBox
+    .map(({ box }) =>
+      notaDaPartida({
+        minutos: numero(box.minutos),
+        pontos: box.pontos,
+        cestasC: box.cestasC,
+        cestasT: box.cestasT,
+        lanceC: box.lanceC,
+        lanceT: box.lanceT,
+        rebotesOf: box.rebotesOf,
+        rebotesDef: box.rebotesDef,
+        roubos: box.roubos,
+        assistencias: box.assistencias,
+        bloqueios: box.bloqueios,
+        faltas: box.faltas,
+        turnovers: box.turnovers,
+      }),
+    )
+    .filter((n): n is number => n !== null)
+    .slice(0, 5)
+  const notaMediaRecente =
+    notas.length === 0 ? null : Math.round((notas.reduce((a, v) => a + v, 0) / notas.length) * 10) / 10
+
+  const timeNaListaDoCj = await timeNaListaDoCjDe(db, jogadorId, timePorId)
+
   return {
+    notaMediaRecente,
+    timeNaListaDoCj,
     perfil: {
       id: jogador.id,
       nome: jogador.nomeCompleto,
@@ -268,6 +333,104 @@ export async function telaDoJogador(
       aoVivo === null ? null : { em: aoVivo.atualizadoEm, fonte: 'ao vivo' },
     ]),
   }
+}
+
+/**
+ * O time do jogador segundo a LISTA DO CJ (versão ativa de níveis). A
+ * hierarquia de PONTOS é a única que o CJ classificou; o vínculo de time é o
+ * mesmo em todos os atributos.
+ */
+async function timeNaListaDoCjDe(
+  db: Db,
+  jogadorId: string,
+  timePorId: Map<string, { id: string; sigla: string; nome: string }>,
+): Promise<{ id: string; sigla: string; nome: string } | null> {
+  const [versao] = await db.select().from(niveisVersao).where(eq(niveisVersao.ativa, true)).limit(1)
+  if (!versao) return null
+  const [vinculo] = await db
+    .select({ timeId: niveis.timeId })
+    .from(niveis)
+    .where(and(eq(niveis.niveisVersaoId, versao.id), eq(niveis.jogadorId, jogadorId), eq(niveis.atributo, 'PONTOS')))
+    .limit(1)
+  const time = vinculo ? timePorId.get(vinculo.timeId) : undefined
+  return time ? { id: time.id, sigla: time.sigla, nome: time.nome } : null
+}
+
+/**
+ * Os apitos da ESTRATÉGIA sobre este jogador, conferidos — a nossa versão da
+ * aba "Games" com rating (identidade 04). Vive na aba de estatísticas com o
+ * rótulo "apitos da estratégia": é o mecanismo de confiança verificável do
+ * Sofascore aplicado ao CJ, e o dono do produto disse sim (Q17).
+ *
+ * Um registro por (jogo, atributo); a conferência é pela linha MAIS BAIXA,
+ * como em `conferirRodadas`. O adversário é lido pelo time da LISTA do CJ,
+ * não pelo `jogadores.time_id`: é a estratégia que apitou, e ela enxerga o
+ * elenco projetado.
+ */
+export async function apitosDoJogador(db: Db, jogadorId: string, limite: number): Promise<ApitoDoJogador[]> {
+  const linhas = await db
+    .select({
+      dataReferencia: jogos.dataReferencia,
+      jogoId: apitos.jogoId,
+      atributo: apitos.atributo,
+      linha: apitos.linha,
+      timeCasaId: jogos.timeCasaId,
+      timeVisitanteId: jogos.timeVisitanteId,
+      status: jogos.status,
+      pontos: estatisticasJogo.pontos,
+      rebotes: estatisticasJogo.rebotesTotal,
+      assistencias: estatisticasJogo.assistencias,
+    })
+    .from(apitos)
+    .innerJoin(jogos, eq(apitos.jogoId, jogos.id))
+    .leftJoin(
+      estatisticasJogo,
+      and(eq(estatisticasJogo.jogoId, apitos.jogoId), eq(estatisticasJogo.jogadorId, apitos.jogadorId)),
+    )
+    .where(and(eq(apitos.estrategia, 'LISTA_SECRETA'), eq(apitos.jogadorId, jogadorId)))
+    .orderBy(desc(jogos.dataReferencia), asc(apitos.atributo), asc(apitos.linha))
+
+  if (linhas.length === 0) return []
+
+  const listaTimes = await db.select({ id: times.id, sigla: times.sigla, nome: times.nome }).from(times)
+  const timePorId = new Map(listaTimes.map((t) => [t.id, t] as const))
+  const meuTime = (await timeNaListaDoCjDe(db, jogadorId, timePorId))?.id ?? null
+
+  const porCard = new Map<string, ApitoDoJogador>()
+  for (const l of linhas) {
+    if (l.linha === null) continue
+    const chave = `${l.jogoId}|${l.atributo}`
+    const emCasa = meuTime === l.timeCasaId
+    const adversarioId = emCasa ? l.timeVisitanteId : l.timeCasaId
+    const valor =
+      l.pontos === null
+        ? null
+        : l.atributo === 'PONTOS'
+          ? l.pontos
+          : l.atributo === 'REBOTES'
+            ? l.rebotes
+            : l.assistencias
+    // Jogo ainda não encerrado não é "não jogou": é ainda não conferido.
+    const fez = l.status === 'ENCERRADO' ? valor : null
+    const atual = porCard.get(chave)
+    if (!atual) {
+      porCard.set(chave, {
+        dataReferencia: l.dataReferencia,
+        jogoId: l.jogoId,
+        adversarioSigla: timePorId.get(adversarioId)?.sigla ?? '—',
+        emCasa,
+        atributo: l.atributo,
+        linhaMaisBaixa: l.linha,
+        fez,
+        bateu: fez === null ? null : fez >= l.linha,
+      })
+    } else if (l.linha < atual.linhaMaisBaixa) {
+      atual.linhaMaisBaixa = l.linha
+      atual.bateu = atual.fez === null ? null : atual.fez >= l.linha
+    }
+  }
+
+  return [...porCard.values()].slice(0, limite)
 }
 
 /**
