@@ -14,7 +14,7 @@ import type { Atributo, Nivel } from '../../motor/tipos'
  */
 
 /** Hash estável e pequeno de um nome. Mesmo nome, mesmo número, sempre. */
-function semente(nome: string): number {
+export function semente(nome: string): number {
   let h = 2166136261
   for (const ch of nome.toLowerCase()) {
     h ^= ch.charCodeAt(0)

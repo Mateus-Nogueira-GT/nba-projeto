@@ -15,7 +15,7 @@ import { describe, expect, it } from 'vitest'
  * comportamento observável para afirmar em runtime.
  */
 const PONTOS_DE_ENTRADA = [
-  'scripts/demo-seed.ts',
+  'scripts/demo-temporada.ts',
   'src/app/api/cron/demo/route.ts',
   'src/app/api/cron/lista-secreta/route.ts',
 ]
@@ -30,8 +30,20 @@ describe('fiação da porta de LLM', () => {
     )
   })
 
-  it('o script da demo entrega a porta ao semearDemo, não a deixa no chão', () => {
-    const fonte = readFileSync('scripts/demo-seed.ts', 'utf8')
-    expect(fonte).toMatch(/semearDemo\([^\n]*portaLLMDoAmbiente\(\)/)
+  it('o script da demo entrega a porta ao simularAte, não a deixa no chão', () => {
+    const fonte = readFileSync('scripts/demo-temporada.ts', 'utf8')
+    // A chamada é multilinha (a porta vai no objeto de opções): o recorte
+    // atravessa quebras de linha, mas curto o bastante para não casar com
+    // uma menção solta lá embaixo.
+    expect(fonte).toMatch(/simularAte\([\s\S]{0,300}?portaLLMDoAmbiente\(\)/)
+  })
+
+  it('demo:seed continua existindo, delegando a demo-temporada', () => {
+    // O nome antigo está no runbook e na memória do parceiro. Se o apelido
+    // sumir ou apontar para outro lugar, quem digitar `npm run demo:seed`
+    // antes de uma apresentação não recebe temporada nenhuma.
+    expect(readFileSync('scripts/demo-seed.ts', 'utf8')).toMatch(
+      /import '\.\/demo-temporada'/,
+    )
   })
 })

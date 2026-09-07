@@ -2,6 +2,7 @@ import { Anton, Barlow, Barlow_Condensed } from 'next/font/google'
 import type { Metadata, Viewport } from 'next'
 import type { ReactNode } from 'react'
 
+import { FaixaDemonstracao } from '@/components/navegacao'
 import { RegistrarServiceWorker } from '@/components/pwa'
 import { semantico } from '@/design-system/tokens/semantico'
 
@@ -50,6 +51,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
     <html lang="pt-BR" className={`${anton.variable} ${barlow.variable} ${barlowCondensed.variable}`}>
       <body>
         <RegistrarServiceWorker />
+        <FaixaDemonstracao />
         {children}
       </body>
     </html>

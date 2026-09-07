@@ -1,6 +1,6 @@
 # Temporada simulada: a demonstração ganha 7 semanas de história que o motor produziu
 
-**Data:** 06/09/2026 · **Status:** brainstorm fechado com o parceiro, aguardando revisão
+**Data:** 06/09/2026 · **Status:** implementada em 07/09/2026 — ver o plano e as erratas 4 e 4b
 **Substitui:** a Peça A (seed de demonstração) de
 [`2026-08-23-demo-e-telas-cj-design.md`](2026-08-23-demo-e-telas-cj-design.md), que fica
 como registro histórico.
@@ -254,6 +254,62 @@ constante troca a temporada inteira — é o único botão.
 **Resumo devolvido** (`ResumoTemporada`): dias produzidos, dias restantes, jogos
 criados, box scores, publicações, itens da lista de hoje, apitos do Fire Live,
 linhas com odd, times classificados — o cron reporta `quantidade` a partir dele.
+
+## 4b · Errata de execução (06/09, onda 1 implementada e revisada)
+
+A revisão adversarial do gerador reprovou três coisas que esta spec pedia. Duas
+eram impossíveis como escritas. Ficam registradas aqui porque mudam o que o
+produto mostra na tela.
+
+**Os minutos do time não somam 240.** A spec pedia as duas coisas ao mesmo
+tempo — a tabela de minutos-alvo por nível e a soma de 240 por time — e elas são
+incompatíveis: 29 dos 30 elencos não chegam a 240 nem somando o teto da faixa de
+todo mundo, porque a lista do CJ nomeia 6 a 9 jogadores dos 15 de um elenco real.
+Forçar 240 inflava o MVP mediano para 46,5 minutos, com 15,8% das linhas cravadas
+em 48. Vale a tabela de minutos-alvo, e a soma por time fica entre 150 e 215. É o
+mesmo motivo que já faz o placar da demo ser baixo, e está documentado no código.
+
+**Cada time joga 3 vezes por semana, não "3 ou 4".** O calendário precisou virar
+função fechada do dia absoluto, e não da janela: com a janela deslizando um dia a
+cada execução do cron, o mesmo 15/08 saía com confrontos diferentes conforme o dia
+em que o cron rodasse. O efeito seria grave e silencioso — todo dia passado ficaria
+para sempre "incompleto", e cada reexecução empilharia um segundo jogo por cima do
+primeiro, com time jogando duas vezes no mesmo dia e as médias contando dobrado.
+A cura é um rodízio de ciclo fixo, e dentro de sete dias três é o teto de dias não
+adjacentes. A rodada passa a ter 6 ou 7 jogos, e cada time faz 21 em 49 dias.
+
+**A tolerância de 1,5 ponto vale para a maioria, não para todos.** Em 49 dias cada
+jogador faz 21 jogos, e o espalhamento que as oscilações exigem deixa o erro-padrão
+da média em torno de 1,3 — quem tem média-alvo colada na borda da faixa sai fora
+por ruído amostral, não por defeito. O teste trava duas coisas: ao menos 93% dos
+jogadores dentro de ±1,5, e ninguém além de 6. Medido em 200 janelas: 95,6% e 4,67.
+
+Duas coisas que a spec pedia e o plano não tinha entregue, agora implementadas: a
+**cauda assimétrica** dos desvios (o plano gerava um sino simétrico, e sem a cauda
+inferior as sequências de 3 jogos abaixo sumiam em algumas janelas) e uma **guarda
+de pureza de verdade** para o gerador — as regras do dependency-cruiser só olhavam
+para `motor/`, então `npm run boundaries` aprovava qualquer I/O dentro de
+`ingestao/demo/`. Agora há três regras próprias, verificadas contra mutantes.
+
+### Duas regras que o dia de hoje impôs (onda 2)
+
+**O bloco de hoje não roda enquanto o passado tiver buraco.** A spec dizia "para
+hoje, depois dos dias passados", supondo que os passados sempre terminam. Com o
+orçamento de tempo do cron eles podem não terminar — e publicar a lista de hoje
+sobre uma janela pela metade produz apito explicado por um histórico que não
+existe. Hoje nasce só quando todos os dias pendentes foram produzidos. A
+consequência prática está no runbook: num banco vazio, o cron sozinho leva dias
+até abrir a primeira rodada, e é por isso que a carga inicial das 7 semanas é
+feita à mão.
+
+**A porta de LLM vai nas duas publicações de hoje, não só na primeira.** A
+narrativa só é gerada na transição de hash. Publicar sem porta, cotar as odds e
+republicar com porta deixaria o hash já fixado sem texto — e quando a
+republicação chegasse ao mesmo hash (o caso comum: as médias mudaram porque
+ontem fechou, mas as odds das mesmas linhas não), a LLM nunca mais seria
+chamada e a lista do dia ficaria sem narrativa para sempre. O custo é uma
+segunda passada sobre a lista de **um** dia, e só quando algo mudou — outra
+ordem de grandeza do que a seção 3 recusou.
 
 ## 5 · Fora de escopo (decisão explícita)
 

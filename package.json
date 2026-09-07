@@ -26,6 +26,7 @@
     "admin:bootstrap": "vite-node scripts/bootstrap-admin.ts",
     "cortesia": "vite-node scripts/conceder-cortesia.ts",
     "demo:seed": "vite-node scripts/demo-seed.ts",
+    "demo:temporada": "vite-node scripts/demo-temporada.ts",
     "demo:limpar": "vite-node scripts/demo-limpar.ts",
     "demo:fotos": "vite-node scripts/demo-fotos.ts",
     "demo:conferir": "vite-node scripts/demo-conferir.ts",
