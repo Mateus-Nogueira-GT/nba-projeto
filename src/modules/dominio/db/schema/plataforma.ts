@@ -386,6 +386,26 @@ export const jogadoresOcultos = pgTable(
 )
 
 /**
+ * Preferências ESCALARES por conta (identidade 04): como o assinante quer ver
+ * a Lista Secreta — a ordem (por jogo, para montar a noite; por nível, para
+ * pegar os melhores) e a lente da zona 2 do card (últimos 5, média × linha,
+ * odds, hierarquia). Uma linha por usuário; ausência é o padrão.
+ *
+ * Mesmo espírito de `jogadores_ocultos`: recorte de LEITURA na tela. O feed
+ * é materializado por evento e não sabe quem está olhando. Guardadas como
+ * texto (não enum do banco) de propósito — os valores válidos são do tipo em
+ * `plataforma/preferencias.ts`; acrescentar uma lente não pede migração.
+ */
+export const preferenciasUsuario = pgTable('preferencias_usuario', {
+  usuarioId: uuid('usuario_id')
+    .primaryKey()
+    .references(() => usuarios.id, { onDelete: 'cascade' }),
+  ordemLista: text('ordem_lista'),
+  lente: text('lente'),
+  atualizadoEm: timestamp('atualizado_em', { withTimezone: true }).notNull().defaultNow(),
+})
+
+/**
  * OBSERVABILIDADE DE LLM — uma linha por chamada, sucesso ou falha.
  *
  * É o que responde "quanto isso está custando" e "qual perfil está falhando"
