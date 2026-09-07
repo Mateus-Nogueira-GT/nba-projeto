@@ -1,8 +1,8 @@
 import { readFileSync } from 'node:fs'
-import { and, eq } from 'drizzle-orm'
+import { and, asc, eq } from 'drizzle-orm'
 import { beforeAll, afterAll, describe, expect, it } from 'vitest'
 import { bancoDeTeste } from '../../dominio/__tests__/ajuda-banco'
-import { jogadores, lesoesEscalacao } from '../../dominio/db/schema'
+import { jogadores, jogos, lesoesEscalacao } from '../../dominio/db/schema'
 import { semearDemo } from '../../ingestao/demo/semear'
 import { carregarRuleset } from '../../motor/ruleset/carregar'
 import { lerFeed } from '../lista-secreta'
@@ -137,13 +137,114 @@ describe('detalhe do apito', () => {
         await banco.db
           .delete(lesoesEscalacao)
           .where(
-            and(
-              eq(lesoesEscalacao.jogoId, item.jogoId),
-              eq(lesoesEscalacao.jogadorId, jogadorId),
-            ),
+            and(eq(lesoesEscalacao.jogoId, item.jogoId), eq(lesoesEscalacao.jogadorId, jogadorId)),
           )
       }
     }
+  })
+
+  it('identidade 04: o detalhe conhece o CONFRONTO — siglas, horário e quem está fora', async () => {
+    // A seção "O jogo" da tela lê daqui. Recalcular o confronto na página
+    // significaria uma segunda consulta com uma segunda regra de "quem é o
+    // adversário" — e o time do apitado vem da curadoria do CJ, nunca de
+    // `jogadores.time_id`.
+    const item = await itemDe('LeBron James')
+    const d = await detalheDoApito(banco.db, ruleset, item)
+
+    expect(d.jogo.casaSigla).not.toBe('—')
+    expect(d.jogo.visitanteSigla).not.toBe('—')
+    expect([d.jogo.casaSigla, d.jogo.visitanteSigla]).toContain(d.jogo.adversarioSigla)
+    expect(d.jogo.adversarioSigla).not.toBe(item.timeSigla)
+    expect(d.jogo.emCasa).toBe(d.jogo.casaSigla === item.timeSigla)
+    expect(d.jogo.dataHoraUtc).toBeInstanceOf(Date)
+    expect(Array.isArray(d.jogo.desfalques)).toBe(true)
+  })
+
+  it('identidade 04: a grade de casas sai da entrega, uma linha por casa e por linha', async () => {
+    // O detalhe mostra a lista COMPLETA que o card resume, em TEXTO (spec 04,
+    // §4.3). A leitura vem daqui já resolvida: a tela não escolhe coleta nem
+    // desempata casa — e ADR-0004 continua valendo, é só leitura.
+    const { cotacoesPorCasa } = await import('../odds/leitura')
+    const item = await itemDe('LeBron James')
+    const grade = await cotacoesPorCasa(banco.db, [item.jogoId], item.jogadorId, item.atributo)
+
+    expect(grade.length).toBeGreaterThan(1)
+    // Ordem estável por nome: a grade não troca de linha a cada render.
+    expect([...grade].map((c) => c.casa).sort()).toEqual(grade.map((c) => c.casa))
+    for (const casa of grade) {
+      expect(casa.casa.length).toBeGreaterThan(0)
+      const linhas = Object.keys(casa.porLinha)
+      expect(linhas.length).toBeGreaterThan(0)
+      for (const l of linhas) expect(casa.porLinha[Number(l)]).toBeGreaterThan(1)
+    }
+    // Uma casa cotou a linha do apito — é o que a coluna do mercado mostra.
+    expect(grade.some((c) => c.porLinha[item.linha!] !== undefined)).toBe(true)
+  })
+
+  it('identidade 04: os desfalques saem em ordem ESTÁVEL — a tela imprime a lista, não uma amostra', async () => {
+    // A tela nomeia quem está FORA. Sem ORDER BY, o Postgres não promete
+    // ordem nenhuma: dois renders da MESMA página podiam nomear desfalques
+    // diferentes sem que nada tivesse mudado no jogo.
+    const item = await itemDe('LeBron James')
+    const elenco = await banco.db.select({ id: jogadores.id }).from(jogadores).limit(6)
+    for (const j of elenco) {
+      await banco.db
+        .insert(lesoesEscalacao)
+        .values({ jogoId: item.jogoId, jogadorId: j.id, status: 'FORA' })
+        .onConflictDoNothing()
+    }
+
+    const esperado = await banco.db
+      .select({ nome: jogadores.nomeCompleto })
+      .from(lesoesEscalacao)
+      .innerJoin(jogadores, eq(jogadores.id, lesoesEscalacao.jogadorId))
+      .where(and(eq(lesoesEscalacao.jogoId, item.jogoId), eq(lesoesEscalacao.status, 'FORA')))
+      .orderBy(asc(jogadores.nomeCompleto))
+
+    const d = await detalheDoApito(banco.db, ruleset, item)
+    expect(d.jogo.desfalques.length).toBeGreaterThan(3)
+    expect(d.jogo.desfalques).toEqual(esperado.map((e) => e.nome))
+    const outraVez = await detalheDoApito(banco.db, ruleset, item)
+    expect(outraVez.jogo.desfalques).toEqual(d.jogo.desfalques)
+  })
+
+  it('identidade 04: a caixa MIN é a MÉDIA dos jogos lidos, não os minutos do último', async () => {
+    // O rótulo do artboard é "MIN · MÉDIA". Mostrar ali os minutos do último
+    // jogo seria um número certo com o nome errado — e o assinante leria uma
+    // média que ninguém calculou.
+    const item = await itemDe('LeBron James')
+    const d = await detalheDoApito(banco.db, ruleset, item, { blocos: 10 })
+    const { jogosRecentes } = await import('../historico-na-linha')
+    const [jogo] = await banco.db.select().from(jogos).where(eq(jogos.id, item.jogoId))
+    const historico = await jogosRecentes(banco.db, item.jogadorId, jogo!.dataHoraUtc, 10)
+    const minutos = historico.map((h) => Number(h.minutos)).filter((m) => Number.isFinite(m))
+    const esperada = minutos.reduce((a, b) => a + b, 0) / minutos.length
+
+    expect(minutos.length).toBeGreaterThan(1)
+    expect(d.minutosMedia).toBeCloseTo(esperada, 5)
+  })
+
+  it('alvo do 1º quarto NÃO vira régua do histórico — jogo inteiro e 12 minutos não se comparam', async () => {
+    // O apito nascido ao vivo tem `linha: null` e `alvo1Q` preenchido. Conferir
+    // os últimos jogos INTEIROS contra o alvo de doze minutos produziria um
+    // "bateu 8 de 8" que ninguém mediu — e nem a spec nem o ruleset definem
+    // essa conferência (CLAUDE.md, regra 3).
+    const item = await itemDe('LeBron James')
+    const aoVivo = { ...item, linha: null, alvo1Q: 3 }
+    const d = await detalheDoApito(banco.db, ruleset, aoVivo)
+
+    expect(d.linhaConferida).toBeNull()
+    expect(d.bateu).toEqual({ acertos: 0, total: 0 })
+    expect(d.blocos.length).toBeGreaterThan(0)
+    expect(d.blocos.every((b) => b.bateu === false)).toBe(true)
+    // Os valores continuam sendo fato — o que sumiu foi o veredito.
+    expect(d.blocos.some((b) => b.valor >= 3)).toBe(true)
+  })
+
+  it('com linha, `linhaConferida` é a própria linha do apito', async () => {
+    const item = await itemDe('LeBron James')
+    const d = await detalheDoApito(banco.db, ruleset, item)
+    expect(d.linhaConferida).toBe(item.linha)
   })
 
   it('sem linha e sem alvo não há o que conferir — é nada, não é "0 de 5"', async () => {
