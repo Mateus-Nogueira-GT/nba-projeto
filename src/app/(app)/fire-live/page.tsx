@@ -15,6 +15,7 @@ import { exibir, ocultar } from './acoes'
 import { avaliarAcesso } from '@/modules/plataforma/assinatura/direito'
 import '@/design-system/tokens/tokens.css'
 import { dataHora, horaCurta } from '@/components/formato'
+import { AtualizarAoVivo } from '@/components/AtualizarAoVivo'
 import { CabecalhoTela, Chip, Moldura } from '@/components/navegacao'
 import { dataDeReferencia } from '@/modules/dominio/rodada'
 
@@ -144,6 +145,11 @@ export default async function PaginaFireLive({
           Como funciona →
         </Link>
       </p>
+
+      {/* Só com jogo no 1º quarto a tela se atualiza sozinha (identidade 04):
+          o servidor decide, o cliente obedece — fora da janela dos jogos
+          nenhum JavaScript de refresh é entregue. */}
+      {placares.length > 0 && <AtualizarAoVivo />}
 
       {placares.length > 0 && (
         <div

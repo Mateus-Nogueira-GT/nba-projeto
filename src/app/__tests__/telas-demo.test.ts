@@ -252,6 +252,30 @@ describe('detalhe do apito', () => {
 })
 
 describe('Fire Live', () => {
+  it('se atualiza sozinho a cada 30 s enquanto há jogo no 1º quarto — e só então (identidade 04)', async () => {
+    // Até a 03, o único refresh do app era o da tela de partida; o Fire Live
+    // dependia do push ou de o assinante navegar. O componente é o mesmo
+    // (`AtualizarAoVivo`), montado só quando o servidor vê jogo ao vivo — e
+    // ele deixa um marcador no HTML para a fumaça provar que foi montado.
+    const { default: Pagina } = await import('../(app)/fire-live/page')
+    const comJogo = renderToStaticMarkup(await Pagina({ searchParams: Promise.resolve({}) }))
+    expect(comJogo).toContain('data-atualiza-ao-vivo="30000"')
+
+    const { jogos } = await import('../../modules/dominio/db/schema')
+    const vivos = await banco.db.select().from(jogos).where(eq(jogos.status, 'AO_VIVO'))
+    try {
+      for (const j of vivos) {
+        await banco.db.update(jogos).set({ status: 'AGENDADO', quartoAtual: null }).where(eq(jogos.id, j.id))
+      }
+      const semJogo = renderToStaticMarkup(await Pagina({ searchParams: Promise.resolve({}) }))
+      expect(semJogo).not.toContain('data-atualiza-ao-vivo')
+    } finally {
+      for (const j of vivos) {
+        await banco.db.update(jogos).set({ status: j.status, quartoAtual: j.quartoAtual }).where(eq(jogos.id, j.id))
+      }
+    }
+  }, 60_000)
+
   it('Ao vivo: cabeçalho vermelho, placar 1Q, selo VIVO e barra de progresso', async () => {
     const { default: Pagina } = await import('../(app)/fire-live/page')
     const html = renderToStaticMarkup(await Pagina({ searchParams: Promise.resolve({}) }))

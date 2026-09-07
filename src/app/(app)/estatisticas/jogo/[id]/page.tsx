@@ -13,7 +13,7 @@ import type { Coluna } from '@/design-system/componentes'
 import { semantico } from '@/design-system/tokens/semantico'
 import '@/design-system/tokens/tokens.css'
 import { Secao, SemBanco, SOBRANCELHA_STATS } from '../../moldura'
-import { AtualizarAoVivo } from './AtualizarAoVivo'
+import { AtualizarAoVivo } from '@/components/AtualizarAoVivo'
 
 export const dynamic = 'force-dynamic'
 
