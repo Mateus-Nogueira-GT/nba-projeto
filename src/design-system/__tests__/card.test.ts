@@ -6,9 +6,15 @@ import { CardEntrada, type CardEntradaProps } from '../componentes/CardEntrada'
 import { componente } from '../tokens/componente'
 
 const base = {
-  nome: 'D. Malloy', timeSigla: 'LAL', posicao: 'G',
-  atributo: 'PONTOS' as const, nivelJogador: 'MVP' as const, nivelApito: 3 as const,
-  confianca: 92, grauConfianca: 4 as const, fotoUrl: null,
+  nome: 'D. Malloy',
+  timeSigla: 'LAL',
+  posicao: 'G',
+  atributo: 'PONTOS' as const,
+  nivelJogador: 'MVP' as const,
+  nivelApito: 3 as const,
+  confianca: 92,
+  grauConfianca: 4 as const,
+  fotoUrl: null,
 }
 
 const render = (props: CardEntradaProps) => renderToStaticMarkup(createElement(CardEntrada, props))
@@ -22,17 +28,62 @@ describe('CardEntrada — contratos de conteúdo (desde a identidade 02)', () =>
   })
 
   it('fire live: selo VIVO e o texto do estado do progresso', () => {
-    const batida = render({ ...base, vivo: true, temperatura: 'quente', alvo1Q: 12, progresso1Q: { observado: 14, alvo: 12 } })
+    const batida = render({
+      ...base,
+      vivo: true,
+      temperatura: 'quente',
+      alvo1Q: 12,
+      progresso1Q: { observado: 14, alvo: 12 },
+    })
     expect(batida).toContain('VIVO')
     expect(batida).toContain('LINHA BATIDA')
 
-    const parcial = render({ ...base, vivo: true, temperatura: 'quente', alvo1Q: 12, progresso1Q: { observado: 9, alvo: 12 } })
+    const parcial = render({
+      ...base,
+      vivo: true,
+      temperatura: 'quente',
+      alvo1Q: 12,
+      progresso1Q: { observado: 9, alvo: 12 },
+    })
     expect(parcial).toContain('FALTA 3 PTS')
   })
 
   it('mostra contra quem o jogador está jogando, quando a tela sabe', () => {
     expect(render({ ...base, linha: 20, adversarioSigla: 'DEN' })).toContain('vs DEN')
     expect(render({ ...base, linha: 20 })).not.toContain('vs ')
+  })
+
+  it('diz de que LADO o jogador está: "@ DEN" fora de casa, "vs DEN" em casa', () => {
+    // O artboard alterna `MIA · @ IND` e `IND · vs MIA`. Em POR NÍVEL, sem
+    // cabeçalho de jogo, essa é a única pista de onde a partida acontece.
+    expect(render({ ...base, linha: 20, adversarioSigla: 'DEN', emCasa: false })).toContain('@ DEN')
+    expect(render({ ...base, linha: 20, adversarioSigla: 'DEN', emCasa: false })).not.toContain(
+      'vs DEN',
+    )
+    expect(render({ ...base, linha: 20, adversarioSigla: 'DEN', emCasa: true })).toContain('vs DEN')
+  })
+
+  it('a nota de confiança é número puro — o artboard 04 tirou o "%" do card', () => {
+    // docs/04-design-system.md: "Probabilidade: 92%" ❌ contra "Confiança: 92" ✅.
+    const html = render({ ...base, linha: 20 })
+    expect(html).toContain('>92<')
+    expect(html).not.toContain('92%')
+  })
+
+  it('a faixa metálica do nível fica recuada, alinhada com o avatar', () => {
+    // `.faixa-nivel{margin:0 0 4px 14px}` — encostada na borda esquerda ela
+    // brigava com a borda lateral do grau.
+    expect(render({ ...base, linha: 20 })).toContain('margin:0 0 4px 14px')
+  })
+
+  it('os links do card são <Link>: tocar num card não recarrega a Lista nem volta ao topo', async () => {
+    // Âncora crua faz navegação de documento inteira — a lista recarrega e o
+    // assinante é jogado para o início dela. Vigiado no FONTE, como o paywall.
+    const { readFile } = await import('node:fs/promises')
+    const fonte = await readFile(new URL('../componentes/CardEntrada.tsx', import.meta.url), 'utf8')
+    const codigo = fonte.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '')
+    expect(fonte).toContain("from 'next/link'")
+    expect(codigo).not.toMatch(/<a[\s>]/)
   })
 
   it('toda prop obrigatória do card aparece na saída renderizada', () => {
@@ -57,8 +108,12 @@ describe('CardEntrada — contratos de conteúdo (desde a identidade 02)', () =>
 describe('CardEntrada — identidade 03 (3 zonas)', () => {
   it('zona 2 fria mostra as barrinhas com valor', () => {
     const html = render({
-      ...base, linha: 25,
-      ultimos5: [{ valor: 30, bateu: true }, { valor: 20, bateu: false }],
+      ...base,
+      linha: 25,
+      ultimos5: [
+        { valor: 30, bateu: true },
+        { valor: 20, bateu: false },
+      ],
     })
     expect(html).toContain('ÚLT. 5 NA LINHA')
     expect(html).toContain('>30<')
@@ -67,7 +122,10 @@ describe('CardEntrada — identidade 03 (3 zonas)', () => {
 
   it('na tela quente a zona 2 é a barra rumo ao alvo, não as barrinhas', () => {
     const html = render({
-      ...base, temperatura: 'quente', modoFire: true, alvo1Q: 10,
+      ...base,
+      temperatura: 'quente',
+      modoFire: true,
+      alvo1Q: 10,
       progresso1Q: { observado: 9, alvo: 10 },
       ultimos5: [{ valor: 30, bateu: true }],
     })
@@ -75,11 +133,31 @@ describe('CardEntrada — identidade 03 (3 zonas)', () => {
     expect(html).not.toContain('ÚLT. 5 NA LINHA')
   })
 
-  it('rodapé: faixa sem média, ODD MÉDIA quando existir, nada de odd quando null', () => {
-    expect(render({ ...base, linha: 25, mediaTemporada: 25.7, oddFaixa: { min: 1.47, max: 1.62, qtdCasas: 3 } }))
-      .toContain('ODD 1,47–1,62')
-    expect(render({ ...base, linha: 25, mediaTemporada: 25.7, oddFaixa: { min: 1.47, max: 1.62, qtdCasas: 3, media: 1.55 } }))
-      .toContain('ODD MÉDIA 1,55')
+  it('rodapé: quem decide média ou faixa é o RULESET, pela presença de `media` no item', () => {
+    // `odds.exibicao` (config/ruleset.v1.yaml) é decisão homologada do parceiro
+    // em 25/08, e a MATERIALIZAÇÃO é que a aplica: com `exibicao: faixa` ela
+    // suprime `oddFaixa.media` do item (lista-secreta.ts, "a tela não decide").
+    // O card só desenha o que recebe — se ele escolhesse a forma, virar a chave
+    // no ruleset deixaria de mudar o produto, e isso é a regra 1 do CLAUDE.md.
+    const faixa = render({
+      ...base,
+      linha: 25,
+      mediaTemporada: 25.7,
+      oddFaixa: { min: 1.47, max: 1.62, qtdCasas: 3 },
+    })
+    expect(faixa).toContain('ODD 1,47–1,62')
+
+    const comMedia = render({
+      ...base,
+      linha: 25,
+      mediaTemporada: 25.7,
+      oddFaixa: { min: 1.47, max: 1.62, qtdCasas: 3, media: 1.55 },
+    })
+    expect(comMedia).toContain('ODD MÉDIA 1,55')
+    // e a faixa NÃO aparece junto: com `exibicao: media` o card diz um número
+    // só, que é o que o parceiro pediu ver.
+    expect(comMedia).not.toContain('1,47–1,62')
+
     const semOdd = render({ ...base, linha: 25, mediaTemporada: 25.7, oddFaixa: null })
     expect(semOdd).toContain('MÉDIA 25,7')
     expect(semOdd).not.toContain('ODD')
@@ -104,8 +182,11 @@ describe('CardEntrada — identidade 03 (3 zonas)', () => {
     // fire perder barrinhas, média e odd do rodapé. Temperatura é da TELA.
     const frio = render({ ...base, linha: 20 })
     const aindaFrio = render({
-      ...base, modoFire: true, linha: 20,
-      ultimos5: [{ valor: 30, bateu: true }], mediaTemporada: 25.7,
+      ...base,
+      modoFire: true,
+      linha: 20,
+      ultimos5: [{ valor: 30, bateu: true }],
+      mediaTemporada: 25.7,
     })
     expect(frio).toContain(componente.contextoFrio.cardGradiente)
     expect(aindaFrio).toContain(componente.contextoFrio.cardGradiente)
@@ -117,7 +198,12 @@ describe('CardEntrada — identidade 03 (3 zonas)', () => {
   it('temperatura quente explícita veste o universo quente mesmo sem modo fire', () => {
     // O Fire Live inteiro é quente — quem cruza alvo sem estar em modo fire
     // também está na tela ao vivo.
-    const html = render({ ...base, temperatura: 'quente', alvo1Q: 10, progresso1Q: { observado: 4, alvo: 10 } })
+    const html = render({
+      ...base,
+      temperatura: 'quente',
+      alvo1Q: 10,
+      progresso1Q: { observado: 4, alvo: 10 },
+    })
     expect(html).toContain(componente.contextoQuente.cardGradiente)
     expect(html).toContain('4 / 10')
   })
@@ -137,14 +223,15 @@ describe('errata pós-merge — alvo desconhecido nunca vira linha batida', () =
   })
 })
 
-
 // ===========================================================================
 // IDENTIDADE 04 — o card fecha o ciclo, ganha abas de atributo e lente
 // ===========================================================================
 
 describe('CardEntrada — identidade 04: o card fecha o ciclo (PRÉ → CONFERIDO)', () => {
   const conferido = {
-    ...base, linha: 25, mediaTemporada: 25.7,
+    ...base,
+    linha: 25,
+    mediaTemporada: 25.7,
     oddFaixa: { min: 1.47, max: 1.62, qtdCasas: 3 },
   }
 
@@ -184,7 +271,9 @@ describe('CardEntrada — identidade 04: o card fecha o ciclo (PRÉ → CONFERID
     ] as const
     for (const [estado, rotulo] of casos) {
       const html = render({ ...conferido, estado, fez: 27, bateu: true })
-      expect(html, estado).toContain(`width:${componente.statusCiclo.largura};box-sizing:border-box`)
+      expect(html, estado).toContain(
+        `width:${componente.statusCiclo.largura};box-sizing:border-box`,
+      )
       expect(html, estado).toContain(`>${rotulo}<`)
     }
   })
@@ -222,15 +311,58 @@ describe('CardEntrada — identidade 04: abas de atributo e lente da zona 2', ()
     for (const rotulo of ['PTS 10+', 'REB 3+', 'AST 4+']) expect(html).toContain(rotulo)
     expect(html.match(/aria-current="true"/g)).toHaveLength(1)
     expect(html).toContain('href="/?atributo=REBOTES"')
-    expect(html).toContain(componente.abaAtributo.bordaAtiva)
-    expect(html).toContain(componente.abaAtributo.fundoAtiva)
+    expect(html).toContain(componente.abaAtributo.ativaPorNivel[3].borda)
+    expect(html).toContain(componente.abaAtributo.ativaPorNivel[3].fundo)
     expect(html).not.toContain('PONTOS 10+')
+  })
+
+  it('a aba ativa veste a cor do NÍVEL DO APITO daquele card, não um verde fixo', () => {
+    // Verde é N3. Fixá-lo na aba faria um card N1 exibir o sinal de N3 no
+    // rodapé — um quarto canal de cor contradizendo o anel do avatar.
+    const abas = [
+      { atributo: 'PONTOS' as const, linha: 10, ativo: true, href: '/?atributo=PONTOS' },
+      { atributo: 'REBOTES' as const, linha: 3, ativo: false, href: '/?atributo=REBOTES' },
+    ]
+    // A asserção é sobre a TINTA, não sobre a borda: a cor da borda também é a
+    // do anel do avatar e apareceria no HTML de qualquer jeito. A tinta a 12%
+    // só existe na aba, então ela é a única prova do vínculo.
+    const n1 = render({ ...base, nivelApito: 1, linha: 10, atributos: abas })
+    expect(n1).toContain(componente.abaAtributo.ativaPorNivel[1].fundo)
+    expect(n1).not.toContain(componente.abaAtributo.ativaPorNivel[3].fundo)
+
+    const turbo = render({ ...base, nivelApito: 1, turbo: true, linha: 10, atributos: abas })
+    expect(turbo).toContain(componente.abaAtributo.ativaTurbo.fundo)
+    expect(turbo).not.toContain(componente.abaAtributo.ativaPorNivel[1].fundo)
+  })
+
+  it('aba de atributo sem linha escreve só o atributo — o apito não some do card', () => {
+    // Um apito com `linha` nula existe (o mercado ainda não veio das casas).
+    // Filtrá-lo apagava o apito da tela inteira, porque o card por jogador é o
+    // único lugar onde ele aparece. Escrever "REB 0+" seria pior: número
+    // inventado. Escrever "REB" é a verdade.
+    const html = render({
+      ...base,
+      linha: 10,
+      atributos: [
+        { atributo: 'PONTOS' as const, linha: 10, ativo: true, href: '/?a=PTS' },
+        { atributo: 'REBOTES' as const, linha: null, ativo: false, href: '/?a=REB' },
+      ],
+    })
+    expect(html).toContain('PTS 10+')
+    expect(html).toContain('>REB<')
+    expect(html).not.toContain('REB 0+')
   })
 
   it('lente MEDIA_LINHA troca a zona 2: sem Barrinhas, média × linha em texto', () => {
     const html = render({
-      ...base, linha: 4, lente: 'MEDIA_LINHA', mediaTemporada: 4.9,
-      ultimos5: [{ valor: 2, bateu: false }, { valor: 7, bateu: true }],
+      ...base,
+      linha: 4,
+      lente: 'MEDIA_LINHA',
+      mediaTemporada: 4.9,
+      ultimos5: [
+        { valor: 2, bateu: false },
+        { valor: 7, bateu: true },
+      ],
     })
     expect(html).not.toContain('ÚLT. 5 NA LINHA')
     expect(html).not.toContain('>7<')
@@ -241,12 +373,22 @@ describe('CardEntrada — identidade 04: abas de atributo e lente da zona 2', ()
     const ult5 = render({ ...base, linha: 4, lente: 'ULT5', ultimos5: [{ valor: 7, bateu: true }] })
     expect(ult5).toContain('ÚLT. 5 NA LINHA')
 
-    const odds = render({ ...base, linha: 4, lente: 'ODDS', oddFaixa: { min: 1.49, max: 1.66, qtdCasas: 3 } })
+    const odds = render({
+      ...base,
+      linha: 4,
+      lente: 'ODDS',
+      oddFaixa: { min: 1.49, max: 1.66, qtdCasas: 3 },
+    })
     expect(odds).toContain('1,49–1,66')
     expect(odds).toContain('3 CASAS')
     expect(odds).not.toContain('ÚLT. 5 NA LINHA')
 
-    const hierarquia = render({ ...base, linha: 4, lente: 'HIERARQUIA', hierarquia: { posicao: 2, total: 8 } })
+    const hierarquia = render({
+      ...base,
+      linha: 4,
+      lente: 'HIERARQUIA',
+      hierarquia: { posicao: 2, total: 8 },
+    })
     expect(hierarquia).toContain('Nº 2 DE 8')
     expect(hierarquia).toContain('HIERARQUIA')
   })

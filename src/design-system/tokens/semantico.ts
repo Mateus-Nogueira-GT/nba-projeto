@@ -127,7 +127,10 @@ export const semantico = {
   aoVivoBorda: p.vermelhoVeu45,
   // Aba de atributo ativa (PTS · REB · AST no rodapé do card): borda no verde
   // do nível 3, fundo na tinta dele. Alias, como o teste de paridade exige.
+  apitoNivel1Tinta: p.ambarVeu12,
+  apitoNivel2Tinta: p.laranjaVeu12,
   apitoNivel3Tinta: p.verdeVeu12,
+  apitoTurboTinta: p.azulVeu12,
   // Par do turbo — para brilho e fundo. O categórico continua sendo apitoTurbo.
   turboClaro: p.azul300,
   turboEscuro: p.azul500,

@@ -19,6 +19,17 @@ export function horaCurta(quando: Date, fuso: string): string {
   })
 }
 
+/**
+ * 18h30 — a hora como se ESCREVE numa frase ("publicada às 18h30", "próxima
+ * lista às 20h30", spec 04 §4.1). Hora redonda perde os minutos: "20h", não
+ * "20h00". O formato de relógio (`horaCurta`) fica onde a hora é dado —
+ * o cabeçalho do jogo.
+ */
+export function horaEmTexto(quando: Date, fuso: string): string {
+  const [hora, minuto] = horaCurta(quando, fuso).split(':')
+  return minuto === '00' ? `${hora}h` : `${hora}h${minuto}`
+}
+
 /** 24/08/2026 20:30 */
 export function dataHora(quando: Date, fuso: string): string {
   return quando.toLocaleString('pt-BR', {

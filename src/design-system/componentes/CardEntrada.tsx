@@ -1,3 +1,5 @@
+import Link from 'next/link'
+
 import type { EstadoDoCiclo } from '../../modules/entrega/lista-por-jogo'
 import type { Atributo, Nivel, NivelApito } from '../../modules/motor/tipos'
 import type { Lente } from '../../modules/plataforma/preferencias'
@@ -53,11 +55,17 @@ export type CardEntradaProps = {
   /**
    * Sigla do time ADVERSÁRIO, quando a tela sabe contra quem é o jogo.
    *
-   * Opcional de propósito: a Lista Secreta agrupa por jogador e não carrega o
-   * confronto; o Fire Live carrega. Ausente, a linha de apoio simplesmente
-   * não fala em confronto — melhor que um "vs —" que não informa nada.
+   * Opcional de propósito: quem não sabe o confronto (a curadoria do CJ pode
+   * pôr o jogador num time que não está em campo) simplesmente não fala nele
+   * — melhor que um "vs —" que não informa nada.
    */
   adversarioSigla?: string | null
+  /**
+   * De que lado o jogador está: `true` escreve "vs ADV" (mandante), `false`
+   * escreve "@ ADV" (visitante) — a alternância do artboard. Ausente, o card
+   * mantém o "vs" de sempre: a tela que não sabe o mando não inventa um.
+   */
+  emCasa?: boolean | null
   posicao: string | null
   atributo: Atributo
   nivelJogador: Nivel
@@ -116,7 +124,13 @@ export type CardEntradaProps = {
    * atributos é UM card, e as abas trocam o mercado — no lugar do rótulo
    * longo do atributo. A entrega decide quem ganha abas; o card só desenha.
    */
-  atributos?: { atributo: Atributo; linha: number; ativo: boolean; href: string }[]
+  atributos?: {
+    atributo: Atributo
+    /** `null` quando o mercado ainda não veio das casas: a aba escreve só o atributo. */
+    linha: number | null
+    ativo: boolean
+    href: string
+  }[]
   /**
    * Lente da zona 2, trocada para TODOS os cards pelo cabeçalho da tela.
    * ULT5 (padrão) são as barrinhas de sempre; as outras escrevem o dado em
@@ -125,6 +139,16 @@ export type CardEntradaProps = {
   lente?: Lente
   /** Posição do jogador na hierarquia do time no atributo — dado da lente HIERARQUIA. */
   hierarquia?: { posicao: number; total: number } | null
+  /**
+   * Destino do CARD INTEIRO (spec 04, §4.1): a análise do apito. É o que
+   * aposenta o link "linhas e confiança →" que ficava entre os cards.
+   *
+   * Renderiza como uma âncora que COBRE o card, irmã do conteúdo — nunca um
+   * `<a>` em volta dele: o nome e as abas já são links, e âncora dentro de
+   * âncora é HTML inválido. Por isso o nome e as abas sobem uma camada
+   * (`zIndex: 1`) e seguem clicáveis por cima da cobertura.
+   */
+  detalheHref?: string | null
 }
 
 /**
@@ -186,6 +210,13 @@ export function CardEntrada(props: CardEntradaProps) {
       : null
     : [
         props.mediaTemporada != null ? `MÉDIA ${decimalPtBr(props.mediaTemporada, 1)}` : null,
+        // QUEM DECIDE MÉDIA OU FAIXA É O RULESET, não o card. `odds.exibicao`
+        // (decisão do parceiro, 25/08) é aplicada na materialização, que
+        // suprime `media` do item quando a chave é 'faixa' — ver
+        // lista-secreta.ts, "a tela não decide". Escolher a forma aqui faria
+        // virar a chave no YAML deixar de mudar o produto: é a regra 1 do
+        // CLAUDE.md. A pergunta "média ou faixa" está reaberta com o CJ; ela se
+        // responde no ruleset, não neste arquivo.
         props.oddFaixa != null
           ? props.oddFaixa.media != null
             ? `ODD MÉDIA ${decimalPtBr(props.oddFaixa.media, 2)}`
@@ -194,6 +225,12 @@ export function CardEntrada(props: CardEntradaProps) {
       ]
         .filter(Boolean)
         .join(' · ') || null
+
+  // A aba ativa herda a cor do nível do apito DESTE card (o anel do avatar diz
+  // a mesma coisa); turbo tem par próprio.
+  const corDaAba = props.turbo
+    ? componente.abaAtributo.ativaTurbo
+    : componente.abaAtributo.ativaPorNivel[props.nivelApito]
 
   // -- ciclo do card (04) -----------------------------------------------------
   const conferido = props.estado === 'CONFERIDO'
@@ -231,7 +268,7 @@ export function CardEntrada(props: CardEntradaProps) {
   const abas = props.atributos && props.atributos.length > 0 ? props.atributos : null
 
   return (
-    <div>
+    <div style={{ position: props.detalheHref ? 'relative' : undefined }}>
       {/* faixa metálica CURTA = nível do jogador */}
       <div
         aria-hidden
@@ -240,7 +277,9 @@ export function CardEntrada(props: CardEntradaProps) {
           height: componente.faixaNivelAltura,
           borderRadius: 2,
           background: nivel.cor,
-          marginBottom: 4,
+          // Recuada 14px: alinha com o avatar em vez de encostar na borda
+          // lateral do grau (artboard, `.faixa-nivel`).
+          margin: '0 0 4px 14px',
         }}
       />
       <article
@@ -276,9 +315,17 @@ export function CardEntrada(props: CardEntradaProps) {
                 }}
               >
                 {props.jogadorHref ? (
-                  <a href={props.jogadorHref} style={{ color: 'inherit', textUnderlineOffset: 3 }}>
+                  <Link
+                    href={props.jogadorHref}
+                    style={{
+                      color: 'inherit',
+                      textUnderlineOffset: 3,
+                      position: 'relative',
+                      zIndex: 1,
+                    }}
+                  >
                     {props.nome}
-                  </a>
+                  </Link>
                 ) : (
                   props.nome
                 )}
@@ -297,7 +344,9 @@ export function CardEntrada(props: CardEntradaProps) {
             >
               {nivel.rotulo} · N{props.nivelApito}
               {props.posicao ? ` · ${props.posicao}` : ''} · {props.timeSigla}
-              {props.adversarioSigla ? ` · vs ${props.adversarioSigla}` : ''}
+              {props.adversarioSigla
+                ? ` · ${props.emCasa === false ? '@' : 'vs'} ${props.adversarioSigla}`
+                : ''}
             </div>
             <div style={{ display: 'flex', gap: 6, marginTop: 4, flexWrap: 'wrap' }}>
               {props.turbo && <Selo icone="⚡" rotulo="TURBO" cor={TURBO.cor} />}
@@ -356,7 +405,9 @@ export function CardEntrada(props: CardEntradaProps) {
                   textShadow: brilhaConfianca ? `0 0 18px ${corGrau}73` : undefined,
                 }}
               >
-                {props.confianca === null ? '—' : `${Math.round(props.confianca)}%`}
+                {/* Número puro: "Probabilidade: 92%" ❌ · "Confiança: 92" ✅
+                    (docs/04-design-system.md, artboard da identidade 04). */}
+                {props.confianca === null ? '—' : Math.round(props.confianca)}
               </span>
             )}
           </div>
@@ -440,7 +491,7 @@ export function CardEntrada(props: CardEntradaProps) {
           {abas ? (
             <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
               {abas.map((aba) => (
-                <a
+                <Link
                   key={aba.atributo}
                   href={aba.href}
                   aria-current={aba.ativo ? 'true' : undefined}
@@ -453,15 +504,23 @@ export function CardEntrada(props: CardEntradaProps) {
                     textDecoration: 'none',
                     whiteSpace: 'nowrap',
                     fontVariantNumeric: 'tabular-nums',
+                    // Acima da cobertura do card: a aba troca o atributo,
+                    // não abre a análise.
+                    position: 'relative',
+                    zIndex: 1,
                     color: aba.ativo
                       ? componente.abaAtributo.textoAtiva
                       : componente.abaAtributo.textoInativa,
-                    border: `1px solid ${aba.ativo ? componente.abaAtributo.bordaAtiva : componente.abaAtributo.bordaInativa}`,
-                    background: aba.ativo ? componente.abaAtributo.fundoAtiva : 'transparent',
+                    border: `1px solid ${aba.ativo ? corDaAba.borda : componente.abaAtributo.bordaInativa}`,
+                    background: aba.ativo ? corDaAba.fundo : 'transparent',
                   }}
                 >
-                  {ATRIBUTO_CURTO[aba.atributo]} {aba.linha}+
-                </a>
+                  {/* Sem linha, só o atributo: "REB 0+" seria número inventado,
+                      e esconder a aba apagaria o apito da tela inteira. */}
+                  {aba.linha === null
+                    ? ATRIBUTO_CURTO[aba.atributo]
+                    : `${ATRIBUTO_CURTO[aba.atributo]} ${aba.linha}+`}
+                </Link>
               ))}
             </div>
           ) : (
@@ -495,6 +554,13 @@ export function CardEntrada(props: CardEntradaProps) {
           )}
         </div>
       </article>
+      {props.detalheHref && (
+        <Link
+          href={props.detalheHref}
+          aria-label={`Análise do apito de ${props.nome}`}
+          style={{ position: 'absolute', inset: 0, borderRadius: componente.cardRaio }}
+        />
+      )}
     </div>
   )
 }

@@ -102,8 +102,18 @@ export const componente = {
   // Abas de atributo no rodapé do card — um jogador com dois ou três
   // atributos vira UM card, e as abas trocam o mercado sem repetir o card.
   abaAtributo: {
-    fundoAtiva: s.apitoNivel3Tinta,
-    bordaAtiva: s.apitoNivel3,
+    /**
+     * A aba ATIVA veste a cor do nível do apito DAQUELE card. O artboard a
+     * desenha verde porque o card desenhado é N3; fixar o verde faria um card
+     * N1 exibir o sinal de N3 no rodapé — um quarto canal de cor dizendo o que
+     * o anel já diz, e dizendo errado.
+     */
+    ativaPorNivel: {
+      1: { borda: s.apitoNivel1, fundo: s.apitoNivel1Tinta },
+      2: { borda: s.apitoNivel2, fundo: s.apitoNivel2Tinta },
+      3: { borda: s.apitoNivel3, fundo: s.apitoNivel3Tinta },
+    },
+    ativaTurbo: { borda: s.apitoTurbo, fundo: s.apitoTurboTinta },
     textoAtiva: s.texto100,
     bordaInativa: s.divisor,
     textoInativa: s.textoSecundario,

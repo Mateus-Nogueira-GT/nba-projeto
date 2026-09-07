@@ -113,6 +113,12 @@ export const primitivo = {
   // Tinta do verde do nível 3 (verde400) para o FUNDO da aba de atributo ativa
   // no rodapé do card: a borda é o verde cheio, o fundo é ele a 12%.
   verdeVeu12: 'rgba(61,211,126,.12)',
+  // Os pares do verdeVeu12 nos outros níveis do apito: a aba de atributo ativa
+  // veste a cor do NÍVEL DO APITO daquele card, nunca um verde fixo — verde é
+  // N3, e um verde num card N1 seria um quarto canal mentindo.
+  ambarVeu12: 'rgba(255,201,61,.12)',
+  laranjaVeu12: 'rgba(255,152,56,.12)',
+  azulVeu12: 'rgba(77,163,255,.12)',
   // Par do azul do turbo (azul400) para brilho e fundo — nunca no lugar do
   // categórico.
   azul300: '#8CC4FF',

@@ -98,6 +98,42 @@ describe('navegação (identidade 04)', () => {
     expect(html).not.toContain('<nav')
   })
 
+  it('lente ATIVA guarda a borda divisória mesmo quando o grupo GRAVA a escolha', () => {
+    // Regressão: com `acao`, a opção vira <button> e o `border: none` que
+    // zerava a borda do botão comia a borda calculada — a lente ativa ficava
+    // só com o fundo, e a fileira inteira crescia 2px conforme o chip ativo.
+    const comAcao = renderToStaticMarkup(
+      createElement(CabecalhoTela, {
+        sobrancelha: 'LISTA SECRETA',
+        titulo: 'LISTA DO DIA',
+        lentes: {
+          opcoes: [
+            { valor: 'ULT5', rotulo: 'ÚLT. 5', href: '/?lente=ULT5' },
+            { valor: 'ODDS', rotulo: 'ODDS', href: '/?lente=ODDS' },
+          ],
+          ativa: 'ULT5',
+          acao: async () => {},
+        },
+      }),
+    )
+    expect(comAcao).toContain('<form')
+    expect(comAcao).toContain(`border:1px solid ${semantico.divisor}`)
+    expect(comAcao).toContain('border:1px solid transparent')
+    expect(comAcao).not.toContain('border:none')
+    expect(comAcao).toContain(`background:${semantico.superficieElevada}`)
+  })
+
+  it('a sobrancelha é cinza; a cor do contexto fica só no marcador (artboard .sobr)', () => {
+    const html = renderToStaticMarkup(
+      createElement(CabecalhoTela, { sobrancelha: 'LISTA SECRETA', titulo: 'LISTA DO DIA' }),
+    )
+    const sobrancelha = html.match(/<p style="([^"]*)"/)![1]!
+    expect(sobrancelha).toContain(`color:${semantico.textoSecundario}`)
+    expect(sobrancelha).not.toContain(semantico.acento)
+    // o losango continua laranja — é ele que carrega o contexto
+    expect(html).toContain(`background:${semantico.acento}`)
+  })
+
   it('FolhaDeFiltros: o botão FILTRAR fica na tela, a parede de filtros dentro da folha fechada, o recorte ativo vira chip com ×', () => {
     const html = renderToStaticMarkup(
       createElement(
@@ -114,6 +150,8 @@ describe('navegação (identidade 04)', () => {
     expect(html).toContain('PONTOS')
     expect(html).toContain('×')
     expect(html).toContain('href="/"')
+    // o ícone do FILTRAR é cinza (artboard), não herda a cor do rótulo
+    expect(html).toContain(`stroke="${semantico.textoSecundario}"`)
     expect(html.toLowerCase()).not.toContain('probabilidade')
   })
 })
