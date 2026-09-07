@@ -188,6 +188,11 @@ export async function publicarListaSecreta(
       // hash não muda no ciclo seguinte.
       const enriquecido = await enriquecerComNarrativas(db, opcoes.llm, conteudo, {
         gravarParcial: gravarConteudo,
+        // O snapshot que este está substituindo: item igual reaproveita a
+        // narrativa. Sem isto a republicação depois das odds — que muda o
+        // hash, não as entradas — gerava a lista inteira de novo (274
+        // chamadas por dia na carga de 07/09, metade delas por nada).
+        anterior: (existente?.conteudoJson as ConteudoFeed | undefined) ?? null,
       })
       narrativas = enriquecido.geradas
       narrativasReprovadas = enriquecido.reprovadas

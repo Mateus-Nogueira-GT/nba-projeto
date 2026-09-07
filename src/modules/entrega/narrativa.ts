@@ -24,6 +24,31 @@ export const LIMITE_NARRATIVA = 280
 export const LIMITE_RESUMO = 400
 
 /**
+ * O que se PEDE ao modelo é menor do que o validador ACEITA.
+ *
+ * Medido na carga real de 07/09/2026: pedindo 280, o modelo devolvia 293 e o
+ * validador reprovava por "muito longo" — 34 vezes em 276. O limite da regra
+ * continua sendo `LIMITE_NARRATIVA`; a folga é só do pedido, porque o modelo
+ * estoura o número que recebe.
+ */
+export const PEDIDO_NARRATIVA = 240
+
+/**
+ * A regra que faltava — e que sozinha explicava 219 das 276 reprovações da
+ * carga de 07/09. O sistema dizia ao modelo que "o percentual é nota de
+ * confiança", os fatos NÃO traziam o percentual, e o modelo então inventava um
+ * ("nota de confiança: 66%") — número fora dos fatos, reprovado. O percentual
+ * já está no card; a frase não precisa dele.
+ */
+const SEM_PERCENTUAL = [
+  'Não cite o percentual de confiança nem nenhuma porcentagem: ele já aparece no card, ao lado do texto.',
+  // Medido com o prompt acima já em vigor: das 6 amostras, a única reprovação
+  // restante foi o modelo CALCULANDO "média de 14,6" a partir dos últimos
+  // cinco valores. Número derivado é número fora dos fatos para o validador.
+  'Não calcule nem derive números novos (médias, somas, diferenças) a partir dos fatos: cite só os que estão escritos.',
+].join(' ')
+
+/**
  * De quantos em quantos itens o progresso é gravado.
  *
  * Com um provedor degradado (15s de timeout mais uma retentativa por item), a
@@ -50,16 +75,17 @@ const ATRIBUTO_TEXTO: Record<string, string> = {
  * chat consome — os dois prompts não podem divergir do validador (ver o
  * comentário lá).
  */
-function sistemaDe(forma: string, limiteCaracteres: number): string {
+function sistemaDe(forma: string, limiteCaracteres: number, extras: readonly string[] = []): string {
   return [
     'Você é um analista de basquete escrevendo para assinantes brasileiros.',
     `Escreva ${forma}, em tom sóbrio de comentarista.`,
     ...regrasDoTexto(limiteCaracteres),
+    ...extras,
     METODOLOGIA,
   ].join('\n')
 }
 
-const SISTEMA_NARRATIVA = sistemaDe('UMA frase', LIMITE_NARRATIVA)
+const SISTEMA_NARRATIVA = sistemaDe('UMA frase', PEDIDO_NARRATIVA, [SEM_PERCENTUAL])
 const SISTEMA_RESUMO = sistemaDe('até três frases', LIMITE_RESUMO)
 
 /**
@@ -135,7 +161,16 @@ export type OpcoesEnriquecimento = {
   gravarParcial?: (parcial: ConteudoFeed) => Promise<void>
   /** Só os testes trocam — o padrão é `LOTE_DE_GRAVACAO`. */
   lote?: number
+  /**
+   * O snapshot que está sendo SUBSTITUÍDO. Item com o mesmo (jogador,
+   * atributo, linha) e narrativa já gerada é reaproveitado sem ida ao
+   * provedor. A republicação depois das odds muda o hash (a odd entra no item)
+   * mas não muda a entrada — e gerava a lista inteira de novo, todo dia.
+   */
+  anterior?: ConteudoFeed | null
 }
+
+const chaveDoItem = (i: ItemFeed): string => `${i.jogadorId}|${i.atributo}|${i.linha ?? ''}`
 
 /**
  * Gera narrativa por item e o resumo do dia.
@@ -150,9 +185,15 @@ export async function enriquecerComNarrativas(
   porta: PortaLLM,
   conteudo: ConteudoFeed,
   opcoes: OpcoesEnriquecimento = {},
-): Promise<{ conteudo: ConteudoFeed; geradas: number; reprovadas: number }> {
+): Promise<{ conteudo: ConteudoFeed; geradas: number; reprovadas: number; reaproveitadas: number }> {
   let geradas = 0
   let reprovadas = 0
+  let reaproveitadas = 0
+
+  const anteriores = new Map<string, string>()
+  for (const i of opcoes.anterior?.itens ?? []) {
+    if (typeof i.narrativa === 'string' && i.narrativa.length > 0) anteriores.set(chaveDoItem(i), i.narrativa)
+  }
 
   const gerarUma = async (
     perfil: 'narrativa' | 'resumo',
@@ -230,6 +271,12 @@ export async function enriquecerComNarrativas(
   }
 
   for (const item of conteudo.itens) {
+    const reaproveitada = anteriores.get(chaveDoItem(item))
+    if (reaproveitada !== undefined) {
+      reaproveitadas += 1
+      itens.push({ ...item, narrativa: reaproveitada })
+      continue
+    }
     const texto = await gerarUma('narrativa', () => promptDeNarrativa(item), LIMITE_NARRATIVA)
     itens.push({ ...item, narrativa: texto })
     // O último lote não precisa de checkpoint: quem chamou grava o resultado
@@ -245,10 +292,18 @@ export async function enriquecerComNarrativas(
   // banco — sem isto, o último lote (até nove itens já pagos) morreria com ela.
   if (conteudo.itens.length > 0) await gravarProgresso()
 
+  // O resumo fala da LISTA; se a lista é a mesma (todo item reaproveitado e
+  // nenhum a menos), o resumo anterior continua verdadeiro e não se paga outro.
+  const listaIgual =
+    reaproveitadas === conteudo.itens.length &&
+    (opcoes.anterior?.itens.length ?? -1) === conteudo.itens.length &&
+    typeof opcoes.anterior?.resumoDoDia === 'string'
   const resumo =
     conteudo.itens.length === 0
       ? null
-      : await gerarUma('resumo', () => promptDeResumo(conteudo), LIMITE_RESUMO)
+      : listaIgual
+        ? (opcoes.anterior?.resumoDoDia ?? null)
+        : await gerarUma('resumo', () => promptDeResumo(conteudo), LIMITE_RESUMO)
 
-  return { conteudo: { ...conteudo, itens, resumoDoDia: resumo }, geradas, reprovadas }
+  return { conteudo: { ...conteudo, itens, resumoDoDia: resumo }, geradas, reprovadas, reaproveitadas }
 }
