@@ -694,6 +694,24 @@ describe('leitura do feed do Fire Live', () => {
     }
   })
 
+  it('a foto chega ao card ao vivo SEM novo ciclo — identidade 04', async () => {
+    // Mesma regra da Lista Secreta: foto é apresentação, não fato do motor.
+    // O snapshot do Fire Live é gravado no ciclo; a foto que entra em
+    // `jogadores` depois dele precisa aparecer na leitura sem esperar o
+    // próximo apito.
+    await reproduzir()
+    const antes = await lerFeedFireLive(banco.db, DIA, QUARTO)
+    const luka = antes.itens.find((i) => i.nome === 'Luka Doncic')!
+    expect(luka.fotoUrl).toBeNull()
+
+    const FOTO = 'https://cdn.nba.com/headshots/nba/latest/1040x760/1629029.png'
+    await banco.db.update(jogadores).set({ fotoUrl: FOTO }).where(eq(jogadores.id, luka.jogadorId))
+
+    const depois = await lerFeedFireLive(banco.db, DIA, QUARTO)
+    expect(depois.itens.find((i) => i.nome === 'Luka Doncic')!.fotoUrl).toBe(FOTO)
+    expect(depois.itens.find((i) => i.nome === 'Austin Reaves')!.fotoUrl).toBeNull()
+  })
+
   it('sem jogo hoje', async () => {
     await banco.db.delete(jogos)
     const feed = await lerFeedFireLive(banco.db, DIA, QUARTO)

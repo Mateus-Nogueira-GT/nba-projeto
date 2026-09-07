@@ -1,6 +1,6 @@
 import { and, eq, inArray } from 'drizzle-orm'
 
-import { feedSnapshot, jogos, times } from '../../dominio/db/schema'
+import { feedSnapshot, jogadores, jogos, times } from '../../dominio/db/schema'
 import type { Db } from '../../dominio/db/tipos'
 import type { ConteudoFeedFireLive, ItemFireLive } from './feed'
 
@@ -67,11 +67,15 @@ export async function lerFeedFireLive(
 
   // Recortes de leitura, combináveis. Valor desconhecido recorta para o vazio
   // — nunca erro: o estado de janela abaixo só fala quando NADA foi apitado.
-  const itens = todos
+  const recortados = todos
     .filter((i) => (filtro.time === undefined ? true : i.timeSigla === filtro.time))
     .filter((i) => (filtro.jogo === undefined ? true : i.jogoId === filtro.jogo))
     // PROPOSTA aguardando CJ — spec 05, pergunta 3: mais recente primeiro.
     .sort((a, b) => b.apitadoEm.localeCompare(a.apitadoEm))
+  // A foto é lida ao vivo de `jogadores`, não do snapshot do ciclo — mesma
+  // regra e mesmo motivo de `lerFeed` na Lista Secreta (identidade 04): foto
+  // é apresentação, e o snapshot é escrito no instante do apito.
+  const itens = await comFotosAoVivo(db, recortados)
 
   const geradoEm =
     vivos.length > 0 ? new Date(Math.max(...vivos.map((s) => s.geradoEm.getTime()))) : null
@@ -148,4 +152,16 @@ export async function placaresAoVivo(
     visitanteSigla: timePorId.get(p.timeVisitanteId)?.sigla ?? '—',
     visitantePlacar: p.placarVisitante ?? 0,
   }))
+}
+
+/** Sobrescreve `fotoUrl` com o valor atual de `jogadores`, por jogador. */
+async function comFotosAoVivo(db: Db, itens: ItemFireLive[]): Promise<ItemFireLive[]> {
+  const ids = [...new Set(itens.map((i) => i.jogadorId))]
+  if (ids.length === 0) return itens
+  const fotos = await db
+    .select({ id: jogadores.id, fotoUrl: jogadores.fotoUrl })
+    .from(jogadores)
+    .where(inArray(jogadores.id, ids))
+  const porId = new Map(fotos.map((f) => [f.id, f.fotoUrl] as const))
+  return itens.map((i) => ({ ...i, fotoUrl: porId.get(i.jogadorId) ?? null }))
 }
