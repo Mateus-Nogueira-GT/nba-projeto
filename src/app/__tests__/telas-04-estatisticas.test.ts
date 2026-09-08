@@ -6,6 +6,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { bancoDeTeste } from '../../modules/dominio/__tests__/ajuda-banco'
 import {
   apitos,
+  classificacao,
   estatisticasJogo,
   jogadores,
   jogos,
@@ -21,15 +22,18 @@ import {
   telaDoJogador,
 } from '../../modules/entrega/estatisticas/jogador'
 import type { ApitoDoJogador, TelaJogador } from '../../modules/entrega/estatisticas/jogador'
+import { telaDoJogo } from '../../modules/entrega/estatisticas/jogo'
 import { telaJogosDoDia } from '../../modules/entrega/estatisticas/jogos-do-dia'
-import { hierarquiaDoTime } from '../../modules/entrega/estatisticas/time'
+import { rotaDoTime } from '../../modules/entrega/estatisticas/rotas'
+import { hierarquiaDoTime, telaDaClassificacao } from '../../modules/entrega/estatisticas/time'
 import type { LinhaHierarquia } from '../../modules/entrega/estatisticas/time'
 import { rulesetAtivo } from '../../modules/entrega/ruleset-ativo'
 import { simularAte } from '../../modules/ingestao/demo/temporada'
 import { LLMFake } from '../../modules/ingestao/llm'
-import { NotaPartida } from '../../design-system/componentes'
+import { Avatar, NotaPartida } from '../../design-system/componentes'
+import { componente } from '../../design-system/tokens/componente'
 import { semantico } from '../../design-system/tokens/semantico'
-import { diaCurto, diaMes } from '../../components/formato'
+import { diaCurto, diaMes, horaCurta } from '../../components/formato'
 import {
   LIMITE_DE_APITOS_DO_JOGADOR,
   recorteDoHistorico,
@@ -1204,5 +1208,362 @@ describe('tela do time · regras de escrita', () => {
     expect(minusculo).not.toContain('altíssimo valor')
     expect(visivel).not.toContain('...')
     expect(visivel).not.toContain('…')
+  }, 60_000)
+})
+
+// ===========================================================================
+// TASK 5.3 · O ÍNDICE DA ABA E A TELA DE PARTIDA
+// ===========================================================================
+
+async function renderizarIndice(busca: Record<string, string> = {}): Promise<string> {
+  const { default: Pagina } = await import('../(app)/estatisticas/page')
+  return renderToStaticMarkup(await Pagina({ searchParams: Promise.resolve(busca) }))
+}
+
+async function renderizarJogo(jogoId: string): Promise<string> {
+  const { default: Pagina } = await import('../(app)/estatisticas/jogo/[id]/page')
+  return renderToStaticMarkup(
+    await Pagina({ params: Promise.resolve({ id: jogoId }), searchParams: Promise.resolve({}) }),
+  )
+}
+
+async function umJogo(status: 'AGENDADO' | 'AO_VIVO' | 'ENCERRADO') {
+  const [jogo] = await banco.db.select().from(jogos).where(eq(jogos.status, status)).limit(1)
+  expect(jogo, `a temporada simulada tem jogo ${status}`).toBeDefined()
+  return jogo!
+}
+
+/** O HTML de cada `<tr>` do corpo de toda tabela de um trecho, na ordem. */
+function linhasDaTabela(html: string): string[] {
+  return html
+    .split('<tbody>')
+    .slice(1)
+    .flatMap((corpo) => corpo.slice(0, corpo.indexOf('</tbody>')).split('<tr').slice(1))
+    .map((pedaco) => pedaco.slice(0, pedaco.indexOf('</tr>')))
+}
+
+/** O HTML de cada `<th>` de um trecho. */
+function cabecalhosDaTabela(html: string): string[] {
+  return html.match(/<th\b[^>]*>[\s\S]*?<\/th>/g) ?? []
+}
+
+/** A cor com que a tela escreveu aquele número — `color` fecha o estilo. */
+function corDe(html: string, numero: number): string | undefined {
+  return html.match(new RegExp(`color:([^"]+)">${numero}<`))?.[1]
+}
+
+/** "100,0" — o aproveitamento como a tela o escreve (a unidade fica no cabeçalho). */
+function aproveitamentoEscrito(v: number | null): string {
+  return v === null ? '—' : (v * 100).toFixed(1).replace('.', ',')
+}
+
+describe('índice da aba · os jogos do dia como lista', () => {
+  it('uma linha por jogo, visitante @ mandante, cada uma com o seu status', async () => {
+    const doDia = await telaJogosDoDia(banco.db, dataDeReferencia(AGORA, fuso), fuso)
+    expect(doDia.jogos.length).toBeGreaterThan(0)
+
+    const html = await renderizarIndice()
+    await gravarConferencia('estatisticas-indice', html)
+    const secao = trecho(html, 'Jogos do dia', 'Classificação')
+    const linhas = itensDaLista(secao)
+    expect(linhas.length).toBe(doDia.jogos.length)
+
+    doDia.jogos.forEach((jogo, indice) => {
+      const linha = linhas[indice]!
+      // A ordem da transmissão, a mesma do Fire Live: visitante, depois mandante.
+      expect(linha.indexOf(jogo.visitante.sigla)).toBeGreaterThan(-1)
+      expect(linha.indexOf(jogo.visitante.sigla)).toBeLessThan(linha.lastIndexOf(jogo.casa.sigla))
+
+      if (jogo.status === 'AGENDADO') {
+        expect(linha).toContain(horaCurta(jogo.dataHoraUtc, fuso))
+      }
+      if (jogo.status === 'AO_VIVO') {
+        expect(linha).toContain(`${jogo.quartoAtual ?? 1}º Q · AO VIVO`)
+      }
+      if (jogo.status === 'ENCERRADO') {
+        expect(linha).toContain('ENCERRADO')
+      }
+      if (jogo.casa.placar !== null && jogo.visitante.placar !== null) {
+        expect(linha).toContain(String(jogo.casa.placar))
+        expect(linha).toContain(String(jogo.visitante.placar))
+      }
+    })
+  }, 60_000)
+
+  it('o jogo em andamento traz o parcial e o ponto do ao vivo, sem declarar vencedor', async () => {
+    const doDia = await telaJogosDoDia(banco.db, dataDeReferencia(AGORA, fuso), fuso)
+    const aoVivo = doDia.jogos.find((j) => j.status === 'AO_VIVO')
+    expect(aoVivo, 'a temporada simulada tem um jogo em andamento hoje').toBeDefined()
+    expect(aoVivo!.casa.placar).not.toBeNull()
+
+    const secao = trecho(await renderizarIndice(), 'Jogos do dia', 'Classificação')
+
+    // O ponto vermelho ao lado do texto: cor nunca é canal único, então o
+    // "AO VIVO" está escrito do lado dele.
+    expect(secao).toContain(`background:${semantico.vivoSelo}`)
+    // NENHUM vencedor: no placar final o perdedor apaga (texto55); no jogo em
+    // andamento os dois números têm o mesmo peso — a sentença é do fim do jogo.
+    expect(corDe(secao, aoVivo!.casa.placar!)).toBe(semantico.texto100)
+    expect(corDe(secao, aoVivo!.visitante.placar!)).toBe(semantico.texto100)
+  }, 60_000)
+
+  it('num dia já encerrado a linha traz o placar final e o status escrito', async () => {
+    const encerrado = await umJogo('ENCERRADO')
+    const secao = trecho(
+      await renderizarIndice({ data: encerrado.dataReferencia }),
+      'Jogos de',
+      'Classificação',
+    )
+    const visivel = texto(secao)
+
+    expect(visivel).toContain('ENCERRADO')
+    expect(visivel).toContain(String(encerrado.placarCasa))
+    expect(visivel).toContain(String(encerrado.placarVisitante))
+  }, 60_000)
+})
+
+describe('índice da aba · a classificação como tabela', () => {
+  /** Os rótulos que a tabela ESCREVE — a grade de caixinhas não dizia nenhum. */
+  const CABECALHOS = ['POS', 'TIME', 'V–D', '%', 'SEQ', 'ÚLT. 5', 'TRILHO']
+
+  it('é uma <table> com posição, sigla, V–D, %, sequência e os últimos 5 em pontinhos', async () => {
+    const tabela = await telaDaClassificacao(banco.db, temporada)
+    expect(tabela.linhas.length).toBeGreaterThan(10)
+
+    const html = await renderizarIndice()
+    const secao = trecho(html, 'Classificação', 'Última atualização')
+    expect(secao).toContain('<table')
+    // A grade de caixinhas some: a tabela é a única forma da classificação.
+    const cabecalho = texto(cabecalhosDaTabela(secao).join(' '))
+    for (const rotulo of CABECALHOS) expect(cabecalho).toContain(rotulo)
+
+    const linhas = linhasDaTabela(secao)
+    expect(linhas.length).toBe(tabela.linhas.length)
+
+    tabela.linhas.forEach((time, indice) => {
+      const linha = linhas[indice]!
+      const visivel = texto(linha)
+      expect(visivel).toContain(time.sigla)
+      expect(visivel).toContain(`${time.vitorias}–${time.derrotas}`)
+      expect(visivel).toContain(aproveitamentoEscrito(time.aproveitamento))
+      if (time.sequencia !== null) expect(visivel).toContain(time.sequencia)
+      // A sigla continua sendo a porta do time — era o que a grade dava.
+      expect(linha).toContain(`href="${rotaDoTime(time.timeId)}"`)
+      // Os pontinhos são NOMEADOS um a um: a cor não é o único canal.
+      const nomeados = linha.match(/aria-label="(vitória|derrota)"/g) ?? []
+      expect(nomeados.length).toBe(time.forma.length)
+    })
+  }, 60_000)
+
+  it('as posições 1 a 6 dizem playoff e as 7 a 10 dizem play-in, por escrito', async () => {
+    const tabela = await telaDaClassificacao(banco.db, temporada)
+    const secao = trecho(await renderizarIndice(), 'Classificação', 'Última atualização')
+    const linhas = linhasDaTabela(secao)
+
+    tabela.linhas.forEach((time, indice) => {
+      const visivel = texto(linhas[indice]!)
+      const esperado =
+        time.posicao === null ? '—' : time.posicao <= 6 ? 'playoff' : time.posicao <= 10 ? 'play-in' : '—'
+      expect(visivel, `posição ${time.posicao}`).toContain(esperado)
+    })
+
+    // O trilho é ESCRITO, não uma cor de fundo: seis vagas de playoff e quatro
+    // de play-in por conferência, e a tela diz qual é qual em cada linha.
+    const visivel = texto(secao)
+    expect((visivel.match(/playoff/g) ?? []).length).toBe(6)
+    expect((visivel.match(/play-in/g) ?? []).length).toBe(4)
+  }, 60_000)
+
+  it('time sem partida encerrada mostra "—" nos últimos 5, em vez de inventar resultado', async () => {
+    const [novo] = await banco.db
+      .insert(times)
+      .values({ sigla: 'ZZZ', nome: 'Clube sem partida' })
+      .returning()
+    await banco.db.insert(classificacao).values({
+      temporada,
+      timeId: novo!.id,
+      vitorias: 0,
+      derrotas: 0,
+      posicao: 99,
+      capturadoEm: new Date(0),
+    })
+
+    try {
+      const secao = trecho(await renderizarIndice(), 'Classificação', 'Última atualização')
+      const linha = linhasDaTabela(secao).find((l) => l.includes(novo!.sigla))!
+      expect(linha, 'o time entrou na classificação').toBeDefined()
+      expect(linha).not.toContain('aria-label="vitória"')
+      expect(linha).not.toContain('aria-label="derrota"')
+      expect(texto(linha)).toContain('—')
+    } finally {
+      await banco.db.delete(classificacao).where(eq(classificacao.timeId, novo!.id))
+      await banco.db.delete(times).where(eq(times.id, novo!.id))
+    }
+  }, 60_000)
+})
+
+describe('tela de partida · o 1º quarto em destaque', () => {
+  it('a célula do 1º Q veste o quente, e a tela diz uma vez o que o Fire Live observa', async () => {
+    const jogo = await umJogo('ENCERRADO')
+    const html = await renderizarJogo(jogo.id)
+    await gravarConferencia('estatisticas-partida', html)
+    const secao = trecho(html, 'Pontos por quarto', 'Líderes da partida')
+    const quente = componente.contextoQuente.faixaFundo
+
+    const cabecalhos = cabecalhosDaTabela(secao)
+    const doPrimeiro = cabecalhos.find((c) => texto(c).trim().startsWith('1º'))!
+    expect(doPrimeiro, 'a coluna do 1º quarto existe').toBeDefined()
+    expect(doPrimeiro).toContain(quente)
+    expect(doPrimeiro).toContain(componente.contextoQuente.borda)
+    for (const outro of cabecalhos.filter((c) => c !== doPrimeiro)) {
+      expect(outro).not.toContain(quente)
+    }
+
+    // A coluna inteira, não só o cabeçalho: a célula de cada time é a que o
+    // Fire Live lê.
+    const linhas = linhasDaTabela(secao)
+    expect(linhas.length).toBe(2)
+    for (const linha of linhas) {
+      const celulas = linha.split('<td').slice(1)
+      expect(celulas[1]).toContain(quente)
+      expect(celulas[2]).not.toContain(quente)
+    }
+
+    // O rótulo explica o destaque UMA vez — repetido por célula viraria ruído.
+    expect((texto(html).match(/1º Q · o que o Fire Live observa/g) ?? []).length).toBe(1)
+  }, 60_000)
+})
+
+describe('tela de partida · o rosto no box score', () => {
+  it('cada linha do box score traz o rosto, e nenhum deles veste anel de apito', async () => {
+    const jogo = await umJogo('ENCERRADO')
+    const tela = (await telaDoJogo(banco.db, jogo.id, {}))!
+    const html = await renderizarJogo(jogo.id)
+    const secao = trecho(html, `Box score · ${tela.casa.nome}`, `Box score · ${tela.visitante.nome}`)
+
+    expect(tela.casa.boxScore.length).toBeGreaterThan(0)
+    const primeiro = tela.casa.boxScore[0]!
+    expect(secao).toContain(
+      renderToStaticMarkup(
+        createElement(Avatar, {
+          nome: primeiro.nome,
+          fotoUrl: primeiro.fotoUrl,
+          timeSigla: tela.casa.sigla,
+          nivelApito: null,
+          tamanho: 26,
+          raio: 8,
+        }),
+      ),
+    )
+    // Um rosto por linha — nem mais, nem menos.
+    expect((secao.match(/width:26px;height:26px/g) ?? []).length).toBe(tela.casa.boxScore.length)
+    // A aba é dado canônico: nada aqui carrega nível do apito.
+    expect(secao).not.toContain('Nível do apito')
+  }, 60_000)
+})
+
+describe('tela de partida · os desfalques com a hierarquia do CJ', () => {
+  it('o desfalque que está na lista do CJ sai com a posição e o nível dela', async () => {
+    // A seção só existe antes do fim do jogo — e o desfalque é por JOGO.
+    const doDia = await telaJogosDoDia(banco.db, dataDeReferencia(AGORA, fuso), fuso)
+    let escolhido: { jogoId: string; timeId: string; linha: LinhaHierarquia } | undefined
+    for (const jogo of doDia.jogos) {
+      if (jogo.status === 'ENCERRADO') continue
+      for (const lado of [jogo.casa, jogo.visitante]) {
+        const hierarquia = await hierarquiaDoTime(banco.db, lado.id, 'PONTOS', jogo.id)
+        // O box score e os desfalques leem `jogadores.time_id` (o time REAL);
+        // a hierarquia lê a lista do CJ. Só serve quem os dois reconhecem.
+        for (const linha of hierarquia) {
+          const [jogador] = await banco.db
+            .select()
+            .from(jogadores)
+            .where(eq(jogadores.id, linha.jogadorId))
+            .limit(1)
+          if (jogador?.timeId === lado.id) {
+            escolhido = { jogoId: jogo.id, timeId: lado.id, linha }
+            break
+          }
+        }
+        if (escolhido) break
+      }
+      if (escolhido) break
+    }
+    expect(escolhido, 'há jogo por vir hoje com a lista do CJ no elenco real').toBeDefined()
+    const [semClassificacao] = await banco.db
+      .insert(jogadores)
+      .values({ nomeCompleto: 'Atleta sem classificação', timeId: escolhido!.timeId })
+      .returning()
+
+    try {
+      await banco.db.insert(lesoesEscalacao).values([
+        { jogoId: escolhido!.jogoId, jogadorId: escolhido!.linha.jogadorId, status: 'FORA' },
+        { jogoId: escolhido!.jogoId, jogadorId: semClassificacao!.id, status: 'FORA' },
+      ])
+      const secao = trecho(await renderizarJogo(escolhido!.jogoId), 'Desfalques', 'Última atualização')
+      const visivel = texto(secao)
+
+      expect(visivel).toContain(escolhido!.linha.nome)
+      expect(visivel).toContain(`nº ${escolhido!.linha.posicao}`)
+      expect(visivel).toContain(NIVEL_ESCRITO[escolhido!.linha.nivel])
+      // A marcação é da lista do CJ, não do elenco real: as duas visões
+      // divergem de propósito, e sem rótulo a divergência é lida como bug.
+      expect(visivel.toLowerCase()).toContain('lista do cj')
+      // A temporada já pode conter outros desfalques com classificação. O
+      // contrato é por jogador: uma anotação no classificado, nenhuma no outro.
+      const linhas = itensDaLista(secao)
+      const classificado = linhas.find((linha) => texto(linha).includes(escolhido!.linha.nome))!
+      expect((texto(classificado).match(/nº \d+/g) ?? []).length).toBe(1)
+      const semClasse = linhas.find((linha) => texto(linha).includes(semClassificacao!.nomeCompleto))!
+      expect(semClasse).toBeDefined()
+      expect(texto(semClasse)).not.toMatch(/nº \d+/)
+    } finally {
+      await banco.db
+        .delete(lesoesEscalacao)
+        .where(
+          and(
+            eq(lesoesEscalacao.jogoId, escolhido!.jogoId),
+            inArray(lesoesEscalacao.jogadorId, [escolhido!.linha.jogadorId, semClassificacao!.id]),
+          ),
+        )
+      await banco.db.delete(jogadores).where(eq(jogadores.id, semClassificacao!.id))
+    }
+  }, 60_000)
+})
+
+describe('índice e tela de partida · regras de escrita', () => {
+  it('nada de probabilidade, de "nível" solto, de meia linha, de odd fora da faixa ou de reticências', async () => {
+    const jogo = await umJogo('ENCERRADO')
+    const telas: [string, string][] = [
+      ['índice', await renderizarIndice()],
+      ['partida', await renderizarJogo(jogo.id)],
+    ]
+
+    for (const [nome, html] of telas) {
+      const visivel = texto(html)
+      const minusculo = visivel.toLowerCase()
+
+      // O % é nota de confiança, nunca probabilidade — e a aba nem exibe nota
+      // de confiança: o "%" daqui é TAXA (aproveitamento da campanha).
+      expect(minusculo, nome).not.toContain('probabilidade')
+      expect(minusculo, nome).not.toContain('confiança')
+
+      // "nível" é do JOGADOR ou do APITO. A nota da partida nunca é nível.
+      for (const ocorrencia of visivel.match(/nível.{0,16}/gi) ?? []) {
+        expect(ocorrencia.toLowerCase(), nome).toMatch(/^nível (do jogador|do apito)/)
+      }
+
+      // Linha sempre inteira, com "+". Nunca meio ponto.
+      expect(visivel, nome).not.toMatch(/\d+,\d+\+/)
+      expect(minusculo, nome).not.toContain('meio ponto')
+
+      // Odd, quando aparecer, é sempre FAIXA (1,30–1,70).
+      for (const pedaco of visivel.match(/ODD[^·]{0,24}/g) ?? []) {
+        expect(pedaco, nome).toMatch(/\d,\d{2}\s*–\s*\d,\d{2}/)
+      }
+
+      expect(minusculo, nome).not.toContain('altíssimo valor')
+      expect(visivel, nome).not.toContain('...')
+      expect(visivel, nome).not.toContain('…')
+    }
   }, 60_000)
 })

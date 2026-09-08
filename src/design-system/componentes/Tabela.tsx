@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import { componente } from '../tokens/componente'
 import { semantico } from '../tokens/semantico'
 
 export type Coluna<T> = {
@@ -10,6 +11,16 @@ export type Coluna<T> = {
   alinhamento?: 'esquerda' | 'direita'
   /** Colunas de identificação ficam presas na rolagem horizontal. */
   fixa?: boolean
+  /**
+   * A coluna inteira — cabeçalho e células — no fundo e na borda do universo
+   * QUENTE. Existe para o 1º quarto da tela de partida: é o recorte que o Fire
+   * Live observa, e marcá-lo com a mesma temperatura daquela tela é o que liga
+   * uma coisa à outra sem escrever uma frase em cada célula.
+   *
+   * Quem usa deve escrever ao lado da tabela o que o destaque significa — cor
+   * nunca é canal único.
+   */
+  destaque?: boolean
   celula: (linha: T) => ReactNode
 }
 
@@ -77,7 +88,17 @@ export function Tabela<T>({ legenda, colunas, linhas, chaveDaLinha, vazio }: Tab
                   fontWeight: 700,
                   position: c.fixa ? 'sticky' : undefined,
                   left: c.fixa ? 0 : undefined,
-                  background: c.fixa ? semantico.fundo : undefined,
+                  background: c.destaque
+                    ? componente.contextoQuente.faixaFundo
+                    : c.fixa
+                      ? semantico.fundo
+                      : undefined,
+                  borderLeft: c.destaque
+                    ? `1px solid ${componente.contextoQuente.borda}`
+                    : undefined,
+                  borderRight: c.destaque
+                    ? `1px solid ${componente.contextoQuente.borda}`
+                    : undefined,
                 }}
               >
                 {/* Abreviação com forma por extenso disponível ao leitor de tela. */}
@@ -100,7 +121,17 @@ export function Tabela<T>({ legenda, colunas, linhas, chaveDaLinha, vazio }: Tab
                     borderBottom: `1px solid ${semantico.divisorSuave}`,
                     position: c.fixa ? 'sticky' : undefined,
                     left: c.fixa ? 0 : undefined,
-                    background: c.fixa ? semantico.fundo : undefined,
+                    background: c.destaque
+                      ? componente.contextoQuente.faixaFundo
+                      : c.fixa
+                        ? semantico.fundo
+                        : undefined,
+                    borderLeft: c.destaque
+                      ? `1px solid ${componente.contextoQuente.borda}`
+                      : undefined,
+                    borderRight: c.destaque
+                      ? `1px solid ${componente.contextoQuente.borda}`
+                      : undefined,
                   }}
                 >
                   {c.celula(linha)}

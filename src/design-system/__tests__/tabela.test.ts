@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest'
 
 import { Tabela } from '../componentes'
 import type { Coluna } from '../componentes'
+import { componente } from '../tokens/componente'
 
 /**
  * A TABELA DENSA DA IDENTIDADE 04.
@@ -60,5 +61,30 @@ describe('Tabela · a vestimenta da identidade 04', () => {
     const html = tabela()
     expect(html).toMatch(/<th[^>]*padding:6px 6px 6px 0/)
     expect(html).toMatch(/<td[^>]*padding:8px 6px 8px 0/)
+  })
+
+  it('sem `destaque` nenhuma coluna veste o universo quente', () => {
+    expect(tabela()).not.toContain(componente.contextoQuente.faixaFundo)
+  })
+
+  it('a coluna em destaque veste o quente do cabeçalho à última célula', () => {
+    const html = renderToStaticMarkup(
+      createElement(Tabela<Linha>, {
+        legenda: 'Uma linha por partida',
+        colunas: [COLUNAS[0]!, { ...COLUNAS[1]!, destaque: true }],
+        linhas: [{ id: 'a', pontos: 10 }],
+        chaveDaLinha: (l: Linha) => l.id,
+      }),
+    )
+    const quente = componente.contextoQuente.faixaFundo
+    const marcadas = html.split(quente).length - 1
+    // Cabeçalho + a célula da única linha: a coluna INTEIRA, não só o topo.
+    expect(marcadas).toBe(2)
+    expect(html).toContain(`border-left:1px solid ${componente.contextoQuente.borda}`)
+    expect(html).toContain(`border-right:1px solid ${componente.contextoQuente.borda}`)
+    // E a coluna vizinha continua fria.
+    const primeiraCelula = html.match(/<td\b[^>]*>[\s\S]*?<\/td>/)?.[0]
+    expect(primeiraCelula).toBeDefined()
+    expect(primeiraCelula).not.toContain(componente.contextoQuente.borda)
   })
 })
