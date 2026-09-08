@@ -6,8 +6,10 @@ import { jogadores } from '../../dominio/db/schema'
 import { carregarRuleset } from '../../motor/ruleset/carregar'
 import { semearDemo } from '../demo/semear'
 import { aplicarFotos, MAPA_FOTOS, urlDaFoto } from '../demo/fotos'
+import { lerListaDeNiveis } from '../niveis/parser'
 
 const ruleset = carregarRuleset(readFileSync('config/ruleset.v1.yaml', 'utf8'))
+const listaDoCj = lerListaDeNiveis(readFileSync('data/fontes/introducao-ia-nba.md', 'utf8'))
 
 describe('fotos da demonstração', () => {
   let banco: Awaited<ReturnType<typeof bancoDeTeste>>
@@ -26,14 +28,44 @@ describe('fotos da demonstração', () => {
     const nomes = new Set(
       (await banco.db.select().from(jogadores)).map((j) => j.nomeCompleto.toLowerCase()),
     )
-    for (const nome of Object.keys(MAPA_FOTOS)) expect(nomes.has(nome.toLowerCase()), nome).toBe(true)
+    for (const nome of Object.keys(MAPA_FOTOS))
+      expect(nomes.has(nome.toLowerCase()), nome).toBe(true)
+  })
+
+  it('todo nome da lista do CJ tem entrada no mapa — na grafia exata do documento', () => {
+    // A identidade 04 põe rosto em todo card. Um nome fora do mapa é uma
+    // silhueta no meio da Lista Secreta — e a lista do CJ é documento vivo,
+    // então este teste é o que avisa quando entra um nome novo sem foto.
+    expect(listaDoCj.jogadores.length).toBeGreaterThan(200)
+    for (const j of listaDoCj.jogadores)
+      expect(j.nomeNaLista in MAPA_FOTOS, j.nomeNaLista).toBe(true)
+  })
+
+  it('nenhum personId se repete — dois nomes com a mesma foto é um rosto errado', () => {
+    const ids = Object.values(MAPA_FOTOS).filter((id) => id !== null)
+    expect(new Set(ids).size).toBe(ids.length)
+  })
+
+  it('com o CDN respondendo, pelo menos 90% dos jogadores semeados ganham foto', async () => {
+    const r = await aplicarFotos(banco.db, async () => true)
+    expect(r.puladas).toEqual([])
+    // O único sem foto é ambiguidade declarada, não falha de curadoria.
+    expect(r.semId).toEqual(['Wiggins'])
+    const [todos, comFoto] = await Promise.all([
+      banco.db.select().from(jogadores),
+      banco.db.select().from(jogadores).where(isNotNull(jogadores.fotoUrl)),
+    ])
+    expect(comFoto.length / todos.length).toBeGreaterThanOrEqual(0.9)
   })
 
   it('só grava URL que o verificador aprovou', async () => {
+    // Limpa o que o teste anterior gravou: aqui o verificador aprova UMA url.
+    await banco.db.update(jogadores).set({ fotoUrl: null })
     const aprovadas = new Set([urlDaFoto(MAPA_FOTOS['Shai']!)])
     const r = await aplicarFotos(banco.db, async (url) => aprovadas.has(url))
     expect(r.gravadas).toBe(1)
-    expect(r.puladas.length).toBe(Object.keys(MAPA_FOTOS).length - 1)
+    const comId = Object.values(MAPA_FOTOS).filter((id) => id !== null).length
+    expect(r.puladas.length).toBe(comId - 1)
     const comFoto = await banco.db.select().from(jogadores).where(isNotNull(jogadores.fotoUrl))
     expect(comFoto).toHaveLength(1)
     expect(comFoto[0]!.fotoUrl).toContain('cdn.nba.com')

@@ -99,9 +99,41 @@ export const primitivo = {
   notaTextoRoxo: '#E9E9F0',
   notaTextoVermelho: '#F7E9E9',
 
+  // -- Identidade 04 · acabamento -------------------------------------------
+  // Texto em opacidades: a MESMA tinta clara (tinta50) em três intensidades
+  // além da cheia. É assim que se separa número de rótulo sem borda nem
+  // segunda cor — densidade por peso e opacidade, não por cromo.
+  tinta50Veu70: 'rgba(245,248,252,.7)',
+  tinta50Veu55: 'rgba(245,248,252,.55)',
+  tinta50Veu40: 'rgba(245,248,252,.4)',
+  // Ao vivo DENTRO do universo quente: tinta e borda do badge de status
+  // (PRÉ · 1º Q · FIM 1º Q · FT), derivadas do vermelho400 do ao vivo.
+  vermelhoVeu14: 'rgba(255,107,107,.14)',
+  vermelhoVeu45: 'rgba(255,107,107,.45)',
+  // O divisor (tinta500) a meia força: a linha ENTRE registros de uma tabela
+  // densa. A régua cheia por linha vira grade; a meia força separa sem pesar.
+  tinta500Veu50: 'rgba(42,56,82,.5)',
+  // Tinta do verde do nível 3 (verde400) para o FUNDO da aba de atributo ativa
+  // no rodapé do card: a borda é o verde cheio, o fundo é ele a 12%.
+  verdeVeu12: 'rgba(61,211,126,.12)',
+  // Os pares do verdeVeu12 nos outros níveis do apito: a aba de atributo ativa
+  // veste a cor do NÍVEL DO APITO daquele card, nunca um verde fixo — verde é
+  // N3, e um verde num card N1 seria um quarto canal mentindo.
+  ambarVeu12: 'rgba(255,201,61,.12)',
+  laranjaVeu12: 'rgba(255,152,56,.12)',
+  azulVeu12: 'rgba(77,163,255,.12)',
+  // Par do azul do turbo (azul400) para brilho e fundo — nunca no lugar do
+  // categórico.
+  azul300: '#8CC4FF',
+  azul500: '#2A7FD9',
+  // Durações: estado muda em ≤ 200 ms; só a ENTRADA de card novo ganha 400 ms.
+  // Nada pulsa continuamente.
+  duracao200: '200ms',
+  duracao400: '400ms',
+
   // Fontes — a família vem por variável CSS publicada no layout (next/font).
   fonteAnton: "var(--fonte-anton), 'Arial Narrow', sans-serif",
-  fonteBarlow: "var(--fonte-barlow), system-ui, sans-serif",
+  fonteBarlow: 'var(--fonte-barlow), system-ui, sans-serif',
   fonteBarlowCondensed: "var(--fonte-barlow-condensed), 'Arial Narrow', sans-serif",
 } as const
 

@@ -1,15 +1,25 @@
-import { and, desc, eq, inArray, or } from 'drizzle-orm'
+import { and, asc, desc, eq, inArray, isNotNull, or, sql } from 'drizzle-orm'
 
 import {
   classificacao,
   estatisticasTimeJogo,
   jogadores,
   jogos,
+  lesoesEscalacao,
+  niveis,
+  niveisVersao,
   times,
 } from '../../dominio/db/schema'
 import type { Db } from '../../dominio/db/tipos'
+
+// A aba de estatísticas NÃO importa do motor (regra `estatisticas-nao-passam-
+// pelo-motor`). Atributo e nível vêm do schema — é a lista do CJ como dado
+// gravado, não como regra.
+type Atributo = (typeof niveis.$inferSelect)['atributo']
+type Nivel = (typeof niveis.$inferSelect)['nivel']
 import { daColuna, maisAntiga } from './atualizacao'
 import type { ComAtualizacao } from './atualizacao'
+import { LIMITE_FORMA } from './jogo'
 import { numero, percentual } from './numeros'
 
 export type QuebraPorQuarto = {
@@ -192,6 +202,58 @@ export async function telaDoTime(
   }
 }
 
+/** Uma posição da hierarquia do CJ no atributo, e se está fora do jogo dado. */
+export type LinhaHierarquia = {
+  posicao: number
+  jogadorId: string
+  nome: string
+  nivel: Nivel
+  /** FORA em `lesoes_escalacao` para `jogoId`; sempre false sem jogo. */
+  fora: boolean
+}
+
+/**
+ * A HIERARQUIA DO CJ POR ATRIBUTO — o depth chart do Sofascore com a regra do
+ * CJ em cima (identidade 04). É a OPD visualizada: a tela marca o PREFIXO
+ * desfalcado em destaque, porque é só ele que abre a regra (se o nº 2 falta e
+ * o nº 1 joga, não há apito).
+ *
+ * Vem de `niveis` (versão ativa), a curadoria — rotulada na tela como "lista
+ * do CJ", à parte do elenco real de `jogadores.time_id`. Sem rótulo, a
+ * divergência (Giannis no Miami) seria lida como bug.
+ */
+export async function hierarquiaDoTime(
+  db: Db,
+  timeId: string,
+  atributo: Atributo,
+  jogoId: string | null,
+): Promise<LinhaHierarquia[]> {
+  const [versao] = await db.select().from(niveisVersao).where(eq(niveisVersao.ativa, true)).limit(1)
+  if (!versao) return []
+
+  const [linhas, fora] = await Promise.all([
+    db
+      .select({
+        posicao: niveis.posicaoHierarquia,
+        jogadorId: niveis.jogadorId,
+        nome: jogadores.nomeCompleto,
+        nivel: niveis.nivel,
+      })
+      .from(niveis)
+      .innerJoin(jogadores, eq(niveis.jogadorId, jogadores.id))
+      .where(and(eq(niveis.niveisVersaoId, versao.id), eq(niveis.timeId, timeId), eq(niveis.atributo, atributo)))
+      .orderBy(asc(niveis.posicaoHierarquia)),
+    jogoId === null
+      ? Promise.resolve([] as { jogadorId: string }[])
+      : db
+          .select({ jogadorId: lesoesEscalacao.jogadorId })
+          .from(lesoesEscalacao)
+          .where(and(eq(lesoesEscalacao.jogoId, jogoId), eq(lesoesEscalacao.status, 'FORA'))),
+  ])
+  const desfalcados = new Set(fora.map((f) => f.jogadorId))
+  return linhas.map((l) => ({ ...l, fora: desfalcados.has(l.jogadorId) }))
+}
+
 export type TelaClassificacao = ComAtualizacao & {
   temporada: string
   linhas: {
@@ -204,6 +266,15 @@ export type TelaClassificacao = ComAtualizacao & {
     derrotas: number
     aproveitamento: number | null
     sequencia: string | null
+    /**
+     * Os últimos resultados (V/D), do mais recente para o mais antigo — a
+     * mesma "forma" que a tela de partida mostra sob o placar
+     * (`LadoDaPartida.forma`), aqui como os pontinhos da classificação.
+     *
+     * Vazio quando o time ainda não encerrou partida: a tela escreve "—" em
+     * vez de inventar resultado.
+     */
+    forma: ('V' | 'D')[]
   }[]
 }
 
@@ -212,11 +283,60 @@ export async function telaDaClassificacao(
   db: Db,
   temporada: string,
 ): Promise<TelaClassificacao> {
-  const linhas = await db
-    .select({ c: classificacao, t: times })
-    .from(classificacao)
-    .innerJoin(times, eq(classificacao.timeId, times.id))
-    .where(eq(classificacao.temporada, temporada))
+  // LIMIT por time, dentro do banco: um calendário desigual não pode consumir
+  // a janela de outra equipe. O lateral mantém uma única ida ao banco e no
+  // máximo cinco resultados por time, sem um recorte arbitrário da liga.
+  const ultimasPartidas = db
+    .select({
+      id: jogos.id,
+      dataHoraUtc: jogos.dataHoraUtc,
+      timeCasaId: jogos.timeCasaId,
+      placarCasa: jogos.placarCasa,
+      placarVisitante: jogos.placarVisitante,
+    })
+    .from(jogos)
+    .where(
+      and(
+        eq(jogos.status, 'ENCERRADO'),
+        isNotNull(jogos.placarCasa),
+        isNotNull(jogos.placarVisitante),
+        or(eq(jogos.timeCasaId, classificacao.timeId), eq(jogos.timeVisitanteId, classificacao.timeId)),
+      ),
+    )
+    .orderBy(desc(jogos.dataHoraUtc), asc(jogos.id))
+    .limit(LIMITE_FORMA)
+    .as('ultimas_partidas')
+  const [linhas, recentes] = await Promise.all([
+    db
+      .select({ c: classificacao, t: times })
+      .from(classificacao)
+      .innerJoin(times, eq(classificacao.timeId, times.id))
+      .where(eq(classificacao.temporada, temporada)),
+    // A forma nasce do JOGO ENCERRADO, aqui na entrega: derivá-la na tela
+    // faria cada tela ter a sua definição de "últimos 5".
+    db
+      .select({
+        timeId: classificacao.timeId,
+        timeCasaId: ultimasPartidas.timeCasaId,
+        placarCasa: ultimasPartidas.placarCasa,
+        placarVisitante: ultimasPartidas.placarVisitante,
+      })
+      .from(classificacao)
+      .leftJoinLateral(ultimasPartidas, sql`true`)
+      .where(eq(classificacao.temporada, temporada))
+      .orderBy(asc(classificacao.timeId), desc(ultimasPartidas.dataHoraUtc), asc(ultimasPartidas.id)),
+  ])
+
+  const forma = new Map<string, ('V' | 'D')[]>()
+  for (const jogo of recentes) {
+    if (jogo.placarCasa === null || jogo.placarVisitante === null) continue
+    const emCasa = jogo.timeId === jogo.timeCasaId
+    const meus = emCasa ? jogo.placarCasa : jogo.placarVisitante
+    const deles = emCasa ? jogo.placarVisitante : jogo.placarCasa
+    const lista = forma.get(jogo.timeId) ?? []
+    lista.push(meus > deles ? 'V' : 'D')
+    forma.set(jogo.timeId, lista)
+  }
 
   return {
     temporada,
@@ -231,6 +351,7 @@ export async function telaDaClassificacao(
         derrotas: c.derrotas,
         aproveitamento: numero(c.aproveitamento),
         sequencia: c.sequencia,
+        forma: forma.get(t.id) ?? [],
       }))
       .sort((a, b) => (a.posicao ?? 99) - (b.posicao ?? 99) || a.nome.localeCompare(b.nome)),
     atualizacao: daColuna(

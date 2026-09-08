@@ -59,6 +59,23 @@
   --avatar-fundo4: #2C2438;
   --avatar-fundo5: #1F3038;
   --avatar-fundo6: #332A22;
+  --texto100: #F5F8FC;
+  --texto70: rgba(245,248,252,.7);
+  --texto55: rgba(245,248,252,.55);
+  --texto40: rgba(245,248,252,.4);
+  --divisor-suave: rgba(42,56,82,.5);
+  --ao-vivo-solido: #FF6B6B;
+  --ao-vivo-tinta: rgba(255,107,107,.14);
+  --ao-vivo-borda: rgba(255,107,107,.45);
+  --apito-nivel1-tinta: rgba(255,201,61,.12);
+  --apito-nivel2-tinta: rgba(255,152,56,.12);
+  --acento-veu: rgba(255,122,26,.08);
+  --apito-nivel3-tinta: rgba(61,211,126,.12);
+  --apito-turbo-tinta: rgba(77,163,255,.12);
+  --turbo-claro: #8CC4FF;
+  --turbo-escuro: #2A7FD9;
+  --duracao-estado: 200ms;
+  --duracao-entrada: 400ms;
 
   /* componente */
   --card-fundo: #131C2E;

@@ -18,10 +18,18 @@ import {
   times,
 } from '../../dominio/db/schema'
 import { carregarRuleset } from '../../motor/ruleset/carregar'
+import { NIVEIS } from '../../motor/tipos'
 import type { Nivel } from '../../motor/tipos'
 import { executarCiclo } from '../fire-live/ciclo'
 import type { ConteudoFeedFireLive } from '../fire-live/feed'
-import { lerFeedFireLive, placaresAoVivo } from '../fire-live/leitura'
+import {
+  agruparFireLivePorJogo,
+  alvosAguardandoPorJogo,
+  comAlvoDoModoFire,
+  lerFeedFireLive,
+  placaresAoVivo,
+} from '../fire-live/leitura'
+import { jogosDoDiaResumo } from '../lista-por-jogo'
 import type { EstadoObservado } from '../fire-live/ciclo'
 import { reservarJogosParaObservar } from '../fire-live/inicio'
 import { FilaEmMemoria } from '../fila/memoria'
@@ -694,6 +702,61 @@ describe('leitura do feed do Fire Live', () => {
     }
   })
 
+  it('a foto chega ao card ao vivo SEM novo ciclo — identidade 04', async () => {
+    // Mesma regra da Lista Secreta: foto é apresentação, não fato do motor.
+    // O snapshot do Fire Live é gravado no ciclo; a foto que entra em
+    // `jogadores` depois dele precisa aparecer na leitura sem esperar o
+    // próximo apito.
+    await reproduzir()
+    const antes = await lerFeedFireLive(banco.db, DIA, QUARTO)
+    const luka = antes.itens.find((i) => i.nome === 'Luka Doncic')!
+    expect(luka.fotoUrl).toBeNull()
+
+    const FOTO = 'https://cdn.nba.com/headshots/nba/latest/1040x760/1629029.png'
+    await banco.db.update(jogadores).set({ fotoUrl: FOTO }).where(eq(jogadores.id, luka.jogadorId))
+
+    const depois = await lerFeedFireLive(banco.db, DIA, QUARTO)
+    expect(depois.itens.find((i) => i.nome === 'Luka Doncic')!.fotoUrl).toBe(FOTO)
+    expect(depois.itens.find((i) => i.nome === 'Austin Reaves')!.fotoUrl).toBeNull()
+  })
+
+  it('o carimbo não empresta o frescor de outro jogo ao snapshot antigo', async () => {
+    await reproduzir()
+    const [original] = await banco.db.select().from(jogos).where(eq(jogos.id, jogoId))
+    const [snapshot] = await banco.db
+      .select()
+      .from(feedSnapshot)
+      .where(eq(feedSnapshot.jogoId, jogoId))
+    const [outro] = await banco.db
+      .insert(jogos)
+      .values({
+        dataReferencia: DIA,
+        dataHoraUtc: new Date(TIPOFF.getTime() + 3_600_000),
+        timeCasaId: original!.timeVisitanteId,
+        timeVisitanteId: original!.timeCasaId,
+        status: 'AO_VIVO',
+        quartoAtual: QUARTO,
+      })
+      .returning()
+    await banco.db.insert(feedSnapshot).values({
+      dataReferencia: DIA,
+      estrategia: 'FIRE_LIVE',
+      jogoId: outro!.id,
+      conteudoJson: {
+        ...(snapshot!.conteudoJson as ConteudoFeedFireLive),
+        jogoId: outro!.id,
+        itens: [],
+      },
+      geradoEm: new Date(snapshot!.geradoEm.getTime() + 60_000),
+      hash: 'outro-jogo-mais-recente',
+    })
+
+    const filtrado = await lerFeedFireLive(banco.db, DIA, QUARTO, { jogo: jogoId })
+    expect(filtrado.geradoEm).toEqual(snapshot!.geradoEm)
+    const todos = await lerFeedFireLive(banco.db, DIA, QUARTO)
+    expect(todos.geradoEm).toEqual(snapshot!.geradoEm)
+  })
+
   it('sem jogo hoje', async () => {
     await banco.db.delete(jogos)
     const feed = await lerFeedFireLive(banco.db, DIA, QUARTO)
@@ -739,7 +802,13 @@ describe('placares ao vivo — a trava mais dura do projeto (só 1º quarto)', (
       .set({ status: 'AO_VIVO', quartoAtual: QUARTO, placarCasa: 12, placarVisitante: 9 })
     const placares = await placaresAoVivo(banco.db, DIA, QUARTO)
     expect(placares).toEqual([
-      expect.objectContaining({ jogoId, casaSigla: 'LAL', casaPlacar: 12, visitanteSigla: 'ADV', visitantePlacar: 9 }),
+      expect.objectContaining({
+        jogoId,
+        casaSigla: 'LAL',
+        casaPlacar: 12,
+        visitanteSigla: 'ADV',
+        visitantePlacar: 9,
+      }),
     ])
   })
 
@@ -788,5 +857,141 @@ describe('filtros do Fire Live (spec 05, fatia 4a)', () => {
     expect(feed.itens).toEqual([])
     // Havia conteúdo antes do recorte: o estado vazio de janela não se aplica.
     expect(feed.estadoVazio).toBeNull()
+  })
+})
+
+// ===========================================================================
+// A TELA POR JOGO (identidade 04, §4.2) — o marco do modo fire e os três estados
+// ===========================================================================
+
+describe('o marco do modo fire no item do Fire Live', () => {
+  const QUARTO = ruleset.fire_live.quarto
+  const DIA = '2026-08-19'
+  const PERCENTUAL = ruleset.fire_live.modo_fire.percentual_media
+  /** O rótulo é escrito pela ENTREGA a partir do YAML — o card não sabe do 75%. */
+  const ROTULO = `${(PERCENTUAL * 100).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}% da média`
+
+  it('o marco é a média do jogador vezes o percentual do RULESET', async () => {
+    await reproduzir()
+    const feed = await lerFeedFireLive(banco.db, DIA, QUARTO)
+    const naTela = await comAlvoDoModoFire(banco.db, ruleset, feed.itens)
+
+    // Luka: MVP com 30,0 de média — o alvo do 1º Q é 11 e o modo fire acende
+    // em 30 × percentual. O número vem do YAML, nunca do código.
+    const luka = naTela.find((i) => i.nome === 'Luka Doncic')!
+    expect(luka.alvoFire).toEqual({ valor: 30 * PERCENTUAL, rotulo: ROTULO })
+    const reaves = naTela.find((i) => i.nome === 'Austin Reaves')!
+    expect(reaves.alvoFire).toEqual({ valor: 20 * PERCENTUAL, rotulo: ROTULO })
+  })
+
+  it('quem o ruleset não põe em modo fire não ganha marco — a regra é do YAML', async () => {
+    await reproduzir()
+    const feed = await lerFeedFireLive(banco.db, DIA, QUARTO)
+    const foraDoModoFire = NIVEIS.find((n) => !ruleset.fire_live.modo_fire.aplica_a.includes(n))!
+    const naTela = await comAlvoDoModoFire(
+      banco.db,
+      ruleset,
+      feed.itens.map((i) => ({ ...i, nivelJogador: foraDoModoFire })),
+    )
+    expect(naTela.every((i) => i.alvoFire === null)).toBe(true)
+  })
+
+  it('sem média gravada não há marco — a tela não inventa o número que falta', async () => {
+    await reproduzir()
+    const feed = await lerFeedFireLive(banco.db, DIA, QUARTO)
+    await banco.db.delete(mediasJogador)
+    const naTela = await comAlvoDoModoFire(banco.db, ruleset, feed.itens)
+    expect(naTela.length).toBeGreaterThan(0)
+    expect(naTela.every((i) => i.alvoFire === null)).toBe(true)
+  })
+})
+
+describe('agrupamento do Fire Live por jogo — os três estados', () => {
+  const QUARTO = ruleset.fire_live.quarto
+  const DIA = '2026-08-19'
+  const FUSO = ruleset.rodada.fuso
+
+  async function grupos(alvos: Map<string, number> = new Map()) {
+    const feed = await lerFeedFireLive(banco.db, DIA, QUARTO)
+    const naTela = await comAlvoDoModoFire(banco.db, ruleset, feed.itens)
+    const doDia = await jogosDoDiaResumo(banco.db, DIA, FUSO)
+    return agruparFireLivePorJogo(naTela, doDia, QUARTO, alvos)
+  }
+
+  it('jogo no 1º quarto vira UM grupo EM_1Q com os apitos dele', async () => {
+    await reproduzir()
+    await banco.db.update(jogos).set({ status: 'AO_VIVO', quartoAtual: QUARTO })
+
+    const lista = await grupos()
+    expect(lista).toHaveLength(1)
+    expect(lista[0]!).toMatchObject({
+      jogoId,
+      estado: 'EM_1Q',
+      casaSigla: 'LAL',
+      visitanteSigla: 'ADV',
+    })
+    expect(lista[0]!.itens.map((i) => i.nome).sort()).toEqual(['Austin Reaves', 'Luka Doncic'])
+  })
+
+  it('passado o 1º quarto o grupo vira FIM_1Q e MANTÉM os apitos', async () => {
+    await reproduzir()
+    await banco.db.update(jogos).set({ status: 'AO_VIVO', quartoAtual: QUARTO + 1 })
+
+    const lista = await grupos()
+    expect(lista).toHaveLength(1)
+    expect(lista[0]!.estado).toBe('FIM_1Q')
+    expect(lista[0]!.itens.length).toBeGreaterThan(0)
+  })
+
+  it('jogo agendado com alvos esperando vira grupo AGUARDANDO, sem card', async () => {
+    await banco.db.update(jogos).set({ status: 'AGENDADO', quartoAtual: null })
+
+    const lista = await grupos(new Map([[jogoId, 4]]))
+    expect(lista).toHaveLength(1)
+    expect(lista[0]!).toMatchObject({ estado: 'AGUARDANDO', alvosAguardando: 4 })
+    expect(lista[0]!.itens).toEqual([])
+  })
+
+  it('jogo agendado SEM alvo esperando não vira grupo — "0 alvos" não é notícia', async () => {
+    await banco.db.update(jogos).set({ status: 'AGENDADO', quartoAtual: null })
+    expect(await grupos()).toEqual([])
+  })
+
+  it('a ordem da tela é a dos chips: no 1º Q agora, depois aguardando, depois encerrado', async () => {
+    await reproduzir()
+    // Um segundo jogo, AGENDADO e mais cedo: sem a ordem por estado ele viria
+    // primeiro (o agrupamento por jogo ordena por horário dentro do estado).
+    const [lal] = await banco.db.select().from(times).where(eq(times.sigla, 'LAL'))
+    const [adv] = await banco.db.select().from(times).where(eq(times.sigla, 'ADV'))
+    const [outro] = await banco.db
+      .insert(jogos)
+      .values({
+        dataHoraUtc: new Date(TIPOFF.getTime() - 3_600_000),
+        dataReferencia: DIA,
+        timeCasaId: adv!.id,
+        timeVisitanteId: lal!.id,
+        status: 'AGENDADO',
+      })
+      .returning()
+    await banco.db
+      .update(jogos)
+      .set({ status: 'AO_VIVO', quartoAtual: QUARTO })
+      .where(eq(jogos.id, jogoId))
+
+    const lista = await grupos(new Map([[outro!.id, 3]]))
+    expect(lista.map((g) => g.estado)).toEqual(['EM_1Q', 'AGUARDANDO'])
+  })
+
+  it('conta os alvos que esperam o 1º quarto por jogo — um por JOGADOR, não por atributo', () => {
+    const itens = [
+      { jogoId: 'j1', jogadorId: 'a' },
+      { jogoId: 'j1', jogadorId: 'a' },
+      { jogoId: 'j1', jogadorId: 'b' },
+      { jogoId: 'j2', jogadorId: 'c' },
+    ]
+    expect([...alvosAguardandoPorJogo(itens).entries()].sort()).toEqual([
+      ['j1', 2],
+      ['j2', 1],
+    ])
   })
 })

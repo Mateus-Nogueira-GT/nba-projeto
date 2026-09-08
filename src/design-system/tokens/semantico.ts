@@ -109,6 +109,39 @@ export const semantico = {
   avatarFundo4: p.avatarFundo4,
   avatarFundo5: p.avatarFundo5,
   avatarFundo6: p.avatarFundo6,
+
+  // -- Identidade 04 · varredura e análise ---------------------------------
+  // Texto em opacidades: número em texto100, rótulo em texto55, apoio em
+  // texto40 — uma cor, várias intensidades (a densidade do Sofascore sem a
+  // paleta dele). `texto100` é o próprio textoPrimario, com nome de escala
+  // para o componente falar a mesma língua nos quatro degraus.
+  texto100: p.tinta50,
+  texto70: p.tinta50Veu70,
+  texto55: p.tinta50Veu55,
+  texto40: p.tinta50Veu40,
+  // Régua fina entre linhas de tabela — o `divisor` a meia força. Alias de um
+  // primitivo, como o teste de paridade exige.
+  divisorSuave: p.tinta500Veu50,
+  // Ao vivo com forma própria DENTRO do quente: o sólido é o mesmo `aoVivo`
+  // (o ponto e o texto); tinta e borda vestem o badge de status de largura
+  // fixa. Distinto do amarelo do nível 1 e do laranja do nível 2 por teste.
+  aoVivoSolido: p.vermelho400,
+  aoVivoTinta: p.vermelhoVeu14,
+  aoVivoBorda: p.vermelhoVeu45,
+  // Aba de atributo ativa (PTS · REB · AST no rodapé do card): borda no verde
+  // do nível 3, fundo na tinta dele. Alias, como o teste de paridade exige.
+  apitoNivel1Tinta: p.ambarVeu12,
+  apitoNivel2Tinta: p.laranjaVeu12,
+  /** Véu do laranja de UI — fundo de estado ativo em seletor de TELA. */
+  acentoVeu: p.laranjaVeu,
+  apitoNivel3Tinta: p.verdeVeu12,
+  apitoTurboTinta: p.azulVeu12,
+  // Par do turbo — para brilho e fundo. O categórico continua sendo apitoTurbo.
+  turboClaro: p.azul300,
+  turboEscuro: p.azul500,
+  // Durações
+  duracaoEstado: p.duracao200,
+  duracaoEntrada: p.duracao400,
 } as const
 
 export type Semantico = typeof semantico

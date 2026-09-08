@@ -1,24 +1,40 @@
-import { and, desc, eq, inArray } from 'drizzle-orm'
+import { and, asc, desc, eq, inArray } from 'drizzle-orm'
 
 import {
+  apitos,
   estatisticasJogo,
   estatisticasQuarto,
   jogadores,
   jogos,
   mediasJogador,
+  niveis,
+  niveisVersao,
   times,
 } from '../../dominio/db/schema'
 import type { Db } from '../../dominio/db/tipos'
+import type { ConfigTemporada } from '../../dominio/temporada'
+import { temporadaDe } from '../../dominio/temporada'
 import { daColuna, maisAntiga } from './atualizacao'
+
+// A aba de estatísticas NÃO importa do motor (regra `estatisticas-nao-passam-
+// pelo-motor`). O atributo aqui é o do dado canônico — o enum do schema.
+type Atributo = (typeof apitos.$inferSelect)['atributo']
+/** Nível do JOGADOR (MVP · All Star · Suporte · Randola) — enum do schema. */
+type NivelDoJogador = (typeof niveis.$inferSelect)['nivel']
 import type { ComAtualizacao } from './atualizacao'
+import { notaDaPartida } from './nota'
 import { numero, percentual } from './numeros'
 
 export type LinhaHistorico = {
   jogoId: string
   data: Date
-  adversarioSigla: string
-  /** true = casa. Muda a leitura da linha e do resultado. */
-  emCasa: boolean
+  /** null junto com `emCasa` — ver `mandoDoJogador`. */
+  adversarioSigla: string | null
+  /**
+   * true = casa, false = fora, null = SEM MANDO: o vínculo jogador↔time não
+   * põe o jogador em nenhum dos dois lados. Ver `mandoDoJogador`.
+   */
+  emCasa: boolean | null
   /** null quando não dá para determinar — ver `resultadoDoJogo`. */
   resultado: 'V' | 'D' | null
   placar: string | null
@@ -28,6 +44,12 @@ export type LinhaHistorico = {
   assistencias: number
   fgPercentual: number | null
   tresPercentual: number | null
+  /**
+   * A nota da partida (3–10) daquele jogo — "o número" do jogador na
+   * identidade 04. null quando o box não sustenta nota (menos de
+   * `MINUTOS_MINIMOS`). Nunca "nível": nível é do jogador e do apito.
+   */
+  nota: number | null
 }
 
 export type BlocoAoVivo = {
@@ -93,33 +115,196 @@ export type TelaJogador = ComAtualizacao & {
   /** Médias da temporada — o "perfil" dos números completos. */
   perfilNumeros: Numeros
   jogosDisputados: number
+  /**
+   * `jogosDisputados` conta a JANELA CARREGADA, não a temporada.
+   *
+   * Ele vem de `medias_jogador` (a temporada inteira), mas cai no tamanho do
+   * histórico quando essa linha não existe para (jogador, temporada,
+   * TEMPORADA) — fallback deliberado, não hipótese. Se o histórico também foi
+   * cortado, o número passa a ser o do recorte, e o hero escrevia
+   * "25 jogos · 2025-26" com ele: a mesma afirmação sobre a temporada que
+   * `historicoCortado` tirou da tabela, duas linhas abaixo. PTS/REB/AST do topo
+   * caem na mesma janela pelo mesmo motivo (é a mesma linha de médias).
+   *
+   * Separado de `historicoCortado` de propósito: COM a linha de médias, cortar
+   * a tabela não torna falso o número do hero — ele continua sendo o da
+   * temporada, e trocar o rótulo ali seria introduzir a mentira simétrica.
+   */
+  jogosDisputadosDoRecorte: boolean
   historico: LinhaHistorico[]
+  /**
+   * O histórico bateu no limite e foi CORTADO.
+   *
+   * A tela precisa dizer isso: `jogosDisputados` vem de `medias_jogador` (a
+   * temporada inteira) e o histórico para no limite, então o perfil escrevia
+   * "68 jogos · temporada 2025-26" duas linhas acima de uma tabela de 25
+   * linhas rotulada "temporada 2025-26". As médias de "Números completos" e a
+   * nota média recente nascem da mesma janela — o recorte vale para as três.
+   *
+   * Lido com UMA partida a mais que o limite, como o histórico de apitos:
+   * é a única forma de saber que cortou sem uma segunda consulta.
+   *
+   * O limite é o ÚNICO recorte que a tela precisa anunciar. O da TEMPORADA já
+   * está no rótulo do artboard ("temporada 2025-26") e agora é verdade: o
+   * histórico é filtrado por ela.
+   */
+  historicoCortado: boolean
   /** Presente só enquanto o jogador está em jogo. */
   aoVivo: BlocoAoVivo | null
+  /**
+   * "O número" do jogador na identidade 04: a média das notas da partida dos
+   * últimos 5 jogos com nota (3–10, uma casa). Dado canônico — nunca aparece
+   * no card do apito, só nesta aba. null sem jogo com nota.
+   */
+  notaMediaRecente: number | null
+  /**
+   * O time do jogador NA LISTA DO CJ (curadoria, `niveis` da versão ativa —
+   * Giannis no Miami), rotulado à parte de `perfil.timeSigla`, que é o time
+   * REAL do provedor. As duas visões convivem na tela com rótulo explícito;
+   * sem rótulo, a divergência é lida como bug.
+   *
+   * `nivel` é o NÍVEL DO JOGADOR em pontos, o único atributo que o CJ
+   * classificou — vem junto porque é a mesma linha de `niveis` e a tela mostra
+   * os dois no mesmo fôlego ("na lista do CJ MIA · Suporte em pontos").
+   */
+  timeNaListaDoCj: { id: string; sigla: string; nome: string; nivel: NivelDoJogador } | null
 }
 
 /**
- * Determina vitória ou derrota para o jogador naquele jogo.
+ * Em que ponto do ciclo está o apito, do ponto de vista do perfil.
  *
- * ATENÇÃO ao vínculo jogador↔time. Aqui vale `jogadores.time_id`, o time REAL
- * do provedor — e NÃO `niveis.time_id`, que é a curadoria do CJ. Os elencos da
- * lista são projetados (LeBron no Philadelphia); usá-los aqui diria que o
- * LeBron venceu um jogo do qual não participou. Esta aba mostra dado canônico,
- * não estratégia.
+ * É a MESMA regra de `estadoDoCiclo` (`../lista-por-jogo.ts`), com os estados
+ * anteriores ao veredito colapsados num só — o perfil não desenha o 1º quarto,
+ * ele só precisa saber se já dá para dizer ✓/✗:
  *
- * Devolve null quando o time do jogador não é nenhum dos dois do jogo — caso
- * real durante a reconciliação de nomes, e melhor exibido como "—" do que
- * chutado.
+ *   AGUARDANDO_OFICIAL  jogo por acontecer, em andamento, ENCERRADO com o box
+ *                       score do jogador ainda não recebido, ou box recebido
+ *                       SEM O MINUTO e com a linha inteira zerada
+ *   NAO_JOGOU           box score com MINUTO ZERO e nada produzido — o DNP
+ *   CONFERIDO           box score que sustenta veredito: minuto em quadra, ou
+ *                       produção na linha (que é prova de que ele entrou)
+ *
+ * A distinção entre os dois primeiros é o que a spec §5.1 exige ("nunca
+ * inferir de parcial"): ausência de linha é dado que não chegou, nunca um
+ * jogador que não entrou em quadra.
+ *
+ * MINUTO NULO não é minuto zero (`minutos` é NULLABLE, e o adaptador emite
+ * null sempre que o provedor manda `min: null`), mas também não é a linha
+ * inteira faltando. O corte é pelo dado que a CONFERÊNCIA usa: `conferirRodadas`
+ * — a tela de Resultados, sobre a mesma (jogo, jogador, atributo) — decide
+ * `bateu` pelo valor do atributo e não olha minuto nenhum. Então:
+ *
+ * - minuto nulo COM produção (pontos, rebotes ou assistências acima de zero) é
+ *   CONFERIDO. O dado oficial CHEGOU: mandar essa linha para "aguardando dado
+ *   oficial" fazia a seção de apitos negar o que a tabela jogo a jogo imprimia
+ *   três linhas abaixo, na mesma tela, e discordar do "fez 18 ✓" da tela de
+ *   Resultados.
+ * - minuto nulo com a linha TODA zerada não sustenta veredito: nada ali
+ *   distingue o reserva que não entrou do box que chegou pela metade. "fez 0 ✗"
+ *   pintaria de vermelho quem talvez nem tenha jogado.
+ * - o mesmo argumento derruba "não jogou" sobre uma linha com produção, e por
+ *   isso o DNP também pede a linha zerada: um box de 0 minuto com 18 pontos
+ *   (provedor que arredonda para baixo quem entrou nos segundos finais) diria
+ *   "não jogou" bem em cima do "pts 18" que a tabela imprime.
+ *
+ * A coluna NOTA continua "—" no minuto nulo, e não é contradição: `notaDaPartida`
+ * normaliza por minuto, então sem minuto não há NOTA a dar — o que é diferente
+ * de não haver PONTOS a contar.
+ */
+export type EstadoDoApito = 'AGUARDANDO_OFICIAL' | 'NAO_JOGOU' | 'CONFERIDO'
+
+/** Um apito conferido do jogador — a linha da nossa "aba Games" com ✓/✗. */
+export type ApitoDoJogador = {
+  /**
+   * O INSTANTE da partida (`jogos.data_hora_utc`), o mesmo que a tabela jogo a
+   * jogo formata. Não é `data_referencia`: o rótulo de calendário do provedor e
+   * o instante caem em dias diferentes para todo jogo que começa às 22h ET, e a
+   * mesma partida saía com duas datas na mesma tela.
+   */
+  data: Date
+  jogoId: string
+  /** null junto com `emCasa` — ver `mandoDoJogador`. */
+  adversarioSigla: string | null
+  /** Mesma leitura de `LinhaHistorico.emCasa`, pela MESMA fonte. */
+  emCasa: boolean | null
+  atributo: Atributo
+  /** A linha mais baixa que a lista ofereceu — a que a conferência usa. */
+  linhaMaisBaixa: number
+  /** O que ele fez no atributo; null fora de `CONFERIDO`. */
+  fez: number | null
+  /** null quando não há veredito (não jogou, ou dado que não chegou). */
+  bateu: boolean | null
+  estado: EstadoDoApito
+}
+
+/**
+ * Os DOIS vínculos jogador↔time, que divergem DE PROPÓSITO: `real` é
+ * `jogadores.time_id` (o elenco do provedor) e `naLista`, `niveis.time_id` (a
+ * curadoria do CJ, projetada — Giannis no Miami).
+ */
+type TimesDoJogador = { real: string | null; naLista: string | null }
+
+/**
+ * MANDO E ADVERSÁRIO — uma regra só para a tela inteira, derivada DO JOGO.
+ *
+ * O lado do jogador é o time que ESTÁ naquela partida. Escolher um dos dois
+ * vínculos como fonte fixa quebra metade da tela, e cada metade por um motivo:
+ *
+ * - só `jogadores.time_id`: o apito nasce grudado num jogo do time da LISTA
+ *   (`montarFatos` monta `jogadoresPorTime` por `niveis.time_id`), e no elenco
+ *   projetado — a norma que o CLAUDE.md descreve — o time real não está em
+ *   nenhum dos dois lados desse jogo: a seção de apitos virava uma coluna de
+ *   "—";
+ * - só `niveis.time_id`: a tabela jogo a jogo nasce do BOX SCORE, que é do
+ *   time real, e ali quem fica de fora é o time da lista.
+ *
+ * Derivar do jogo serve às duas seções com UMA regra, e por isso a mesma
+ * partida sai igual nas duas — o defeito que esta função veio fechar. O time
+ * real vem primeiro porque esta aba exibe DADO CANÔNICO (a exceção que o
+ * CLAUDE.md escreve para ela); a lista entra quando o real não está em quadra
+ * naquela partida.
+ *
+ * A tela de DETALHE DO APITO decide o adversário só por `niveis.time_id`
+ * (`../detalhe-apito.ts`), e ali o assunto é a estratégia. As duas respostas
+ * coincidem em todo jogo de apito do elenco projetado, que é onde a divergência
+ * apareceria; elas só se separam se os DOIS vínculos estiverem na mesma
+ * partida, um em cada lado — e aí esta aba fica com o canônico.
+ *
+ * `emCasa: null` só quando NENHUM dos dois vínculos está na partida: o jogador
+ * trocado no meio da temporada (`jogadores.time_id` é o time ATUAL, e a linha
+ * de box anterior à troca é de outro elenco) e a reconciliação de nomes ainda
+ * por confirmar. Chutar `false` fazia a tela imprimir "@ <time da casa>", que
+ * pode ser o PRÓPRIO time do jogador; sem mando não há nem "vs" nem "@".
+ */
+function mandoDoJogador(
+  timesDoJogador: TimesDoJogador,
+  jogo: { timeCasaId: string; timeVisitanteId: string },
+): { emCasa: boolean | null; adversarioId: string | null } {
+  for (const time of [timesDoJogador.real, timesDoJogador.naLista]) {
+    if (time === null) continue
+    if (time === jogo.timeCasaId) return { emCasa: true, adversarioId: jogo.timeVisitanteId }
+    if (time === jogo.timeVisitanteId) return { emCasa: false, adversarioId: jogo.timeCasaId }
+  }
+  return { emCasa: null, adversarioId: null }
+}
+
+/**
+ * Determina vitória ou derrota para o jogador naquele jogo, pelo mando de
+ * `mandoDoJogador`. Sem mando não há resultado: melhor exibido como "—" do
+ * que chutado.
  */
 function resultadoDoJogo(
-  timeDoJogador: string | null,
-  jogo: { timeCasaId: string; timeVisitanteId: string; placarCasa: number | null; placarVisitante: number | null },
-): { resultado: 'V' | 'D' | null; emCasa: boolean; adversarioId: string } {
-  const emCasa = timeDoJogador === jogo.timeCasaId
-  const adversarioId = emCasa ? jogo.timeVisitanteId : jogo.timeCasaId
+  timesDoJogador: TimesDoJogador,
+  jogo: {
+    timeCasaId: string
+    timeVisitanteId: string
+    placarCasa: number | null
+    placarVisitante: number | null
+  },
+): { resultado: 'V' | 'D' | null; emCasa: boolean | null; adversarioId: string | null } {
+  const { emCasa, adversarioId } = mandoDoJogador(timesDoJogador, jogo)
 
-  const pertence = timeDoJogador === jogo.timeCasaId || timeDoJogador === jogo.timeVisitanteId
-  if (!pertence || jogo.placarCasa === null || jogo.placarVisitante === null) {
+  if (emCasa === null || jogo.placarCasa === null || jogo.placarVisitante === null) {
     return { resultado: null, emCasa, adversarioId }
   }
 
@@ -128,24 +313,77 @@ function resultadoDoJogo(
   return { resultado: meus > deles ? 'V' : 'D', emCasa, adversarioId }
 }
 
+/** A sigla do adversário, ou null quando não há mando. */
+function siglaDoAdversario(
+  adversarioId: string | null,
+  timePorId: Map<string, { sigla: string }>,
+): string | null {
+  return adversarioId === null ? null : (timePorId.get(adversarioId)?.sigla ?? null)
+}
+
+/**
+ * A nota da partida a partir de uma linha de box score.
+ *
+ * Uma função só para o histórico e para a média recente: se cada um montasse
+ * a chamada, a nota da tabela e a nota do cabeçalho poderiam divergir — duas
+ * respostas para "quanto ele foi bem naquele jogo".
+ */
+function notaDoBox(box: typeof estatisticasJogo.$inferSelect): number | null {
+  return notaDaPartida({
+    minutos: numero(box.minutos),
+    pontos: box.pontos,
+    cestasC: box.cestasC,
+    cestasT: box.cestasT,
+    lanceC: box.lanceC,
+    lanceT: box.lanceT,
+    rebotesOf: box.rebotesOf,
+    rebotesDef: box.rebotesDef,
+    roubos: box.roubos,
+    assistencias: box.assistencias,
+    bloqueios: box.bloqueios,
+    faltas: box.faltas,
+    turnovers: box.turnovers,
+  })
+}
+
+/**
+ * Quantas partidas a tabela jogo a jogo carrega por padrão.
+ *
+ * Exportado porque a TELA precisa dizer o recorte quando ele acontece, e o
+ * mesmo número escrito à mão em dois arquivos diverge no dia em que um dos
+ * dois muda — a mesma razão de `LIMITE_DE_APITOS_DO_JOGADOR`.
+ */
+export const LIMITE_DE_PARTIDAS_DO_HISTORICO = 25
+
+/**
+ * @param opcoes.temporada rótulo da temporada exibida — o mesmo de
+ * `medias_jogador`, e o que a tabela jogo a jogo nomeia.
+ * @param opcoes.calendario como a data de um jogo vira aquele rótulo
+ * (`temporadaDe`, fonte única). `jogos` não guarda temporada; sem o calendário
+ * a tela não teria como recortar o histórico e voltaria a rotular de
+ * "temporada 2025-26" uma tabela que atravessa duas.
+ */
 export async function telaDoJogador(
   db: Db,
   jogadorId: string,
-  opcoes: { temporada: string; limiteHistorico?: number } ,
+  opcoes: { temporada: string; calendario: ConfigTemporada; limiteHistorico?: number },
 ): Promise<TelaJogador | null> {
   const [jogador] = await db.select().from(jogadores).where(eq(jogadores.id, jogadorId)).limit(1)
   if (!jogador) return null
 
-  const limite = opcoes.limiteHistorico ?? 25
+  const limite = opcoes.limiteHistorico ?? LIMITE_DE_PARTIDAS_DO_HISTORICO
 
-  const [linhasBox, listaTimes, medias] = await Promise.all([
+  const [lidas, listaTimes, medias] = await Promise.all([
     db
       .select({ box: estatisticasJogo, jogo: jogos })
       .from(estatisticasJogo)
       .innerJoin(jogos, eq(estatisticasJogo.jogoId, jogos.id))
       .where(eq(estatisticasJogo.jogadorId, jogadorId))
       .orderBy(desc(jogos.dataHoraUtc))
-      .limit(limite),
+      // UMA A MAIS que o limite: é assim que a tela sabe que cortou, o mesmo
+      // truque do histórico de apitos. Sem isso a seção continuava rotulada
+      // "temporada 2025-26" por cima de um recorte das últimas 25 partidas.
+      .limit(limite + 1),
     db.select().from(times),
     db
       .select()
@@ -162,12 +400,44 @@ export async function telaDoJogador(
 
   const timePorId = new Map(listaTimes.map((t) => [t.id, t] as const))
 
+  /**
+   * O JOGO A JOGO É DA TEMPORADA QUE A TELA NOMEIA.
+   *
+   * A seção sai rotulada "temporada 2025-26" (artboard) e o hero, duas linhas
+   * acima, conta `medias_jogador`, que É filtrado por temporada. Sem este
+   * recorte a tabela atravessava temporadas por baixo daquele rótulo — "3
+   * jogos · 2025-26" no hero, 23 linhas na tabela, o mesmo nome de temporada
+   * nos dois — e as médias de "Números completos", que nascem desta mesma
+   * janela, herdavam a afirmação falsa.
+   *
+   * O recorte é feito aqui, e não no SQL, porque `jogos` não guarda a
+   * temporada: ela é DERIVADA da data pelo calendário do ruleset, e
+   * `temporadaDe` é a fonte única desse rótulo (dois lugares derivando-o de
+   * jeitos diferentes é como o JOIN devolve zero linhas sem erro nenhum). A
+   * janela já vem ordenada do mais recente para o mais antigo e a temporada
+   * corrente é o PREFIXO dessa ordem — o que se descarta está sempre na cauda,
+   * então o `limite + 1` continua dizendo se cortou.
+   */
+  const daTemporada = lidas.filter(
+    ({ jogo }) => temporadaDe(jogo.dataHoraUtc, opcoes.calendario) === opcoes.temporada,
+  )
+  const historicoCortado = daTemporada.length > limite
+  const linhasBox = daTemporada.slice(0, limite)
+
+  // Os dois vínculos, lidos UMA vez para a tela inteira — ver `mandoDoJogador`.
+  const timeNaListaDoCj = await timeNaListaDoCjDe(db, jogadorId, timePorId)
+  const timesDoJogador: TimesDoJogador = {
+    real: jogador.timeId,
+    naLista: timeNaListaDoCj?.id ?? null,
+  }
+
   const historico: LinhaHistorico[] = linhasBox.map(({ box, jogo }) => {
-    const { resultado, emCasa, adversarioId } = resultadoDoJogo(jogador.timeId, jogo)
+    const { resultado, emCasa, adversarioId } = resultadoDoJogo(timesDoJogador, jogo)
     return {
+      nota: notaDoBox(box),
       jogoId: jogo.id,
       data: jogo.dataHoraUtc,
-      adversarioSigla: timePorId.get(adversarioId)?.sigla ?? '—',
+      adversarioSigla: siglaDoAdversario(adversarioId, timePorId),
       emCasa,
       resultado,
       placar:
@@ -188,6 +458,9 @@ export async function telaDoJogador(
   // duas telas não podem discordar sobre quantos pontos um jogador faz.
   const media = medias[0]
   const n = linhasBox.length
+  // A contagem da TEMPORADA, quando ela existe. Sem ela o número é o da janela
+  // carregada — e a tela precisa saber disso para não nomear a temporada.
+  const jogosDaTemporada = media?.jogos ?? null
   /**
    * Média sobre os jogos em que o número EXISTE.
    *
@@ -242,7 +515,21 @@ export async function telaDoJogador(
 
   const aoVivo = await blocoAoVivo(db, jogadorId, jogador.timeId, timePorId)
 
+  // Nota média recente: as últimas 5 partidas COM nota (menos de 5 minutos não
+  // tem nota — ver nota.ts). O histórico já vem do mais recente para o mais antigo.
+  const notas = historico
+    .map((l) => l.nota)
+    .filter((n): n is number => n !== null)
+    .slice(0, 5)
+  const notaMediaRecente =
+    notas.length === 0
+      ? null
+      : Math.round((notas.reduce((a, v) => a + v, 0) / notas.length) * 10) / 10
+
   return {
+    notaMediaRecente,
+    timeNaListaDoCj,
+    historicoCortado,
     perfil: {
       id: jogador.id,
       nome: jogador.nomeCompleto,
@@ -256,7 +543,8 @@ export async function telaDoJogador(
       ativo: jogador.ativo,
     },
     perfilNumeros,
-    jogosDisputados: media?.jogos ?? n,
+    jogosDisputados: jogosDaTemporada ?? n,
+    jogosDisputadosDoRecorte: jogosDaTemporada === null && historicoCortado,
     historico,
     aoVivo,
     atualizacao: maisAntiga([
@@ -268,6 +556,181 @@ export async function telaDoJogador(
       aoVivo === null ? null : { em: aoVivo.atualizadoEm, fonte: 'ao vivo' },
     ]),
   }
+}
+
+/**
+ * O vínculo do jogador na LISTA DO CJ (versão ativa de níveis): o time
+ * projetado e o nível dele em PONTOS — a única hierarquia que o CJ
+ * classificou; o vínculo de time é o mesmo em todos os atributos.
+ *
+ * UMA definição da consulta, porque são dois usos: o rótulo "na lista do CJ"
+ * do hero e o MANDO das duas seções (`mandoDoJogador`). Escritas separadas,
+ * uma delas continuaria lendo só `jogadores.time_id` no dia seguinte.
+ */
+async function vinculoNaListaDoCj(
+  db: Db,
+  jogadorId: string,
+): Promise<{ timeId: string; nivel: NivelDoJogador } | null> {
+  const [versao] = await db.select().from(niveisVersao).where(eq(niveisVersao.ativa, true)).limit(1)
+  if (!versao) return null
+  const [vinculo] = await db
+    .select({ timeId: niveis.timeId, nivel: niveis.nivel })
+    .from(niveis)
+    .where(
+      and(
+        eq(niveis.niveisVersaoId, versao.id),
+        eq(niveis.jogadorId, jogadorId),
+        eq(niveis.atributo, 'PONTOS'),
+      ),
+    )
+    .limit(1)
+  return vinculo ?? null
+}
+
+/** O mesmo vínculo, já resolvido em sigla e nome para o hero. */
+async function timeNaListaDoCjDe(
+  db: Db,
+  jogadorId: string,
+  timePorId: Map<string, { id: string; sigla: string; nome: string }>,
+): Promise<{ id: string; sigla: string; nome: string; nivel: NivelDoJogador } | null> {
+  const vinculo = await vinculoNaListaDoCj(db, jogadorId)
+  const time = vinculo ? timePorId.get(vinculo.timeId) : undefined
+  return time && vinculo
+    ? { id: time.id, sigla: time.sigla, nome: time.nome, nivel: vinculo.nivel }
+    : null
+}
+
+/**
+ * Os apitos da ESTRATÉGIA sobre este jogador, conferidos — a nossa versão da
+ * aba "Games" com rating (identidade 04). Vive na aba de estatísticas com o
+ * rótulo "apitos da estratégia": é o mecanismo de confiança verificável do
+ * Sofascore aplicado ao CJ, e o dono do produto disse sim (Q17).
+ *
+ * Um registro por (jogo, atributo); a conferência é pela linha MAIS BAIXA,
+ * como em `conferirRodadas`. Mando e adversário saem de `mandoDoJogador` — a
+ * MESMA regra da tabela jogo a jogo. Quem apitou foi a estratégia, mas contra
+ * quem ele jogou é fato da partida, e as duas seções vivem na mesma tela:
+ * lendo fontes diferentes, a mesma partida saía "vs SAS" no apito e "@ MIA"
+ * três linhas abaixo.
+ */
+export async function apitosDoJogador(
+  db: Db,
+  jogadorId: string,
+  limite: number,
+): Promise<ApitoDoJogador[]> {
+  const linhas = await db
+    .select({
+      data: jogos.dataHoraUtc,
+      jogoId: apitos.jogoId,
+      atributo: apitos.atributo,
+      linha: apitos.linha,
+      timeCasaId: jogos.timeCasaId,
+      timeVisitanteId: jogos.timeVisitanteId,
+      status: jogos.status,
+      minutos: estatisticasJogo.minutos,
+      pontos: estatisticasJogo.pontos,
+      rebotes: estatisticasJogo.rebotesTotal,
+      assistencias: estatisticasJogo.assistencias,
+    })
+    .from(apitos)
+    .innerJoin(jogos, eq(apitos.jogoId, jogos.id))
+    .leftJoin(
+      estatisticasJogo,
+      and(
+        eq(estatisticasJogo.jogoId, apitos.jogoId),
+        eq(estatisticasJogo.jogadorId, apitos.jogadorId),
+      ),
+    )
+    .where(and(eq(apitos.estrategia, 'LISTA_SECRETA'), eq(apitos.jogadorId, jogadorId)))
+    .orderBy(desc(jogos.dataHoraUtc), asc(apitos.atributo), asc(apitos.linha))
+
+  if (linhas.length === 0) return []
+
+  const listaTimes = await db
+    .select({ id: times.id, sigla: times.sigla, nome: times.nome })
+    .from(times)
+  const timePorId = new Map(listaTimes.map((t) => [t.id, t] as const))
+  // OS DOIS vínculos: o jogo do apito é do time da LISTA (é dele que o apito
+  // nasce) e o box score é do time REAL. `mandoDoJogador` usa o que estiver
+  // naquela partida — sem isso, o elenco projetado do CJ apagava o adversário
+  // de toda linha desta seção.
+  const [doProvedor, naLista] = await Promise.all([
+    db
+      .select({ timeId: jogadores.timeId })
+      .from(jogadores)
+      .where(eq(jogadores.id, jogadorId))
+      .limit(1),
+    vinculoNaListaDoCj(db, jogadorId),
+  ])
+  const timesDoJogador: TimesDoJogador = {
+    real: doProvedor[0]?.timeId ?? null,
+    naLista: naLista?.timeId ?? null,
+  }
+
+  const porCard = new Map<string, ApitoDoJogador>()
+  for (const l of linhas) {
+    if (l.linha === null) continue
+    const chave = `${l.jogoId}|${l.atributo}`
+    const { emCasa, adversarioId } = mandoDoJogador(timesDoJogador, l)
+    // TRÊS estados, nunca dois. "Não jogou" é a LINHA DO RESERVA QUE NÃO
+    // ENTROU (0 min, 0 pts) — o provedor manda essa linha também, e a
+    // sincronização insere toda linha recebida. AUSÊNCIA de linha é outra
+    // coisa: é dado que ainda não chegou, e chamar isso de DNP é inferir
+    // veredito de ausência de dado — o jogo acabou às 23h, o job de box score
+    // ainda não rodou, e o perfil dizia que o jogador não entrou em quadra.
+    const temBox = l.pontos !== null
+    const encerrado = l.status === 'ENCERRADO'
+    // UMA regra, na ordem em que a linha fala: produção na linha prova que ele
+    // entrou; minuto em quadra também; minuto ZERO é o DNP; e minuto que não
+    // chegou, sobre uma linha sem nada, não sustenta veredito nenhum. É a mesma
+    // leitura que `conferirRodadas` faz do outro lado do app (a tela de
+    // Resultados decide pelo VALOR DO ATRIBUTO, sem olhar minuto) — e as duas
+    // falam da mesma (jogo, jogador, atributo).
+    const minutos = numero(l.minutos)
+    const produziu = (l.pontos ?? 0) > 0 || (l.rebotes ?? 0) > 0 || (l.assistencias ?? 0) > 0
+    // PRODUÇÃO VENCE. Não se marca ponto sem jogar, e o provedor que arredonda
+    // para baixo quem entrou nos segundos finais manda 0 minuto COM pontos na
+    // linha: chamar isso de DNP escreveria "não jogou" bem em cima do "pts N"
+    // que a tabela imprime três linhas abaixo. O DNP de verdade é a linha
+    // ZERADA. Mesma ordem de `entrouEmQuadra` em `resultados.ts`: é o que
+    // impede as duas telas de discordarem sobre a mesma (jogo, jogador,
+    // atributo).
+    const estado: EstadoDoApito =
+      !encerrado || !temBox
+        ? 'AGUARDANDO_OFICIAL'
+        : produziu || (minutos !== null && minutos > 0)
+          ? 'CONFERIDO'
+          : minutos === 0
+            ? 'NAO_JOGOU'
+            : 'AGUARDANDO_OFICIAL'
+    const fez =
+      estado !== 'CONFERIDO'
+        ? null
+        : l.atributo === 'PONTOS'
+          ? l.pontos
+          : l.atributo === 'REBOTES'
+            ? l.rebotes
+            : l.assistencias
+    const atual = porCard.get(chave)
+    if (!atual) {
+      porCard.set(chave, {
+        estado,
+        data: l.data,
+        jogoId: l.jogoId,
+        adversarioSigla: siglaDoAdversario(adversarioId, timePorId),
+        emCasa,
+        atributo: l.atributo,
+        linhaMaisBaixa: l.linha,
+        fez,
+        bateu: fez === null ? null : fez >= l.linha,
+      })
+    } else if (l.linha < atual.linhaMaisBaixa) {
+      atual.linhaMaisBaixa = l.linha
+      atual.bateu = atual.fez === null ? null : atual.fez >= l.linha
+    }
+  }
+
+  return [...porCard.values()].slice(0, limite)
 }
 
 /**
@@ -294,12 +757,13 @@ async function blocoAoVivo(
   const quartos = await db
     .select()
     .from(estatisticasQuarto)
-    .where(
-      and(eq(estatisticasQuarto.jogoId, jogo.id), eq(estatisticasQuarto.jogadorId, jogadorId)),
-    )
+    .where(and(eq(estatisticasQuarto.jogoId, jogo.id), eq(estatisticasQuarto.jogadorId, jogadorId)))
 
-  const emCasa = jogo.timeCasaId === timeDoJogador
-  const adversarioId = emCasa ? jogo.timeVisitanteId : jogo.timeCasaId
+  // O jogo foi escolhido pelo time REAL do jogador — é por ele que o jogador
+  // entra em quadra, e é dele a quebra por quarto que este bloco soma. Logo o
+  // mando é sempre conhecido aqui, e o time da lista não entra na conta: ele
+  // apontaria uma partida em que o jogador não está jogando.
+  const { adversarioId } = mandoDoJogador({ real: timeDoJogador, naLista: null }, jogo)
 
   // Sem linha de quarto ainda, o mais recente que existe é a própria partida.
   const atualizadoEm = quartos.reduce(
@@ -310,7 +774,7 @@ async function blocoAoVivo(
   return {
     jogoId: jogo.id,
     atualizadoEm,
-    adversarioSigla: timePorId.get(adversarioId)?.sigla ?? '—',
+    adversarioSigla: siglaDoAdversario(adversarioId, timePorId) ?? '—',
     quartoAtual: jogo.quartoAtual,
     tempoRestante: jogo.tempoRestante,
     placar:
@@ -332,10 +796,7 @@ async function blocoAoVivo(
 }
 
 /** Ids de jogadores citados em cards — usado para montar os links do feed. */
-export async function nomesDeJogadores(
-  db: Db,
-  ids: string[],
-): Promise<Map<string, string>> {
+export async function nomesDeJogadores(db: Db, ids: string[]): Promise<Map<string, string>> {
   if (ids.length === 0) return new Map()
   const linhas = await db.select().from(jogadores).where(inArray(jogadores.id, ids))
   return new Map(linhas.map((j) => [j.id, j.nomeCompleto] as const))

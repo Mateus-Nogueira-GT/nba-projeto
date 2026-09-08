@@ -18,6 +18,9 @@ async function principal() {
   })
 
   console.log(`Fotos gravadas: ${resultado.gravadas}`)
+  if (resultado.semId.length > 0) {
+    console.log(`Sem foto de propósito (ambíguo na lista do CJ): ${resultado.semId.join(', ')}`)
+  }
   if (resultado.puladas.length > 0) {
     console.log('Puladas (sem jogador correspondente ou URL não respondeu 200):')
     for (const nome of resultado.puladas) console.log(`  - ${nome}`)

@@ -249,6 +249,31 @@ describe('job diário da Lista Secreta', () => {
     const depois = await lerFeed(banco.db, HOJE)
     expect(depois!.conteudo.itens.filter((i) => i.jogadorId === alvo).every((i) => i.fotoUrl === FOTO)).toBe(true)
   })
+
+  it('a foto chega ao card SEM republicar — é apresentação, não estratégia (identidade 04)', async () => {
+    // O teste acima garante que a republicação vê a foto. Este garante o que
+    // a carga real de 07/09 mostrou faltar: `demo:fotos` roda DEPOIS da
+    // publicação, ninguém republica, e 0 de 137 cards tinham rosto embora 3
+    // jogadores apitados tivessem foto em `jogadores`. A foto não é fato do
+    // motor; congelá-la no JSON do snapshot era prender apresentação dentro
+    // de estratégia. A leitura passa a buscar `jogadores.foto_url` ao vivo.
+    await escalar('Luka Doncic', 'FORA')
+    await publicarListaSecreta(banco.db, ruleset, { dataReferencia: HOJE, agora: UMA_HORA_ANTES })
+    const antes = await lerFeed(banco.db, HOJE)
+    const alvo = antes!.conteudo.itens[0]!.jogadorId
+    expect(antes!.conteudo.itens.every((i) => i.fotoUrl === null)).toBe(true)
+
+    const FOTO = 'https://cdn.nba.com/headshots/nba/latest/1040x760/1629029.png'
+    await banco.db.update(jogadores).set({ fotoUrl: FOTO }).where(eq(jogadores.id, alvo))
+
+    // Nenhuma publicação entre a foto e a leitura.
+    const depois = await lerFeed(banco.db, HOJE)
+    const doAlvo = depois!.conteudo.itens.filter((i) => i.jogadorId === alvo)
+    expect(doAlvo.length).toBeGreaterThan(0)
+    expect(doAlvo.every((i) => i.fotoUrl === FOTO)).toBe(true)
+    // Os outros continuam sem foto: a leitura sobrescreve por jogador, não em bloco.
+    expect(depois!.conteudo.itens.filter((i) => i.jogadorId !== alvo).every((i) => i.fotoUrl === null)).toBe(true)
+  })
 })
 
 // ===========================================================================

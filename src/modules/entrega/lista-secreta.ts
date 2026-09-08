@@ -188,6 +188,11 @@ export async function publicarListaSecreta(
       // hash não muda no ciclo seguinte.
       const enriquecido = await enriquecerComNarrativas(db, opcoes.llm, conteudo, {
         gravarParcial: gravarConteudo,
+        // O snapshot que este está substituindo: item igual reaproveita a
+        // narrativa. Sem isto a republicação depois das odds — que muda o
+        // hash, não as entradas — gerava a lista inteira de novo (274
+        // chamadas por dia na carga de 07/09, metade delas por nada).
+        anterior: (existente?.conteudoJson as ConteudoFeed | undefined) ?? null,
       })
       narrativas = enriquecido.geradas
       narrativasReprovadas = enriquecido.reprovadas
@@ -436,7 +441,34 @@ export async function lerFeed(
     .limit(1)
 
   if (!linha) return null
-  return { conteudo: linha.conteudoJson as ConteudoFeed, geradoEm: linha.geradoEm }
+  const conteudo = await comFotosAoVivo(db, linha.conteudoJson as ConteudoFeed)
+  return { conteudo, geradoEm: linha.geradoEm }
+}
+
+/**
+ * A FOTO É LIDA AO VIVO, não do snapshot.
+ *
+ * O snapshot continua gravando `fotoUrl` (o hash cobre o item inteiro — ver o
+ * teste "trocar a foto REGRAVA o snapshot"), mas a leitura sobrescreve com o
+ * que está em `jogadores.foto_url` agora. Motivo, medido na carga de
+ * 07/09/2026: `demo:fotos` roda depois da publicação, ninguém republica, e a
+ * tela abriu com 0 de 137 cards com rosto embora três apitados tivessem foto.
+ * Foto é apresentação; congelá-la dentro de um JSON de estratégia era prender
+ * uma coisa dentro da outra. Uma consulta a mais por leitura, sobre ≤ 150 ids
+ * por chave primária, na mesma região do banco (ADR-0008) — milissegundos.
+ */
+async function comFotosAoVivo(db: Db, conteudo: ConteudoFeed): Promise<ConteudoFeed> {
+  const ids = [...new Set(conteudo.itens.map((i) => i.jogadorId))]
+  if (ids.length === 0) return conteudo
+  const fotos = await db
+    .select({ id: jogadores.id, fotoUrl: jogadores.fotoUrl })
+    .from(jogadores)
+    .where(inArray(jogadores.id, ids))
+  const porId = new Map(fotos.map((f) => [f.id, f.fotoUrl] as const))
+  return {
+    ...conteudo,
+    itens: conteudo.itens.map((i) => ({ ...i, fotoUrl: porId.get(i.jogadorId) ?? null })),
+  }
 }
 
 /**

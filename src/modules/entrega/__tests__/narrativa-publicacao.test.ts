@@ -3,7 +3,7 @@ import { and, eq } from 'drizzle-orm'
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 
 import { bancoDeTeste } from '../../dominio/__tests__/ajuda-banco'
-import { feedSnapshot } from '../../dominio/db/schema'
+import { feedSnapshot, jogadores } from '../../dominio/db/schema'
 import { ErroLLM, LLMFake, type PortaLLM } from '../../ingestao/llm'
 import { semearDemo } from '../../ingestao/demo/semear'
 import { carregarRuleset } from '../../motor/ruleset/carregar'
@@ -62,6 +62,29 @@ describe('narrativa na publicação', () => {
     expect(r.publicou).toBe(true)
     expect(r.publicou && r.mudou).toBe(false)
     expect(segunda.chamadas).toHaveLength(0)
+  })
+
+  it('republicar com o hash MUDADO mas os mesmos itens reaproveita as narrativas — zero chamadas (identidade 04)', async () => {
+    // O caso real: as odds entram nos itens depois da primeira publicação, o
+    // hash muda, e a republicação gerava tudo de novo. Aqui a mudança de hash
+    // vem pela foto (o teste vizinho em lista-secreta.test prova que ela
+    // regrava o snapshot); os itens continuam os mesmos.
+    const primeira = new LLMFake()
+    await publicar(primeira)
+    const antes = await lerFeed(banco.db, HOJE)
+    const alvo = antes!.conteudo.itens[0]!.jogadorId
+    await banco.db
+      .update(jogadores)
+      .set({ fotoUrl: 'https://cdn.nba.com/headshots/nba/latest/1040x760/1629029.png' })
+      .where(eq(jogadores.id, alvo))
+
+    const segunda = new LLMFake()
+    const r = await publicar(segunda)
+
+    expect(r.publicou && r.mudou).toBe(true)
+    expect(segunda.chamadas).toHaveLength(0)
+    const depois = await lerFeed(banco.db, HOJE)
+    expect(depois!.conteudo.itens.map((i) => i.narrativa)).toEqual(antes!.conteudo.itens.map((i) => i.narrativa))
   })
 
   it('o snapshot gravado carrega as narrativas', async () => {

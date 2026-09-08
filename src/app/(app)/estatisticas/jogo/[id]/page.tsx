@@ -8,12 +8,13 @@ import { rulesetAtivo } from '@/modules/entrega/ruleset-ativo'
 import { exigirAcessoEstatisticasSeConfigurado } from '@/modules/plataforma/assinatura/guarda'
 import { dataHora, diaCurto } from '@/components/formato'
 import { CabecalhoTela, Moldura } from '@/components/navegacao'
-import { NotaPartida, Tabela, UltimaAtualizacao } from '@/design-system/componentes'
+import { Avatar, NotaPartida, Tabela, UltimaAtualizacao } from '@/design-system/componentes'
 import type { Coluna } from '@/design-system/componentes'
+import { NIVEL_JOGADOR } from '@/design-system/tokens/css'
 import { semantico } from '@/design-system/tokens/semantico'
 import '@/design-system/tokens/tokens.css'
 import { Secao, SemBanco, SOBRANCELHA_STATS } from '../../moldura'
-import { AtualizarAoVivo } from './AtualizarAoVivo'
+import { AtualizarAoVivo } from '@/components/AtualizarAoVivo'
 
 export const dynamic = 'force-dynamic'
 
@@ -25,30 +26,43 @@ function minutos(v: number | null): string {
   return v === null ? '—' : String(Math.round(v))
 }
 
-const COLUNAS: Coluna<LinhaDoBoxScore>[] = [
-  {
-    chave: 'jogador',
-    rotulo: 'Jogador',
-    alinhamento: 'esquerda',
-    fixa: true,
-    celula: (l) => (
-      <a href={rotaDoJogador(l.jogadorId)} style={{ color: semantico.textoPrimario }}>
-        {l.nome}
-      </a>
-    ),
-  },
-  { chave: 'nota', rotulo: 'NOTA', descricao: 'nota da partida', celula: (l) => <NotaPartida nota={l.nota} /> },
-  { chave: 'min', rotulo: 'MIN', descricao: 'minutos', celula: (l) => minutos(l.minutos) },
-  { chave: 'pts', rotulo: 'PTS', descricao: 'pontos', celula: (l) => l.pontos },
-  { chave: 'reb', rotulo: 'REB', descricao: 'rebotes', celula: (l) => l.rebotes },
-  { chave: 'ast', rotulo: 'AST', descricao: 'assistências', celula: (l) => l.assistencias },
-  { chave: 'rou', rotulo: 'ROU', descricao: 'roubos', celula: (l) => l.roubos },
-  { chave: 'toc', rotulo: 'TOC', descricao: 'tocos', celula: (l) => l.bloqueios },
-  { chave: 'to', rotulo: 'TO', descricao: 'turnovers', celula: (l) => l.turnovers },
-  { chave: 'fg', rotulo: 'FG%', descricao: 'aproveitamento de quadra', celula: (l) => pct(l.fgPercentual) },
-  { chave: 'tres', rotulo: '3P%', descricao: 'aproveitamento de três', celula: (l) => pct(l.tresPercentual) },
-  { chave: 'll', rotulo: 'LL%', descricao: 'aproveitamento de lance livre', celula: (l) => pct(l.lancePercentual) },
-]
+function colunasDoBoxScore(timeSigla: string): Coluna<LinhaDoBoxScore>[] {
+  return [
+    {
+      chave: 'jogador',
+      rotulo: 'Jogador',
+      alinhamento: 'esquerda',
+      fixa: true,
+      celula: (l) => (
+        <a
+          href={rotaDoJogador(l.jogadorId)}
+          style={{ display: 'flex', alignItems: 'center', gap: 8, color: semantico.textoPrimario }}
+        >
+          <Avatar
+            nome={l.nome}
+            fotoUrl={l.fotoUrl}
+            timeSigla={timeSigla}
+            nivelApito={null}
+            tamanho={26}
+            raio={8}
+          />
+          {l.nome}
+        </a>
+      ),
+    },
+    { chave: 'nota', rotulo: 'NOTA', descricao: 'nota da partida', celula: (l) => <NotaPartida nota={l.nota} /> },
+    { chave: 'min', rotulo: 'MIN', descricao: 'minutos', celula: (l) => minutos(l.minutos) },
+    { chave: 'pts', rotulo: 'PTS', descricao: 'pontos', celula: (l) => l.pontos },
+    { chave: 'reb', rotulo: 'REB', descricao: 'rebotes', celula: (l) => l.rebotes },
+    { chave: 'ast', rotulo: 'AST', descricao: 'assistências', celula: (l) => l.assistencias },
+    { chave: 'rou', rotulo: 'ROU', descricao: 'roubos', celula: (l) => l.roubos },
+    { chave: 'toc', rotulo: 'TOC', descricao: 'tocos', celula: (l) => l.bloqueios },
+    { chave: 'to', rotulo: 'TO', descricao: 'turnovers', celula: (l) => l.turnovers },
+    { chave: 'fg', rotulo: 'FG%', descricao: 'aproveitamento de quadra', celula: (l) => pct(l.fgPercentual) },
+    { chave: 'tres', rotulo: '3P%', descricao: 'aproveitamento de três', celula: (l) => pct(l.tresPercentual) },
+    { chave: 'll', rotulo: 'LL%', descricao: 'aproveitamento de lance livre', celula: (l) => pct(l.lancePercentual) },
+  ]
+}
 
 function Placar({
   casa,
@@ -113,7 +127,7 @@ function Quartos({ casa, visitante }: { casa: LadoDaPartida; visitante: LadoDaPa
   // revisão: a versão manual não tinha `<caption>` nem `scope`).
   const colunas: Coluna<LadoDaPartida>[] = [
     { chave: 'time', rotulo: 'Time', alinhamento: 'esquerda', fixa: true, celula: (l) => l.sigla },
-    { chave: 'q1', rotulo: '1º', alinhamento: 'direita', celula: (l) => l.quartos!.q1 },
+    { chave: 'q1', rotulo: '1º', alinhamento: 'direita', destaque: true, celula: (l) => l.quartos!.q1 },
     { chave: 'q2', rotulo: '2º', alinhamento: 'direita', celula: (l) => l.quartos!.q2 },
     { chave: 'q3', rotulo: '3º', alinhamento: 'direita', celula: (l) => l.quartos!.q3 },
     { chave: 'q4', rotulo: '4º', alinhamento: 'direita', celula: (l) => l.quartos!.q4 },
@@ -139,12 +153,17 @@ function Quartos({ casa, visitante }: { casa: LadoDaPartida; visitante: LadoDaPa
   })
 
   return (
-    <Tabela
-      legenda={`Pontos por quarto — ${casa.sigla} × ${visitante.sigla}`}
-      colunas={colunas}
-      linhas={[casa, visitante]}
-      chaveDaLinha={(l) => l.timeId}
-    />
+    <>
+      <p style={{ margin: '0 0 8px', fontSize: 12, color: semantico.textoSecundario }}>
+        1º Q · o que o Fire Live observa
+      </p>
+      <Tabela
+        legenda={`Pontos por quarto — ${casa.sigla} × ${visitante.sigla}`}
+        colunas={colunas}
+        linhas={[casa, visitante]}
+        chaveDaLinha={(l) => l.timeId}
+      />
+    </>
   )
 }
 
@@ -161,6 +180,12 @@ function Desfalques({ lado }: { lado: LadoDaPartida }) {
             {d.nome} — {d.status === 'FORA' ? 'fora' : 'dúvida'}
             {d.motivo ? ` (${d.motivo})` : ''}
             {!d.confirmado && ' · não confirmado'}
+            {d.hierarquiaPontos && (
+              <span style={{ display: 'block', color: semantico.textoSecundario, fontSize: 12 }}>
+                Lista do CJ · {d.hierarquiaPontos.timeSigla} · PONTOS · nº {d.hierarquiaPontos.posicao}
+                {' · '}{NIVEL_JOGADOR[d.hierarquiaPontos.nivel].rotulo}
+              </span>
+            )}
           </li>
         ))}
       </ul>
@@ -247,7 +272,7 @@ export default async function PaginaDoJogo({
             <Secao key={lado.timeId} titulo={`Box score · ${lado.nome}`}>
               <Tabela
                 legenda={`Box score de ${lado.nome}`}
-                colunas={COLUNAS}
+                colunas={colunasDoBoxScore(lado.sigla)}
                 linhas={lado.boxScore}
                 chaveDaLinha={(l) => l.jogadorId}
                 // `temBox` é OR: quando só um lado sincronizou, o outro caía

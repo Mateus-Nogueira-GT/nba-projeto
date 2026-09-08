@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import { componente } from '../tokens/componente'
 import { semantico } from '../tokens/semantico'
 
 export type Coluna<T> = {
@@ -10,6 +11,16 @@ export type Coluna<T> = {
   alinhamento?: 'esquerda' | 'direita'
   /** Colunas de identificação ficam presas na rolagem horizontal. */
   fixa?: boolean
+  /**
+   * A coluna inteira — cabeçalho e células — no fundo e na borda do universo
+   * QUENTE. Existe para o 1º quarto da tela de partida: é o recorte que o Fire
+   * Live observa, e marcá-lo com a mesma temperatura daquela tela é o que liga
+   * uma coisa à outra sem escrever uma frase em cada célula.
+   *
+   * Quem usa deve escrever ao lado da tabela o que o destaque significa — cor
+   * nunca é canal único.
+   */
+  destaque?: boolean
   celula: (linha: T) => ReactNode
 }
 
@@ -47,37 +58,47 @@ export function Tabela<T>({ legenda, colunas, linhas, chaveDaLinha, vazio }: Tab
         style={{
           width: '100%',
           borderCollapse: 'collapse',
+          fontFamily: semantico.fonteRotulo,
           fontSize: 13,
+          letterSpacing: 0.5,
           fontVariantNumeric: 'tabular-nums',
           whiteSpace: 'nowrap',
         }}
       >
-        <caption
-          style={{
-            textAlign: 'left',
-            fontSize: 12,
-            color: semantico.textoSecundario,
-            paddingBottom: 6,
-          }}
-        >
-          {legenda}
-        </caption>
+        {/* A legenda NOMEIA a tabela para quem não vê, e some para quem vê: o
+            cabeçalho da seção logo acima já diz a mesma coisa, e dois títulos
+            empilhados são ruído. Tirá-la do DOM tiraria o nome da tabela. */}
+        <caption style={SO_LEITOR_DE_TELA}>{legenda}</caption>
         <thead>
           <tr>
-            {colunas.map((c) => (
+            {colunas.map((c, i) => (
               <th
                 key={c.chave}
                 scope="col"
                 title={c.descricao}
                 style={{
                   textAlign: c.alinhamento === 'direita' ? 'right' : 'left',
-                  padding: '8px 10px',
+                  // A primeira coluna nasce colada à margem esquerda.
+                  padding: i === 0 ? '6px 6px 6px 0' : '6px 6px',
                   borderBottom: `1px solid ${semantico.divisor}`,
-                  color: semantico.textoSecundario,
-                  fontWeight: 600,
+                  fontSize: 10,
+                  letterSpacing: 1.2,
+                  textTransform: 'uppercase',
+                  color: semantico.texto40,
+                  fontWeight: 700,
                   position: c.fixa ? 'sticky' : undefined,
                   left: c.fixa ? 0 : undefined,
-                  background: c.fixa ? semantico.fundo : undefined,
+                  background: c.destaque
+                    ? componente.contextoQuente.faixaFundo
+                    : c.fixa
+                      ? semantico.fundo
+                      : undefined,
+                  borderLeft: c.destaque
+                    ? `1px solid ${componente.contextoQuente.borda}`
+                    : undefined,
+                  borderRight: c.destaque
+                    ? `1px solid ${componente.contextoQuente.borda}`
+                    : undefined,
                 }}
               >
                 {/* Abreviação com forma por extenso disponível ao leitor de tela. */}
@@ -89,16 +110,28 @@ export function Tabela<T>({ legenda, colunas, linhas, chaveDaLinha, vazio }: Tab
         <tbody>
           {linhas.map((linha) => (
             <tr key={chaveDaLinha(linha)}>
-              {colunas.map((c) => (
+              {colunas.map((c, i) => (
                 <td
                   key={c.chave}
                   style={{
                     textAlign: c.alinhamento === 'direita' ? 'right' : 'left',
-                    padding: '8px 10px',
-                    borderBottom: `1px solid ${semantico.divisor}`,
+                    padding: i === 0 ? '8px 6px 8px 0' : '8px 6px',
+                    // Régua a meia força ENTRE registros: a linha cheia por
+                    // linha vira grade e a densidade some.
+                    borderBottom: `1px solid ${semantico.divisorSuave}`,
                     position: c.fixa ? 'sticky' : undefined,
                     left: c.fixa ? 0 : undefined,
-                    background: c.fixa ? semantico.fundo : undefined,
+                    background: c.destaque
+                      ? componente.contextoQuente.faixaFundo
+                      : c.fixa
+                        ? semantico.fundo
+                        : undefined,
+                    borderLeft: c.destaque
+                      ? `1px solid ${componente.contextoQuente.borda}`
+                      : undefined,
+                    borderRight: c.destaque
+                      ? `1px solid ${componente.contextoQuente.borda}`
+                      : undefined,
                   }}
                 >
                   {c.celula(linha)}
@@ -111,3 +144,16 @@ export function Tabela<T>({ legenda, colunas, linhas, chaveDaLinha, vazio }: Tab
     </div>
   )
 }
+
+/** Fora da tela, dentro da árvore de acessibilidade. */
+const SO_LEITOR_DE_TELA = {
+  position: 'absolute',
+  width: 1,
+  height: 1,
+  padding: 0,
+  margin: -1,
+  overflow: 'hidden',
+  clip: 'rect(0 0 0 0)',
+  whiteSpace: 'nowrap',
+  border: 0,
+} as const

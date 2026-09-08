@@ -6,6 +6,8 @@ import {
   jogadores,
   jogos,
   lesoesEscalacao,
+  niveis,
+  niveisVersao,
   times,
 } from '../../dominio/db/schema'
 import type { Db } from '../../dominio/db/tipos'
@@ -30,6 +32,12 @@ import { numero, percentual } from './numeros'
 export type LinhaDoBoxScore = {
   jogadorId: string
   nome: string
+  /**
+   * O rosto, LIDO AO VIVO de `jogadores.foto_url` (spec 04, §5.3) — a tela de
+   * partida põe o Avatar na linha do box score, como a do jogador já faz no
+   * hero. `null` vira monograma; a tela nunca fica sem o canal da identidade.
+   */
+  fotoUrl: string | null
   posicao: string | null
   minutos: number | null
   pontos: number
@@ -60,6 +68,12 @@ export type LadoDaPartida = {
     status: 'FORA' | 'DUVIDA'
     motivo: string | null
     confirmado: boolean
+    /** Contexto editorial em pontos; não altera o lado real do desfalque. */
+    hierarquiaPontos: {
+      posicao: number
+      nivel: (typeof niveis.$inferSelect)['nivel']
+      timeSigla: string
+    } | null
   }[]
 }
 
@@ -92,7 +106,12 @@ export type TelaDoJogo = ComAtualizacao & {
 }
 
 const LIMITE_H2H_PADRAO = 5
-const LIMITE_FORMA = 5
+/**
+ * Quantos resultados a "forma" (V/D) carrega. Exportado porque a
+ * classificação do índice mostra os MESMOS últimos 5 — dois números 5 em
+ * arquivos diferentes divergiriam no dia em que um deles mudasse.
+ */
+export const LIMITE_FORMA = 5
 
 export async function telaDoJogo(
   db: Db,
@@ -142,7 +161,7 @@ export async function telaDoJogo(
   // sequenciais ao banco quando 2 bastam (achado da revisão; esta é a única
   // tela da aba com refresh automático a cada 30s, então cada round-trip a
   // menos conta em dobro).
-  const [listaTimes, boxTimes, boxJogadores, elenco, escalacao, h2hBruto, formaCasaBruta, formaVisitanteBruta] =
+  const [listaTimes, boxTimes, boxJogadores, elenco, escalacao, h2hBruto, formaCasaBruta, formaVisitanteBruta, hierarquiaPontos] =
     await Promise.all([
       db.select().from(times).where(inArray(times.id, idsTimes)),
       db.select().from(estatisticasTimeJogo).where(eq(estatisticasTimeJogo.jogoId, jogoId)),
@@ -168,10 +187,25 @@ export async function telaDoJogo(
         .limit(limiteH2H),
       formaDoTime(jogo.timeCasaId),
       formaDoTime(jogo.timeVisitanteId),
+      // A anotação do desfalque mostra a lista ativa de PONTOS, identificada
+      // como tal na tela. A sigla editorial pode divergir do elenco real.
+      db
+        .select({
+          jogadorId: niveis.jogadorId,
+          posicao: niveis.posicaoHierarquia,
+          nivel: niveis.nivel,
+          timeSigla: times.sigla,
+        })
+        .from(niveis)
+        .innerJoin(niveisVersao, and(eq(niveisVersao.id, niveis.niveisVersaoId), eq(niveisVersao.ativa, true)))
+        .innerJoin(jogadores, eq(jogadores.id, niveis.jogadorId))
+        .innerJoin(times, eq(times.id, niveis.timeId))
+        .where(and(eq(niveis.atributo, 'PONTOS'), inArray(jogadores.timeId, idsTimes))),
     ])
 
   const timePorId = new Map(listaTimes.map((t) => [t.id, t] as const))
   const jogadorPorId = new Map(elenco.map((j) => [j.id, j] as const))
+  const hierarquiaPorJogador = new Map(hierarquiaPontos.map((linha) => [linha.jogadorId, linha]))
   const formaBrutaPorTime = new Map([
     [jogo.timeCasaId, formaCasaBruta],
     [jogo.timeVisitanteId, formaVisitanteBruta],
@@ -206,6 +240,7 @@ export async function telaDoJogo(
         return {
           jogadorId: l.jogadorId,
           nome: jogador?.nomeCompleto ?? '—',
+          fotoUrl: jogador?.fotoUrl ?? null,
           posicao: jogador?.posicao ?? null,
           minutos,
           pontos: l.pontos,
@@ -259,6 +294,7 @@ export async function telaDoJogo(
         status: e.status as 'FORA' | 'DUVIDA',
         motivo: e.motivo,
         confirmado: e.confirmado,
+        hierarquiaPontos: hierarquiaPorJogador.get(e.jogadorId) ?? null,
       }))
 
     return {

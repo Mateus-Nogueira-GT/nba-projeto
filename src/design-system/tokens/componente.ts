@@ -69,6 +69,70 @@ export const componente = {
   notaFaixaBoa: { fundo: s.notaBoaFundo, texto: s.notaBoaTexto },
   notaFaixaMediana: { fundo: s.notaMedianaFundo, texto: s.notaMedianaTexto },
   notaFaixaFraca: { fundo: s.notaFracaFundo, texto: s.notaFracaTexto },
+
+  // -- Identidade 04 · varredura e análise ---------------------------------
+  // Selo de contexto no canto do cabeçalho — PRÉ-LIVE laranja, ■ AO VIVO
+  // vermelho. Pendência anotada desde a 03; aqui vira token para os dois
+  // universos vestirem o mesmo componente.
+  seloContexto: {
+    preLive: { fundo: s.acento, texto: s.textoSobreCor },
+    aoVivo: { fundo: s.vivoSelo, texto: s.textoSobreCor },
+  },
+  // Cabeçalho de jogo — a ÚNICA fronteira de seção da Lista e do Fire Live.
+  // Veste o gradiente do universo da tela; o de dentro é sigla forte, nada de
+  // escudo.
+  cabecalhoJogo: {
+    fundoFrio: `linear-gradient(135deg, ${s.superficieFria1}, ${s.superficieFria2} 55%)`,
+    fundoQuente: `linear-gradient(135deg, ${s.superficieQuente1}, ${s.superficieQuente2} 55%)`,
+    bordaFria: s.divisor,
+    bordaQuente: s.bordaQuente,
+  },
+  // Badge de status do ciclo do card (PRÉ · 1º Q · FIM 1º Q · FT · —). A
+  // largura é FIXA para o card não pular a cada refresh de 30 s — e é isso, não
+  // uma animação, que faz o ao vivo parecer estável.
+  statusCiclo: {
+    largura: '52px',
+    fundoAoVivo: s.aoVivoTinta,
+    bordaAoVivo: s.aoVivoBorda,
+    textoAoVivo: s.aoVivoSolido,
+    fundoNeutro: s.superficieElevada,
+    bordaNeutra: s.divisor,
+    textoNeutro: s.texto55,
+  },
+  // Abas de atributo no rodapé do card — um jogador com dois ou três
+  // atributos vira UM card, e as abas trocam o mercado sem repetir o card.
+  abaAtributo: {
+    /**
+     * A aba ATIVA veste a cor do nível do apito DAQUELE card. O artboard a
+     * desenha verde porque o card desenhado é N3; fixar o verde faria um card
+     * N1 exibir o sinal de N3 no rodapé — um quarto canal de cor dizendo o que
+     * o anel já diz, e dizendo errado.
+     */
+    ativaPorNivel: {
+      1: { borda: s.apitoNivel1, fundo: s.apitoNivel1Tinta },
+      2: { borda: s.apitoNivel2, fundo: s.apitoNivel2Tinta },
+      3: { borda: s.apitoNivel3, fundo: s.apitoNivel3Tinta },
+    },
+    ativaTurbo: { borda: s.apitoTurbo, fundo: s.apitoTurboTinta },
+    /**
+     * Par NEUTRO, para o seletor que não pertence a um apito — o de atributo
+     * na tela do time, por exemplo. Sem nível para vestir, ele usa o laranja de
+     * UI dos outros seletores de tela, e não empresta a cor de um nível que
+     * não existe ali.
+     */
+    ativaNeutra: { borda: s.acento, fundo: s.acentoVeu },
+    textoAtiva: s.texto100,
+    bordaInativa: s.divisor,
+    textoInativa: s.textoSecundario,
+    raio: '6px',
+  },
+  // Veredito do card CONFERIDO: "fez N" na cor das barrinhas — bateu, falhou —
+  // e o neutro do DNP em texto40. Quem não jogou não ganha ✓ nem ✗.
+  conferido: {
+    bateu: s.barrinhaBateu,
+    falhou: s.barrinhaFalhou,
+    neutro: s.texto40,
+  },
 } as const
 
 export type Componente = typeof componente

@@ -1,5 +1,14 @@
 import type { Nivel, NivelApito } from '@/modules/motor/tipos'
-import { CardEntrada, Pilula } from '@/design-system/componentes'
+import {
+  BarraAlvo,
+  Barrinhas,
+  CabecalhoJogo,
+  CardEntrada,
+  FormaNoAtributo,
+  HierarquiaDoTime,
+  Pilula,
+  SeloContexto,
+} from '@/design-system/componentes'
 import { semantico } from '@/design-system/tokens/semantico'
 import { CONFIANCA_GRAU, NIVEL_JOGADOR, APITO, TURBO, MODO_FIRE } from '@/design-system/tokens/css'
 import { razaoDeContraste } from '@/design-system/tokens/contraste'
@@ -27,7 +36,15 @@ const EXEMPLO: Record<Nivel, { nome: string; time: string; sigla: string; posica
   RANDOLA: { nome: 'Mamukelashvili', time: 'Lakers', sigla: 'LAL', posicao: 'F' },
 }
 
-function Secao({ titulo, nota, children }: { titulo: string; nota?: string; children: React.ReactNode }) {
+function Secao({
+  titulo,
+  nota,
+  children,
+}: {
+  titulo: string
+  nota?: string
+  children: React.ReactNode
+}) {
   return (
     <section style={{ marginBottom: 40 }}>
       <h2 style={{ fontSize: 15, letterSpacing: 1, textTransform: 'uppercase', opacity: 0.7 }}>
@@ -89,7 +106,7 @@ export default async function PaginaGaleria() {
 
       <Secao
         titulo="Card comum (grau 3) vs. grau máximo (grau 5, brilha)"
-        nota="Só o grau 5 de confiança acende o brilho ao redor do card — os demais graus mudam a cor do % e da borda lateral."
+        nota="Só o grau 5 de confiança acende o brilho ao redor do card — os demais graus mudam a cor da nota de confiança e da borda lateral."
       >
         <CardEntrada
           nome="Austin Reaves"
@@ -188,7 +205,10 @@ export default async function PaginaGaleria() {
         />
       </Secao>
 
-      <Secao titulo="Rebotes e assistências" nota="O modelo é (jogador, atributo). Pontos não é o único caso.">
+      <Secao
+        titulo="Rebotes e assistências"
+        nota="O modelo é (jogador, atributo). Pontos não é o único caso."
+      >
         <CardEntrada
           nome="Wembanyama"
           timeSigla="SAS"
@@ -207,7 +227,7 @@ export default async function PaginaGaleria() {
           atributo="ASSISTENCIAS"
           nivelJogador="SUPORTE"
           nivelApito={2}
-          confianca={85.5}
+          confianca={86}
           grauConfianca={1}
           linha={7}
         />
@@ -255,15 +275,386 @@ export default async function PaginaGaleria() {
       >
         <div style={{ display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap' }}>
           {GRAUS.map((grau) => (
-            <span key={grau} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
-              <Pilula texto={`${80 + grau * 3}%`} cor={CONFIANCA_GRAU[grau]} brilho={grau === 5} />
+            <span
+              key={grau}
+              style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}
+            >
+              <Pilula texto={`${80 + grau * 3}`} cor={CONFIANCA_GRAU[grau]} brilho={grau === 5} />
               <span style={{ fontSize: 12, opacity: 0.7 }}>grau {grau}</span>
             </span>
           ))}
         </div>
       </Secao>
 
-      <Secao titulo="Contraste verificado" nota="Valores calculados na renderização — não são texto fixo.">
+      {/* ---------------------------------------------------------------- */}
+      {/* Identidade 04 · varredura e análise                               */}
+      {/* ---------------------------------------------------------------- */}
+
+      <Secao
+        titulo="Identidade 04 · o card fecha o ciclo"
+        nota="PRÉ → 1º Q → FIM 1º Q → AGUARDANDO OFICIAL → CONFERIDO, o mesmo card na Lista, no Fire Live e nos Resultados. O badge de status tem largura fixa para o card não pular a cada refresh; conferido, o rodapé diz fez N com ✓ ou ✗ — e quem não jogou é neutro, nem um nem outro."
+      >
+        <CardEntrada
+          nome="Cooper Flagg"
+          timeSigla="DAL"
+          adversarioSigla="ORL"
+          posicao="F"
+          atributo="PONTOS"
+          nivelJogador="ALL_STAR"
+          nivelApito={3}
+          confianca={91}
+          grauConfianca={4}
+          linha={15}
+          estado="PRE"
+          ultimos5={[
+            { valor: 19, bateu: true },
+            { valor: 22, bateu: true },
+            { valor: 17, bateu: true },
+            { valor: 13, bateu: false },
+            { valor: 25, bateu: true },
+          ]}
+          mediaTemporada={18.6}
+          oddFaixa={{ min: 1.47, max: 1.62, qtdCasas: 3 }}
+        />
+        <CardEntrada
+          nome="Giannis"
+          timeSigla="MIA"
+          adversarioSigla="IND"
+          posicao="F"
+          atributo="PONTOS"
+          nivelJogador="MVP"
+          nivelApito={1}
+          confianca={null}
+          grauConfianca={null}
+          modoFire
+          temperatura="quente"
+          vivo
+          estado="Q1"
+          alvo1Q={11}
+          progresso1Q={{ observado: 9, alvo: 11 }}
+        />
+        <CardEntrada
+          nome="Siakam"
+          timeSigla="IND"
+          adversarioSigla="MIA"
+          posicao="F"
+          atributo="REBOTES"
+          nivelJogador="MVP"
+          nivelApito={1}
+          confianca={null}
+          grauConfianca={null}
+          temperatura="quente"
+          estado="FIM_Q1"
+          alvo1Q={3}
+          progresso1Q={{ observado: 3, alvo: 3 }}
+          alvoFire={{ valor: 2.25, rotulo: 'marco de exemplo' }}
+        />
+        <CardEntrada
+          nome="Cooper Flagg"
+          timeSigla="DAL"
+          adversarioSigla="ORL"
+          posicao="F"
+          atributo="PONTOS"
+          nivelJogador="ALL_STAR"
+          nivelApito={3}
+          confianca={91}
+          grauConfianca={4}
+          linha={15}
+          estado="AGUARDANDO_OFICIAL"
+        />
+        <CardEntrada
+          nome="Cooper Flagg"
+          timeSigla="DAL"
+          adversarioSigla="ORL"
+          posicao="F"
+          atributo="PONTOS"
+          nivelJogador="ALL_STAR"
+          nivelApito={3}
+          confianca={91}
+          grauConfianca={4}
+          linha={15}
+          estado="CONFERIDO"
+          fez={25}
+          bateu
+          ultimos5={[
+            { valor: 25, bateu: true },
+            { valor: 19, bateu: true },
+            { valor: 22, bateu: true },
+            { valor: 17, bateu: true },
+            { valor: 13, bateu: false },
+          ]}
+        />
+        <CardEntrada
+          nome="Irving"
+          timeSigla="DAL"
+          adversarioSigla="ORL"
+          posicao="G"
+          atributo="ASSISTENCIAS"
+          nivelJogador="MVP"
+          nivelApito={1}
+          confianca={88}
+          grauConfianca={3}
+          linha={5}
+          estado="CONFERIDO"
+          fez={4}
+          bateu={false}
+          ultimos5={[
+            { valor: 4, bateu: false },
+            { valor: 6, bateu: true },
+            { valor: 3, bateu: false },
+            { valor: 7, bateu: true },
+            { valor: 5, bateu: true },
+          ]}
+        />
+        <CardEntrada
+          nome="Banchero"
+          timeSigla="ORL"
+          adversarioSigla="DAL"
+          posicao="F"
+          atributo="ASSISTENCIAS"
+          nivelJogador="ALL_STAR"
+          nivelApito={1}
+          confianca={86}
+          grauConfianca={2}
+          linha={4}
+          estado="CONFERIDO"
+          fez={null}
+          bateu={null}
+        />
+      </Secao>
+
+      <Secao
+        titulo="Identidade 04 · abas de atributo e as quatro lentes"
+        nota="Um jogador com dois ou três atributos é UM card: as abas do rodapé trocam o mercado. A lente do cabeçalho da tela troca a zona 2 de todos os cards de uma vez — ÚLT. 5 (padrão), MÉDIA × LINHA, ODDS, HIERARQUIA. Sem dado, a lente escreve o rótulo com um traço, nunca um número inventado."
+      >
+        <CardEntrada
+          nome="Kevin Porter"
+          timeSigla="MIL"
+          adversarioSigla="LAC"
+          posicao="G"
+          atributo="PONTOS"
+          nivelJogador="ALL_STAR"
+          nivelApito={3}
+          confianca={91}
+          grauConfianca={4}
+          opdOrigemNivel={3}
+          linha={10}
+          atributos={[
+            { atributo: 'PONTOS', linha: 10, ativo: true, href: '#pts' },
+            { atributo: 'REBOTES', linha: 3, ativo: false, href: '#reb' },
+            { atributo: 'ASSISTENCIAS', linha: 4, ativo: false, href: '#ast' },
+          ]}
+          ultimos5={[
+            { valor: 13, bateu: true },
+            { valor: 7, bateu: false },
+            { valor: 17, bateu: true },
+            { valor: 19, bateu: true },
+            { valor: 11, bateu: true },
+          ]}
+          mediaTemporada={16.2}
+          oddFaixa={{ min: 1.47, max: 1.62, qtdCasas: 3 }}
+        />
+        <CardEntrada
+          nome="Fontecchio"
+          timeSigla="MIA"
+          adversarioSigla="IND"
+          posicao="C"
+          atributo="REBOTES"
+          nivelJogador="SUPORTE"
+          nivelApito={3}
+          confianca={91}
+          grauConfianca={4}
+          linha={4}
+          lente="MEDIA_LINHA"
+          mediaTemporada={4.9}
+          oddFaixa={{ min: 1.49, max: 1.66, qtdCasas: 3 }}
+        />
+        <CardEntrada
+          nome="Fontecchio"
+          timeSigla="MIA"
+          adversarioSigla="IND"
+          posicao="C"
+          atributo="REBOTES"
+          nivelJogador="SUPORTE"
+          nivelApito={3}
+          confianca={91}
+          grauConfianca={4}
+          linha={4}
+          lente="ODDS"
+          mediaTemporada={4.9}
+          oddFaixa={{ min: 1.49, max: 1.66, qtdCasas: 3 }}
+        />
+        <CardEntrada
+          nome="Fontecchio"
+          timeSigla="MIA"
+          adversarioSigla="IND"
+          posicao="C"
+          atributo="REBOTES"
+          nivelJogador="SUPORTE"
+          nivelApito={3}
+          confianca={91}
+          grauConfianca={4}
+          linha={4}
+          lente="HIERARQUIA"
+          hierarquia={{ posicao: 2, total: 8 }}
+          mediaTemporada={4.9}
+        />
+        <CardEntrada
+          nome="Toppin"
+          timeSigla="IND"
+          adversarioSigla="MIA"
+          posicao="F"
+          atributo="ASSISTENCIAS"
+          nivelJogador="RANDOLA"
+          nivelApito={2}
+          confianca={85}
+          grauConfianca={2}
+          linha={2}
+          lente="HIERARQUIA"
+          hierarquia={null}
+        />
+      </Secao>
+
+      <Secao
+        titulo="Identidade 04 · cabeçalho de jogo e selo de contexto"
+        nota="A única fronteira de seção da varredura: visitante @ mandante, sigla em Anton, sem escudo. Frio na Lista Secreta; quente com o placar do 1º quarto no Fire Live; mudo enquanto o jogo não começou. O ponto do ao vivo não pulsa — nada se anima continuamente. O selo preenchido no canto do cabeçalho da tela veste os dois universos."
+      >
+        <CabecalhoJogo
+          casaSigla="IND"
+          visitanteSigla="MIA"
+          horarioUtc={new Date('2026-01-15T22:30:00.000Z')}
+          fuso="America/Sao_Paulo"
+          status="AGENDADO"
+        />
+        <CabecalhoJogo
+          casaSigla="IND"
+          visitanteSigla="MIA"
+          horarioUtc={new Date('2026-01-15T22:30:00.000Z')}
+          fuso="America/Sao_Paulo"
+          status="AO_VIVO"
+        />
+        <CabecalhoJogo
+          casaSigla="ORL"
+          visitanteSigla="DAL"
+          horarioUtc={new Date('2026-01-15T22:30:00.000Z')}
+          fuso="America/Sao_Paulo"
+          status="ENCERRADO"
+          placarCasa={108}
+          placarVisitante={116}
+          quartosCasa={[25, 28, 26, 29]}
+          quartosVisitante={[30, 27, 31, 28]}
+        />
+        <CabecalhoJogo
+          casaSigla="IND"
+          visitanteSigla="MIA"
+          horarioUtc={new Date('2026-01-15T22:30:00.000Z')}
+          fuso="America/Sao_Paulo"
+          status="AO_VIVO"
+          placarCasa={33}
+          placarVisitante={48}
+          temperatura="quente"
+        />
+        <CabecalhoJogo
+          casaSigla="SAS"
+          visitanteSigla="PHI"
+          horarioUtc={new Date('2026-01-15T23:00:00.000Z')}
+          fuso="America/Sao_Paulo"
+          status="AGENDADO"
+          temperatura="quente"
+        />
+        <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+          <SeloContexto contexto="preLive" />
+          <SeloContexto contexto="aoVivo" />
+        </div>
+      </Secao>
+
+      <Secao
+        titulo="Identidade 04 · forma no atributo"
+        nota="Dez jogos do mais antigo ao mais recente, contra a mesma linha do apito. A amostra curta mantém as colunas; sem linha, o histórico informa os valores sem veredito. Dados ilustrativos."
+      >
+        <FormaNoAtributo
+          linha={20}
+          jogos={[
+            { valor: 18, bateu: false, adversarioSigla: 'BOS' },
+            { valor: 25, bateu: true, adversarioSigla: 'MIA' },
+            { valor: 21, bateu: true, adversarioSigla: 'ORL' },
+            { valor: 14, bateu: false, adversarioSigla: 'IND' },
+            { valor: 27, bateu: true, adversarioSigla: 'NYK' },
+            { valor: 20, bateu: true, adversarioSigla: 'ATL' },
+            { valor: 19, bateu: false, adversarioSigla: 'CHI' },
+            { valor: 23, bateu: true, adversarioSigla: 'TOR' },
+            { valor: 16, bateu: false, adversarioSigla: 'MIL' },
+            { valor: 26, bateu: true, adversarioSigla: 'DAL' },
+          ]}
+        />
+        <FormaNoAtributo
+          linha={null}
+          jogos={[
+            { valor: 0, bateu: false, adversarioSigla: 'BOS' },
+            { valor: 3, bateu: false, adversarioSigla: 'MIA' },
+            { valor: 5, bateu: false, adversarioSigla: 'ORL' },
+          ]}
+        />
+      </Secao>
+
+      <Secao
+        titulo="Identidade 04 · marcos e barra congelada"
+        nota="O ponto abaixo demonstra um valor conhecido no instante do apito, apenas na galeria. O feed só o exibe quando esse dado existir. Depois de FIM 1º Q a barra conserva o último valor do quarto; não há animação."
+      >
+        <BarraAlvo
+          observado={9}
+          alvo={11}
+          unidade="pts"
+          marcos={[{ valor: 8, rotulo: 'marco de exemplo', cor: MODO_FIRE.cor }]}
+          apitouEm={{ valor: 7, rotulo: 'apitou aqui' }}
+        />
+        <div>
+          <p style={{ color: semantico.textoSecundario, fontSize: 12 }}>FIM 1º Q · congelada</p>
+          <BarraAlvo
+            observado={11}
+            alvo={11}
+            unidade="pts"
+            marcos={[{ valor: 8, rotulo: 'marco de exemplo', cor: MODO_FIRE.cor }]}
+          />
+        </div>
+      </Secao>
+
+      <Secao
+        titulo="Identidade 04 · hierarquia e prefixo desfalcado"
+        nota="As ausências consecutivas desde o nº 1 recebem destaque. A ausência isolada no nº 4 continua escrita, com a posição e o nível do jogador. Exemplos ilustrativos da lista do CJ."
+      >
+        <HierarquiaDoTime
+          linhas={[
+            { jogadorId: 'galeria-1', posicao: 1, nome: 'LeBron James', nivel: 'MVP', fora: true },
+            { jogadorId: 'galeria-2', posicao: 2, nome: 'Embiid', nivel: 'MVP', fora: true },
+            { jogadorId: 'galeria-3', posicao: 3, nome: 'Maxey', nivel: 'ALL_STAR', fora: false },
+            { jogadorId: 'galeria-4', posicao: 4, nome: 'Grimes', nivel: 'SUPORTE', fora: true },
+          ]}
+        />
+        <HierarquiaDoTime linhas={[]} />
+      </Secao>
+
+      <Secao
+        titulo="Identidade 04 · a última barrinha é desta rodada"
+        nota="O contorno e a descrição acessível identificam o resultado acrescentado ao fim da fileira."
+      >
+        <Barrinhas
+          rotulo="ÚLT. 5 NA LINHA"
+          destacarUltima
+          jogos={[
+            { valor: 19, bateu: true },
+            { valor: 22, bateu: true },
+            { valor: 17, bateu: true },
+            { valor: 13, bateu: false },
+            { valor: 25, bateu: true },
+          ]}
+        />
+      </Secao>
+
+      <Secao
+        titulo="Contraste verificado"
+        nota="Valores calculados na renderização — não são texto fixo."
+      >
         <table style={{ borderCollapse: 'collapse', fontSize: 13, maxWidth: 560 }}>
           <thead>
             <tr style={{ textAlign: 'left', opacity: 0.6 }}>
@@ -278,7 +669,9 @@ export default async function PaginaGaleria() {
               ['Apito turbo', TURBO.cor] as const,
               ['Modo fire', MODO_FIRE.cor] as const,
               ...Object.entries(NIVEL_JOGADOR).map(([k, v]) => [`Faixa ${k}`, v.cor] as const),
-              ...Object.entries(CONFIANCA_GRAU).map(([k, v]) => [`Pílula confiança grau ${k}`, v] as const),
+              ...Object.entries(CONFIANCA_GRAU).map(
+                ([k, v]) => [`Pílula confiança grau ${k}`, v] as const,
+              ),
             ].map(([nome, cor]) => (
               <tr key={nome} style={{ borderTop: `1px solid ${semantico.divisor}` }}>
                 <td style={{ padding: '6px 12px 6px 0' }}>
