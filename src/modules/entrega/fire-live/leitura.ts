@@ -1,4 +1,4 @@
-import { and, eq, inArray } from 'drizzle-orm'
+import { and, eq, inArray, or, sql } from 'drizzle-orm'
 
 import {
   estatisticasTimeJogo,
@@ -10,6 +10,7 @@ import {
 } from '../../dominio/db/schema'
 import type { Db } from '../../dominio/db/tipos'
 import { janelaNoBanco } from '../../dominio/janela'
+import { somarDias } from '../../dominio/rodada'
 import { calendarioDoRuleset, temporadaDe } from '../../dominio/temporada'
 import type { Ruleset } from '../../motor/ruleset/schema'
 import { colunaMedia } from '../historico-na-linha'
@@ -50,20 +51,34 @@ export type FiltroFireLive = {
   jogo?: string
 }
 
+/** A rodada vira à meia-noite; uma partida em andamento não termina com ela. */
+function partidasDoFeed(dataReferencia: string) {
+  return or(
+    eq(jogos.dataReferencia, dataReferencia),
+    and(
+      eq(jogos.dataReferencia, somarDias(dataReferencia, -1)),
+      eq(jogos.status, 'AO_VIVO'),
+    ),
+  )
+}
+
 export async function lerFeedFireLive(
   db: Db,
   dataReferencia: string,
   quartoFireLive: number,
   filtro: FiltroFireLive = {},
 ): Promise<FeedFireLive> {
-  const [partidas, snapshots, listaTimes, placaresQ1] = await Promise.all([
-    db.select().from(jogos).where(eq(jogos.dataReferencia, dataReferencia)),
+  const recorteDePartidas = partidasDoFeed(dataReferencia)
+  const [partidas, snapshotsComJogo, listaTimes, placaresQ1] = await Promise.all([
+    db.select().from(jogos).where(recorteDePartidas),
     db
-      .select()
+      .select({ snapshot: feedSnapshot })
       .from(feedSnapshot)
+      .innerJoin(jogos, eq(feedSnapshot.jogoId, jogos.id))
       .where(
         and(
-          eq(feedSnapshot.dataReferencia, dataReferencia),
+          recorteDePartidas,
+          eq(feedSnapshot.dataReferencia, sql<string>`${jogos.dataReferencia}::text`),
           eq(feedSnapshot.estrategia, 'FIRE_LIVE'),
         ),
       ),
@@ -76,8 +91,9 @@ export async function lerFeedFireLive(
       })
       .from(estatisticasTimeJogo)
       .innerJoin(jogos, eq(estatisticasTimeJogo.jogoId, jogos.id))
-      .where(eq(jogos.dataReferencia, dataReferencia)),
+      .where(recorteDePartidas),
   ])
+  const snapshots = snapshotsComJogo.map(({ snapshot }) => snapshot)
 
   if (partidas.length === 0) {
     return {
@@ -201,7 +217,7 @@ export async function placaresAoVivo(
     .from(jogos)
     .where(
       and(
-        eq(jogos.dataReferencia, dataReferencia),
+        partidasDoFeed(dataReferencia),
         eq(jogos.status, 'AO_VIVO'),
         eq(jogos.quartoAtual, quartoFireLive),
       ),

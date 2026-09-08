@@ -264,7 +264,8 @@ export default async function PaginaFireLive({
     // é por evento e não sabe quem está olhando. Uma consulta só (id + nome).
     jogadoresOcultosComNome(getDb(), sessao.usuarioId),
   ])
-  // Cabeçalhos e cards pertencem à mesma rodada, inclusive na madrugada.
+  // Cabeçalhos e cards vêm do mesmo recorte, incluindo jogos ainda ao vivo
+  // que começaram na rodada anterior e atravessaram a meia-noite.
   const jogosDoDia = feed.jogos
 
   const ocultos = new Set(nomesOcultos.map((j) => j.id))
