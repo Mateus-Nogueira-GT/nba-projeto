@@ -16,7 +16,7 @@ export const maxDuration = 300
 
 const configuracao = configuracaoOperacionalPush()
 
-export const POST = handleCallback(
+export const POST: (request: Request) => Promise<Response> = handleCallback(
   async (mensagem, metadata) => {
     const inicio = Date.now()
     const contagens = await enviarLotePush(
