@@ -97,3 +97,28 @@ export function diaDaRodada(dataReferencia: string): string {
   })
   return `${semana.charAt(0).toUpperCase()}${semana.slice(1)}, ${dia}/${mes}`
 }
+
+/**
+ * "há 12 s" · "há 3 min" · "há 2 h" — o carimbo do AO VIVO, com precisão de
+ * SEGUNDOS.
+ *
+ * Distinto do `há N min` de `UltimaAtualizacao` (aba de estatísticas) porque a
+ * pergunta é outra: o Fire Live se recarrega a cada 30 s, e "agora mesmo" para
+ * qualquer coisa abaixo de um minuto apagaria justamente a defasagem que a
+ * tela promete nunca esconder (spec 04, §4.2).
+ *
+ * `agora` entra por parâmetro: chamar o relógio aqui dentro tornaria a função
+ * dependente do segundo em que roda.
+ */
+export function decorridoCurto(de: Date, agora: Date): string {
+  const segundos = Math.max(0, Math.round((agora.getTime() - de.getTime()) / 1000))
+  if (segundos < 60) return `há ${segundos} s`
+
+  const minutos = Math.round(segundos / 60)
+  if (minutos < 60) return `há ${minutos} min`
+
+  const horas = Math.round(minutos / 60)
+  if (horas < 24) return `há ${horas} h`
+
+  return `há ${Math.round(horas / 24)} d`
+}

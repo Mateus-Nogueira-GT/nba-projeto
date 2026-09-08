@@ -31,10 +31,17 @@ export type JogoResumo = {
   placarVisitante: number | null
 }
 
-export type GrupoDeJogo = Omit<JogoResumo, 'id'> & {
+/**
+ * O parâmetro de tipo existe para o FIRE LIVE (identidade 04, §4.2): a tela ao
+ * vivo agrupa `ItemFireLive`, que é `ItemFeed` mais o progresso no 1º quarto e
+ * o instante do apito. Sem ele o agrupamento devolveria `ItemFeed` e a tela
+ * perderia justamente os campos que só ela mostra. O padrão mantém `ItemFeed`
+ * para quem já usava — a Lista Secreta não muda uma linha.
+ */
+export type GrupoDeJogo<T extends ItemFeed = ItemFeed> = Omit<JogoResumo, 'id'> & {
   jogoId: string
   /** Em ordem de sinal: turbo, depois N3 → N1; empate por grau e por confiança. */
-  itens: ItemFeed[]
+  itens: T[]
 }
 
 /**
@@ -71,7 +78,7 @@ export function estadoDoCiclo(
  * grau de confiança, depois a confiança bruta. Estável — dois cards iguais
  * mantêm a ordem em que vieram, e a entrada não é mutada.
  */
-export function ordenarPorSinal(itens: readonly ItemFeed[]): ItemFeed[] {
+export function ordenarPorSinal<T extends ItemFeed>(itens: readonly T[]): T[] {
   return [...itens].sort(
     (a, b) =>
       Number(b.turbo) - Number(a.turbo) ||
@@ -88,23 +95,23 @@ export function ordenarPorSinal(itens: readonly ItemFeed[]): ItemFeed[] {
  * grupo sem cabeçalho no fim, porque perder o apito em silêncio é pior do que
  * mostrá-lo sem siglas.
  */
-export function agruparPorJogo(
-  itens: readonly ItemFeed[],
+export function agruparPorJogo<T extends ItemFeed>(
+  itens: readonly T[],
   doDia: readonly JogoResumo[],
-): GrupoDeJogo[] {
+): GrupoDeJogo<T>[] {
   const porId = new Map(doDia.map((j) => [j.id, j] as const))
-  const baldes = new Map<string, ItemFeed[]>()
+  const baldes = new Map<string, T[]>()
   for (const item of itens) {
     const lista = baldes.get(item.jogoId) ?? []
     lista.push(item)
     baldes.set(item.jogoId, lista)
   }
 
-  const conhecidos: GrupoDeJogo[] = []
-  const orfaos: GrupoDeJogo[] = []
+  const conhecidos: GrupoDeJogo<T>[] = []
+  const orfaos: GrupoDeJogo<T>[] = []
   for (const [jogoId, lista] of baldes) {
     const jogo = porId.get(jogoId)
-    const grupo: GrupoDeJogo = jogo
+    const grupo: GrupoDeJogo<T> = jogo
       ? { ...semId(jogo), jogoId, itens: ordenarPorSinal(lista) }
       : {
           jogoId,

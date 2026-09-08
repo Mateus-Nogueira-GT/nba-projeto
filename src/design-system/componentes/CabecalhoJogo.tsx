@@ -15,6 +15,8 @@ export type CabecalhoJogoProps = {
   quartoAtual?: number | null
   placarCasa?: number | null
   placarVisitante?: number | null
+  /** Fire Live congelado: os placares recebidos são do Q1, não do jogo inteiro. */
+  primeiroQuartoEncerrado?: boolean
   /**
    * Pontos por quarto de cada lado — a quebra do jogo ENCERRADO (identidade
    * 04, §4.4). Opcionais: sem elas o cabeçalho é exatamente o de antes, e a
@@ -259,7 +261,13 @@ export function CabecalhoJogo(props: CabecalhoJogoProps) {
             >
               {temPlacar ? `${props.placarVisitante} · ${props.placarCasa}` : '—'}
             </span>
-            {props.status === 'AO_VIVO' ? statusAoVivo : statusEncerrado}
+            {props.primeiroQuartoEncerrado ? (
+              <span style={{ ...ROTULO, color: semantico.texto55 }}>FIM 1º Q</span>
+            ) : props.status === 'AO_VIVO' ? (
+              statusAoVivo
+            ) : (
+              statusEncerrado
+            )}
           </>
         )}
       </div>

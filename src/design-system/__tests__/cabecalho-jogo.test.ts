@@ -79,6 +79,25 @@ describe('CabecalhoJogo — a única fronteira de seção da varredura', () => {
     expect(html).not.toContain(componente.cabecalhoJogo.fundoQuente)
   })
 
+  it('o recorte do Fire Live congela no fim do Q1 sem mudar o status nas outras telas', () => {
+    const props: CabecalhoJogoProps = {
+      ...base,
+      status: 'AO_VIVO',
+      quartoAtual: 2,
+      primeiroQuartoEncerrado: true,
+      placarCasa: 27,
+      placarVisitante: 31,
+    }
+    const quente = render({ ...props, temperatura: 'quente' })
+    expect(quente).toContain('31 · 27')
+    expect(quente).toContain('FIM 1º Q')
+    expect(quente).not.toContain('AO VIVO')
+    expect(render(props)).toContain('2º Q · AO VIVO')
+    expect(
+      render({ ...props, temperatura: 'quente', placarCasa: null, placarVisitante: null }),
+    ).not.toContain('31 · 27')
+  })
+
   it('frio não veste o universo quente', () => {
     const html = render({ ...base, status: 'AO_VIVO', placarCasa: 33, placarVisitante: 48 })
     expect(html).not.toContain(componente.cabecalhoJogo.fundoQuente)
