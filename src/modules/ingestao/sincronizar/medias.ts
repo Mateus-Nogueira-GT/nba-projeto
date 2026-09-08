@@ -3,6 +3,7 @@ import { and, eq, gt, gte, isNotNull, lt, notInArray } from 'drizzle-orm'
 import { estatisticasJogo, jogos, mediasJogador } from '../../dominio/db/schema'
 import type { Db } from '../../dominio/db/tipos'
 import { temporadaDe, type ConfigTemporada } from '../../dominio/temporada'
+import { intervaloDoDia } from '../../dominio/rodada'
 import { excluded } from './upsert'
 import type { Resumo } from './identidade'
 
@@ -53,8 +54,9 @@ export async function recalcularMedias(
 
   // Recorte da temporada: do mês de início até o mesmo mês do ano seguinte.
   const anoInicial = Number(temporada.slice(0, 4))
-  const inicio = new Date(Date.UTC(anoInicial, opcoes.configTemporada.mesInicio - 1, 1))
-  const fim = new Date(Date.UTC(anoInicial + 1, opcoes.configTemporada.mesInicio - 1, 1))
+  const mes = String(opcoes.configTemporada.mesInicio).padStart(2, '0')
+  const inicio = intervaloDoDia(`${anoInicial}-${mes}-01`, opcoes.configTemporada.fuso).inicio
+  const fim = intervaloDoDia(`${anoInicial + 1}-${mes}-01`, opcoes.configTemporada.fuso).inicio
 
   const linhas = await db
     .select({

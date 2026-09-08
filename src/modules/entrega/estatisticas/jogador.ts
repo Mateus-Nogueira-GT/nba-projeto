@@ -14,6 +14,7 @@ import {
 import type { Db } from '../../dominio/db/tipos'
 import type { ConfigTemporada } from '../../dominio/temporada'
 import { temporadaDe } from '../../dominio/temporada'
+import { colunasDeParticipacao, entrouEmQuadra } from '../../dominio/participacao'
 import { daColuna, maisAntiga } from './atualizacao'
 
 // A aba de estatísticas NÃO importa do motor (regra `estatisticas-nao-passam-
@@ -190,11 +191,10 @@ export type TelaJogador = ComAtualizacao & {
  *
  * MINUTO NULO não é minuto zero (`minutos` é NULLABLE, e o adaptador emite
  * null sempre que o provedor manda `min: null`), mas também não é a linha
- * inteira faltando. O corte é pelo dado que a CONFERÊNCIA usa: `conferirRodadas`
- * — a tela de Resultados, sobre a mesma (jogo, jogador, atributo) — decide
- * `bateu` pelo valor do atributo e não olha minuto nenhum. Então:
+ * inteira faltando. O corte é o mesmo de `conferirRodadas`: minutos positivos
+ * ou qualquer evento estatístico registrado provam presença. Então:
  *
- * - minuto nulo COM produção (pontos, rebotes ou assistências acima de zero) é
+ * - minuto nulo COM produção (incluindo tentativas e ações defensivas) é
  *   CONFERIDO. O dado oficial CHEGOU: mandar essa linha para "aguardando dado
  *   oficial" fazia a seção de apitos negar o que a tabela jogo a jogo imprimia
  *   três linhas abaixo, na mesma tela, e discordar do "fez 18 ✓" da tela de
@@ -627,10 +627,7 @@ export async function apitosDoJogador(
       timeCasaId: jogos.timeCasaId,
       timeVisitanteId: jogos.timeVisitanteId,
       status: jogos.status,
-      minutos: estatisticasJogo.minutos,
-      pontos: estatisticasJogo.pontos,
-      rebotes: estatisticasJogo.rebotesTotal,
-      assistencias: estatisticasJogo.assistencias,
+      ...colunasDeParticipacao,
     })
     .from(apitos)
     .innerJoin(jogos, eq(apitos.jogoId, jogos.id))
@@ -683,11 +680,9 @@ export async function apitosDoJogador(
     // UMA regra, na ordem em que a linha fala: produção na linha prova que ele
     // entrou; minuto em quadra também; minuto ZERO é o DNP; e minuto que não
     // chegou, sobre uma linha sem nada, não sustenta veredito nenhum. É a mesma
-    // leitura que `conferirRodadas` faz do outro lado do app (a tela de
-    // Resultados decide pelo VALOR DO ATRIBUTO, sem olhar minuto) — e as duas
+    // leitura que `conferirRodadas` faz do outro lado do app — e as duas
     // falam da mesma (jogo, jogador, atributo).
     const minutos = numero(l.minutos)
-    const produziu = (l.pontos ?? 0) > 0 || (l.rebotes ?? 0) > 0 || (l.assistencias ?? 0) > 0
     // PRODUÇÃO VENCE. Não se marca ponto sem jogar, e o provedor que arredonda
     // para baixo quem entrou nos segundos finais manda 0 minuto COM pontos na
     // linha: chamar isso de DNP escreveria "não jogou" bem em cima do "pts N"
@@ -698,7 +693,7 @@ export async function apitosDoJogador(
     const estado: EstadoDoApito =
       !encerrado || !temBox
         ? 'AGUARDANDO_OFICIAL'
-        : produziu || (minutos !== null && minutos > 0)
+        : entrouEmQuadra(l)
           ? 'CONFERIDO'
           : minutos === 0
             ? 'NAO_JOGOU'

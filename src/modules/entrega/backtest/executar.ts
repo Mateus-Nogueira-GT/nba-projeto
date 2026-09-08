@@ -73,7 +73,7 @@ export async function executarBacktest(
   // O laço é o mesmo do job diário: para cada data, montarFatos e avaliar.
   const calculados: Apito[] = []
   for (const data of datasDoPeriodo(periodo)) {
-    const fatos = await montarFatos(db, data, configTemporada)
+    const fatos = await montarFatos(db, data, configTemporada, ruleset.media.janela)
     if (fatos.times.length === 0) continue
     // O Fire Live exige replay de quartos ao vivo — fora do escopo da parte A.
     calculados.push(...avaliar(fatos, ruleset).filter((a) => a.estrategia === 'LISTA_SECRETA'))

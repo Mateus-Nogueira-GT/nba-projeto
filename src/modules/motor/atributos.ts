@@ -17,6 +17,19 @@ import type { Atributo, Nivel } from './tipos'
 
 const VAZIO: number[] = []
 
+export function parametrosOpd(atributo: Atributo, ruleset: Ruleset) {
+  return atributo === 'PONTOS' ? ruleset.opd : (bloco(atributo, ruleset)?.opd ?? ruleset.opd)
+}
+
+export function nivelMinimoOscilacao(nivel: Nivel, atributo: Atributo, ruleset: Ruleset) {
+  return (
+    (atributo === 'PONTOS'
+      ? undefined
+      : bloco(atributo, ruleset)?.oscilacao?.nivel_minimo_apito?.[nivel]) ??
+    ruleset.oscilacao.nivel_minimo_apito[nivel]
+  )
+}
+
 function bloco(atributo: Atributo, ruleset: Ruleset): BlocoAtributo | undefined {
   return ruleset.por_atributo[atributo]
 }
@@ -37,11 +50,17 @@ export function origemDoAtributo(
 export function deltaOscilacao(
   nivel: Nivel,
   atributo: Atributo,
-  jogadorId: string,
+  identidades: string | readonly string[],
   ruleset: Ruleset,
 ): number | undefined {
   if (atributo === 'PONTOS') {
-    return ruleset.oscilacao.excecoes_por_jogador[jogadorId] ?? ruleset.oscilacao.delta[nivel]
+    const chaves = typeof identidades === 'string' ? [identidades] : identidades
+    const excecoes = ruleset.oscilacao.excecoes_por_jogador
+    const deltas = new Set(
+      chaves.filter((chave) => Object.hasOwn(excecoes, chave)).map((chave) => excecoes[chave]!),
+    )
+    if (deltas.size > 1) throw new Error('Exceções de oscilação conflitantes para o mesmo jogador.')
+    return deltas.values().next().value ?? ruleset.oscilacao.delta[nivel]
   }
   return bloco(atributo, ruleset)?.oscilacao?.delta[nivel]
 }
@@ -94,7 +113,9 @@ export function faixaEstatica(
   ruleset: Ruleset,
 ): [number, number] | undefined {
   const tabela =
-    atributo === 'PONTOS' ? ruleset.odds.tabela_estatica[nivel] : bloco(atributo, ruleset)?.odds?.[nivel]
+    atributo === 'PONTOS'
+      ? ruleset.odds.tabela_estatica[nivel]
+      : bloco(atributo, ruleset)?.odds?.[nivel]
   return tabela?.[String(linha)]
 }
 

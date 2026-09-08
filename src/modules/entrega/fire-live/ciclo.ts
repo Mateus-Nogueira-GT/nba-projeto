@@ -116,7 +116,7 @@ export async function executarCiclo(
     return { encerrar: true, motivo: 'limite-de-tempo', ciclou: false }
   }
 
-  const fatos = await montarFatosDoJogo(db, opcoes.jogoId, calendarioDoRuleset(ruleset))
+  const fatos = await montarFatosDoJogo(db, opcoes.jogoId, calendarioDoRuleset(ruleset), ruleset.media.janela)
   if (fatos === null) return { encerrar: true, motivo: 'jogo-nao-encontrado', ciclou: false }
 
   // A GUARDA DO QUARTO. Vale para os dois lados: o jogo ainda não começou

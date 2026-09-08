@@ -33,6 +33,13 @@ const blocoAtributo = z.object({
   oscilacao: z
     .object({
       delta: porNivel(z.number()),
+      nivel_minimo_apito: porNivel(z.number().int().min(1).max(3)).optional(),
+    })
+    .optional(),
+  opd: z
+    .object({
+      janela: z.number().int().positive(),
+      mapa_nivel: z.record(z.string(), z.number().int().min(1).max(3)),
     })
     .optional(),
   confianca: z

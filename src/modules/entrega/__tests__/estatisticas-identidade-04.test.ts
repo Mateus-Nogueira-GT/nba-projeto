@@ -125,7 +125,27 @@ describe('apitosDoJogador — os DOIS motivos de não haver veredito', () => {
     try {
       await banco.db
         .update(estatisticasJogo)
-        .set({ minutos: '0.00', pontos: 0, rebotesTotal: 0, assistencias: 0 })
+        .set({
+          minutos: '0.00',
+          pontos: 0,
+          rebotesTotal: 0,
+          rebotesOf: 0,
+          rebotesDef: 0,
+          assistencias: 0,
+          cestasC: 0,
+          cestasT: 0,
+          doisC: 0,
+          doisT: 0,
+          tresC: 0,
+          tresT: 0,
+          lanceC: 0,
+          lanceT: 0,
+          roubos: 0,
+          bloqueios: 0,
+          turnovers: 0,
+          faltas: 0,
+          saldoQuadra: 0,
+        })
         .where(
           and(eq(estatisticasJogo.jogoId, apito.jogoId), eq(estatisticasJogo.jogadorId, jogadorId)),
         )
@@ -138,12 +158,7 @@ describe('apitosDoJogador — os DOIS motivos de não haver veredito', () => {
     } finally {
       await banco.db
         .update(estatisticasJogo)
-        .set({
-          minutos: box!.minutos,
-          pontos: box!.pontos,
-          rebotesTotal: box!.rebotesTotal,
-          assistencias: box!.assistencias,
-        })
+        .set(box!)
         .where(
           and(eq(estatisticasJogo.jogoId, apito.jogoId), eq(estatisticasJogo.jogadorId, jogadorId)),
         )
@@ -458,7 +473,27 @@ describe('apitosDoJogador — minuto que não chegou não é minuto zero', () =>
     try {
       await banco.db
         .update(estatisticasJogo)
-        .set({ minutos: null, pontos: 0, rebotesTotal: 0, assistencias: 0 })
+        .set({
+          minutos: null,
+          pontos: 0,
+          rebotesTotal: 0,
+          rebotesOf: 0,
+          rebotesDef: 0,
+          assistencias: 0,
+          cestasC: 0,
+          cestasT: 0,
+          doisC: 0,
+          doisT: 0,
+          tresC: 0,
+          tresT: 0,
+          lanceC: 0,
+          lanceT: 0,
+          roubos: 0,
+          bloqueios: 0,
+          turnovers: 0,
+          faltas: 0,
+          saldoQuadra: 0,
+        })
         .where(onde)
       const depois = (await apitosDoJogador(banco.db, jogadorId, 20)).find(
         (a) => a.jogoId === apito.jogoId && a.atributo === apito.atributo,
@@ -468,15 +503,7 @@ describe('apitosDoJogador — minuto que não chegou não é minuto zero', () =>
       expect(depois.fez).toBeNull()
       expect(depois.bateu).toBeNull()
     } finally {
-      await banco.db
-        .update(estatisticasJogo)
-        .set({
-          minutos: box!.minutos,
-          pontos: box!.pontos,
-          rebotesTotal: box!.rebotesTotal,
-          assistencias: box!.assistencias,
-        })
-        .where(onde)
+      await banco.db.update(estatisticasJogo).set(box!).where(onde)
     }
   })
 

@@ -410,24 +410,37 @@ describe('DNP é neutro — também quando o provedor manda a linha zerada', () 
       eq(estatisticasJogo.jogoId, alvo.jogoId),
       eq(estatisticasJogo.jogadorId, alvo.jogadorId),
     )
-    const [linha] = await banco.db
-      .select({
-        minutos: estatisticasJogo.minutos,
-        pontos: estatisticasJogo.pontos,
-        rebotesTotal: estatisticasJogo.rebotesTotal,
-        assistencias: estatisticasJogo.assistencias,
-      })
-      .from(estatisticasJogo)
-      .where(onde)
+    const [linha] = await banco.db.select().from(estatisticasJogo).where(onde)
 
     expect(alvo).toBeDefined()
     expect(Number(linha!.minutos)).toBeGreaterThan(0)
     try {
       // DNP é a linha zerada. Zerar só os minutos preservaria produção real,
       // caso distinto protegido por coerencia-participacao.test.ts.
-      await banco.db.update(estatisticasJogo).set({
-        minutos: '0.00', pontos: 0, rebotesTotal: 0, assistencias: 0,
-      }).where(onde)
+      await banco.db
+        .update(estatisticasJogo)
+        .set({
+          minutos: '0.00',
+          pontos: 0,
+          rebotesTotal: 0,
+          rebotesOf: 0,
+          rebotesDef: 0,
+          assistencias: 0,
+          cestasC: 0,
+          cestasT: 0,
+          doisC: 0,
+          doisT: 0,
+          tresC: 0,
+          tresT: 0,
+          lanceC: 0,
+          lanceT: 0,
+          roubos: 0,
+          bloqueios: 0,
+          turnovers: 0,
+          faltas: 0,
+          saldoQuadra: 0,
+        })
+        .where(onde)
       const [dia] = await conferirRodadas(banco.db, HOJE, 1)
       const depois = await recapDaNoite(banco.db, ONTEM)
       const temporadaDepois = await taxaDaTemporada(banco.db, HOJE, 49)

@@ -92,7 +92,7 @@ export async function publicarListaSecreta(
     }
   }
 
-  const fatos = await montarFatos(db, opcoes.dataReferencia, calendarioDoRuleset(ruleset))
+  const fatos = await montarFatos(db, opcoes.dataReferencia, calendarioDoRuleset(ruleset), ruleset.media.janela)
   if (fatos.times.length === 0) return { publicou: false, motivo: 'sem-lista-ativa' }
 
   const apitos = avaliar(fatos, ruleset).filter((a) => a.estrategia === 'LISTA_SECRETA')
@@ -221,7 +221,11 @@ async function enriquecer(db: Db, ruleset: Ruleset, apitos: Apito[]): Promise<It
   const [elenco, listaTimes, vinculos, jogosDaLista, medias, oddsLinhas] = await Promise.all([
     db.select().from(jogadores),
     db.select().from(times),
-    db.select().from(niveis),
+    db
+      .select({ jogadorId: niveis.jogadorId, atributo: niveis.atributo, timeId: niveis.timeId })
+      .from(niveis)
+      .innerJoin(niveisVersao, eq(niveis.niveisVersaoId, niveisVersao.id))
+      .where(and(eq(niveisVersao.ativa, true), inArray(niveis.jogadorId, idsJogadores))),
     db.select().from(jogos).where(inArray(jogos.id, idsJogos)),
     db
       .select()
@@ -243,8 +247,11 @@ async function enriquecer(db: Db, ruleset: Ruleset, apitos: Apito[]): Promise<It
   const posicaoPorJogador = new Map(elenco.map((j) => [j.id, j.posicao] as const))
   const fotoPorJogador = new Map(elenco.map((j) => [j.id, j.fotoUrl] as const))
   const timePorId = new Map(listaTimes.map((t) => [t.id, t] as const))
-  // O time vem da LISTA do CJ, não de jogadores.time_id — elencos projetados.
-  const timeDoJogador = new Map(vinculos.map((v) => [v.jogadorId, v.timeId] as const))
+  // O vínculo pertence à versão ativa e ao atributo que gerou o apito.
+  // Outra classificação do mesmo jogador pode pertencer a outro time.
+  const timeDoJogador = new Map(
+    vinculos.map((v) => [`${v.jogadorId}|${v.atributo}`, v.timeId] as const),
+  )
 
   const jogoPorId = new Map(jogosDaLista.map((j) => [j.id, j] as const))
   const calendario = calendarioDoRuleset(ruleset)
@@ -281,7 +288,7 @@ async function enriquecer(db: Db, ruleset: Ruleset, apitos: Apito[]): Promise<It
       a.linha !== null
         ? oddPorChave.get(`${a.jogoId}|${a.jogadorId}|${a.atributo}|${a.linha}`)
         : undefined
-    const time = timePorId.get(timeDoJogador.get(a.jogadorId) ?? '')
+    const time = timePorId.get(timeDoJogador.get(`${a.jogadorId}|${a.atributo}`) ?? '')
     // Mesma conta que a tela imprime: arredonda primeiro, gradua depois.
     const exibido = a.confianca === null ? null : arredondar(a.confianca, ruleset)
     return {

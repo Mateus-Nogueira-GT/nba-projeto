@@ -13,9 +13,13 @@ import type { Atributo, JogadorFato, JogoFato, TimeFato } from '../tipos'
  *   time SEM MVP -> o jogador nº 1 da hierarquia  (vale para 15 dos 30 times)
  */
 export function blocoDeTopo(time: TimeFato, atributo: Atributo): JogadorFato[] {
-  const hierarquia = [...time.jogadores].sort(
-    (a, b) => a.posicaoHierarquia - b.posicaoHierarquia,
-  )
+  const hierarquia = time.jogadores
+    .filter((j) => j.classificacoes[atributo] !== undefined)
+    .sort(
+      (a, b) =>
+        (a.posicaoHierarquiaPorAtributo?.[atributo] ?? a.posicaoHierarquia) -
+        (b.posicaoHierarquiaPorAtributo?.[atributo] ?? b.posicaoHierarquia),
+    )
 
   const mvps = hierarquia.filter((j) => j.classificacoes[atributo] === 'MVP')
   if (mvps.length > 0) return mvps

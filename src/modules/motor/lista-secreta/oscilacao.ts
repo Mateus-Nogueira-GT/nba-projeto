@@ -1,4 +1,4 @@
-import { deltaOscilacao } from '../atributos'
+import { deltaOscilacao, nivelMinimoOscilacao } from '../atributos'
 import type { Ruleset } from '../ruleset/schema'
 import { NIVEIS_APITO, valorDoAtributo } from '../tipos'
 import type { Atributo, JogadorFato, Nivel, NivelApito } from '../tipos'
@@ -19,7 +19,7 @@ export function limiarOscilacao(
   media: number,
   nivel: Nivel,
   atributo: Atributo,
-  jogadorId: string,
+  jogadorId: string | readonly string[],
   ruleset: Ruleset,
 ): number | null {
   const delta = deltaOscilacao(nivel, atributo, jogadorId, ruleset)
@@ -71,7 +71,16 @@ export function avaliarOscilacao(
   const media = jogador.medias[atributo]
   if (media === undefined) return null
 
-  const limiar = limiarOscilacao(media, nivel, atributo, jogador.id, ruleset)
+  const limiar = limiarOscilacao(
+    media,
+    nivel,
+    atributo,
+    [
+      jogador.id,
+      ...(jogador.chavesEstrategia ?? (jogador.chaveEstrategia ? [jogador.chaveEstrategia] : [])),
+    ],
+    ruleset,
+  )
   if (limiar === null) return null
 
   const sequencia = contarSequencia(jogador, atributo, media, limiar, ruleset)
@@ -79,8 +88,8 @@ export function avaliarOscilacao(
 
   const nivelApito = sequencia as NivelApito
 
-  // Suporte e Randola não apitam no nível 1 — já oscilam muito por natureza.
-  if (nivelApito < ruleset.oscilacao.nivel_minimo_apito[nivel]) return null
+  // O mínimo é por atributo: em pontos, Suporte/Randola começam no nível 2.
+  if (nivelApito < nivelMinimoOscilacao(nivel, atributo, ruleset)) return null
 
   // P9: MVP no nível 3 vai pro turbo E acumula o bônus de confiança.
   const turbo =

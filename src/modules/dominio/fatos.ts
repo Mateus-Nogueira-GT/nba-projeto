@@ -6,7 +6,6 @@ import type {
   JogadorFato,
   JogoFato,
   JogoHistorico,
-  Nivel,
   StatusEscalacao,
   TimeFato,
 } from '../motor/tipos'
@@ -22,6 +21,9 @@ import {
   times,
 } from './db/schema'
 import type { Db } from './db/tipos'
+import { chavesEstrategiaConfirmadas, indexarClassificacoes } from './fatos-editoriais'
+import { janelaNoBanco, type JanelaMedia } from './janela'
+import { colunasDeParticipacao, entrouEmQuadra } from './participacao'
 import { intervaloDoDia } from './rodada'
 import { temporadaDe, type ConfigTemporada } from './temporada'
 
@@ -54,6 +56,7 @@ export async function montarFatos(
   db: Db,
   dataReferencia: string,
   configTemporada: ConfigTemporada,
+  janela: JanelaMedia = 'temporada',
 ): Promise<Fatos> {
   const { inicio, fim } = diaDe(dataReferencia, configTemporada.fuso)
   const temporada = temporadaDe(inicio, configTemporada)
@@ -79,46 +82,46 @@ export async function montarFatos(
   // 3 · Carga em lote — evita N+1 numa rodada cheia.
   const idsJogador = [...new Set(classificacoes.map((c) => c.jogadorId))]
 
-  const [elenco, listaTimes, medias, escalacoes, quartos, historicoBruto] = await Promise.all([
-    idsJogador.length > 0
-      ? db.select().from(jogadores).where(inArray(jogadores.id, idsJogador))
-      : Promise.resolve([]),
-    db.select().from(times),
-    idsJogador.length > 0
-      ? db
-          .select()
-          .from(mediasJogador)
-          .where(
-            and(
-              inArray(mediasJogador.jogadorId, idsJogador),
-              eq(mediasJogador.janela, 'TEMPORADA'),
-              eq(mediasJogador.temporada, temporada),
-            ),
-          )
-      : Promise.resolve([]),
-    idsJogo.length > 0
-      ? db.select().from(lesoesEscalacao).where(inArray(lesoesEscalacao.jogoId, idsJogo))
-      : Promise.resolve([]),
-    idsJogo.length > 0
-      ? db.select().from(estatisticasQuarto).where(inArray(estatisticasQuarto.jogoId, idsJogo))
-      : Promise.resolve([]),
-    idsJogador.length > 0
-      ? db
-          .select({
-            jogadorId: estatisticasJogo.jogadorId,
-            jogoId: estatisticasJogo.jogoId,
-            pontos: estatisticasJogo.pontos,
-            rebotes: estatisticasJogo.rebotesTotal,
-            assistencias: estatisticasJogo.assistencias,
-            data: jogos.dataHoraUtc,
-          })
-          .from(estatisticasJogo)
-          .innerJoin(jogos, eq(estatisticasJogo.jogoId, jogos.id))
-          .where(
-            and(inArray(estatisticasJogo.jogadorId, idsJogador), lt(jogos.dataHoraUtc, inicio)),
-          )
-      : Promise.resolve([]),
-  ])
+  const [elenco, listaTimes, medias, escalacoes, quartos, historicoBruto, chavesEstrategia] =
+    await Promise.all([
+      idsJogador.length > 0
+        ? db.select().from(jogadores).where(inArray(jogadores.id, idsJogador))
+        : Promise.resolve([]),
+      db.select().from(times),
+      idsJogador.length > 0
+        ? db
+            .select()
+            .from(mediasJogador)
+            .where(
+              and(
+                inArray(mediasJogador.jogadorId, idsJogador),
+                eq(mediasJogador.janela, janelaNoBanco(janela)),
+                eq(mediasJogador.temporada, temporada),
+              ),
+            )
+        : Promise.resolve([]),
+      idsJogo.length > 0
+        ? db.select().from(lesoesEscalacao).where(inArray(lesoesEscalacao.jogoId, idsJogo))
+        : Promise.resolve([]),
+      idsJogo.length > 0
+        ? db.select().from(estatisticasQuarto).where(inArray(estatisticasQuarto.jogoId, idsJogo))
+        : Promise.resolve([]),
+      idsJogador.length > 0
+        ? db
+            .select({
+              jogadorId: estatisticasJogo.jogadorId,
+              jogoId: estatisticasJogo.jogoId,
+              ...colunasDeParticipacao,
+              data: jogos.dataHoraUtc,
+            })
+            .from(estatisticasJogo)
+            .innerJoin(jogos, eq(estatisticasJogo.jogoId, jogos.id))
+            .where(
+              and(inArray(estatisticasJogo.jogadorId, idsJogador), lt(jogos.dataHoraUtc, inicio)),
+            )
+        : Promise.resolve([]),
+      chavesEstrategiaConfirmadas(db, idsJogador),
+    ])
 
   // 4 · Índices em memória.
   const mediasPorJogador = new Map<string, Partial<Record<Atributo, number>>>()
@@ -136,10 +139,10 @@ export async function montarFatos(
     lista.push({
       jogoId: h.jogoId,
       data: h.data.toISOString(),
-      // Linha em estatisticas_jogo significa que ele entrou em quadra.
-      // Ausência de linha é DNP — e, com `dnp: ignora`, DNP não entra na
-      // contagem de jogos consecutivos de qualquer forma.
-      jogou: true,
+      // Reservas também recebem linhas zeradas do provedor. Só minutos
+      // positivos OU produção comprovam participação; produzir vence os
+      // minutos arredondados para zero, como na conferência dos resultados.
+      jogou: entrouEmQuadra(h),
       pontos: h.pontos,
       rebotes: h.rebotes,
       assistencias: h.assistencias,
@@ -151,19 +154,7 @@ export async function montarFatos(
     lista.sort((a, b) => b.data.localeCompare(a.data))
   }
 
-  const classesPorJogador = new Map<
-    string,
-    { classificacoes: Partial<Record<Atributo, Nivel>>; posicao: number; timeId: string }
-  >()
-  for (const c of classificacoes) {
-    const atual = classesPorJogador.get(c.jogadorId) ?? {
-      classificacoes: {},
-      posicao: c.posicaoHierarquia,
-      timeId: c.timeId,
-    }
-    atual.classificacoes[c.atributo] = c.nivel
-    classesPorJogador.set(c.jogadorId, atual)
-  }
+  const { porTime: classesPorTime } = indexarClassificacoes(classificacoes)
 
   const dadosJogador = new Map(elenco.map((j) => [j.id, j] as const))
 
@@ -171,20 +162,19 @@ export async function montarFatos(
   //     ATENÇÃO: o vínculo jogador↔time vem da LISTA do CJ (niveis.time_id),
   //     nunca de jogadores.time_id — os elencos são projetados.
   const jogadoresPorTime = new Map<string, JogadorFato[]>()
-  for (const [jogadorId, dados] of classesPorJogador) {
-    const info = dadosJogador.get(jogadorId)
-    const lista = jogadoresPorTime.get(dados.timeId) ?? []
-
-    lista.push({
-      id: jogadorId,
-      nome: info?.nomeCompleto ?? jogadorId,
-      timeId: dados.timeId,
-      posicaoHierarquia: dados.posicao,
-      classificacoes: dados.classificacoes,
-      medias: mediasPorJogador.get(jogadorId) ?? {},
-      historico: historicoPorJogador.get(jogadorId) ?? [],
-    })
-    jogadoresPorTime.set(dados.timeId, lista)
+  for (const [timeId, classes] of classesPorTime) {
+    jogadoresPorTime.set(
+      timeId,
+      [...classes].map(([jogadorId, dados]) => ({
+        id: jogadorId,
+        nome: dadosJogador.get(jogadorId)?.nomeCompleto ?? jogadorId,
+        timeId,
+        ...dados,
+        chavesEstrategia: chavesEstrategia.get(jogadorId),
+        medias: mediasPorJogador.get(jogadorId) ?? {},
+        historico: historicoPorJogador.get(jogadorId) ?? [],
+      })),
+    )
   }
 
   const timesFato: TimeFato[] = listaTimes

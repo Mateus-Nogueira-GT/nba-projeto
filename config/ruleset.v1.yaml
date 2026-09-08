@@ -298,10 +298,17 @@ por_atributo:
   REBOTES:
     origem: demonstracao
 
+    # DOCX recebido em 08/09, p. 14: OPD só N3/N2; oscilação nos três níveis.
+    # Deltas, linhas, confiança, odds e greens abaixo continuam demonstrativos.
+    opd:
+      janela: 2
+      mapa_nivel: { 1: 3, 2: 2 }
+
     # Delta menor que o de pontos: quem tira 10 rebotes não cai 6 num jogo ruim,
     # cai 3. Usar o delta de pontos aqui faria o limiar ficar inalcançável.
     oscilacao:
       delta: { MVP: 3, ALL_STAR: 3, SUPORTE: 2, RANDOLA: 2 }
+      nivel_minimo_apito: { MVP: 1, ALL_STAR: 1, SUPORTE: 1, RANDOLA: 1 }
 
     confianca:
       base:

@@ -68,7 +68,12 @@ export function avaliar(fatos: Fatos, ruleset: Ruleset): Apito[] {
 
 function avaliarListaSecreta(time: TimeFato, jogo: JogoFato, ruleset: Ruleset): Apito[] {
   const apitos: Apito[] = []
-  const porOpd = new Map(avaliarOpd(time, jogo, ruleset).map((o) => [o.jogadorId, o.nivelApito]))
+  const opdPorAtributo = new Map(
+    ruleset.niveis.atributos.map((atributo) => [
+      atributo,
+      new Map(avaliarOpd(time, jogo, ruleset, atributo).map((o) => [o.jogadorId, o.nivelApito])),
+    ]),
+  )
 
   for (const jogador of time.jogadores) {
     for (const atributo of ruleset.niveis.atributos) {
@@ -76,7 +81,7 @@ function avaliarListaSecreta(time: TimeFato, jogo: JogoFato, ruleset: Ruleset): 
       if (nivel === undefined) continue
 
       const oscilacao = avaliarOscilacao(jogador, atributo, ruleset)
-      const nivelOpd = porOpd.get(jogador.id) ?? null
+      const nivelOpd = opdPorAtributo.get(atributo)?.get(jogador.id) ?? null
       if (oscilacao === null && nivelOpd === null) continue
 
       // Os dois métodos podem apitar o mesmo jogador. A chave de deduplicação
@@ -100,6 +105,7 @@ function avaliarListaSecreta(time: TimeFato, jogo: JogoFato, ruleset: Ruleset): 
           metodo,
           nivelApito,
           turbo: turboOpd || (oscilacao?.turbo ?? false),
+          acumulaBonus: !oscilacao?.turbo || ruleset.oscilacao.turbo.acumula_bonus,
           opdOrigemNivel: nivelOpd,
           ruleset,
         }),
@@ -121,17 +127,12 @@ function porLinha(p: {
   metodo: Metodo
   nivelApito: NivelApito
   turbo: boolean
+  acumulaBonus: boolean
   opdOrigemNivel: NivelApito | null
   ruleset: Ruleset
 }): Apito[] {
   return linhasDoNivel(p.nivel, p.atributo, p.ruleset).map((linha) => ({
-    chaveDeduplicacao: montarChave(
-      p.jogo.id,
-      p.jogador.id,
-      p.atributo,
-      p.estrategia,
-      linha,
-    ),
+    chaveDeduplicacao: montarChave(p.jogo.id, p.jogador.id, p.atributo, p.estrategia, linha),
     jogoId: p.jogo.id,
     jogadorId: p.jogador.id,
     atributo: p.atributo,
@@ -143,7 +144,14 @@ function porLinha(p: {
     modoFire: false,
     opdOrigemNivel: p.opdOrigemNivel,
     linha,
-    confianca: calcularConfianca(p.nivel, p.atributo, linha, p.nivelApito, p.ruleset),
+    confianca: calcularConfianca(
+      p.nivel,
+      p.atributo,
+      linha,
+      p.nivelApito,
+      p.ruleset,
+      p.acumulaBonus,
+    ),
     alvo1Q: null,
   }))
 }

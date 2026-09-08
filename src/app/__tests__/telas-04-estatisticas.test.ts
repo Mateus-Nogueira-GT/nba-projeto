@@ -372,7 +372,27 @@ describe('tela do jogador · os três estados da linha de apito', () => {
     try {
       await banco.db
         .update(estatisticasJogo)
-        .set({ minutos: '0.00', pontos: 0, rebotesTotal: 0, assistencias: 0 })
+        .set({
+          minutos: '0.00',
+          pontos: 0,
+          rebotesTotal: 0,
+          rebotesOf: 0,
+          rebotesDef: 0,
+          assistencias: 0,
+          cestasC: 0,
+          cestasT: 0,
+          doisC: 0,
+          doisT: 0,
+          tresC: 0,
+          tresT: 0,
+          lanceC: 0,
+          lanceT: 0,
+          roubos: 0,
+          bloqueios: 0,
+          turnovers: 0,
+          faltas: 0,
+          saldoQuadra: 0,
+        })
         .where(ondeBox(conferido.jogoId, alvo))
       const secao = secaoDeApitos(await renderizarJogador(alvo))
 
@@ -382,15 +402,7 @@ describe('tela do jogador · os três estados da linha de apito', () => {
         conferidos.length - noMesmoJogo,
       )
     } finally {
-      await banco.db
-        .update(estatisticasJogo)
-        .set({
-          minutos: box!.minutos,
-          pontos: box!.pontos,
-          rebotesTotal: box!.rebotesTotal,
-          assistencias: box!.assistencias,
-        })
-        .where(ondeBox(conferido.jogoId, alvo))
+      await banco.db.update(estatisticasJogo).set(box!).where(ondeBox(conferido.jogoId, alvo))
     }
   }, 60_000)
 

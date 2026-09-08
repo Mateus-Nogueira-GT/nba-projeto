@@ -1,13 +1,6 @@
 import { and, eq, inArray } from 'drizzle-orm'
 
-import type {
-  Atributo,
-  JogadorFato,
-  JogoFato,
-  Nivel,
-  StatusEscalacao,
-  TimeFato,
-} from '../motor/tipos'
+import type { Atributo, JogadorFato, JogoFato, StatusEscalacao, TimeFato } from '../motor/tipos'
 import {
   apitos,
   estatisticasQuarto,
@@ -20,6 +13,8 @@ import {
   times,
 } from './db/schema'
 import type { Db } from './db/tipos'
+import { chavesEstrategiaConfirmadas, indexarClassificacoes } from './fatos-editoriais'
+import { janelaNoBanco, type JanelaMedia } from './janela'
 import type { NivelApito } from '../motor/tipos'
 import { temporadaDe, type ConfigTemporada } from './temporada'
 
@@ -52,6 +47,7 @@ export async function montarFatosDoJogo(
   db: Db,
   jogoId: string,
   configTemporada: ConfigTemporada,
+  janela: JanelaMedia = 'temporada',
 ): Promise<FatosDoJogo | null> {
   const [partida] = await db.select().from(jogos).where(eq(jogos.id, jogoId)).limit(1)
   if (!partida) return null
@@ -91,39 +87,46 @@ export async function montarFatosDoJogo(
   ]
   const idsJogador = [...new Set([...idsCanonicos, ...classificacoes.map((c) => c.jogadorId)])]
 
-  const [elenco, listaTimes, medias, escalacoes, quartos, opdPublicada] = await Promise.all([
-    idsJogador.length > 0
-      ? db.select().from(jogadores).where(inArray(jogadores.id, idsJogador))
-      : Promise.resolve([]),
-    db.select().from(times).where(inArray(times.id, idsTime)),
-    idsJogador.length > 0
-      ? db
-          .select()
-          .from(mediasJogador)
-          .where(
-            and(
-              inArray(mediasJogador.jogadorId, idsJogador),
-              eq(mediasJogador.janela, 'TEMPORADA'),
-              eq(mediasJogador.temporada, temporada),
-            ),
-          )
-      : Promise.resolve([]),
-    db.select().from(lesoesEscalacao).where(eq(lesoesEscalacao.jogoId, jogoId)),
-    db.select().from(estatisticasQuarto).where(eq(estatisticasQuarto.jogoId, jogoId)),
-    // Cruzamento (requisito 6): o card exibe a OPD QUE FOI PUBLICADA, lida da
-    // tabela de apitos — não uma OPD recalculada agora, que poderia divergir
-    // do que o usuário viu no feed antes do jogo.
-    db
-      .select({ jogadorId: apitos.jogadorId, nivelApito: apitos.nivelApito })
-      .from(apitos)
-      .where(
-        and(
-          eq(apitos.jogoId, jogoId),
-          eq(apitos.estrategia, 'LISTA_SECRETA'),
-          eq(apitos.metodo, 'OPD'),
+  const [elenco, listaTimes, medias, escalacoes, quartos, opdPublicada, chavesEstrategia] =
+    await Promise.all([
+      idsJogador.length > 0
+        ? db.select().from(jogadores).where(inArray(jogadores.id, idsJogador))
+        : Promise.resolve([]),
+      db.select().from(times).where(inArray(times.id, idsTime)),
+      idsJogador.length > 0
+        ? db
+            .select()
+            .from(mediasJogador)
+            .where(
+              and(
+                inArray(mediasJogador.jogadorId, idsJogador),
+                eq(mediasJogador.janela, janelaNoBanco(janela)),
+                eq(mediasJogador.temporada, temporada),
+              ),
+            )
+        : Promise.resolve([]),
+      db.select().from(lesoesEscalacao).where(eq(lesoesEscalacao.jogoId, jogoId)),
+      db.select().from(estatisticasQuarto).where(eq(estatisticasQuarto.jogoId, jogoId)),
+      // Cruzamento (requisito 6): o card exibe a OPD QUE FOI PUBLICADA, lida da
+      // tabela de apitos — não uma OPD recalculada agora, que poderia divergir
+      // do que o usuário viu no feed antes do jogo.
+      db
+        .select({
+          jogadorId: apitos.jogadorId,
+          nivelApito: apitos.nivelApito,
+          opdOrigemNivel: apitos.opdOrigemNivel,
+        })
+        .from(apitos)
+        .where(
+          and(
+            eq(apitos.jogoId, jogoId),
+            eq(apitos.estrategia, 'LISTA_SECRETA'),
+            eq(apitos.metodo, 'OPD'),
+            eq(apitos.atributo, 'PONTOS'),
+          ),
         ),
-      ),
-  ])
+      chavesEstrategiaConfirmadas(db, idsJogador),
+    ])
 
   const mediasPorJogador = new Map<string, Partial<Record<Atributo, number>>>()
   for (const m of medias) {
@@ -134,39 +137,28 @@ export async function montarFatosDoJogo(
     })
   }
 
-  const classesPorJogador = new Map<
-    string,
-    { classificacoes: Partial<Record<Atributo, Nivel>>; posicao: number; timeId: string }
-  >()
-  for (const c of classificacoes) {
-    const atual = classesPorJogador.get(c.jogadorId) ?? {
-      classificacoes: {},
-      posicao: c.posicaoHierarquia,
-      timeId: c.timeId,
-    }
-    atual.classificacoes[c.atributo] = c.nivel
-    classesPorJogador.set(c.jogadorId, atual)
-  }
+  const { porJogador: classesPorJogador, porTime: classesPorTime } =
+    indexarClassificacoes(classificacoes)
 
   const dadosJogador = new Map(elenco.map((j) => [j.id, j] as const))
 
   const jogadoresPorTime = new Map<string, JogadorFato[]>()
-  for (const c of classificacoesEditoriais) {
-    const jogadorId = c.jogadorId
-    const dados = classesPorJogador.get(jogadorId)!
-    if ((jogadoresPorTime.get(c.timeId) ?? []).some((j) => j.id === jogadorId)) continue
-    const lista = jogadoresPorTime.get(c.timeId) ?? []
-    lista.push({
-      id: jogadorId,
-      nome: dadosJogador.get(jogadorId)?.nomeCompleto ?? jogadorId,
-      timeId: c.timeId,
-      posicaoHierarquia: dados.posicao,
-      classificacoes: dados.classificacoes,
-      medias: mediasPorJogador.get(jogadorId) ?? {},
-      // Vazio de propósito: nenhuma regra do Fire Live lê histórico.
-      historico: [],
-    })
-    jogadoresPorTime.set(c.timeId, lista)
+  for (const timeId of idsTime) {
+    const classes = classesPorTime.get(timeId)
+    if (!classes) continue
+    jogadoresPorTime.set(
+      timeId,
+      [...classes].map(([jogadorId, dados]) => ({
+        id: jogadorId,
+        nome: dadosJogador.get(jogadorId)?.nomeCompleto ?? jogadorId,
+        timeId,
+        ...dados,
+        chavesEstrategia: chavesEstrategia.get(jogadorId),
+        medias: mediasPorJogador.get(jogadorId) ?? {},
+        // Vazio de propósito: nenhuma regra do Fire Live lê histórico.
+        historico: [],
+      })),
+    )
   }
 
   const canonicosPorTime = new Map<string, JogadorFato[]>()
@@ -180,8 +172,10 @@ export async function montarFatosDoJogo(
       timeId: jogador.timeId,
       // Não classificados não ganham uma posição editorial inventada.
       // Este campo não participa da avaliação do elenco canônico.
-      posicaoHierarquia: editorial?.posicao ?? Number.MAX_SAFE_INTEGER,
+      posicaoHierarquia: editorial?.posicaoHierarquia ?? Number.MAX_SAFE_INTEGER,
+      posicaoHierarquiaPorAtributo: editorial?.posicaoHierarquiaPorAtributo ?? {},
       classificacoes: editorial?.classificacoes ?? {},
+      chavesEstrategia: chavesEstrategia.get(jogador.id),
       medias: mediasPorJogador.get(jogador.id) ?? {},
       historico: [],
     })
@@ -222,7 +216,10 @@ export async function montarFatosDoJogo(
     // A Lista Secreta grava uma linha por linha de aposta; o nível da OPD é o
     // mesmo em todas elas. Fica o maior, para não depender da ordem do SELECT.
     const atual = opdPreLive.get(o.jogadorId) ?? 0
-    if (o.nivelApito > atual) opdPreLive.set(o.jogadorId, o.nivelApito as NivelApito)
+    // Snapshots legados de método OPD podem não ter a origem separada.
+    // Nos registros atuais, o nível combinado nunca substitui a origem.
+    const origem = o.opdOrigemNivel ?? o.nivelApito
+    if (origem > atual) opdPreLive.set(o.jogadorId, origem as NivelApito)
   }
 
   return { jogo, times: timesFato, opdPreLive }

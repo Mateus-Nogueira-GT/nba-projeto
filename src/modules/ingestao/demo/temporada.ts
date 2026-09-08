@@ -945,7 +945,7 @@ function protagonistasDoJogo(
  * publicada e não participa de nenhuma decisão de apito.
  */
 async function modoFireAceso(c: Contexto, jogoId: string): Promise<boolean> {
-  const fatos = await montarFatosDoJogo(c.db, jogoId, calendarioDoRuleset(c.ruleset))
+  const fatos = await montarFatosDoJogo(c.db, jogoId, calendarioDoRuleset(c.ruleset), c.ruleset.media.janela)
   if (fatos === null) return false
   return fatos.times.some((time) =>
     avaliarFireLive(time, fatos.jogo, c.ruleset, { opdPreLive: new Map() }).apitos.some(

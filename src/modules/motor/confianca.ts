@@ -12,12 +12,13 @@ export function calcularConfianca(
   linha: number,
   nivelApito: NivelApito,
   ruleset: Ruleset,
+  acumulaBonus = true,
 ): number | null {
   const base = confiancaBase(nivel, atributo, linha, ruleset)
   if (base === undefined) return null
 
   // Randola tem bônus 0 em todos os níveis (P8) — sempre a tabela base.
-  return base + bonusConfianca(nivel, atributo, nivelApito, ruleset)
+  return base + (acumulaBonus ? bonusConfianca(nivel, atributo, nivelApito, ruleset) : 0)
 }
 
 /** Linhas disponíveis para um nível e atributo, na ordem do ruleset. */

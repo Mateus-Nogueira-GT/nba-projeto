@@ -46,6 +46,12 @@ export type JogadorFato = {
   timeId: string
   /** 1..N dentro do time. Usado SOMENTE pela OPD. */
   posicaoHierarquia: number
+  /** A ordem editorial pode ser diferente em pontos, rebotes e assistências. */
+  posicaoHierarquiaPorAtributo?: Partial<Record<Atributo, number>>
+  /** Identidade editorial reconciliada; permite exceções sem depender do UUID. */
+  chaveEstrategia?: string
+  /** Todos os nomes reconciliados: um alias de casa não apaga a identidade editorial. */
+  chavesEstrategia?: string[]
   /**
    * Classificação do CJ, por atributo. Ausência do atributo aqui significa
    * "não classificado pela plataforma" — o que muda o multiplicador do Fire Live.

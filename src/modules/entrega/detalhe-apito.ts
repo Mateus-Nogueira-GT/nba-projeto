@@ -1,6 +1,7 @@
-import { and, asc, eq, inArray } from 'drizzle-orm'
+import { and, asc, desc, eq, inArray, lt } from 'drizzle-orm'
 
 import {
+  estatisticasJogo,
   jogadores,
   jogos,
   lesoesEscalacao,
@@ -10,9 +11,14 @@ import {
   times,
 } from '../dominio/db/schema'
 import type { Db } from '../dominio/db/tipos'
+import { chavesEstrategiaConfirmadas } from '../dominio/fatos-editoriais'
+import { janelaNoBanco } from '../dominio/janela'
+import { entrouEmQuadraSql } from '../dominio/participacao'
+import { dataDeReferencia, intervaloDoDia } from '../dominio/rodada'
 import { calendarioDoRuleset, temporadaDe } from '../dominio/temporada'
-import { deltaOscilacao } from '../motor/atributos'
+import { deltaOscilacao, nivelMinimoOscilacao } from '../motor/atributos'
 import type { Ruleset } from '../motor/ruleset/schema'
+import { NIVEIS_APITO } from '../motor/tipos'
 import type { Atributo, Nivel } from '../motor/tipos'
 import { colunaMedia, jogosRecentes, valorDoJogo } from './historico-na-linha'
 import type { ItemFeed } from './lista-secreta'
@@ -127,14 +133,15 @@ export async function detalheDoApito(
 
   const temporada = temporadaDe(jogo.dataHoraUtc, calendarioDoRuleset(ruleset))
 
-  // 1 · Média da TEMPORADA — a que o motor usou para decidir, não "5 jogos".
+  // 1 · A mesma janela configurada para o motor. A média continua móvel;
+  // o nome público mediaTemporada é legado e não define a janela consultada.
   const [mediaRow] = await db
     .select()
     .from(mediasJogador)
     .where(
       and(
         eq(mediasJogador.jogadorId, item.jogadorId),
-        eq(mediasJogador.janela, 'TEMPORADA'),
+        eq(mediasJogador.janela, janelaNoBanco(ruleset.media.janela)),
         eq(mediasJogador.temporada, temporada),
       ),
     )
@@ -168,7 +175,13 @@ export async function detalheDoApito(
     ? await db
         .select()
         .from(niveis)
-        .where(and(eq(niveis.niveisVersaoId, versaoAtiva.id), eq(niveis.jogadorId, item.jogadorId)))
+        .where(
+          and(
+            eq(niveis.niveisVersaoId, versaoAtiva.id),
+            eq(niveis.jogadorId, item.jogadorId),
+            eq(niveis.atributo, item.atributo),
+          ),
+        )
         .limit(1)
     : []
   const timeDoJogadorId = vinculo?.timeId ?? null
@@ -243,7 +256,11 @@ export async function detalheDoApito(
   // 5 · O porquê — nomeia a regra que disparou, não uma frase genérica. Os
   //     FATOS são levantados uma vez; deles saem o texto plano (o de sempre) e
   //     os fatores estruturados da identidade 04.
-  const fatos = await fatosDoPorque(db, ruleset, item, mediaTemporada, historico, {
+  const { inicio: inicioDaRodada } = intervaloDoDia(
+    dataDeReferencia(jogo.dataHoraUtc, ruleset.rodada.fuso),
+    ruleset.rodada.fuso,
+  )
+  const fatos = await fatosDoPorque(db, ruleset, item, mediaTemporada, inicioDaRodada, {
     timeDoJogadorId,
     niveisVersaoId: versaoAtiva?.id ?? null,
     foraDaPartida: new Set(foraDaPartida.map((f) => f.jogadorId)),
@@ -266,7 +283,14 @@ export async function detalheDoApito(
 
 type FatosDoPorque = {
   /** Oscilação: quantos jogos seguidos abaixo, o limiar, a média e os valores desses jogos. */
-  oscilacao: { n: number; limiar: number; media: number; valores: number[] } | null
+  oscilacao: {
+    n: number
+    limiar: number
+    media: number
+    valores: number[]
+    rotuloMedia: string
+    nivelMinimo: number
+  } | null
   /** OPD: o prefixo da hierarquia que está fora, do topo para baixo. */
   opd: { nomes: string[] } | null
 }
@@ -276,7 +300,7 @@ async function fatosDoPorque(
   ruleset: Ruleset,
   item: ItemFeed,
   mediaTemporada: number | null,
-  historico: { pontos: number; rebotesTotal: number; assistencias: number }[],
+  inicioDaRodada: Date,
   /** Time e versão de níveis do apitado — a OPD só existe dentro deles. */
   contexto: {
     timeDoJogadorId: string | null
@@ -288,16 +312,61 @@ async function fatosDoPorque(
   const fatos: FatosDoPorque = { oscilacao: null, opd: null }
 
   if (item.metodo === 'OSCILACAO') {
-    const delta = deltaOscilacao(item.nivelJogador, item.atributo, item.jogadorId, ruleset)
+    // O recorte de 5/10 jogos pertence à forma exibida. A justificativa lê o
+    // histórico anterior à rodada, como montarFatos, para que DNPs não
+    // consumam a janela e apaguem jogos que sustentaram a sequência.
+    const [historico, chavesEstrategia] = await Promise.all([
+      db
+        .select({
+          pontos: estatisticasJogo.pontos,
+          rebotesTotal: estatisticasJogo.rebotesTotal,
+          assistencias: estatisticasJogo.assistencias,
+          jogou: entrouEmQuadraSql('estatisticas_jogo').mapWith(Boolean),
+        })
+        .from(estatisticasJogo)
+        .innerJoin(jogos, eq(estatisticasJogo.jogoId, jogos.id))
+        .where(
+          and(
+            eq(estatisticasJogo.jogadorId, item.jogadorId),
+            lt(jogos.dataHoraUtc, inicioDaRodada),
+          ),
+        )
+        .orderBy(desc(jogos.dataHoraUtc)),
+      chavesEstrategiaConfirmadas(db, [item.jogadorId]),
+    ])
+    const delta = deltaOscilacao(
+      item.nivelJogador,
+      item.atributo,
+      [item.jogadorId, ...(chavesEstrategia.get(item.jogadorId) ?? [])],
+      ruleset,
+    )
     if (mediaTemporada !== null && delta !== undefined) {
-      const limiar = mediaTemporada - delta
+      const limiar =
+        ruleset.oscilacao.criterio_sequencia === 'limiar' ? mediaTemporada - delta : mediaTemporada
       const valores: number[] = []
       for (const h of historico) {
+        if (!h.jogou) {
+          if (ruleset.oscilacao.dnp === 'ignora') continue
+          break
+        }
         const v = valorDoJogo(h, item.atributo)
-        if (v <= limiar) valores.push(v)
-        else break
+        const abaixo = ruleset.oscilacao.criterio_sequencia === 'limiar' ? v <= limiar : v < limiar
+        if (!abaixo) break
+        valores.push(v)
+        if (valores.length >= (NIVEIS_APITO.at(-1) ?? 1)) break
       }
-      fatos.oscilacao = { n: valores.length, limiar, media: mediaTemporada, valores }
+      const rotuloMedia =
+        ruleset.media.janela === 'temporada'
+          ? 'Média da temporada'
+          : `Média dos últimos ${ruleset.media.janela === 'ultimos_5' ? 5 : 10} jogos`
+      fatos.oscilacao = {
+        n: valores.length,
+        limiar,
+        media: mediaTemporada,
+        valores,
+        rotuloMedia,
+        nivelMinimo: nivelMinimoOscilacao(item.nivelJogador, item.atributo, ruleset),
+      }
     }
   }
 
@@ -342,11 +411,11 @@ async function fatosDoPorque(
 function textoPlano(item: ItemFeed, fatos: FatosDoPorque): string[] {
   if (item.metodo === 'OSCILACAO') {
     if (!fatos.oscilacao) return []
-    const { n, limiar, media } = fatos.oscilacao
+    const { n, limiar, media, rotuloMedia } = fatos.oscilacao
     const unidade = UNIDADE[item.atributo]
     return [
       `◆ ${n} jogo${n === 1 ? '' : 's'} seguido${n === 1 ? '' : 's'} abaixo de ${fmt(limiar)} ${unidade}.`,
-      `Média da temporada: ${fmt(media)}.`,
+      `${rotuloMedia}: ${fmt(media)}.`,
     ]
   }
   if (item.metodo === 'OPD') {
@@ -376,19 +445,17 @@ function montarFatores(item: ItemFeed, fatos: FatosDoPorque): Fator[] {
   ]
 
   if (item.metodo === 'OSCILACAO' && fatos.oscilacao) {
-    const { n, limiar, media, valores } = fatos.oscilacao
+    const { n, limiar, media, valores, rotuloMedia } = fatos.oscilacao
     const lista = valores.map((v) => String(v)).join(', ')
     fatores.push({
       chave: 'OSCILACAO',
       titulo: 'Oscilação',
       texto:
         n === 0
-          ? `Média da temporada: ${fmt(media)} ${unidade}.`
-          : `${n} jogo${n === 1 ? '' : 's'} seguido${n === 1 ? '' : 's'} abaixo de ${fmt(limiar)} ${unidade}: ${lista}. A média da temporada é ${fmt(media)}.`,
+          ? `${rotuloMedia}: ${fmt(media)} ${unidade}.`
+          : `${n} jogo${n === 1 ? '' : 's'} seguido${n === 1 ? '' : 's'} abaixo de ${fmt(limiar)} ${unidade}: ${lista}. ${rotuloMedia}: ${fmt(media)}.`,
       destaque:
-        n === 0
-          ? 'Média da temporada'
-          : `${n} jogo${n === 1 ? '' : 's'} seguido${n === 1 ? '' : 's'}`,
+        n === 0 ? rotuloMedia : `${n} jogo${n === 1 ? '' : 's'} seguido${n === 1 ? '' : 's'}`,
     })
   }
 
@@ -426,8 +493,10 @@ function montarFatores(item: ItemFeed, fatos: FatosDoPorque): Fator[] {
       chave: 'TURBO',
       titulo: 'Turbo',
       texto:
-        'Oscilação e desfalque se reforçam no mesmo jogador — o destaque que atravessa os dois métodos.',
-      destaque: 'Oscilação e desfalque',
+        item.metodo === 'OPD'
+          ? 'Oscilação e desfalque se reforçam no mesmo jogador — o destaque que atravessa os dois métodos.'
+          : `Oscilação N${item.nivelApito} de ${ROTULO_NIVEL[item.nivelJogador]} — o nível do jogador e a sequência sustentam o turbo.`,
+      destaque: item.metodo === 'OPD' ? 'Oscilação e desfalque' : `Oscilação N${item.nivelApito}`,
     })
   }
 
@@ -451,8 +520,8 @@ function textoDoNivelDoApito(item: ItemFeed, fatos: FatosDoPorque): string {
           ? 'dois jogos abaixo'
           : 'um jogo abaixo'
     const cerca =
-      item.nivelJogador === 'SUPORTE' || item.nivelJogador === 'RANDOLA'
-        ? ` ${ROTULO_NIVEL[item.nivelJogador]} não apita em N1.`
+      fatos.oscilacao.nivelMinimo > 1
+        ? ` ${ROTULO_NIVEL[item.nivelJogador]} começa em N${fatos.oscilacao.nivelMinimo} neste atributo.`
         : ''
     return `${n} — ${seguidos}.${cerca}`
   }

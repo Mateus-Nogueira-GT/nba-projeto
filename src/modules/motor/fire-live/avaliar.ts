@@ -146,7 +146,7 @@ export function avaliarFireLive(
         turbo: false,
         modoFire: nivel !== null && emModoFire(valor, media, nivel, ruleset),
         // Cruzamento: se já estava apitado em OPD pré-live, o card mostra isso.
-        opdOrigemNivel: opcoes.opdPreLive.get(jogador.id) ?? null,
+        opdOrigemNivel: atributo === 'PONTOS' ? (opcoes.opdPreLive.get(jogador.id) ?? null) : null,
         linha: null,
         confianca: null,
         alvo1Q: alvo,

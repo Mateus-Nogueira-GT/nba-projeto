@@ -1,5 +1,6 @@
 import type { Ruleset } from '../ruleset/schema'
-import type { JogoFato, NivelApito, TimeFato } from '../tipos'
+import { parametrosOpd } from '../atributos'
+import type { Atributo, JogoFato, NivelApito, TimeFato } from '../tipos'
 
 export type ApitoOpd = { jogadorId: string; nivelApito: NivelApito }
 
@@ -12,10 +13,20 @@ export type ApitoOpd = { jogadorId: string; nivelApito: NivelApito }
  * A trava crítica: o desfalque tem que ser PREFIXO da hierarquia. Se o nº 2
  * falta e o nº 1 joga, não há apito nenhum.
  */
-export function avaliarOpd(time: TimeFato, jogo: JogoFato, ruleset: Ruleset): ApitoOpd[] {
-  const hierarquia = [...time.jogadores].sort(
-    (a, b) => a.posicaoHierarquia - b.posicaoHierarquia,
-  )
+export function avaliarOpd(
+  time: TimeFato,
+  jogo: JogoFato,
+  ruleset: Ruleset,
+  atributo: Atributo = 'PONTOS',
+): ApitoOpd[] {
+  const parametros = parametrosOpd(atributo, ruleset)
+  const hierarquia = time.jogadores
+    .filter((j) => j.classificacoes[atributo] !== undefined)
+    .sort(
+      (a, b) =>
+        (a.posicaoHierarquiaPorAtributo?.[atributo] ?? a.posicaoHierarquia) -
+        (b.posicaoHierarquiaPorAtributo?.[atributo] ?? b.posicaoHierarquia),
+    )
   const estaFora = (id: string) => jogo.escalacao[id] === 'FORA'
 
   // Maior bloco contíguo de desfalques a partir do topo.
@@ -30,13 +41,13 @@ export function avaliarOpd(time: TimeFato, jogo: JogoFato, ruleset: Ruleset): Ap
   const beneficiados = hierarquia
     .slice(prefixo)
     .filter((j) => !estaFora(j.id))
-    .slice(0, ruleset.opd.janela)
+    .slice(0, parametros.janela)
 
   const apitos: ApitoOpd[] = []
 
   for (const [indice, jogador] of beneficiados.entries()) {
     const distancia = indice + 1
-    const nivelApito = ruleset.opd.mapa_nivel[String(distancia)]
+    const nivelApito = parametros.mapa_nivel[String(distancia)]
     if (nivelApito === undefined) continue
     apitos.push({ jogadorId: jogador.id, nivelApito: nivelApito as NivelApito })
   }
