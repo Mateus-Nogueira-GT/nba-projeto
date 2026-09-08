@@ -230,7 +230,7 @@ export default async function PaginaApito({
 
   const ruleset = await rulesetAtivo()
   const hoje = dataDeReferencia(new Date(), ruleset.rodada.fuso)
-  const { itens, geradoEm } = await linhasDoJogador(getDb(), hoje, jogadorId, atributo)
+  let { itens, geradoEm } = await linhasDoJogador(getDb(), hoje, jogadorId, atributo)
 
   // O apito do Fire Live abre ESTA página (spec §4.3): a análise é a mesma, o
   // 1º quarto é que entra no topo. Sem apito pré-live, o item ao vivo passa a
@@ -240,7 +240,7 @@ export default async function PaginaApito({
   // jogador só (ou pelo atributo da query, que costuma vir vazio) abria a
   // página com hero de um mercado e BarraAlvo de outro: `linhasDoJogador` já
   // colapsa para um atributo, e o Fire Live roda nos três.
-  const preLive = itens[0]
+  let preLive = itens[0]
   const aoVivo = vivo.itens.find(
     (i) =>
       i.jogadorId === jogadorId &&
@@ -248,6 +248,19 @@ export default async function PaginaApito({
         ? i.atributo === preLive.atributo
         : atributo === undefined || i.atributo === atributo),
   )
+
+  // O Fire Live conserva jogos da rodada anterior enquanto estão em andamento.
+  // A análise pré-live continua pertencendo à rodada em que ESSE jogo começou.
+  if (!preLive && aoVivo) {
+    const jogo = vivo.jogos.find((j) => j.id === aoVivo.jogoId)
+    const rodada = jogo ? dataDeReferencia(jogo.dataHoraUtc, ruleset.rodada.fuso) : hoje
+    if (rodada !== hoje) {
+      const anterior = await linhasDoJogador(getDb(), rodada, jogadorId, aoVivo.atributo)
+      itens = anterior.itens.filter((i) => i.jogoId === aoVivo.jogoId)
+      preLive = itens[0]
+      if (preLive) geradoEm = anterior.geradoEm
+    }
+  }
 
   const principal = preLive ?? aoVivo
 
