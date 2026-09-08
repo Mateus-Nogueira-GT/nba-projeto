@@ -29,6 +29,12 @@ const ATRIBUTO_ROTULO: Record<Atributo, string> = {
   REBOTES: 'Rebotes',
   ASSISTENCIAS: 'Assistências',
 }
+/** A unidade escrita depois do número ("25 pontos") — nunca antes, que é a gramática da linha. */
+const ATRIBUTO_UNIDADE: Record<Atributo, string> = {
+  PONTOS: 'pontos',
+  REBOTES: 'rebotes',
+  ASSISTENCIAS: 'assistências',
+}
 
 const ROTULO: CSSProperties = {
   fontFamily: semantico.fonteRotulo,
@@ -75,17 +81,25 @@ const decimal = (n: number) =>
   n.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })
 
 /**
- * Contra quem o apitado jogou E de que lado, quando as siglas permitem
- * afirmar. O mando vai junto porque o apoio do card escreve `vs ADV` para o
- * mandante e `@ ADV` para o visitante (artboards da 04) — sem ele, metade dos
- * cards da tela diria "em casa" para quem estava fora.
+ * Contra quem o apitado jogou E de que lado. O mando vai junto porque o apoio
+ * do card escreve `vs ADV` para o mandante e `@ ADV` para o visitante
+ * (artboards da 04) — sem ele, metade dos cards da tela diria "em casa" para
+ * quem estava fora.
+ *
+ * O time é o da LISTA DO CJ (`JogadorConferido.timeId`), comparado por ID com
+ * os dois lados do jogo — nunca `jogadores.time_id`, que é o time REAL do
+ * provedor (CLAUDE.md: a única exceção é a aba de estatísticas). Com elenco
+ * projetado (Giannis no Miami) o time real não casa com lado nenhum e o
+ * confronto sumiria; e quando o time real é justamente o adversário daquela
+ * noite, o mando inverte. Mesma leitura de `apitosDoJogador` no perfil.
  */
 function adversarioDe(
   jogo: JogoEncerradoResumo,
-  timeSigla: string,
+  timeId: string | null,
 ): { sigla: string; emCasa: boolean } | null {
-  if (timeSigla === jogo.casaSigla) return { sigla: jogo.visitanteSigla, emCasa: true }
-  if (timeSigla === jogo.visitanteSigla) return { sigla: jogo.casaSigla, emCasa: false }
+  if (timeId === null) return null
+  if (timeId === jogo.casaId) return { sigla: jogo.visitanteSigla, emCasa: true }
+  if (timeId === jogo.visitanteId) return { sigla: jogo.casaSigla, emCasa: false }
   return null
 }
 
@@ -150,24 +164,72 @@ function Seta({
   )
 }
 
-/** Um número do bloco da noite: rótulo pequeno em cima, número grande embaixo. */
-function NumeroDaNoite({ rotulo, valor, cor }: { rotulo: string; valor: string; cor?: string }) {
+/**
+ * Um número do bloco da noite: rótulo pequeno em cima, número grande embaixo.
+ *
+ * `nota` toma o lugar do número quando ainda não há o que contar ("aguardando
+ * o fim da noite"); `base` escreve embaixo sobre quantos ele foi calculado
+ * ("22 de 27") — só quando a base difere do que está em tela.
+ */
+function NumeroDaNoite({
+  rotulo,
+  valor,
+  cor,
+  nota,
+  base,
+}: {
+  rotulo: string
+  valor?: string
+  cor?: string
+  nota?: string
+  base?: string
+}) {
   return (
     <div>
       <p style={{ ...ROTULO, margin: 0 }}>{rotulo}</p>
-      <p
-        style={{
-          margin: '2px 0 0',
-          fontFamily: semantico.fonteTitulo,
-          fontSize: 30,
-          letterSpacing: 0.5,
-          lineHeight: 1.1,
-          color: cor ?? semantico.texto100,
-          fontVariantNumeric: 'tabular-nums',
-        }}
-      >
-        {valor}
-      </p>
+      {nota ? (
+        <p
+          style={{
+            margin: '4px 0 0',
+            minHeight: 33,
+            fontFamily: semantico.fonteRotulo,
+            fontSize: 11,
+            letterSpacing: 0.6,
+            lineHeight: 1.25,
+            color: semantico.texto55,
+          }}
+        >
+          {nota}
+        </p>
+      ) : (
+        <p
+          style={{
+            margin: '2px 0 0',
+            fontFamily: semantico.fonteTitulo,
+            fontSize: 30,
+            letterSpacing: 0.5,
+            lineHeight: 1.1,
+            color: cor ?? semantico.texto100,
+            fontVariantNumeric: 'tabular-nums',
+          }}
+        >
+          {valor}
+        </p>
+      )}
+      {base && (
+        <p
+          style={{
+            margin: '2px 0 0',
+            fontFamily: semantico.fonteRotulo,
+            fontSize: 11,
+            letterSpacing: 0.8,
+            color: semantico.texto55,
+            fontVariantNumeric: 'tabular-nums',
+          }}
+        >
+          {base}
+        </p>
+      )}
     </div>
   )
 }
@@ -200,6 +262,13 @@ function Vazio({ children }: { children: ReactNode }) {
  * o estado vem do jogo e do box score (`estadoDoCiclo`), nunca do fato de o
  * jogador ter ou não estatística — o box PARCIAL do 1º quarto faria a tela
  * dizer "não jogou" para quem entra em quadra às 22h (§5.1).
+ *
+ * Enquanto a noite NÃO terminou (`recap.noiteEncerrada` falso) a tela conta os
+ * apitos publicados e escreve "aguardando o fim da noite" no lugar da taxa —
+ * nunca "APITOS 0 · BATERAM 0" em cima de trinta cards, nem uma taxa que muda
+ * a cada jogo que acaba. O apito da noite é superlativo da noite inteira e só
+ * aparece quando ela acabou. `/resultados` sem data já cai na última noite
+ * que terminou; a rodada em curso se alcança pela seta.
  */
 export default async function PaginaResultadosDaRodada({
   params,
@@ -251,6 +320,8 @@ export default async function PaginaResultadosDaRodada({
   }
 
   const proxima = data >= hoje ? null : `/resultados/${somarDias(data, 1)}`
+  // A noite ainda não terminou: sem taxa, sem apito da noite (§5.1).
+  const emCurso = !recap.noiteEncerrada
   const cabecalho = (
     <CabecalhoTela
       sobrancelha="RESULTADOS · RODADA"
@@ -295,7 +366,10 @@ export default async function PaginaResultadosDaRodada({
       {cabecalho}
 
       {/* A NOITE em três números. "BATERAM" e "NA NOITE" são taxas de
-          conferência — nunca dividem elemento com um % de confiança de apito. */}
+          conferência — nunca dividem elemento com um % de confiança de apito.
+          APITOS é o que está em tela (publicados); a taxa é sobre os
+          CONFERIDOS, porque DNP é neutro (§4.4) — e quando a base difere do
+          que está em tela, ela vem escrita embaixo. */}
       <div
         style={{
           ...CAIXA,
@@ -306,13 +380,25 @@ export default async function PaginaResultadosDaRodada({
           gap: 10,
         }}
       >
-        <NumeroDaNoite rotulo="APITOS" valor={String(recap.apitos)} />
+        <NumeroDaNoite rotulo="APITOS" valor={String(recap.publicados)} />
         <NumeroDaNoite
           rotulo="BATERAM"
-          valor={String(recap.bateram)}
+          valor={recap.conferidos === 0 ? '—' : String(recap.bateram)}
           cor={componente.conferido.bateu}
         />
-        <NumeroDaNoite rotulo="NA NOITE" valor={recap.taxa === null ? '—' : inteiro(recap.taxa)} />
+        {emCurso ? (
+          <NumeroDaNoite rotulo="NA NOITE" nota="aguardando o fim da noite" />
+        ) : (
+          <NumeroDaNoite
+            rotulo="NA NOITE"
+            valor={recap.taxa === null ? '—' : inteiro(recap.taxa)}
+            base={
+              recap.taxa !== null && recap.conferidos !== recap.publicados
+                ? `${recap.bateram} de ${recap.conferidos}`
+                : undefined
+            }
+          />
+        )}
       </div>
 
       {/* A TEMPORADA acumulada — o argumento do produto, e o número que só faz
@@ -358,8 +444,10 @@ export default async function PaginaResultadosDaRodada({
         </span>
       </div>
 
-      {/* O APITO DA NOITE — quem passou mais longe da linha mais baixa. */}
-      {recap.apitoDaNoite && (
+      {/* O APITO DA NOITE — o turbo que bateu, ou quem passou mais longe da
+          linha mais baixa (§4.4). Só com a noite encerrada: é superlativo da
+          noite inteira, e mudaria a cada jogo que acabasse. */}
+      {!emCurso && recap.apitoDaNoite && (
         <ApitoDaNoite
           card={recap.apitoDaNoite}
           jogo={
@@ -393,10 +481,14 @@ export default async function PaginaResultadosDaRodada({
             />
 
             {/* O jogo acabou e o box ainda não chegou: NUNCA inferir ✓/✗ de
-                dado parcial (§5.1). O que a tela pode afirmar é quando olhou. */}
+                dado parcial (§5.1). O que a tela pode afirmar é quando olhou
+                ESTE jogo — o carimbo é o dele, nunca o da rodada: o jogo que
+                espera o box não herda o horário do vizinho que acabou de ser
+                atualizado ("um número velho apresentado como atual é pior do
+                que número nenhum", estatisticas/atualizacao.ts). */}
             {estado === 'AGUARDANDO_OFICIAL' && (
               <p style={{ ...ROTULO, margin: '0 0 10px', fontSize: 11, color: semantico.texto55 }}>
-                {`Aguardando dado oficial · última atualização ${dataHora(recap.atualizacao.em, fuso)}`}
+                {`Aguardando dado oficial · última atualização ${dataHora(jogo.atualizadoEm, fuso)}`}
               </p>
             )}
 
@@ -404,17 +496,21 @@ export default async function PaginaResultadosDaRodada({
               {ordenarCards(cards, conferido).map((card) => {
                 const item = itemPorCard.get(`${jogo.jogoId}|${card.jogadorId}|${card.atributo}`)
                 const jogou = card.fez !== null
-                const adversario = adversarioDe(jogo, card.timeSigla)
-                // A fileira do card conferido ganha o jogo que ACABOU. Ela
-                // segue na ordem canônica do app — mais recente primeiro —, e
-                // é o card que a lê cronologicamente: uma direção só, aqui e
-                // na Lista Secreta. Quem não jogou não ganha barrinha nova, e
-                // sem jogo novo a fileira não é a desta rodada.
+                const adversario = adversarioDe(jogo, card.timeId)
+                // A fileira do card conferido ganha o jogo que ACABOU, e é a
+                // TELA que a monta em ordem cronológica — o mais antigo à
+                // esquerda, o desta rodada à direita, contornado (artboard).
+                // A entrega materializa `ultimos5` do mais recente ao mais
+                // antigo; o card não inverte nada (inverter lá mudaria a
+                // Lista, o /como-funciona e a galeria congelada). Quem não
+                // jogou não ganha barrinha nova, e sem jogo novo a fileira
+                // não é a desta rodada. Antes do veredito o card é o da
+                // Lista, na mesma ordem dela.
                 const ultimos5 =
                   conferido && jogou
                     ? [
+                        ...[...(item?.ultimos5 ?? []).slice(0, 4)].reverse(),
                         { valor: card.fez!, bateu: card.bateuLinhaMaisBaixa === true },
-                        ...(item?.ultimos5 ?? []).slice(0, 4),
                       ]
                     : conferido
                       ? []
@@ -433,7 +529,7 @@ export default async function PaginaResultadosDaRodada({
                     atributo={card.atributo}
                     nivelJogador={card.nivelJogador}
                     nivelApito={card.nivelApito as NivelApito}
-                    turbo={item?.turbo ?? false}
+                    turbo={card.turbo}
                     // O veredito ocupa o lugar do %: o card conferido fala de
                     // ACERTO, e nota de confiança ao lado de "fez 27" leria
                     // como se as duas medissem a mesma coisa (§4.4).
@@ -450,7 +546,7 @@ export default async function PaginaResultadosDaRodada({
                     fez={card.fez}
                     bateu={card.bateuLinhaMaisBaixa}
                     ultimos5={ultimos5}
-                    destacarMaisRecente={conferido && jogou}
+                    destacarUltima={conferido && jogou}
                   />
                 )
               })}
@@ -461,7 +557,9 @@ export default async function PaginaResultadosDaRodada({
 
       {/* Os greens do Fire Live seguem em bloco PRÓPRIO: são marcos do 1º
           quarto, não conferência de linha, e somar os dois inventaria uma taxa
-          que ninguém calculou. */}
+          que ninguém calculou. A escrita é "25 pontos no 1º quarto", com o
+          marco nomeado — nunca "Pontos 25": nesta tela atributo + número é a
+          gramática da LINHA ("PONTOS 15+"), e o marco não é uma linha. */}
       {greens.length > 0 && (
         <section style={{ marginTop: 24 }}>
           <h2 style={{ ...ROTULO, margin: '0 0 8px', fontSize: 11 }}>GREENS DO FIRE LIVE</h2>
@@ -480,11 +578,14 @@ export default async function PaginaResultadosDaRodada({
                   fontSize: 14,
                 }}
               >
-                <strong>
-                  {`${green.nome} · ${ATRIBUTO_ROTULO[green.atributo]} ${green.marco}`}
-                </strong>
+                <span style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                  <strong>{green.nome}</strong>
+                  <span style={{ ...ROTULO, fontSize: 11, color: semantico.texto55 }}>
+                    {`marco ${green.marco}`}
+                  </span>
+                </span>
                 <span style={{ ...ROTULO, fontSize: 11, color: semantico.texto55 }}>
-                  {`${green.valor} no 1º quarto`}
+                  {`${green.valor} ${ATRIBUTO_UNIDADE[green.atributo]} no 1º quarto`}
                 </span>
               </div>
             ))}
@@ -499,8 +600,9 @@ export default async function PaginaResultadosDaRodada({
  * O APITO DA NOITE — o card em destaque, na borda do nível 3.
  *
  * Não é um `CardEntrada`: aqui não há ciclo, barrinha nem linha para conferir,
- * e sim UM fato — quem passou mais longe da linha mais baixa. O número grande
- * é o que ele fez, na cor de quem bateu.
+ * e sim UM fato — o turbo que bateu, ou quem passou mais longe da linha mais
+ * baixa (§4.4; a escolha é da entrega). O número grande é o que ele fez, na
+ * cor de quem bateu; o anel do avatar diz o nível do apito, turbo incluído.
  */
 function ApitoDaNoite({
   card,
@@ -510,7 +612,7 @@ function ApitoDaNoite({
   jogo: JogoEncerradoResumo | null
 }) {
   const linha = card.linhaConferida
-  const adversario = jogo ? adversarioDe(jogo, card.timeSigla) : null
+  const adversario = jogo ? adversarioDe(jogo, card.timeId) : null
   const apoio = [
     linha === null ? ATRIBUTO_ROTULO[card.atributo] : `${ATRIBUTO_ROTULO[card.atributo]} ${linha}+`,
     card.timeSigla,
@@ -536,6 +638,7 @@ function ApitoDaNoite({
         fotoUrl={card.fotoUrl}
         timeSigla={card.timeSigla}
         nivelApito={card.nivelApito as NivelApito}
+        turbo={card.turbo}
       />
       <div style={{ flex: 1, minWidth: 0 }}>
         <p

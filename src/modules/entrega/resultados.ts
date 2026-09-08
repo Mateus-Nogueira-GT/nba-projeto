@@ -7,11 +7,13 @@ import {
   greens,
   jogadores,
   jogos,
+  niveis,
+  niveisVersao,
   times,
 } from '../dominio/db/schema'
 import { somarDias } from '../dominio/rodada'
 import type { Db } from '../dominio/db/tipos'
-import { daColuna, maisAntiga, type Atualizacao } from './estatisticas/atualizacao'
+import { maisAntiga, type Atualizacao } from './estatisticas/atualizacao'
 import type { StatusJogo } from './lista-por-jogo'
 import type { Atributo, Nivel } from '../motor/tipos'
 
@@ -41,11 +43,23 @@ export type JogadorConferido = {
   jogoId: string
   jogadorId: string
   nome: string
+  /**
+   * O time do apitado na LISTA DO CJ — id e sigla, nunca `jogadores.time_id`.
+   *
+   * É a estratégia que apitou, e ela enxerga o elenco PROJETADO (Giannis no
+   * Miami). O id vai junto porque é por ele que a tela descobre o mando: com
+   * elenco projetado a sigla do provedor não casa com nenhum lado do jogo, o
+   * confronto some do card e o mando inverte. Mesma regra de
+   * `apitosDoJogador` (estatisticas/jogador.ts).
+   */
+  timeId: string | null
   timeSigla: string
   fotoUrl: string | null
   atributo: Atributo
   nivelJogador: Nivel
   nivelApito: number
+  /** Apito turbo — o critério de desempate do apito da noite (spec §4.4). */
+  turbo: boolean
   /** Ordenadas da mais baixa para a mais alta — a ordem da tela. */
   linhas: LinhaConferida[]
   /**
@@ -78,6 +92,42 @@ export type DiaConferido = {
   acertos: number
   /** Jogadores que entraram em quadra — DNP não é acerto nem erro. */
   conferidos: number
+}
+
+/**
+ * O time de cada apitado segundo a LISTA DO CJ (versão ativa de `niveis`).
+ *
+ * O vínculo jogador↔time é o mesmo em todos os atributos — o CJ classificou
+ * PONTOS, e o elenco é dele —, então uma linha qualquer da versão ativa
+ * responde. Sem versão ativa ou sem vínculo o mapa não responde e o card
+ * escreve "—": é o que a Lista Secreta já faz, e melhor do que a sigla do
+ * provedor passando por curadoria.
+ */
+async function vinculosDaListaDoCj(db: Db, idsJogador: string[]): Promise<Map<string, string>> {
+  if (idsJogador.length === 0) return new Map()
+  const [versao] = await db
+    .select({ id: niveisVersao.id })
+    .from(niveisVersao)
+    .where(eq(niveisVersao.ativa, true))
+    .limit(1)
+  if (!versao) return new Map()
+  const vinculos = await db
+    .select({ jogadorId: niveis.jogadorId, timeId: niveis.timeId })
+    .from(niveis)
+    .where(and(eq(niveis.niveisVersaoId, versao.id), inArray(niveis.jogadorId, idsJogador)))
+  return new Map(vinculos.map((v) => [v.jogadorId, v.timeId] as const))
+}
+
+/** A regra de participação de `sincronizar/medias.ts`: minutos positivos. */
+function entrouEmQuadra(linha: { minutos: string | null }): boolean {
+  return linha.minutos !== null && Number(linha.minutos) > 0
+}
+
+/** As linhas de um `db.execute`, seja qual for a forma que o driver devolve. */
+function linhasDe(resultado: unknown): Record<string, unknown>[] {
+  return Array.isArray(resultado)
+    ? (resultado as Record<string, unknown>[])
+    : ((resultado as { rows?: Record<string, unknown>[] }).rows ?? [])
 }
 
 function valorDoAtributo(
@@ -118,18 +168,17 @@ export async function conferirRodadas(db: Db, ate: string, dias: number): Promis
       jogoId: apitos.jogoId,
       jogadorId: apitos.jogadorId,
       nome: jogadores.nomeCompleto,
-      timeSigla: times.sigla,
       fotoUrl: jogadores.fotoUrl,
       atributo: apitos.atributo,
       nivelJogador: apitos.nivelJogador,
       nivelApito: apitos.nivelApito,
+      turbo: apitos.turbo,
       linha: apitos.linha,
       confianca: apitos.confianca,
     })
     .from(apitos)
     .innerJoin(jogos, eq(apitos.jogoId, jogos.id))
     .innerJoin(jogadores, eq(apitos.jogadorId, jogadores.id))
-    .leftJoin(times, eq(jogadores.timeId, times.id))
     .where(
       and(
         eq(apitos.estrategia, 'LISTA_SECRETA'),
@@ -141,11 +190,19 @@ export async function conferirRodadas(db: Db, ate: string, dias: number): Promis
 
   if (linhas.length === 0) return []
 
+  // O TIME É O DA LISTA DO CJ (regra do projeto; a única exceção é a aba de
+  // estatísticas). Ler `jogadores.time_id` aqui faria o card de um elenco
+  // projetado mostrar a sigla que a Lista Secreta não mostra e, pior, não
+  // casar com nenhum lado do jogo — o confronto sumiria do apoio.
   const idsJogo = [...new Set(linhas.map((l) => l.jogoId))]
+  const timeDoCj = await vinculosDaListaDoCj(db, [...new Set(linhas.map((l) => l.jogadorId))])
+  const listaTimes = await db.select({ id: times.id, sigla: times.sigla }).from(times)
+  const siglaPorTime = new Map(listaTimes.map((t) => [t.id, t.sigla] as const))
   const observados = await db
     .select({
       jogoId: estatisticasJogo.jogoId,
       jogadorId: estatisticasJogo.jogadorId,
+      minutos: estatisticasJogo.minutos,
       pontos: estatisticasJogo.pontos,
       rebotes: estatisticasJogo.rebotesTotal,
       assistencias: estatisticasJogo.assistencias,
@@ -153,7 +210,14 @@ export async function conferirRodadas(db: Db, ate: string, dias: number): Promis
     .from(estatisticasJogo)
     .where(inArray(estatisticasJogo.jogoId, idsJogo))
 
-  const porJogoJogador = new Map(observados.map((o) => [`${o.jogoId}|${o.jogadorId}`, o] as const))
+  // DNP É NEUTRO (§4.4, §5.1) — e a linha zerada do provedor também é DNP. A
+  // regra de participação é a de `sincronizar/medias.ts`: sem minutos
+  // positivos a linha não descreve um jogo jogado, e contá-la daria ✗ a quem
+  // ficou no banco. A demo não gera essa linha (o desfalque não tem box); o
+  // provedor real pode gerar.
+  const porJogoJogador = new Map(
+    observados.filter(entrouEmQuadra).map((o) => [`${o.jogoId}|${o.jogadorId}`, o] as const),
+  )
 
   // (dia, jogador, atributo) é o card; as linhas se acumulam dentro dele.
   const porDia = new Map<string, Map<string, JogadorConferido>>()
@@ -168,6 +232,8 @@ export async function conferirRodadas(db: Db, ate: string, dias: number): Promis
     const valor = observado ? valorDoAtributo(observado, l.atributo) : null
     const bateu = valor === null ? null : valor >= l.linha
 
+    const timeId = timeDoCj.get(l.jogadorId) ?? null
+    const timeSigla = timeId === null ? '—' : (siglaPorTime.get(timeId) ?? '—')
     const atual =
       doDia.get(chave) ??
       ({
@@ -175,11 +241,13 @@ export async function conferirRodadas(db: Db, ate: string, dias: number): Promis
         jogoId: l.jogoId,
         jogadorId: l.jogadorId,
         nome: l.nome,
-        timeSigla: l.timeSigla ?? '—',
+        timeId,
+        timeSigla,
         fotoUrl: l.fotoUrl,
         atributo: l.atributo,
         nivelJogador: l.nivelJogador,
         nivelApito: l.nivelApito,
+        turbo: l.turbo,
         linhas: [],
         linhaConferida: null,
         valor,
@@ -231,6 +299,13 @@ export async function conferirRodadas(db: Db, ate: string, dias: number): Promis
 
 export type JogoEncerradoResumo = {
   jogoId: string
+  /**
+   * Os times do jogo por ID, não só por sigla: é por eles que a tela descobre
+   * o mando do apitado, comparando com `JogadorConferido.timeId` (o vínculo do
+   * CJ). Comparar siglas quebrava no elenco projetado.
+   */
+  casaId: string
+  visitanteId: string
   casaSigla: string
   visitanteSigla: string
   /**
@@ -257,20 +332,48 @@ export type JogoEncerradoResumo = {
    * oficial" para sempre (§5.1).
    */
   temBoxOficial: boolean
+  /**
+   * Quando ESTE jogo foi visto pela última vez. Por jogo, nunca da rodada: o
+   * jogo que espera o box não pode herdar o carimbo de outro que acabou de ser
+   * atualizado — "um número velho apresentado como atual é pior do que número
+   * nenhum" (estatisticas/atualizacao.ts) vale também ao contrário.
+   */
+  atualizadoEm: Date
 }
 
 export type RecapDaNoite = {
   dataReferencia: string
-  /** Jogadores que entraram em quadra — o denominador. */
-  apitos: number
+  /**
+   * Apitos PUBLICADOS na rodada — um por card em tela. É o número que a tela
+   * escreve sob "APITOS" (§4.4: "N apitos · N bateram · taxa").
+   *
+   * Existe porque `conferidos` não descreve a tela: numa rodada em curso ele é
+   * 0 embaixo de dezenas de cards, e numa noite com desfalque ele fica abaixo
+   * da contagem visível. Quando os dois diferem, a tela escreve a base da
+   * taxa ao lado dela ("22 de 27").
+   */
+  publicados: number
+  /** Com veredito: jogo ENCERRADO e jogador em quadra — o denominador da taxa. DNP fica fora. */
+  conferidos: number
   /** Jogadores que bateram ao menos a linha mais baixa. */
   bateram: number
-  /** bateram / apitos; null sem apito conferido. NUNCA "probabilidade" nem "acerto do apito". */
+  /** bateram / conferidos; null sem apito conferido. NUNCA "probabilidade" nem "acerto do apito". */
   taxa: number | null
-  /** Entre os que bateram, o que mais passou da linha mais baixa. */
+  /**
+   * O turbo que bateu, ou quem mais passou da linha mais baixa (§4.4). Vem
+   * mesmo com a noite em curso — é a tela que decide não o destacar antes do
+   * fim, porque um superlativo da noite só existe quando a noite acabou.
+   */
   apitoDaNoite: JogadorConferido | null
+  /**
+   * A noite TERMINOU: todo jogo com apito está ENCERRADO. Enquanto for false a
+   * tela não escreve taxa nem apito da noite — escreve os publicados e
+   * "aguardando o fim da noite" (§5.1, nunca inferir de parcial). É por jogo
+   * com apito, não pela rodada inteira: o jogo sem apito não tem card.
+   */
+  noiteEncerrada: boolean
   porJogo: { jogo: JogoEncerradoResumo; cards: JogadorConferido[] }[]
-  /** Quando os jogos DESTA rodada foram vistos pela última vez. */
+  /** O carimbo mais ANTIGO entre os jogos DESTA rodada; o de cada jogo vai no próprio jogo. */
   atualizacao: Atualizacao
 }
 
@@ -292,10 +395,12 @@ export async function recapDaNoite(db: Db, dataReferencia: string): Promise<Reca
   const cards = dia?.jogadores ?? []
   const vazio: RecapDaNoite = {
     dataReferencia,
-    apitos: 0,
+    publicados: 0,
+    conferidos: 0,
     bateram: 0,
     taxa: null,
     apitoDaNoite: null,
+    noiteEncerrada: false,
     porJogo: [],
     atualizacao: maisAntiga([]),
   }
@@ -303,7 +408,15 @@ export async function recapDaNoite(db: Db, dataReferencia: string): Promise<Reca
 
   const idsJogo = [...new Set(cards.map((c) => c.jogoId))]
   const [partidas, listaTimes, boxes, comBox] = await Promise.all([
-    db.select().from(jogos).where(inArray(jogos.id, idsJogo)),
+    // A ORDEM DAS SEÇÕES É A DO CALENDÁRIO. Sem `orderBy`, a ordem é a que o
+    // Postgres devolver, e ela muda quando qualquer linha de `jogos` é
+    // atualizada — placar e quarto mudam a noite inteira. O id desempata dois
+    // jogos no mesmo horário, que é comum numa rodada da NBA.
+    db
+      .select()
+      .from(jogos)
+      .where(inArray(jogos.id, idsJogo))
+      .orderBy(asc(jogos.dataHoraUtc), asc(jogos.id)),
     db.select({ id: times.id, sigla: times.sigla }).from(times),
     db.select().from(estatisticasTimeJogo).where(inArray(estatisticasTimeJogo.jogoId, idsJogo)),
     db
@@ -319,10 +432,11 @@ export async function recapDaNoite(db: Db, dataReferencia: string): Promise<Reca
   }
 
   const porJogo = partidas
-    .sort((a, b) => a.dataHoraUtc.getTime() - b.dataHoraUtc.getTime())
     .map((j) => ({
       jogo: {
         jogoId: j.id,
+        casaId: j.timeCasaId,
+        visitanteId: j.timeVisitanteId,
         casaSigla: siglaPorId.get(j.timeCasaId) ?? '—',
         visitanteSigla: siglaPorId.get(j.timeVisitanteId) ?? '—',
         status: j.status,
@@ -333,6 +447,7 @@ export async function recapDaNoite(db: Db, dataReferencia: string): Promise<Reca
         quartosCasa: quartos(j.id, j.timeCasaId),
         quartosVisitante: quartos(j.id, j.timeVisitanteId),
         temBoxOficial: jogosComBox.has(j.id),
+        atualizadoEm: j.atualizadoEm,
       },
       cards: cards.filter((c) => c.jogoId === j.id),
     }))
@@ -340,24 +455,40 @@ export async function recapDaNoite(db: Db, dataReferencia: string): Promise<Reca
 
   const encerrados = new Set(partidas.filter((j) => j.status === 'ENCERRADO').map((j) => j.id))
   const conferiveis = cards.filter((c) => encerrados.has(c.jogoId))
-  const apitos = conferiveis.filter((c) => c.fez !== null).length
+  const conferidos = conferiveis.filter((c) => c.fez !== null).length
   const bateram = conferiveis.filter((c) => c.bateuLinhaMaisBaixa === true).length
   const folga = (c: JogadorConferido) => (c.fez ?? 0) - (c.linhaConferida ?? 0)
+  // "O maior valor sobre a linha, OU o turbo que bateu" (§4.4): o turbo que
+  // bateu vem primeiro — é o sinal mais raro da noite —, e entre iguais decide
+  // a folga, depois o nível do apito. O nome fecha a ordem para que dois cards
+  // idênticos não troquem de lugar entre dois carregamentos.
   const apitoDaNoite =
     conferiveis
       .filter((c) => c.bateuLinhaMaisBaixa === true)
-      .sort((a, b) => folga(b) - folga(a) || b.nivelApito - a.nivelApito)[0] ?? null
+      .sort(
+        (a, b) =>
+          Number(b.turbo) - Number(a.turbo) ||
+          folga(b) - folga(a) ||
+          b.nivelApito - a.nivelApito ||
+          a.nome.localeCompare(b.nome),
+      )[0] ?? null
 
   return {
     dataReferencia,
-    apitos,
+    publicados: cards.length,
+    conferidos,
     bateram,
-    taxa: apitos === 0 ? null : bateram / apitos,
+    taxa: conferidos === 0 ? null : bateram / conferidos,
     apitoDaNoite,
+    noiteEncerrada: porJogo.length > 0 && porJogo.every((g) => g.jogo.status === 'ENCERRADO'),
     porJogo,
     // Os jogos DESTA rodada, não os da janela local do dia: a rodada tardia
-    // cai fora daquela janela e o carimbo degradava para 31/12/1969.
-    atualizacao: daColuna(partidas, 'jogos da rodada') ?? maisAntiga([]),
+    // cai fora daquela janela e o carimbo degradava para 31/12/1969. E o
+    // carimbo da TELA é o do dado mais ANTIGO que ela mostra (doutrina de
+    // `estatisticas/atualizacao.ts`); o de cada jogo vai no próprio jogo.
+    atualizacao: maisAntiga(
+      partidas.map((j) => ({ em: j.atualizadoEm, fonte: 'jogos da rodada' })),
+    ),
   }
 }
 
@@ -385,8 +516,10 @@ export async function taxaDaTemporada(db: Db, ate: string, dias: number): Promis
              -- SÓ JOGO ENCERRADO conta como conferido. O jogo ao vivo tem box
              -- PARCIAL em estatisticas_jogo (o 1º quarto do Fire Live), e
              -- contá-lo daria "não bateu" a quem ainda está em quadra — o teste
-             -- da janela exclusiva pegou exatamente isso.
-             max(case when j.status = 'ENCERRADO' then
+             -- da janela exclusiva pegou exatamente isso. E SÓ QUEM ENTROU EM
+             -- QUADRA: a linha sem minutos positivos é DNP, neutro (§4.4) — a
+             -- mesma regra de participação das médias.
+             max(case when j.status = 'ENCERRADO' and e.minutos > 0 then
                    case a.atributo
                      when 'PONTOS' then e.pontos
                      when 'REBOTES' then e.rebotes_total
@@ -404,18 +537,48 @@ export async function taxaDaTemporada(db: Db, ate: string, dias: number): Promis
     )
     select count(*) filter (where valor is not null)::int as conferidos,
            count(*) filter (where valor is not null and valor >= linha_minima)::int as acertos,
-           count(distinct data_referencia)::int as rodadas
+           -- SÓ RODADA QUE CONFERIU ALGO. A rodada em curso tem apito publicado
+           -- e nenhum valor: contá-la fazia a faixa dizer "20 RODADAS" ao lado
+           -- dos mesmos "274 de 400" que ontem apareciam sob "19 RODADAS".
+           count(distinct data_referencia) filter (where valor is not null)::int as rodadas
       from cards
   `)
-  const linhas = Array.isArray(resultado)
-    ? (resultado as Record<string, unknown>[])
-    : ((resultado as { rows?: Record<string, unknown>[] }).rows ?? [])
-  const l = linhas[0] ?? {}
+  const l = linhasDe(resultado)[0] ?? {}
   return {
     conferidos: Number(l.conferidos ?? 0),
     acertos: Number(l.acertos ?? 0),
     rodadas: Number(l.rodadas ?? 0),
   }
+}
+
+/**
+ * A ÚLTIMA RODADA COM CONFERÊNCIA até `ate` (inclusive) — a noite que TERMINOU.
+ *
+ * É para onde `/resultados` sem data leva: o recap da noite (§4.4) é a noite
+ * que acabou, não a rodada em curso. Uma rodada conta quando TODO jogo com
+ * apito está ENCERRADO e ao menos um apitado tem veredito (box com minutos
+ * positivos, a mesma regra de participação da taxa). A rodada de hoje, com
+ * jogo AGENDADO ou AO_VIVO, fica de fora mesmo que um jogo já tenha acabado —
+ * a seta da tela leva até ela. Sem nada conferido (banco recém-semeado),
+ * null: quem chama decide o fallback.
+ */
+export async function ultimaRodadaConferida(db: Db, ate: string): Promise<string | null> {
+  const resultado = await db.execute(sql`
+    select j.data_referencia::text as data_referencia
+      from apitos a
+      join jogos j on j.id = a.jogo_id
+      left join estatisticas_jogo e
+        on e.jogo_id = a.jogo_id and e.jogador_id = a.jogador_id and e.minutos > 0
+     where a.estrategia = 'LISTA_SECRETA'
+       and a.linha is not null
+       and j.data_referencia <= ${ate}
+     group by j.data_referencia
+    having bool_and(j.status = 'ENCERRADO') and count(e.id) > 0
+     order by j.data_referencia desc
+     limit 1
+  `)
+  const valor = linhasDe(resultado)[0]?.data_referencia
+  return typeof valor === 'string' ? valor : null
 }
 
 export type GreenDoDia = {

@@ -2,10 +2,15 @@ import { and, eq, inArray } from 'drizzle-orm'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 
+import { dataHora } from '../../components/formato'
 import { bancoDeTeste } from '../../modules/dominio/__tests__/ajuda-banco'
 import { dataDeReferencia, somarDias } from '../../modules/dominio/rodada'
 import { lerFeed } from '../../modules/entrega/lista-secreta'
-import { recapDaNoite, taxaDaTemporada } from '../../modules/entrega/resultados'
+import {
+  recapDaNoite,
+  taxaDaTemporada,
+  ultimaRodadaConferida,
+} from '../../modules/entrega/resultados'
 import { rulesetAtivo } from '../../modules/entrega/ruleset-ativo'
 import { simularAte } from '../../modules/ingestao/demo/temporada'
 import { LLMFake } from '../../modules/ingestao/llm'
@@ -122,9 +127,12 @@ async function destinoDoRedirect(promessa: Promise<unknown>): Promise<string> {
 const pct = (taxa: number) => `${Math.round(taxa * 100)}%`
 
 describe('Resultados · o índice da rodada', () => {
-  it('/resultados sozinho manda para a rodada de HOJE no fuso da rodada', async () => {
+  it('/resultados sozinho manda para a ÚLTIMA rodada com conferência — a noite que terminou, não a de hoje', async () => {
     const { default: Pagina } = await import('../(app)/resultados/page')
-    expect(await destinoDoRedirect(Pagina())).toBe(`/resultados/${HOJE}`)
+    const ultima = await ultimaRodadaConferida(banco.db, HOJE)
+    // O fixture: hoje está em curso, ontem terminou.
+    expect(ultima).toBe(ONTEM)
+    expect(await destinoDoRedirect(Pagina())).toBe(`/resultados/${ONTEM}`)
   }, 60_000)
 
   it('data que não é uma data volta para hoje, em vez de quebrar', async () => {
@@ -172,19 +180,52 @@ describe('Resultados · o índice da rodada', () => {
 })
 
 describe('Resultados · o recap da noite', () => {
-  it('o cabeçalho da noite traz os três números de recapDaNoite', async () => {
+  it('o cabeçalho da noite traz os três números de recapDaNoite — APITOS é o que está em tela', async () => {
     const recap = await recapDaNoite(banco.db, ONTEM)
     const html = await renderizar(ONTEM)
 
-    expect(recap.apitos).toBeGreaterThan(0)
+    expect(recap.noiteEncerrada).toBe(true)
+    expect(recap.conferidos).toBeGreaterThan(0)
+    // O número grande é o de cards em tela: "APITOS 0" em cima de 29 cards
+    // era a leitura que a revisão derrubou. A taxa é sobre os CONFERIDOS (DNP
+    // é neutro), e quando a base difere do que está em tela ela vem escrita.
     const bloco = textoSeparado(trecho(html, 'APITOS', 'TEMPORADA'))
     expect([...bloco.matchAll(/\d+%?/g)].map((m) => m[0])).toEqual([
-      String(recap.apitos),
+      String(recap.publicados),
       String(recap.bateram),
       pct(recap.taxa!),
+      ...(recap.conferidos === recap.publicados
+        ? []
+        : [String(recap.bateram), String(recap.conferidos)]),
     ])
+    expect(cardsDaTela(html)).toHaveLength(recap.publicados)
     expect(bloco).toContain('BATERAM')
     expect(bloco).toContain('NA NOITE')
+    expect(bloco).not.toContain('aguardando o fim da noite')
+  }, 60_000)
+
+  it('com um DNP na noite, a base da taxa fica escrita ao lado dela', async () => {
+    const { estatisticasJogo } = await import('../../modules/dominio/db/schema')
+    const antes = await recapDaNoite(banco.db, ONTEM)
+    const alvo = antes.porJogo.flatMap((g) => g.cards).find((c) => c.fez !== null)!
+    const onde = and(
+      eq(estatisticasJogo.jogoId, alvo.jogoId),
+      eq(estatisticasJogo.jogadorId, alvo.jogadorId),
+    )
+    const [linha] = await banco.db.select().from(estatisticasJogo).where(onde)
+
+    try {
+      await banco.db.delete(estatisticasJogo).where(onde)
+      const recap = await recapDaNoite(banco.db, ONTEM)
+      const html = await renderizar(ONTEM)
+      expect(recap.conferidos).toBeLessThan(recap.publicados)
+      const bloco = textoSeparado(trecho(html, 'APITOS', 'TEMPORADA'))
+      expect(bloco).toContain(`${recap.bateram} de ${recap.conferidos}`)
+      expect(bloco).toContain(pct(recap.taxa!))
+      expect(cardsDaTela(html)).toHaveLength(recap.publicados)
+    } finally {
+      await banco.db.insert(estatisticasJogo).values(linha!)
+    }
   }, 60_000)
 
   it('a faixa da temporada mostra taxaDaTemporada, com quantas rodadas e quantos apitos', async () => {
@@ -242,7 +283,15 @@ describe('Resultados · o recap da noite', () => {
     expect(greens.length).toBeGreaterThan(0)
     const texto = textoSeparado(html)
     expect(texto).toContain('GREENS DO FIRE LIVE')
-    for (const g of greens) expect(texto).toContain(`${g.marco}`)
+    const unidade = { PONTOS: 'pontos', REBOTES: 'rebotes', ASSISTENCIAS: 'assistências' }
+    for (const g of greens) {
+      expect(texto).toContain(g.nome)
+      // O valor com a unidade e o quarto; o marco nomeado como marco. Nunca
+      // "Pontos 25": atributo + número, nesta tela, é a gramática da LINHA.
+      expect(texto).toContain(`${g.valor} ${unidade[g.atributo]} no 1º quarto`)
+      expect(texto).toContain(`marco ${g.marco}`)
+    }
+    expect(texto).not.toMatch(/(Pontos|Rebotes|Assistências) \d+\b(?!\+)/)
   }, 60_000)
 })
 
@@ -432,21 +481,37 @@ describe('Resultados · o estado vem do jogo, não do que a tela não achou', ()
     }
   }, 60_000)
 
-  it('a rodada EM CURSO não inventa taxa: sem jogo encerrado, "NA NOITE" é — e não há apito da noite', async () => {
+  it('a rodada EM CURSO não inventa taxa nem escreve "APITOS 0": conta os publicados e aguarda o fim da noite', async () => {
     const { jogos } = await import('../../modules/dominio/db/schema')
     const encerrados = await banco.db
       .select({ id: jogos.id })
       .from(jogos)
       .where(and(eq(jogos.dataReferencia, HOJE), eq(jogos.status, 'ENCERRADO')))
+    const recap = await recapDaNoite(banco.db, HOJE)
     const html = await renderizar(HOJE)
 
     // O fixture: a rodada de hoje está rolando, com cards em tela.
     expect(encerrados).toHaveLength(0)
-    expect(cardsDaTela(html).length).toBeGreaterThan(0)
+    expect(recap.noiteEncerrada).toBe(false)
+    expect(cardsDaTela(html)).toHaveLength(recap.publicados)
+    expect(recap.publicados).toBeGreaterThan(0)
 
     const bloco = textoSeparado(trecho(html, 'APITOS', 'TEMPORADA'))
-    expect([...bloco.matchAll(/\d+%?|—/g)].map((m) => m[0])).toEqual(['0', '0', '—'])
+    // O número de apitos é o que está em tela; sem jogo encerrado não há
+    // "bateram" nem taxa — e a tela diz por quê, em vez de "0 · 0 · —".
+    expect([...bloco.matchAll(/\d+%?|—/g)].map((m) => m[0])).toEqual([
+      String(recap.publicados),
+      '—',
+    ])
+    expect(bloco).toContain('aguardando o fim da noite')
     expect(html).not.toContain('APITO DA NOITE')
+  }, 60_000)
+
+  it('% de confiança sem casa decimal — na rodada em curso, que é onde ele aparece', async () => {
+    const html = await renderizar(HOJE)
+    const cards = cardsDaTela(html)
+    expect(cards.some((c) => textoDaTela(c).includes('%'))).toBe(true)
+    for (const card of cards) expect(textoDaTela(card)).not.toMatch(/\d+,\d+\s?%/)
   }, 60_000)
 
   it('box do jogo chegou e o apitado não jogou: DNP, não "aguardando dado oficial"', async () => {
@@ -490,10 +555,12 @@ describe('Resultados · o estado vem do jogo, não do que a tela não achou', ()
     let casa = 0
     for (const { jogo, cards } of recap.porJogo) {
       for (const card of cards) {
-        if (card.timeSigla === jogo.visitanteSigla) {
+        // O lado é decidido por ID — o time da LISTA do CJ contra os dois
+        // times do jogo —, nunca por sigla.
+        if (card.timeId === jogo.visitanteId) {
           expect(texto).toContain(`· ${card.timeSigla} · @ ${jogo.casaSigla}`)
           fora++
-        } else if (card.timeSigla === jogo.casaSigla) {
+        } else if (card.timeId === jogo.casaId) {
           expect(texto).toContain(`· ${card.timeSigla} · vs ${jogo.visitanteSigla}`)
           casa++
         }
@@ -504,18 +571,108 @@ describe('Resultados · o estado vem do jogo, não do que a tela não achou', ()
     expect(casa).toBeGreaterThan(0)
   }, 60_000)
 
-  it('a barrinha desta rodada é a ÚLTIMA da fileira, e vale o que o jogador fez', async () => {
+  it('o mando e a sigla vêm da LISTA do CJ: o time REAL do provedor não mexe no card', async () => {
+    const { jogadores, times } = await import('../../modules/dominio/db/schema')
     const recap = await recapDaNoite(banco.db, ONTEM)
+    const grupo = recap.porJogo.find((g) => g.cards.some((c) => c.timeId !== null))!
+    const alvo = grupo.cards.find((c) => c.timeId !== null)!
+    const [real] = await banco.db
+      .select({ timeId: jogadores.timeId })
+      .from(jogadores)
+      .where(eq(jogadores.id, alvo.jogadorId))
+    // Um time que não é o da lista nem joga esta partida — o elenco projetado
+    // (Giannis no Miami) visto pelo lado do provedor.
+    const forasteiro = (
+      await banco.db.select({ id: times.id, sigla: times.sigla }).from(times)
+    ).find(
+      (t) => t.id !== alvo.timeId && t.id !== grupo.jogo.casaId && t.id !== grupo.jogo.visitanteId,
+    )!
+    const emCasa = alvo.timeId === grupo.jogo.casaId
+    const apoio = emCasa
+      ? `· ${alvo.timeSigla} · vs ${grupo.jogo.visitanteSigla}`
+      : `· ${alvo.timeSigla} · @ ${grupo.jogo.casaSigla}`
+
+    try {
+      await banco.db
+        .update(jogadores)
+        .set({ timeId: forasteiro.id })
+        .where(eq(jogadores.id, alvo.jogadorId))
+      const html = await renderizar(ONTEM)
+      const artigo = cardsDaTela(html).find((c) => c.includes(alvo.nome))!
+      expect(artigo).toBeDefined()
+      expect(textoDaTela(artigo)).toContain(apoio)
+      expect(textoDaTela(artigo)).not.toContain(forasteiro.sigla)
+    } finally {
+      await banco.db
+        .update(jogadores)
+        .set({ timeId: real!.timeId })
+        .where(eq(jogadores.id, alvo.jogadorId))
+    }
+  }, 60_000)
+
+  it('o carimbo de "aguardando dado oficial" é o do PRÓPRIO jogo, não o mais novo da rodada', async () => {
+    const { estatisticasJogo, jogos } = await import('../../modules/dominio/db/schema')
+    const recap = await recapDaNoite(banco.db, ONTEM)
+    const [semBox, tocado, esquecido] = recap.porJogo
+    expect(recap.porJogo.length).toBeGreaterThan(2)
+    // Horários derivados do próprio jogo, distintos na hora: o jogo sem box
+    // foi visto há tempo; um vizinho acabou de ser atualizado; outro está
+    // ainda mais velho. Nem o mais novo da rodada (o carimbo antigo) nem o
+    // mais antigo (a doutrina da tela) é o do jogo que espera o box.
+    const antigo = new Date(semBox!.jogo.dataHoraUtc.getTime() + 3 * 3_600_000)
+    const recente = new Date(antigo.getTime() + 5 * 3_600_000)
+    const maisVelho = new Date(antigo.getTime() - 5 * 3_600_000)
+    const ondeBox = eq(estatisticasJogo.jogoId, semBox!.jogo.jogoId)
+    const linhas = await banco.db.select().from(estatisticasJogo).where(ondeBox)
+    const carimbar = (jogoId: string, quando: Date) =>
+      banco.db.update(jogos).set({ atualizadoEm: quando }).where(eq(jogos.id, jogoId))
+
+    try {
+      await banco.db.delete(estatisticasJogo).where(ondeBox)
+      await carimbar(semBox!.jogo.jogoId, antigo)
+      await carimbar(tocado!.jogo.jogoId, recente)
+      await carimbar(esquecido!.jogo.jogoId, maisVelho)
+      const texto = textoDaTela(await renderizar(ONTEM))
+      expect(texto.toLowerCase()).toContain('aguardando dado oficial')
+      expect(texto).toContain(dataHora(antigo, FUSO))
+      expect(texto).not.toContain(dataHora(recente, FUSO))
+      expect(texto).not.toContain(dataHora(maisVelho, FUSO))
+    } finally {
+      await banco.db.insert(estatisticasJogo).values(linhas)
+      await carimbar(semBox!.jogo.jogoId, semBox!.jogo.atualizadoEm)
+      await carimbar(tocado!.jogo.jogoId, tocado!.jogo.atualizadoEm)
+      await carimbar(esquecido!.jogo.jogoId, esquecido!.jogo.atualizadoEm)
+    }
+  }, 60_000)
+
+  it('a barrinha desta rodada é a ÚLTIMA da fileira cronológica, e vale o que o jogador fez', async () => {
+    const recap = await recapDaNoite(banco.db, ONTEM)
+    const feed = await lerFeed(banco.db, ONTEM)
     const html = await renderizar(ONTEM)
     const alvo = recap.porJogo.flatMap((g) => g.cards).find((c) => c.fez !== null && c.fez > 0)!
+    // A metade PRÉ do card: o item do feed da linha mais baixa, com os últimos
+    // 5 na ordem canônica da entrega (mais recente primeiro).
+    const item = (feed?.conteudo.itens ?? [])
+      .filter(
+        (i) =>
+          i.jogoId === alvo.jogoId && i.jogadorId === alvo.jogadorId && i.atributo === alvo.atributo,
+      )
+      .sort((a, b) => (a.linha ?? Infinity) - (b.linha ?? Infinity))[0]!
 
     expect(alvo).toBeDefined()
+    expect(item).toBeDefined()
+    expect((item.ultimos5 ?? []).length).toBeGreaterThan(0)
     const artigo = cardsDaTela(html).find((c) => c.includes(alvo.nome))!
     const fileira = artigo.slice(artigo.indexOf('ÚLT. 5 NA LINHA'))
     const quadrados = [...fileira.matchAll(/(<span[^>]*>)(\d+)<\/span>/g)]
     expect(quadrados.length).toBeGreaterThan(1)
+    // É a TELA que monta a fileira em ordem cronológica — do mais antigo à
+    // esquerda ao jogo desta rodada à direita — e o card não a inverte.
+    expect(quadrados.map((q) => q[2])).toEqual([
+      ...[...(item.ultimos5 ?? []).slice(0, 4)].reverse().map((j) => String(j.valor)),
+      String(alvo.fez),
+    ])
     const ultimo = quadrados.at(-1)!
-    expect(ultimo[2]).toBe(String(alvo.fez))
     expect(ultimo[1]).toContain('outline:2px')
     expect(quadrados.slice(0, -1).every((q) => !q[1]!.includes('outline'))).toBe(true)
   }, 60_000)

@@ -326,11 +326,16 @@ describe('Fire Live', () => {
 describe('tela de Resultados', () => {
   // A tela mora em `/resultados/[data]` desde a identidade 04 (§4.4) e é
   // testada em `telas-04-resultados.test.ts`. Aqui fica só o atalho: quem
-  // chega em `/resultados` vai para a rodada de hoje, no fuso da rodada.
-  it('o atalho leva à rodada de hoje', async () => {
+  // chega em `/resultados` vai para a ÚLTIMA rodada com conferência — a noite
+  // que terminou —, não para a rodada em curso.
+  it('o atalho leva à última rodada com conferência', async () => {
+    const { ultimaRodadaConferida } = await import('../../modules/entrega/resultados')
     const { default: Pagina } = await import('../(app)/resultados/page')
+    const destino = await ultimaRodadaConferida(banco.db, HOJE)
+    expect(destino).not.toBeNull()
+    expect(destino).not.toBe(HOJE)
     await expect(Pagina()).rejects.toMatchObject({
-      digest: expect.stringContaining(`/resultados/${HOJE}`),
+      digest: expect.stringContaining(`/resultados/${destino}`),
     })
   }, 60_000)
 })

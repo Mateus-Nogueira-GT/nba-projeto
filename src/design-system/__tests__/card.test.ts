@@ -371,11 +371,11 @@ describe('CardEntrada — mando e fileira, identidade 04', () => {
     expect(render({ ...base, linha: 20, adversarioSigla: 'DEN' })).toContain('vs DEN')
   })
 
-  it('a fileira é CRONOLÓGICA: a prop chega do mais recente ao mais antigo, a tela lê ao contrário', () => {
+  it('a fileira sai na ordem em que chega: quem monta a fileira decide a direção, o card não inverte', () => {
     const html = render({ ...base, linha: 20, ultimos5: cinco })
     const fileira = html.slice(html.indexOf('ÚLT. 5 NA LINHA'))
     const quadrados = [...fileira.matchAll(/>(\d+)<\/span>/g)].map((m) => m[1])
-    expect(quadrados).toEqual(['13', '17', '22', '19', '25'])
+    expect(quadrados).toEqual(['25', '19', '22', '17', '13'])
   })
 
   it('o contorno da rodada é EXPLÍCITO: sem a prop, nem o card conferido marca nada', () => {
@@ -391,18 +391,18 @@ describe('CardEntrada — mando e fileira, identidade 04', () => {
     expect(semProp).not.toContain('desta rodada')
   })
 
-  it('com destacarMaisRecente, o contorno cai no PRIMEIRO da prop — o jogo desta rodada', () => {
+  it('com destacarUltima, o contorno cai na ÚLTIMA da prop — quem monta a fileira põe o jogo desta rodada no fim', () => {
     const html = render({
       ...base,
       linha: 20,
-      ultimos5: cinco,
+      ultimos5: [...cinco].reverse(),
       estado: 'CONFERIDO',
       fez: 25,
       bateu: true,
-      destacarMaisRecente: true,
+      destacarUltima: true,
     })
     expect(html.match(/outline:2px/g)).toHaveLength(1)
-    // ...que, lida cronologicamente, é a última da fileira: o quadrado do 25.
+    // A fileira chegou cronológica (13 … 25): o contorno está no quadrado do 25.
     expect(html.indexOf('outline:2px')).toBeGreaterThan(html.indexOf('>13<'))
     expect(html.indexOf('>25<')).toBeGreaterThan(html.indexOf('outline:2px'))
     expect(html).toContain('a última é a desta rodada')

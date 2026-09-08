@@ -2,9 +2,9 @@ import { semantico } from '../tokens/semantico'
 
 export type BarrinhasProps = {
   /**
-   * Na ordem em que a fileira é LIDA, da esquerda para a direita — quem chama
-   * decide (o card entrega em ordem cronológica). `valor` é o número do jogo;
-   * `bateu`, contra a linha.
+   * Na ordem em que a fileira é LIDA, da esquerda para a direita — quem monta
+   * a fileira decide; nem o card nem este componente invertem. `valor` é o
+   * número do jogo; `bateu`, contra a linha.
    */
   jogos: { valor: number; bateu: boolean }[]
   /** Rótulo opcional antes dos quadrados (o card usa "ÚLT. 5 NA LINHA"). */
