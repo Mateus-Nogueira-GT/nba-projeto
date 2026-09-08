@@ -1,3 +1,4 @@
+import { identidadesDeApresentacao } from '../../dominio/identidade-apresentacao'
 import { and, asc, desc, eq, inArray, isNotNull, or, sql } from 'drizzle-orm'
 
 import {
@@ -109,9 +110,7 @@ export async function telaDoTime(
     db
       .select()
       .from(classificacao)
-      .where(
-        and(eq(classificacao.timeId, timeId), eq(classificacao.temporada, opcoes.temporada)),
-      )
+      .where(and(eq(classificacao.timeId, timeId), eq(classificacao.temporada, opcoes.temporada)))
       .limit(1),
     db
       .select()
@@ -168,6 +167,11 @@ export async function telaDoTime(
 
   const campanha = campanhaLinhas[0]
 
+  const identidades = await identidadesDeApresentacao(
+    db,
+    elenco.map((j) => j.id),
+  )
+
   return {
     time: {
       id: time.id,
@@ -188,7 +192,7 @@ export async function telaDoTime(
     elenco: elenco
       .map((j) => ({
         id: j.id,
-        nome: j.nomeCompleto,
+        nome: identidades.get(j.id)?.nome ?? j.nomeCompleto,
         posicao: j.posicao,
         numeroCamisa: j.numeroCamisa,
       }))
@@ -241,7 +245,13 @@ export async function hierarquiaDoTime(
       })
       .from(niveis)
       .innerJoin(jogadores, eq(niveis.jogadorId, jogadores.id))
-      .where(and(eq(niveis.niveisVersaoId, versao.id), eq(niveis.timeId, timeId), eq(niveis.atributo, atributo)))
+      .where(
+        and(
+          eq(niveis.niveisVersaoId, versao.id),
+          eq(niveis.timeId, timeId),
+          eq(niveis.atributo, atributo),
+        ),
+      )
       .orderBy(asc(niveis.posicaoHierarquia)),
     jogoId === null
       ? Promise.resolve([] as { jogadorId: string }[])
@@ -250,8 +260,16 @@ export async function hierarquiaDoTime(
           .from(lesoesEscalacao)
           .where(and(eq(lesoesEscalacao.jogoId, jogoId), eq(lesoesEscalacao.status, 'FORA'))),
   ])
+  const identidades = await identidadesDeApresentacao(
+    db,
+    linhas.map((l) => l.jogadorId),
+  )
   const desfalcados = new Set(fora.map((f) => f.jogadorId))
-  return linhas.map((l) => ({ ...l, fora: desfalcados.has(l.jogadorId) }))
+  return linhas.map((l) => ({
+    ...l,
+    nome: identidades.get(l.jogadorId)?.nome ?? l.nome,
+    fora: desfalcados.has(l.jogadorId),
+  }))
 }
 
 export type TelaClassificacao = ComAtualizacao & {
@@ -279,10 +297,7 @@ export type TelaClassificacao = ComAtualizacao & {
 }
 
 /** Classificação da liga — a entrada "por time" do menu. */
-export async function telaDaClassificacao(
-  db: Db,
-  temporada: string,
-): Promise<TelaClassificacao> {
+export async function telaDaClassificacao(db: Db, temporada: string): Promise<TelaClassificacao> {
   // LIMIT por time, dentro do banco: um calendário desigual não pode consumir
   // a janela de outra equipe. O lateral mantém uma única ida ao banco e no
   // máximo cinco resultados por time, sem um recorte arbitrário da liga.
@@ -300,7 +315,10 @@ export async function telaDaClassificacao(
         eq(jogos.status, 'ENCERRADO'),
         isNotNull(jogos.placarCasa),
         isNotNull(jogos.placarVisitante),
-        or(eq(jogos.timeCasaId, classificacao.timeId), eq(jogos.timeVisitanteId, classificacao.timeId)),
+        or(
+          eq(jogos.timeCasaId, classificacao.timeId),
+          eq(jogos.timeVisitanteId, classificacao.timeId),
+        ),
       ),
     )
     .orderBy(desc(jogos.dataHoraUtc), asc(jogos.id))
@@ -324,7 +342,11 @@ export async function telaDaClassificacao(
       .from(classificacao)
       .leftJoinLateral(ultimasPartidas, sql`true`)
       .where(eq(classificacao.temporada, temporada))
-      .orderBy(asc(classificacao.timeId), desc(ultimasPartidas.dataHoraUtc), asc(ultimasPartidas.id)),
+      .orderBy(
+        asc(classificacao.timeId),
+        desc(ultimasPartidas.dataHoraUtc),
+        asc(ultimasPartidas.id),
+      ),
   ])
 
   const forma = new Map<string, ('V' | 'D')[]>()

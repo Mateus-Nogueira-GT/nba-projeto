@@ -109,10 +109,34 @@ function trecho(html: string, de: string, ate: string): string {
 const cardsDaTela = (html: string) =>
   [...html.matchAll(/<article[\s\S]*?<\/article>/g)].map((m) => m[0])
 
-async function renderizar(data: string): Promise<string> {
+async function renderizar(data: string, busca: Record<string, string> = {}): Promise<string> {
   const { default: Pagina } = await import('../(app)/resultados/[data]/page')
-  return renderToStaticMarkup(await Pagina({ params: Promise.resolve({ data }) }))
+  return renderToStaticMarkup(
+    await Pagina({ params: Promise.resolve({ data }), searchParams: Promise.resolve(busca) }),
+  )
 }
+
+describe('Resultados · filtros preservados', () => {
+  it('atributo/time recortam cards e a navegação mantém o filtro na outra rodada', async () => {
+    const recap = await recapDaNoite(banco.db, ONTEM)
+    const alvo = recap.porJogo.flatMap((g) => g.cards).find((c) => c.timeId !== null)!
+    const html = await renderizar(ONTEM, {
+      estrategia: 'LISTA_SECRETA',
+      atributo: alvo.atributo,
+      time: alvo.timeId!,
+    })
+    const esperados = recap.porJogo
+      .flatMap((g) => g.cards)
+      .filter((c) => c.atributo === alvo.atributo && c.timeId === alvo.timeId)
+    expect(cardsDaTela(html)).toHaveLength(esperados.length)
+    expect(html).toContain(
+      `/resultados/${somarDias(ONTEM, -1)}?estrategia=LISTA_SECRETA&amp;atributo=${alvo.atributo}&amp;time=${alvo.timeId}`,
+    )
+    expect(textoSeparado(html)).toContain('Resumo dos filtros · Lista Secreta · jogo inteiro')
+    expect(textoSeparado(html)).toContain('Linha prevista')
+    expect(textoSeparado(html)).toContain('Realizado · jogo inteiro')
+  })
+})
 
 /** O destino do `redirect()` que a tela lançou. */
 async function destinoDoRedirect(promessa: Promise<unknown>): Promise<string> {
@@ -135,7 +159,7 @@ describe('Resultados · o índice da rodada', () => {
     const ultima = await ultimaRodadaConferida(banco.db, HOJE)
     // O fixture: hoje está em curso, ontem terminou.
     expect(ultima).toBe(ONTEM)
-    expect(await destinoDoRedirect(Pagina())).toBe(`/resultados/${ONTEM}`)
+    expect(await destinoDoRedirect(Pagina({}))).toBe(`/resultados/${ONTEM}`)
   }, 60_000)
 
   it('data que não é uma data volta para hoje, em vez de quebrar', async () => {
@@ -483,7 +507,9 @@ describe('Resultados · o estado vem do jogo, não do que a tela não achou', ()
       expect(cardsDaTela(depois)).toHaveLength(cardsDaTela(antes).length)
       expect(depois.match(/>PRÉ</g) ?? []).toHaveLength((antes.match(/>PRÉ</g) ?? []).length)
       expect(depois.match(/>FT</g) ?? []).toHaveLength((antes.match(/>FT</g) ?? []).length)
-      expect(textoDaTela(depois).toLowerCase()).not.toContain('aguardando dado oficial')
+      expect(textoDaTela(depois).toLowerCase().split('aguardando dado oficial').length).toBe(
+        textoDaTela(antes).toLowerCase().split('aguardando dado oficial').length,
+      )
     } finally {
       await banco.db
         .update(jogos)

@@ -4,7 +4,12 @@ import { z } from 'zod'
 import { getDb } from '@/modules/dominio/db/cliente'
 import { telaDoJogo } from '@/modules/entrega/estatisticas/jogo'
 import type { LadoDaPartida, LinhaDoBoxScore } from '@/modules/entrega/estatisticas/jogo'
-import { BASE_ESTATISTICAS, rotaDoJogador, rotaDoTime } from '@/modules/entrega/estatisticas/rotas'
+import {
+  BASE_ESTATISTICAS,
+  contextoEstatisticas,
+  rotaDoJogador,
+  rotaDoTime,
+} from '@/modules/entrega/estatisticas/rotas'
 import { rulesetAtivo } from '@/modules/entrega/ruleset-ativo'
 import { exigirAcessoEstatisticasSeConfigurado } from '@/modules/plataforma/assinatura/guarda'
 import { dataHora, diaCurto } from '@/components/formato'
@@ -51,7 +56,12 @@ function colunasDoBoxScore(timeSigla: string): Coluna<LinhaDoBoxScore>[] {
         </a>
       ),
     },
-    { chave: 'nota', rotulo: 'NOTA', descricao: 'nota da partida', celula: (l) => <NotaPartida nota={l.nota} /> },
+    {
+      chave: 'nota',
+      rotulo: 'NOTA',
+      descricao: 'nota da partida',
+      celula: (l) => <NotaPartida nota={l.nota} />,
+    },
     { chave: 'min', rotulo: 'MIN', descricao: 'minutos', celula: (l) => minutos(l.minutos) },
     { chave: 'pts', rotulo: 'PTS', descricao: 'pontos', celula: (l) => l.pontos },
     { chave: 'reb', rotulo: 'REB', descricao: 'rebotes', celula: (l) => l.rebotes },
@@ -59,9 +69,24 @@ function colunasDoBoxScore(timeSigla: string): Coluna<LinhaDoBoxScore>[] {
     { chave: 'rou', rotulo: 'ROU', descricao: 'roubos', celula: (l) => l.roubos },
     { chave: 'toc', rotulo: 'TOC', descricao: 'tocos', celula: (l) => l.bloqueios },
     { chave: 'to', rotulo: 'TO', descricao: 'turnovers', celula: (l) => l.turnovers },
-    { chave: 'fg', rotulo: 'FG%', descricao: 'aproveitamento de quadra', celula: (l) => pct(l.fgPercentual) },
-    { chave: 'tres', rotulo: '3P%', descricao: 'aproveitamento de três', celula: (l) => pct(l.tresPercentual) },
-    { chave: 'll', rotulo: 'LL%', descricao: 'aproveitamento de lance livre', celula: (l) => pct(l.lancePercentual) },
+    {
+      chave: 'fg',
+      rotulo: 'FG%',
+      descricao: 'aproveitamento de quadra',
+      celula: (l) => pct(l.fgPercentual),
+    },
+    {
+      chave: 'tres',
+      rotulo: '3P%',
+      descricao: 'aproveitamento de três',
+      celula: (l) => pct(l.tresPercentual),
+    },
+    {
+      chave: 'll',
+      rotulo: 'LL%',
+      descricao: 'aproveitamento de lance livre',
+      celula: (l) => pct(l.lancePercentual),
+    },
   ]
 }
 
@@ -128,7 +153,13 @@ function Quartos({ casa, visitante }: { casa: LadoDaPartida; visitante: LadoDaPa
   // revisão: a versão manual não tinha `<caption>` nem `scope`).
   const colunas: Coluna<LadoDaPartida>[] = [
     { chave: 'time', rotulo: 'Time', alinhamento: 'esquerda', fixa: true, celula: (l) => l.sigla },
-    { chave: 'q1', rotulo: '1º', alinhamento: 'direita', destaque: true, celula: (l) => l.quartos!.q1 },
+    {
+      chave: 'q1',
+      rotulo: '1º',
+      alinhamento: 'direita',
+      destaque: true,
+      celula: (l) => l.quartos!.q1,
+    },
     { chave: 'q2', rotulo: '2º', alinhamento: 'direita', celula: (l) => l.quartos!.q2 },
     { chave: 'q3', rotulo: '3º', alinhamento: 'direita', celula: (l) => l.quartos!.q3 },
     { chave: 'q4', rotulo: '4º', alinhamento: 'direita', celula: (l) => l.quartos!.q4 },
@@ -183,8 +214,10 @@ function Desfalques({ lado }: { lado: LadoDaPartida }) {
             {!d.confirmado && ' · não confirmado'}
             {d.hierarquiaPontos && (
               <span style={{ display: 'block', color: semantico.textoSecundario, fontSize: 12 }}>
-                Lista do CJ · {d.hierarquiaPontos.timeSigla} · PONTOS · nº {d.hierarquiaPontos.posicao}
-                {' · '}{NIVEL_JOGADOR[d.hierarquiaPontos.nivel].rotulo}
+                Lista do CJ · {d.hierarquiaPontos.timeSigla} · PONTOS · nº{' '}
+                {d.hierarquiaPontos.posicao}
+                {' · '}
+                {NIVEL_JOGADOR[d.hierarquiaPontos.nivel].rotulo}
               </span>
             )}
           </li>
@@ -212,11 +245,16 @@ export default async function PaginaDoJogo({
   // qualquer lixo (`dataValidaOuHoje`), duplicar a regra só duplicaria bug
   // (achado da revisão). O prefixo vem de `rotas.ts`, como nas telas irmãs —
   // literal aqui é o que faz "a mesma tela" virar coincidência.
-  const { data: dataBruta } = await searchParams
+  const busca = await searchParams
+  const { data: dataBruta } = busca
+  const contexto = contextoEstatisticas(busca)
   const dataVoltar = Array.isArray(dataBruta) ? dataBruta[0] : dataBruta
-  const voltarHref = dataVoltar
-    ? `${BASE_ESTATISTICAS}?data=${encodeURIComponent(dataVoltar)}`
-    : BASE_ESTATISTICAS
+  const voltarHref =
+    typeof busca.jogador === 'string' && z.uuid().safeParse(busca.jogador).success
+      ? rotaDoJogador(busca.jogador, contexto)
+      : dataVoltar
+        ? `${BASE_ESTATISTICAS}?data=${encodeURIComponent(dataVoltar)}`
+        : BASE_ESTATISTICAS
   const agora = new Date()
   const ruleset = await rulesetAtivo()
   const { fuso } = ruleset.rodada
@@ -320,7 +358,12 @@ export default async function PaginaDoJogo({
         </Secao>
       )}
 
-      <UltimaAtualizacao em={tela.atualizacao.em} fonte={tela.atualizacao.fonte} agora={agora} fuso={fuso} />
+      <UltimaAtualizacao
+        em={tela.atualizacao.em}
+        fonte={tela.atualizacao.fonte}
+        agora={agora}
+        fuso={fuso}
+      />
     </Moldura>
   )
 }

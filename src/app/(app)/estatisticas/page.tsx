@@ -411,7 +411,11 @@ export default async function PaginaEstatisticas({
               {resultados.map((r) => (
                 <li key={`${r.tipo}-${r.id}`}>
                   <a
-                    href={r.tipo === 'JOGADOR' ? rotaDoJogador(r.id) : rotaDoTime(r.id)}
+                    href={
+                      r.tipo === 'JOGADOR'
+                        ? rotaDoJogador(r.id, { periodo: '10', atributo: 'PONTOS', q: termo })
+                        : rotaDoTime(r.id)
+                    }
                     style={{
                       display: 'flex',
                       justifyContent: 'space-between',
