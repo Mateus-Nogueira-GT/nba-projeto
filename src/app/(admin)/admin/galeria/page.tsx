@@ -1,5 +1,14 @@
 import type { Nivel, NivelApito } from '@/modules/motor/tipos'
-import { CabecalhoJogo, CardEntrada, Pilula, SeloContexto } from '@/design-system/componentes'
+import {
+  BarraAlvo,
+  Barrinhas,
+  CabecalhoJogo,
+  CardEntrada,
+  FormaNoAtributo,
+  HierarquiaDoTime,
+  Pilula,
+  SeloContexto,
+} from '@/design-system/componentes'
 import { semantico } from '@/design-system/tokens/semantico'
 import { CONFIANCA_GRAU, NIVEL_JOGADOR, APITO, TURBO, MODO_FIRE } from '@/design-system/tokens/css'
 import { razaoDeContraste } from '@/design-system/tokens/contraste'
@@ -97,7 +106,7 @@ export default async function PaginaGaleria() {
 
       <Secao
         titulo="Card comum (grau 3) vs. grau máximo (grau 5, brilha)"
-        nota="Só o grau 5 de confiança acende o brilho ao redor do card — os demais graus mudam a cor do % e da borda lateral."
+        nota="Só o grau 5 de confiança acende o brilho ao redor do card — os demais graus mudam a cor da nota de confiança e da borda lateral."
       >
         <CardEntrada
           nome="Austin Reaves"
@@ -218,7 +227,7 @@ export default async function PaginaGaleria() {
           atributo="ASSISTENCIAS"
           nivelJogador="SUPORTE"
           nivelApito={2}
-          confianca={85.5}
+          confianca={86}
           grauConfianca={1}
           linha={7}
         />
@@ -270,7 +279,7 @@ export default async function PaginaGaleria() {
               key={grau}
               style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}
             >
-              <Pilula texto={`${80 + grau * 3}%`} cor={CONFIANCA_GRAU[grau]} brilho={grau === 5} />
+              <Pilula texto={`${80 + grau * 3}`} cor={CONFIANCA_GRAU[grau]} brilho={grau === 5} />
               <span style={{ fontSize: 12, opacity: 0.7 }}>grau {grau}</span>
             </span>
           ))}
@@ -283,7 +292,7 @@ export default async function PaginaGaleria() {
 
       <Secao
         titulo="Identidade 04 · o card fecha o ciclo"
-        nota="PRÉ → 1º Q → FIM 1º Q → FT → CONFERIDO, o mesmo card na Lista, no Fire Live e nos Resultados. O badge de status tem largura fixa para o card não pular a cada refresh; conferido, o rodapé diz fez N com ✓ ou ✗ — e quem não jogou é neutro, nem um nem outro."
+        nota="PRÉ → 1º Q → FIM 1º Q → AGUARDANDO OFICIAL → CONFERIDO, o mesmo card na Lista, no Fire Live e nos Resultados. O badge de status tem largura fixa para o card não pular a cada refresh; conferido, o rodapé diz fez N com ✓ ou ✗ — e quem não jogou é neutro, nem um nem outro."
       >
         <CardEntrada
           nome="Cooper Flagg"
@@ -338,6 +347,20 @@ export default async function PaginaGaleria() {
           estado="FIM_Q1"
           alvo1Q={3}
           progresso1Q={{ observado: 3, alvo: 3 }}
+          alvoFire={{ valor: 2.25, rotulo: 'marco de exemplo' }}
+        />
+        <CardEntrada
+          nome="Cooper Flagg"
+          timeSigla="DAL"
+          adversarioSigla="ORL"
+          posicao="F"
+          atributo="PONTOS"
+          nivelJogador="ALL_STAR"
+          nivelApito={3}
+          confianca={91}
+          grauConfianca={4}
+          linha={15}
+          estado="AGUARDANDO_OFICIAL"
         />
         <CardEntrada
           nome="Cooper Flagg"
@@ -516,6 +539,10 @@ export default async function PaginaGaleria() {
           horarioUtc={new Date('2026-01-15T22:30:00.000Z')}
           fuso="America/Sao_Paulo"
           status="ENCERRADO"
+          placarCasa={108}
+          placarVisitante={116}
+          quartosCasa={[25, 28, 26, 29]}
+          quartosVisitante={[30, 27, 31, 28]}
         />
         <CabecalhoJogo
           casaSigla="IND"
@@ -539,6 +566,89 @@ export default async function PaginaGaleria() {
           <SeloContexto contexto="preLive" />
           <SeloContexto contexto="aoVivo" />
         </div>
+      </Secao>
+
+      <Secao
+        titulo="Identidade 04 · forma no atributo"
+        nota="Dez jogos do mais antigo ao mais recente, contra a mesma linha do apito. A amostra curta mantém as colunas; sem linha, o histórico informa os valores sem veredito. Dados ilustrativos."
+      >
+        <FormaNoAtributo
+          linha={20}
+          jogos={[
+            { valor: 18, bateu: false, adversarioSigla: 'BOS' },
+            { valor: 25, bateu: true, adversarioSigla: 'MIA' },
+            { valor: 21, bateu: true, adversarioSigla: 'ORL' },
+            { valor: 14, bateu: false, adversarioSigla: 'IND' },
+            { valor: 27, bateu: true, adversarioSigla: 'NYK' },
+            { valor: 20, bateu: true, adversarioSigla: 'ATL' },
+            { valor: 19, bateu: false, adversarioSigla: 'CHI' },
+            { valor: 23, bateu: true, adversarioSigla: 'TOR' },
+            { valor: 16, bateu: false, adversarioSigla: 'MIL' },
+            { valor: 26, bateu: true, adversarioSigla: 'DAL' },
+          ]}
+        />
+        <FormaNoAtributo
+          linha={null}
+          jogos={[
+            { valor: 0, bateu: false, adversarioSigla: 'BOS' },
+            { valor: 3, bateu: false, adversarioSigla: 'MIA' },
+            { valor: 5, bateu: false, adversarioSigla: 'ORL' },
+          ]}
+        />
+      </Secao>
+
+      <Secao
+        titulo="Identidade 04 · marcos e barra congelada"
+        nota="O ponto abaixo demonstra um valor conhecido no instante do apito, apenas na galeria. O feed só o exibe quando esse dado existir. Depois de FIM 1º Q a barra conserva o último valor do quarto; não há animação."
+      >
+        <BarraAlvo
+          observado={9}
+          alvo={11}
+          unidade="pts"
+          marcos={[{ valor: 8, rotulo: 'marco de exemplo', cor: MODO_FIRE.cor }]}
+          apitouEm={{ valor: 7, rotulo: 'apitou aqui' }}
+        />
+        <div>
+          <p style={{ color: semantico.textoSecundario, fontSize: 12 }}>FIM 1º Q · congelada</p>
+          <BarraAlvo
+            observado={11}
+            alvo={11}
+            unidade="pts"
+            marcos={[{ valor: 8, rotulo: 'marco de exemplo', cor: MODO_FIRE.cor }]}
+          />
+        </div>
+      </Secao>
+
+      <Secao
+        titulo="Identidade 04 · hierarquia e prefixo desfalcado"
+        nota="As ausências consecutivas desde o nº 1 recebem destaque. A ausência isolada no nº 4 continua escrita, com a posição e o nível do jogador. Exemplos ilustrativos da lista do CJ."
+      >
+        <HierarquiaDoTime
+          linhas={[
+            { jogadorId: 'galeria-1', posicao: 1, nome: 'LeBron James', nivel: 'MVP', fora: true },
+            { jogadorId: 'galeria-2', posicao: 2, nome: 'Embiid', nivel: 'MVP', fora: true },
+            { jogadorId: 'galeria-3', posicao: 3, nome: 'Maxey', nivel: 'ALL_STAR', fora: false },
+            { jogadorId: 'galeria-4', posicao: 4, nome: 'Grimes', nivel: 'SUPORTE', fora: true },
+          ]}
+        />
+        <HierarquiaDoTime linhas={[]} />
+      </Secao>
+
+      <Secao
+        titulo="Identidade 04 · a última barrinha é desta rodada"
+        nota="O contorno e a descrição acessível identificam o resultado acrescentado ao fim da fileira."
+      >
+        <Barrinhas
+          rotulo="ÚLT. 5 NA LINHA"
+          destacarUltima
+          jogos={[
+            { valor: 19, bateu: true },
+            { valor: 22, bateu: true },
+            { valor: 17, bateu: true },
+            { valor: 13, bateu: false },
+            { valor: 25, bateu: true },
+          ]}
+        />
       </Secao>
 
       <Secao

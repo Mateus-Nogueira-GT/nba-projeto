@@ -1,3 +1,4 @@
+import { gravarConferencia, prepararFotosConferencia } from './conferencia'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 
@@ -69,6 +70,7 @@ beforeAll(async () => {
     .insert(usuarios)
     .values({ id: USUARIO_DEMO, email: 'demo@teste.com', senhaHash: 'x' })
     .onConflictDoNothing()
+  await prepararFotosConferencia(banco.db)
   vi.useFakeTimers({ toFake: ['Date'] })
   vi.setSystemTime(AGORA)
 }, 180_000)
@@ -239,6 +241,7 @@ describe('Fire Live · 04 — por jogo, com os três estados', () => {
 
   it('os três chips são os três estados, e recortam a tela pela URL', async () => {
     const html = semScript(await renderizar())
+    await gravarConferencia('identidade-04-firelive', html)
     expect(html).toContain('No 1º Q agora')
     expect(html).toContain('Aguardando')
     expect(html).toContain('1º Q encerrado')
@@ -323,6 +326,7 @@ describe('Fire Live · 04 — por jogo, com os três estados', () => {
         .set({ quartoAtual: 2, placarCasa: 98, placarVisitante: 102 })
         .where(eq(jogos.id, item.jogoId))
       const html = semScript(await renderizar({ jogo: item.jogoId }))
+      await gravarConferencia('identidade-04-firelive-encerrado', html)
       expect(html).toContain(`${visitante.pontosQ1} · ${casa.pontosQ1}`)
       expect(html).not.toContain('102 · 98')
       expect(html).not.toContain('2º Q · AO VIVO')

@@ -1,5 +1,9 @@
 # Design System — IA da NBA
 
+> **Referência atual: Identidade 04**, na seção final deste documento. As anatomias
+> anteriores ficam como histórico. A escrita vigente distingue nota de confiança
+> (inteira, sem `%`), taxa observada (com `%`) e nota da partida (uma casa decimal).
+
 ## O problema que este documento resolve
 
 Os documentos de origem carregam **três sistemas de cor simultâneos** disputando o mesmo
@@ -138,11 +142,13 @@ Decorre do fato de que o % **não é probabilidade** (ver `02-motor-regras.md`).
 | -------------------- | ------------------------------------ |
 | "Probabilidade: 92%" | "Confiança: 92"                      |
 | "92% de chance"      | "Nível de confiança da análise"      |
-| "Odd 1,45"           | "Odd média entre casas: 1,30 – 1,70" |
+| "Odd 1,45" sem qualificação | "Odd média 1,45" ou "Faixa de odds 1,30–1,70", conforme o ruleset |
 | "Entrada garantida"  | "Entrada sugerida pela estratégia"   |
 
-A odd é sempre **faixa**, nunca valor único — ela varia por casa e por minuto, e exibir
-um número exato cria expectativa que o produto não controla.
+A forma da odd obedece `odds.exibicao` no ruleset: `media` ou `faixa`. Esta é a
+errata da decisão de 25/08, preservada pelo repasse da Identidade 04. A regra de
+escrita é **nenhuma odd sem dizer o que é**. A tela não muda a escolha do ruleset,
+nem trata cotação exibida como valor garantido na casa.
 
 ---
 
@@ -309,3 +315,74 @@ quadra) imprime `—`, nunca `0`.
 
 **Nome:** "nota da partida" ou "nota". Nunca "nível" — `nível do jogador` e
 `nível do apito` são outra coisa no vocabulário do CJ.
+
+## Identidade 04 — referência vigente
+
+A implementação mantém Anton, Barlow Condensed e Barlow, a paleta Broadcast e as
+três camadas de tokens. Lista Secreta e Fire Live priorizam leitura rápida; detalhe,
+Resultados e Estatísticas oferecem a análise. A anatomia de três zonas do card e
+a posição das abas ficam **congeladas durante a temporada**. Uma reorganização
+exige uma feature própria, não uma correção de acabamento.
+
+### Vocabulário numérico
+
+| Informação | Escrita | Uso |
+| --- | --- | --- |
+| Nota de confiança | `90`, sem decimal nem `%` | Força da análise; nunca chance de retorno |
+| Taxa da noite/temporada | `68%`, acompanhada da amostra | Resultados observados, fora do elemento da confiança |
+| Nota da partida | `7,4` | Desempenho do box score, apenas na consulta de estatísticas |
+| Linha | `20+` | Inteira; a leitura do card e a conferência usam a menor linha publicada |
+| Odd | `ODD MÉDIA 1,55` ou faixa qualificada | Forma definida por `odds.exibicao`; sem links para casas |
+
+O rodapé conferido preserva o artboard: linha e `fez N` com veredito; a odd continua
+no detalhe. Esta descrição registra o comportamento existente, sem decidir a
+pendência comercial sobre sua inclusão no card. A redação dos dois sentidos de
+“média” também permanece como está até a decisão editorial do parceiro.
+
+### Tokens e componentes
+
+- `texto100`, `texto70`, `texto55`, `texto40`: hierarquia de texto; não substituem a
+  verificação de contraste sobre a superfície concreta.
+- `aoVivoSolido`, `aoVivoTinta`, `aoVivoBorda`: status ao vivo dentro do universo
+  quente. Rótulo e forma acompanham a cor.
+- `turboClaro`, `turboEscuro`: apoio ao turbo. O brilho quente pertence ao modo fire;
+  não se aplica automaticamente a todo card da tela ao vivo.
+- `duracaoEstado` (200 ms), `duracaoEntrada` (400 ms): transições breves, sem pulsação
+  contínua. O número usa `tabular-nums` para não deslocar a leitura.
+- `CabecalhoJogo`: única fronteira entre jogos, com siglas, horário, status e placar.
+- `FormaNoAtributo`: últimos dez jogos e régua da linha; `Barrinhas` mantém os últimos
+  cinco no card e pode destacar a conferência mais recente.
+- `HierarquiaDoTime`: lista do CJ por atributo com desfalques em prefixo; deixa visível
+  a diferença entre time da lista e time atual do provedor.
+- `BarraAlvo`: alvo, marco do modo fire e ponto do apito **somente quando existe o valor
+  observado naquele instante**. Horário do apito não é valor; não se inventa esse ponto.
+- `SeloContexto`, `FolhaDeFiltros` e `FaixaDemonstracao`: contexto explícito, recortes
+  fora da lista de cards e aviso fino de dados simulados.
+
+### Ciclo e navegação
+
+`PRE → Q1 → FIM_Q1 → AGUARDANDO_OFICIAL → CONFERIDO` é derivado da partida e do
+box score. Jogo encerrado sem dado suficiente não recebe erro de aposta. Uma linha
+com produção prova participação mesmo com minutos arredondados para zero. A linha
+inteira zerada com zero minutos é DNP, neutra; minutos ausentes e produção ausente
+aguardam dado oficial. Perfil, recap e contador usam essa mesma evidência.
+
+A Lista agrupa por jogo ou por nível e reúne os atributos em um card por jogador.
+As lentes `ULT5`, `MEDIA_LINHA`, `ODDS` e `HIERARQUIA`, junto da ordem, são preferências
+por conta; filtros continuam na URL. O nome abre Estatísticas; o corpo do card abre
+o detalhe do atributo escolhido. O Fire Live mantém o apito após o 1º quarto e
+mostra o placar desse quarto, sem substituí-lo pelo total posterior da partida.
+
+Resultados sem data abrem a última rodada conferida. Uma rodada ainda em andamento
+declara espera, sem vender uma taxa parcial como resultado final da noite. A consulta
+de Estatísticas mantém o elenco real; a seção explicitamente rotulada de apitos e
+hierarquia usa a lista do CJ. O adversário é resolvido no contexto de cada jogo.
+
+### Verificação reproduzível
+
+O fechamento usa os testes de tela em `src/app/__tests__/telas-04-*.test.ts`, as
+verificações de componentes e a regressão de participação entre telas. O helper
+`conferencia.ts` renderiza o HTML com o CSS real; `scripts/captura-telas.sh` produz
+capturas de 390 px e desktop. `demo:conferir -- --pglite` semeia sete semanas com
+`simularAte` e verifica leituras reais sem acessar o Neon. Captura estática verifica
+apresentação; não substitui um smoke autenticado do deploy.

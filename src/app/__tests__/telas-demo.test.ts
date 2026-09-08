@@ -10,6 +10,7 @@ import { rulesetAtivo } from '../../modules/entrega/ruleset-ativo'
 import { simularAte } from '../../modules/ingestao/demo/temporada'
 import { LLMFake } from '../../modules/ingestao/llm'
 import type { ConteudoFeed } from '../../modules/entrega/lista-secreta'
+import { gravarConferencia } from './conferencia'
 
 /**
  * FUMAÇA DAS TELAS NOVAS.
@@ -52,7 +53,10 @@ let banco: Awaited<ReturnType<typeof bancoDeTeste>>
 
 const USUARIO_DEMO = '00000000-0000-4000-8000-000000000001'
 vi.mock('../../modules/plataforma/auth/cookies', () => ({
-  sessaoAtual: async () => ({ usuarioId: '00000000-0000-4000-8000-000000000001', email: 'demo@teste.com' }),
+  sessaoAtual: async () => ({
+    usuarioId: '00000000-0000-4000-8000-000000000001',
+    email: 'demo@teste.com',
+  }),
 }))
 vi.mock('../../modules/plataforma/assinatura/direito', () => ({
   avaliarAcesso: async () => ({ permitido: true }),
@@ -109,22 +113,6 @@ afterAll(async () => {
   await banco.fechar()
 })
 
-// ---------------------------------------------------------------------------
-// CONFERÊNCIA VISUAL (gate delegado da identidade 03): com CONFERENCIA=1, o
-// HTML real de cada tela é gravado para auditoria humana — o mesmo render
-// deste harness, sem simulação paralela. `.superpowers/` está no .gitignore.
-// ---------------------------------------------------------------------------
-async function gravarConferencia(nome: string, html: string) {
-  if (process.env.CONFERENCIA !== '1') return
-  const { mkdirSync, writeFileSync } = await import('node:fs')
-  const dir = '.superpowers/conferencia'
-  mkdirSync(dir, { recursive: true })
-  writeFileSync(
-    `${dir}/${nome}.html`,
-    `<!doctype html><meta charset="utf-8"><link href="https://fonts.googleapis.com/css2?family=Anton&family=Barlow:wght@400;600&family=Barlow+Condensed:wght@500;600;700&display=swap" rel="stylesheet"><style>:root{--fonte-anton:'Anton';--fonte-barlow:'Barlow';--fonte-barlow-condensed:'Barlow Condensed'}body{margin:0;background:#0B1220}</style><body>${html}`,
-  )
-}
-
 describe('Lista Secreta', () => {
   // O "card por jogador E atributo" virou UM card por jogador com abas de
   // atributo na identidade 04 — quem prova isso é `telas-04-lista.test.ts`.
@@ -178,7 +166,9 @@ describe('Lista Secreta', () => {
       await Pagina({ searchParams: Promise.resolve({ atributo: 'REBOTES' }) }),
     )
 
-    const quantidades = [...html.matchAll(/href="(\/\?[^"]*quantidade=\d[^"]*)"/g)].map((m) => m[1]!)
+    const quantidades = [...html.matchAll(/href="(\/\?[^"]*quantidade=\d[^"]*)"/g)].map(
+      (m) => m[1]!,
+    )
     expect(quantidades.length).toBeGreaterThan(0)
     for (const href of quantidades) {
       expect(href).toContain('atributo=REBOTES')
@@ -303,7 +293,8 @@ describe('Fire Live', () => {
   it('Ao vivo: cabeçalho vermelho, placar 1Q, selo VIVO e barra de progresso', async () => {
     const { default: Pagina } = await import('../(app)/fire-live/page')
     const html = renderToStaticMarkup(await Pagina({ searchParams: Promise.resolve({}) }))
-    expect(html).toContain('FIRE LIVE · AO VIVO')
+    expect(html).toMatch(/>FIRE LIVE</)
+    expect(html).toContain('AO VIVO</span>')
     expect(html).toContain('ACONTECENDO')
     expect(html).toContain('1º Q')
 
@@ -503,7 +494,10 @@ describe('Estatísticas — identidade 03 (conferência em lote)', () => {
     const [umTime] = await banco.db.select().from(times).limit(1)
     const { default: Time } = await import('../(app)/estatisticas/time/[id]/page')
     const htmlTime = renderToStaticMarkup(
-      await Time({ params: Promise.resolve({ id: umTime!.id }), searchParams: Promise.resolve({}) }),
+      await Time({
+        params: Promise.resolve({ id: umTime!.id }),
+        searchParams: Promise.resolve({}),
+      }),
     )
 
     await gravarConferencia(

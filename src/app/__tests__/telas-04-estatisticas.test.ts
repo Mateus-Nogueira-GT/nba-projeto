@@ -1,3 +1,4 @@
+import { gravarConferencia, prepararFotosConferencia } from './conferencia'
 import { createElement } from 'react'
 import { and, eq, inArray } from 'drizzle-orm'
 import { renderToStaticMarkup } from 'react-dom/server'
@@ -141,6 +142,7 @@ beforeAll(async () => {
   ).toBeDefined()
   sujeito = escolhido!
 
+  await prepararFotosConferencia(banco.db)
   vi.useFakeTimers({ toFake: ['Date'] })
   vi.setSystemTime(AGORA)
 }, 300_000)
@@ -184,22 +186,6 @@ async function renderizarTime(id: string, busca: Record<string, string> = {}): P
 /** Texto visível, sem marcação — para afirmar sobre rótulo e valor vizinhos. */
 function texto(html: string): string {
   return html.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ')
-}
-
-/**
- * CONFERÊNCIA VISUAL (gate delegado, como em `telas-demo.test.ts`): com
- * CONFERENCIA=1 o HTML real da tela é gravado para conferir ao lado do
- * artboard. `.superpowers/` está no .gitignore.
- */
-async function gravarConferencia(nome: string, html: string) {
-  if (process.env.CONFERENCIA !== '1') return
-  const { mkdirSync, writeFileSync } = await import('node:fs')
-  const dir = '.superpowers/conferencia'
-  mkdirSync(dir, { recursive: true })
-  writeFileSync(
-    `${dir}/${nome}.html`,
-    `<!doctype html><meta charset="utf-8"><link href="https://fonts.googleapis.com/css2?family=Anton&family=Barlow:wght@400;600&family=Barlow+Condensed:wght@500;600;700&display=swap" rel="stylesheet"><style>:root{--fonte-anton:'Anton';--fonte-barlow:'Barlow';--fonte-barlow-condensed:'Barlow Condensed'}body{margin:0;background:#0B1220}</style><body>${html}`,
-  )
 }
 
 /**

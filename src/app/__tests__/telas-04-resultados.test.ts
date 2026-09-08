@@ -1,3 +1,4 @@
+import { gravarConferencia, prepararFotosConferencia } from './conferencia'
 import { and, eq, inArray } from 'drizzle-orm'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
@@ -70,6 +71,7 @@ beforeAll(async () => {
       senhaHash: 'x',
     })
     .onConflictDoNothing()
+  await prepararFotosConferencia(banco.db)
   vi.useFakeTimers({ toFake: ['Date'] })
   vi.setSystemTime(AGORA)
 }, 180_000)
@@ -148,6 +150,7 @@ describe('Resultados · o índice da rodada', () => {
 
   it('o rótulo é o da RODADA, com as setas de ontem e de amanhã', async () => {
     const html = await renderizar(ONTEM)
+    await gravarConferencia('identidade-04-resultados', html)
     const [ano, mes, dia] = ONTEM.split('-').map(Number)
     const semana = new Date(Date.UTC(ano!, mes! - 1, dia!)).toLocaleDateString('pt-BR', {
       timeZone: 'UTC',

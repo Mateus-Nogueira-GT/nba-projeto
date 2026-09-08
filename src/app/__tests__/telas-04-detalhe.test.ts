@@ -1,3 +1,4 @@
+import { gravarConferencia, prepararFotosConferencia } from './conferencia'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 
@@ -69,6 +70,7 @@ beforeAll(async () => {
       senhaHash: 'x',
     })
     .onConflictDoNothing()
+  await prepararFotosConferencia(banco.db)
   vi.useFakeTimers({ toFake: ['Date'] })
   vi.setSystemTime(AGORA)
 }, 180_000)
@@ -200,6 +202,7 @@ function regrasDeEscrita(html: string): void {
 describe('Detalhe do apito — o esqueleto fixo da análise (identidade 04)', () => {
   it('as seções saem sempre na mesma ordem, do fato gerador ao jogo', async () => {
     const html = await renderizar(await sujeito())
+    await gravarConferencia('identidade-04-detalhe', html)
 
     const ordem = ['FORMA NO ATRIBUTO', 'COMPARAÇÃO', 'POR QUE ENTROU', 'LINHAS DE', 'O JOGO']
     const posicoes = ordem.map((titulo) => {

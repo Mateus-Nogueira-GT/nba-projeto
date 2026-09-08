@@ -1,5 +1,46 @@
 # Repasse da Identidade 04 — estado em 08/09/2026, 10h
 
+## Atualização de publicação — 08/09/2026
+
+O parceiro pediu o commit e a publicação imediata na `main` para apresentar o
+produto, substituindo a espera pelo fechamento do loop. O histórico abaixo
+registra o ponto de partida; não representa mais o estado da implementação.
+
+**Implementado e integrado:** Fire Live por jogo e por estado (`8512128`),
+índice e partida de Estatísticas (`7b3d346`), coerência da participação entre
+perfil, recap e taxa da temporada (`f21f507`), galeria, documentação e harness
+de conferência com PGlite e capturas mobile/desktop.
+
+**Validação integrada antes da publicação:** 1.294 testes em 105 arquivos,
+typecheck, lint, boundaries, `git diff --check` e build de produção passaram.
+`demo:conferir -- --pglite` passou com 49 dias simulados, 30 times e conferência
+da taxa acumulada contra os resultados detalhados. Não houve mudança em
+`config/` nem em `src/modules/motor/` na implementação da Identidade 04.
+
+**Limites da conferência:** foram geradas 32 capturas de 16 telas em 390 e
+1280 px, sem conteúdo excedendo a largura do viewport. O Chrome de captura
+falhou ao carregar fotos diretamente do CDN (`ERR_HTTP2_PROTOCOL_ERROR`),
+embora a URL verificada por HTTP respondesse 200. A verificação offline de
+fotos comprova a presença de URLs; não comprova a disponibilidade de todas
+as imagens. O harness renderiza HTML real, mas não comprova hidratação ou
+o fluxo autenticado do deploy. A skill `playwright-interactive` citada pelo
+workflow de frontend não estava instalada; a captura usou Chrome via CDP.
+
+**Loop de revisão ainda incompleto:** a primeira bateria fixa passou e três
+lentes iniciaram a leitura; não se concluíram as cinco lentes nem duas
+rodadas consecutivas sem achados. Permanecem para reprodução adversarial os
+candidatos sobre UUID inválido nas rotas de Estatísticas e continuidade do
+Fire Live após a virada real de meia-noite. Eles não foram corrigidos nem
+declarados refutados nesta publicação. As decisões comerciais/editoriais
+da seção 5 continuam pendentes, com o comportamento existente preservado.
+
+**Publicação:** aplicar somente a migração aditiva `0017`, confirmar o schema,
+mesclar o PR #12 e publicar a integração de UX. Preservar o checkout da
+apresentação e os dados já semeados. A confirmação do deploy deve ser feita
+separadamente da confirmação do merge.
+
+---
+
 **Para:** quem assumir daqui (Codex ou outro agente) · **De:** a sessão que implementou as
 fases 0 a 5 · **Motivo:** limite de sessão próximo
 

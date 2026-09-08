@@ -1,3 +1,4 @@
+import { gravarConferencia, prepararFotosConferencia } from './conferencia'
 import { and, eq } from 'drizzle-orm'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
@@ -59,6 +60,7 @@ beforeAll(async () => {
     .insert(usuarios)
     .values({ id: USUARIO_DEMO, email: 'demo@teste.com', senhaHash: 'x' })
     .onConflictDoNothing()
+  await prepararFotosConferencia(banco.db)
   vi.useFakeTimers({ toFake: ['Date'] })
   vi.setSystemTime(AGORA)
 }, 180_000)
@@ -105,6 +107,7 @@ describe('Lista Secreta · 04 — a varredura por jogo', () => {
     expect(esperados.length).toBeGreaterThan(1)
 
     const html = await renderizar()
+    await gravarConferencia('identidade-04-lista', html)
     expect(cabecalhosDeJogo(html)).toEqual(esperados)
   }, 60_000)
 

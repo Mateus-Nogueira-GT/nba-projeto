@@ -1,10 +1,14 @@
 import { and, eq, lt } from 'drizzle-orm'
 
 import { fecharDb, getDb } from '../src/modules/dominio/db/cliente'
-import { jogos as tabelaJogos } from '../src/modules/dominio/db/schema'
+import type { Db } from '../src/modules/dominio/db/tipos'
+import {
+  jogos as tabelaJogos,
+  jogadores as tabelaJogadores,
+} from '../src/modules/dominio/db/schema'
 import { dataDeReferencia } from '../src/modules/dominio/rodada'
 import { calendarioDoRuleset, temporadaDe } from '../src/modules/dominio/temporada'
-import { telaDoJogador } from '../src/modules/entrega/estatisticas/jogador'
+import { apitosDoJogador, telaDoJogador } from '../src/modules/entrega/estatisticas/jogador'
 import { telaDoJogo } from '../src/modules/entrega/estatisticas/jogo'
 import { telaJogosDoDia } from '../src/modules/entrega/estatisticas/jogos-do-dia'
 import { telaDaClassificacao, telaDoTime } from '../src/modules/entrega/estatisticas/time'
@@ -12,8 +16,18 @@ import { buscar } from '../src/modules/entrega/estatisticas/busca'
 import { lerFeedFireLive, placaresAoVivo } from '../src/modules/entrega/fire-live/leitura'
 import { planoDoDia } from '../src/modules/entrega/gestao'
 import { detalheDoApito } from '../src/modules/entrega/detalhe-apito'
-import { lerFeed, linhasDoJogador } from '../src/modules/entrega/lista-secreta'
-import { conferirRodadas } from '../src/modules/entrega/resultados'
+import { agruparPorJogador, lerFeed, linhasDoJogador } from '../src/modules/entrega/lista-secreta'
+import {
+  conferirRodadas,
+  recapDaNoite,
+  taxaDaTemporada,
+  ultimaRodadaConferida,
+} from '../src/modules/entrega/resultados'
+import {
+  agruparPorJogo,
+  cartoesPorJogador,
+  jogosDoDiaResumo,
+} from '../src/modules/entrega/lista-por-jogo'
 import { rulesetAtivo } from '../src/modules/entrega/ruleset-ativo'
 import { autossemeaduraHabilitada } from '../src/modules/ingestao/demo/autossemeadura'
 
@@ -44,25 +58,22 @@ import { autossemeaduraHabilitada } from '../src/modules/ingestao/demo/autosseme
  *          aprenderia a ignorar o ✗ — que é o oposto do que este script faz.
  *
  *   npx dotenv -e .env.local -- npm run demo:conferir
+ *   npm run demo:conferir -- --pglite  # sete semanas locais, sem .env nem rede
  */
 
 type Item = { tela: string; marca: '✓' | '✗' | '·'; detalhe: string }
 
-const itens: Item[] = []
+async function conferir(db: Db, ruleset: Awaited<ReturnType<typeof rulesetAtivo>>, agora: Date) {
+  const itens: Item[] = []
+  /** Conferência de verdade: `ok: false` reprova a demonstração. */
+  const registrar = (tela: string, ok: boolean, detalhe: string) =>
+    itens.push({ tela, marca: ok ? '✓' : '✗', detalhe })
+  /** Retrato do dia: informativo nunca reprova. */
+  const informar = (tela: string, presente: boolean, detalhe: string) =>
+    itens.push({ tela, marca: presente ? '✓' : '·', detalhe })
 
-/** Conferência de verdade: `ok: false` reprova a demonstração. */
-const registrar = (tela: string, ok: boolean, detalhe: string) =>
-  itens.push({ tela, marca: ok ? '✓' : '✗', detalhe })
-
-/** Retrato do dia: `presente` só escolhe a marca. Informativo nunca reprova. */
-const informar = (tela: string, presente: boolean, detalhe: string) =>
-  itens.push({ tela, marca: presente ? '✓' : '·', detalhe })
-
-async function principal() {
-  const db = getDb()
-  const ruleset = await rulesetAtivo()
   const { fuso } = ruleset.rodada
-  const hoje = dataDeReferencia(new Date(), fuso)
+  const hoje = dataDeReferencia(agora, fuso)
   console.log(`Conferindo a demonstração para a rodada de ${hoje} (fuso ${fuso})\n`)
 
   // 1 · Lista Secreta — a vitrine.
@@ -70,8 +81,47 @@ async function principal() {
   const itensFeed = feed?.conteudo.itens ?? []
   registrar('Lista Secreta', itensFeed.length > 0, `${itensFeed.length} entradas publicadas`)
 
-  const comFoto = itensFeed.filter((i) => i.fotoUrl).length
-  registrar('  · fotos nos cards', comFoto > 0, `${comFoto} de ${itensFeed.length} com headshot`)
+  const jogosLista = await jogosDoDiaResumo(db, hoje, fuso)
+  // Mesma projeção da página: reduzir as linhas do mesmo atributo, fazer
+  // as abas de cada jogador e só então agrupar os cards pelo jogo.
+  const atributos = agruparPorJogador(itensFeed)
+  const cards = cartoesPorJogador(atributos)
+  const grupos = agruparPorJogo(
+    cards.map((c) => c.principal),
+    jogosLista,
+  )
+  registrar(
+    '  · lista por jogo',
+    grupos.length > 0 &&
+      grupos.every(
+        (g) =>
+          jogosLista.some((j) => j.id === g.jogoId) && g.itens.every((i) => i.jogoId === g.jogoId),
+      ) &&
+      grupos.reduce((total, g) => total + g.itens.length, 0) === cards.length,
+    `${grupos.length} grupo(s), todos com jogo conhecido e sem perder entradas`,
+  )
+  const chaves = cards.map((c) => `${c.principal.jogoId}:${c.principal.jogadorId}`)
+  registrar(
+    '  · um card por jogador',
+    cards.length > 0 &&
+      new Set(chaves).size === cards.length &&
+      cards.reduce((total, c) => total + c.atributos.length, 0) === atributos.length &&
+      cards.every((c) => new Set(c.atributos.map((a) => a.atributo)).size === c.atributos.length),
+    `${cards.length} card(s) com ${atributos.length} atributo(s) em abas (${itensFeed.length} linhas publicadas)`,
+  )
+  const comFoto = cards.filter((c) => c.visivel.fotoUrl).length
+  registrar(
+    '  · fotos nos cards',
+    cards.length > 0 && comFoto / cards.length >= 0.9,
+    `${comFoto} de ${cards.length} com headshot (esperado ≥ 90%; presença da URL, não disponibilidade do CDN)`,
+  )
+  const cadastro = await db.select({ foto: tabelaJogadores.fotoUrl }).from(tabelaJogadores)
+  const fotosCadastro = cadastro.filter((j) => j.foto).length
+  registrar(
+    '  · fotos no cadastro',
+    cadastro.length > 0 && fotosCadastro / cadastro.length >= 0.9,
+    `${fotosCadastro} de ${cadastro.length} jogadores com URL de foto (esperado ≥ 90%)`,
+  )
 
   const comHistorico = itensFeed.filter((i) => (i.ultimos5?.length ?? 0) > 0).length
   registrar('  · barrinhas (últ. 5)', comHistorico > 0, `${comHistorico} com histórico na linha`)
@@ -165,6 +215,39 @@ async function principal() {
     `${acertos} green / ${conferidos - acertos} red em ${conferidos} conferidos`,
   )
 
+  const ultima = await ultimaRodadaConferida(db, hoje)
+  const recap = ultima ? await recapDaNoite(db, ultima) : null
+  registrar(
+    '  · recap e apito da noite',
+    recap !== null &&
+      recap.conferidos > 0 &&
+      recap.apitoDaNoite !== null &&
+      recap.apitoDaNoite.bateuLinhaMaisBaixa === true &&
+      recap.porJogo.some((g) =>
+        g.cards.some(
+          (c) =>
+            c.jogoId === recap.apitoDaNoite?.jogoId &&
+            c.jogadorId === recap.apitoDaNoite?.jogadorId &&
+            c.atributo === recap.apitoDaNoite?.atributo,
+        ),
+      ),
+    recap
+      ? `${recap.dataReferencia}: ${recap.bateram}/${recap.conferidos}; destaque ${recap.apitoDaNoite?.nome ?? 'ausente'}`
+      : 'sem rodada conferida',
+  )
+  const taxa = await taxaDaTemporada(db, hoje, 49)
+  const janela = await conferirRodadas(db, hoje, 49)
+  const totalConferidos = janela.reduce((total, r) => total + r.conferidos, 0)
+  const totalAcertos = janela.reduce((total, r) => total + r.acertos, 0)
+  registrar(
+    '  · taxa da temporada',
+    taxa.conferidos > 0 &&
+      taxa.rodadas > 0 &&
+      taxa.conferidos === totalConferidos &&
+      taxa.acertos === totalAcertos,
+    `${taxa.acertos}/${taxa.conferidos} em ${taxa.rodadas} rodadas; conferência detalhada ${totalAcertos}/${totalConferidos}`,
+  )
+
   // 4b · A TEMPORADA POR TRÁS DOS NÚMEROS — o lastro que a tela não mostra.
   // As médias, a classificação, as barrinhas e a própria taxa de acerto só
   // significam alguma coisa se as sete semanas estiverem inteiras no banco.
@@ -249,13 +332,22 @@ async function principal() {
     `${achados.length} resultado(s) para "${termo}"`,
   )
 
-  const alvo = itensFeed[0]
+  // Quem apitou pela primeira vez hoje pode legitimamente não ter apito
+  // conferido. Escolher pelo recap prova o histórico sem reprovar por sorteio
+  // nem depender da ordem dos UUIDs que o banco acabou de gerar.
+  const alvo = recap?.apitoDaNoite ?? itensFeed[0]
   if (alvo) {
     const calendario = calendarioDoRuleset(ruleset)
-    const temporada = temporadaDe(new Date(), calendario)
+    const temporada = temporadaDe(agora, calendario)
     const tela = await telaDoJogador(db, alvo.jogadorId, { temporada, calendario })
     const jogos = tela?.historico.length ?? 0
     registrar('Estatísticas · jogador', jogos > 0, `${jogos} jogos no histórico de ${alvo.nome}`)
+    const apitos = await apitosDoJogador(db, alvo.jogadorId, 25)
+    registrar(
+      '  · histórico de apitos',
+      apitos.length > 0 && apitos.some((a) => a.estado === 'CONFERIDO'),
+      `${apitos.length} apito(s) no perfil de ${alvo.nome}, ${apitos.filter((a) => a.estado === 'CONFERIDO').length} conferido(s)`,
+    )
     const arremessos = tela?.perfilNumeros.ataque.doisPercentual ?? null
     registrar(
       '  · 2P%/3P%/LL%',
@@ -272,10 +364,7 @@ async function principal() {
       )
     }
   }
-  const tabela = await telaDaClassificacao(
-    db,
-    temporadaDe(new Date(), calendarioDoRuleset(ruleset)),
-  )
+  const tabela = await telaDaClassificacao(db, temporadaDe(agora, calendarioDoRuleset(ruleset)))
   registrar(
     'Estatísticas · classificação',
     tabela.linhas.length > 0,
@@ -358,9 +447,25 @@ async function principal() {
   process.exitCode = 1
 }
 
-principal()
-  .catch((erro) => {
-    console.error(erro instanceof Error ? erro.message : erro)
-    process.exitCode = 1
-  })
-  .finally(() => fecharDb())
+async function principal() {
+  if (process.argv.includes('--pglite')) {
+    const { prepararDemoPglite } = await import('./demo-conferir-pglite')
+    const ambiente = await prepararDemoPglite()
+    try {
+      await conferir(ambiente.db, ambiente.ruleset, ambiente.agora)
+    } finally {
+      await ambiente.fechar()
+    }
+    return
+  }
+  try {
+    await conferir(getDb(), await rulesetAtivo(), new Date())
+  } finally {
+    await fecharDb()
+  }
+}
+
+principal().catch((erro) => {
+  console.error(erro instanceof Error ? erro.message : erro)
+  process.exitCode = 1
+})
