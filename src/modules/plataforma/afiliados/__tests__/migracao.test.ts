@@ -59,6 +59,7 @@ describe('schema comercial de afiliados', () => {
       banco.db.insert(acordosAfiliados).values({
         parceiroId: parceiro!.id,
         ofertaId: oferta!.id,
+        moeda: 'BRL',
         percentualPontosBase: 10_001,
         inicio: new Date('2026-09-01T00:00:00.000Z'),
       }),

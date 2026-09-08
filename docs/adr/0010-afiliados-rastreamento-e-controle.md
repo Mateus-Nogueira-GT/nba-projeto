@@ -17,6 +17,9 @@ contratos ainda estão em definição; as integrações atuais fornecem somente 
 - Clique, visita NIP, saída para casa e resultado importado são fatos diferentes.
 - Relatórios entram por CSV, passam por prévia e só geram comissão após confirmação
   administrativa. Checksum do arquivo e ID externo por casa evitam duplicação.
+- Cada linha conciliada referencia explicitamente a atribuição de primeiro toque e a
+  versão do acordo. Link divergente, versão ausente ou moeda incompatível permanecem
+  pendentes; a data do evento não escolhe contrato automaticamente.
 - O livro preserva base, percentual versionado, moeda, ajustes e origem. Moedas não
   são somadas entre si.
 - Recebimento da casa, liberação de comissão e repasse ao parceiro são registros

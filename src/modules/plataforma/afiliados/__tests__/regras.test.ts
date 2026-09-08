@@ -72,9 +72,9 @@ describe('importação comercial', () => {
   it('distingue ausente de zero e não soma total híbrido aos componentes', () => {
     const previa = prepararImportacaoCsv(
       [
-        'id_externo;indicado;data_evento;tipo;moeda;cpa_centavos;revshare_centavos;total_centavos;codigo_link',
-        'evt-1;ma***@email.test;2026-09-08T10:00:00.000Z;HIBRIDO;BRL;10000;2500;12500;nip-a',
-        'evt-2;an***@email.test;2026-09-08T11:00:00.000Z;CPA;BRL;0;;;nip-a',
+        'id_externo;indicado;data_evento;tipo;moeda;cpa_centavos;revshare_centavos;total_centavos;codigo_link;atribuicao_id;acordo_id',
+        'evt-1;mateus@email.test;2026-09-08T10:00:00.000Z;HIBRIDO;BRL;10000;2500;12500;nip-a;;',
+        'evt-2;an***@email.test;2026-09-08T11:00:00.000Z;CPA;BRL;0;;;nip-a;;',
       ].join('\n'),
     )
 
@@ -85,6 +85,7 @@ describe('importação comercial', () => {
       revshareCentavos: 2_500,
       totalCentavos: 12_500,
       baseConfirmadaCentavos: 12_500,
+      indicadoMascarado: 'ma***@email.test',
     })
     expect(previa.linhas[1]).toMatchObject({
       cpaCentavos: 0,
@@ -97,8 +98,8 @@ describe('importação comercial', () => {
   it('rejeita datas e valores monetários ambíguos', () => {
     const previa = prepararImportacaoCsv(
       [
-        'id_externo;indicado;data_evento;tipo;moeda;cpa_centavos;revshare_centavos;total_centavos;codigo_link',
-        'evt-1;pessoa;08/09/2026;CPA;BRL;1.000,00;;;nip-a',
+        'id_externo;indicado;data_evento;tipo;moeda;cpa_centavos;revshare_centavos;total_centavos;codigo_link;atribuicao_id;acordo_id',
+        'evt-1;pessoa;08/09/2026;CPA;BRL;1.000,00;;;nip-a;;',
       ].join('\n'),
     )
     expect(previa.linhas).toEqual([])

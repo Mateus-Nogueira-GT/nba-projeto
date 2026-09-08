@@ -23,8 +23,8 @@ cadastro próprio, URL HTTPS e host exato homologado.
 Arquivo UTF-8 separado por ponto e vírgula, com no máximo 1 MB e 10.000 linhas:
 
 ```csv
-id_externo;indicado;data_evento;tipo;moeda;cpa_centavos;revshare_centavos;total_centavos;codigo_link
-evento-001;ma***@exemplo.com;2026-09-08T10:00:00.000Z;HIBRIDO;BRL;10000;2500;12500;nip-campanha
+id_externo;indicado;data_evento;tipo;moeda;cpa_centavos;revshare_centavos;total_centavos;codigo_link;atribuicao_id;acordo_id
+evento-001;ma***@exemplo.com;2026-09-08T10:00:00.000Z;HIBRIDO;BRL;10000;2500;12500;nip-campanha;00000000-0000-4000-8000-000000000001;00000000-0000-4000-8000-000000000002
 ```
 
 - `data_evento`: ISO 8601 UTC.
@@ -33,9 +33,15 @@ evento-001;ma***@exemplo.com;2026-09-08T10:00:00.000Z;HIBRIDO;BRL;10000;2500;125
 - em híbrido, `total_centavos` é a base quando informado; não somar o total novamente
   aos componentes.
 - `id_externo` é único dentro da casa. Arquivo com o mesmo checksum é reutilizado.
+- `atribuicao_id` identifica a janela interna de primeiro toque e `acordo_id` fixa a
+  versão, o parceiro, a oferta e a moeda. Enquanto a casa não devolver identificadores
+  conciliáveis, a operação deve enriquecer o arquivo com evidência auditável ou manter
+  a linha pendente.
+- `indicado` é mascarado novamente no servidor; não usar o arquivo para expor PII.
 
 Upload cria uma prévia. Linhas sem link compatível ficam pendentes; confirmar o lote
-publica somente linhas válidas e procura o acordo vigente na data do evento.
+é bloqueado enquanto houver erro ou pendência. A tela mostra o resultado de cada linha
+e a versão do acordo é explícita, sem inferir um marco de vigência ainda não homologado.
 
 ## Liquidação manual
 

@@ -13,6 +13,7 @@ import {
   criarParceiro,
   criarPreviaImportacao,
   definirStatusLink,
+  definirStatusOferta,
   definirStatusParceiro,
   liberarComissao,
   painelDoAfiliado,
@@ -82,6 +83,7 @@ async function contexto() {
     {
       parceiroId: parceiroA.id,
       ofertaId: oferta.id,
+      moeda: 'BRL',
       percentualPontosBase: 4_000,
       inicio: new Date('2026-09-01T00:00:00.000Z'),
     },
@@ -180,15 +182,43 @@ describe('operação de afiliados', () => {
         agora: new Date('2026-09-12T00:02:00.000Z'),
       }),
     ).toContain('https://ofertas.casa.test/nba')
+    const previaDivergente = await criarPreviaImportacao(
+      banco.db,
+      c.admin,
+      {
+        ofertaId: c.oferta.id,
+        arquivoNome: 'divergencia.csv',
+        conteudo: [
+          'id_externo;indicado;data_evento;tipo;moeda;cpa_centavos;revshare_centavos;total_centavos;codigo_link;atribuicao_id;acordo_id',
+          `div-${c.linkB.codigo};pessoa@teste.com;2026-09-12T00:03:00.000Z;CPA;BRL;1000;;;${c.linkB.codigo};${segundo.atribuicaoId};${c.acordoA.id}`,
+        ].join('\n'),
+      },
+      new Date('2026-09-12T01:00:00.000Z'),
+    )
+    expect(previaDivergente).toMatchObject({ validas: 0, pendentes: 1 })
+    await expect(
+      confirmarImportacao(
+        banco.db,
+        c.admin,
+        previaDivergente.loteId,
+        new Date('2026-09-12T02:00:00.000Z'),
+      ),
+    ).rejects.toThrow('pendências')
     expect((await painelDoAfiliado(banco.db, c.usuarioA.id)).totais.cliquesObservados).toBe(1)
     expect((await painelDoAfiliado(banco.db, c.usuarioB.id)).totais.cliquesObservados).toBe(1)
   })
 
   it('confirma CSV uma vez, calcula a parcela e controla repasse manual parcial', async () => {
     const c = await contexto()
+    const clique = await registrarClique(banco.db, {
+      codigo: c.linkA.codigo,
+      visitanteToken: `conversao-${c.linkA.codigo}`,
+      agora: new Date('2026-09-02T10:00:00.000Z'),
+      automatizado: false,
+    })
     const csv = [
-      'id_externo;indicado;data_evento;tipo;moeda;cpa_centavos;revshare_centavos;total_centavos;codigo_link',
-      `evt-${c.linkA.codigo};ma***@teste.com;2026-09-08T10:00:00.000Z;HIBRIDO;BRL;10000;2500;12500;${c.linkA.codigo}`,
+      'id_externo;indicado;data_evento;tipo;moeda;cpa_centavos;revshare_centavos;total_centavos;codigo_link;atribuicao_id;acordo_id',
+      `evt-${c.linkA.codigo};mateus@teste.com;2026-09-08T10:00:00.000Z;HIBRIDO;BRL;10000;2500;12500;${c.linkA.codigo};${clique.atribuicaoId};${c.acordoA.id}`,
     ].join('\n')
     const importadoEm = new Date('2026-09-08T11:00:00.000Z')
     const previa = await criarPreviaImportacao(
@@ -224,12 +254,29 @@ describe('operação de afiliados', () => {
     )
     expect(confirmadaNovamente.comissoesCriadas).toBe(0)
 
-    const liberacao = await liberarComissao(
-      banco.db,
-      c.admin,
-      { comissaoId: confirmada.comissaoIds[0]!, valorCentavos: 3_000, motivo: 'liberação manual' },
-      new Date('2026-09-09T00:00:00.000Z'),
+    const tentativasLiberacao = await Promise.allSettled([
+      liberarComissao(
+        banco.db,
+        c.admin,
+        { comissaoId: confirmada.comissaoIds[0]!, valorCentavos: 3_000, motivo: 'lote A' },
+        new Date('2026-09-09T00:00:00.000Z'),
+      ),
+      liberarComissao(
+        banco.db,
+        c.admin,
+        { comissaoId: confirmada.comissaoIds[0]!, valorCentavos: 3_000, motivo: 'lote B' },
+        new Date('2026-09-09T00:00:00.000Z'),
+      ),
+    ])
+    expect(
+      tentativasLiberacao.filter((resultado) => resultado.status === 'fulfilled'),
+    ).toHaveLength(1)
+    expect(tentativasLiberacao.filter((resultado) => resultado.status === 'rejected')).toHaveLength(
+      1,
     )
+    const liberacao = tentativasLiberacao.find((resultado) => resultado.status === 'fulfilled')
+    if (!liberacao || liberacao.status !== 'fulfilled')
+      throw new Error('Liberação esperada ausente')
     const repasse = await registrarRepasse(
       banco.db,
       c.admin,
@@ -239,7 +286,7 @@ describe('operação de afiliados', () => {
         valorCentavos: 2_000,
         referenciaExterna: `pix-${c.linkA.codigo}`,
         pagoEm: new Date('2026-09-10T00:00:00.000Z'),
-        alocacoes: [{ liberacaoId: liberacao.id, valorCentavos: 2_000 }],
+        alocacoes: [{ liberacaoId: liberacao.value.id, valorCentavos: 2_000 }],
       },
       new Date('2026-09-10T00:00:00.000Z'),
     )
@@ -254,7 +301,7 @@ describe('operação de afiliados', () => {
           valorCentavos: 2_000,
           referenciaExterna: `pix-excesso-${c.linkA.codigo}`,
           pagoEm: new Date('2026-09-10T00:01:00.000Z'),
-          alocacoes: [{ liberacaoId: liberacao.id, valorCentavos: 2_000 }],
+          alocacoes: [{ liberacaoId: liberacao.value.id, valorCentavos: 2_000 }],
         },
         new Date('2026-09-10T00:01:00.000Z'),
       ),
@@ -278,9 +325,16 @@ describe('operação de afiliados', () => {
     )
     expect(recebimento.valorCentavos).toBe(8_000)
 
+    const clique = await registrarClique(banco.db, {
+      codigo: c.linkA.codigo,
+      visitanteToken: `ajuste-${c.linkA.codigo}`,
+      agora: new Date('2026-09-02T10:00:00.000Z'),
+      automatizado: false,
+    })
+
     const csv = [
-      'id_externo;indicado;data_evento;tipo;moeda;cpa_centavos;revshare_centavos;total_centavos;codigo_link',
-      `ajuste-${c.linkA.codigo};ma***@teste.com;2026-09-08T10:00:00.000Z;CPA;BRL;10000;;;${c.linkA.codigo}`,
+      'id_externo;indicado;data_evento;tipo;moeda;cpa_centavos;revshare_centavos;total_centavos;codigo_link;atribuicao_id;acordo_id',
+      `ajuste-${c.linkA.codigo};ma***@teste.com;2026-09-08T10:00:00.000Z;CPA;BRL;10000;;;${c.linkA.codigo};${clique.atribuicaoId};${c.acordoA.id}`,
     ].join('\n')
     const previa = await criarPreviaImportacao(
       banco.db,
@@ -312,6 +366,16 @@ describe('operação de afiliados', () => {
     ).rejects.toThrow('Link indisponível')
 
     await definirStatusLink(banco.db, c.admin, c.linkA.id, true, agora)
+    await definirStatusOferta(banco.db, c.admin, c.oferta.id, 'PAUSADA', agora)
+    await expect(
+      registrarClique(banco.db, {
+        codigo: c.linkA.codigo,
+        visitanteToken: 'visitante-oferta-pausada',
+        agora,
+        automatizado: false,
+      }),
+    ).rejects.toThrow('Oferta indisponível')
+    await definirStatusOferta(banco.db, c.admin, c.oferta.id, 'ATIVA', agora)
     await definirStatusParceiro(banco.db, c.admin, c.parceiroA.id, 'SUSPENSO', agora)
     await expect(painelDoAfiliado(banco.db, c.usuarioA.id)).rejects.toThrow(
       'Acesso de afiliado exigido',

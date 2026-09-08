@@ -30,6 +30,7 @@ it('upgrade/rollback aditivo preserva dados anteriores de preferências, canais 
   await ocultarJogador(banco.db, usuarioId, jogador!.id)
   await atualizarPreferenciaPush(banco.db, usuarioId, { canal: 'GREEN', habilitado: false })
 
+  await banco.pg.exec(readFileSync('drizzle/down/0021_flashy_texas_twister.sql', 'utf8'))
   await banco.pg.exec(readFileSync('drizzle/down/0020_new_brood.sql', 'utf8'))
   await banco.pg.exec(readFileSync('drizzle/down/0019_demonic_silver_surfer.sql', 'utf8'))
   await banco.pg.exec(readFileSync('drizzle/down/0018_experiencia_por_conta.sql', 'utf8'))
@@ -54,7 +55,11 @@ it('upgrade/rollback aditivo preserva dados anteriores de preferências, canais 
     lente: 'ODDS',
   })
 
-  for (const arquivo of ['drizzle/0019_demonic_silver_surfer.sql', 'drizzle/0020_new_brood.sql']) {
+  for (const arquivo of [
+    'drizzle/0019_demonic_silver_surfer.sql',
+    'drizzle/0020_new_brood.sql',
+    'drizzle/0021_flashy_texas_twister.sql',
+  ]) {
     for (const sql of readFileSync(arquivo, 'utf8').split('--> statement-breakpoint')) {
       if (sql.trim()) await banco.pg.exec(sql)
     }

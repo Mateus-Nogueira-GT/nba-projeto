@@ -24,6 +24,10 @@ mkdirSync(DIR_DOWN, { recursive: true })
 const CONSTRAINTS_ANTERIORES = {
   // Antes da 0012: uma linha por (dia, estratégia). A 0012 acrescenta jogo_id.
   feed_snapshot_unico: 'UNIQUE ("data_referencia", "estrategia")',
+  // A 0020 abre espaço para ajustes negativos, preservando a validação original
+  // quando ela é revertida.
+  comissoes_afiliados_valores_validos:
+    'CHECK ("base_nip_centavos" >= 0 and "parcela_parceiro_centavos" >= 0 and "percentual_pontos_base" between 0 and 10000)',
 }
 
 /** Comandos cuja inversão é conhecida. Qualquer outro derruba o script. */
@@ -47,6 +51,10 @@ const INVERSORES = [
   {
     reconhece: /^ALTER TABLE "([a-z_]+)" ADD COLUMN "([a-z_]+)"/i,
     inverte: (m) => `ALTER TABLE "${m[1]}" DROP COLUMN IF EXISTS "${m[2]}";`,
+  },
+  {
+    reconhece: /^ALTER TABLE "([a-z_]+)" ALTER COLUMN "([a-z_]+)" DROP NOT NULL/i,
+    inverte: (m) => `ALTER TABLE "${m[1]}" ALTER COLUMN "${m[2]}" SET NOT NULL;`,
   },
   /**
    * Índice ganha DROP explícito.

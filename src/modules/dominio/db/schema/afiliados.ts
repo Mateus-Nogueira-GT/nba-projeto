@@ -1,5 +1,6 @@
 import { sql } from 'drizzle-orm'
 import {
+  type AnyPgColumn,
   boolean,
   check,
   index,
@@ -94,6 +95,7 @@ export const acordosAfiliados = pgTable(
     ofertaId: uuid('oferta_id')
       .notNull()
       .references(() => ofertasAfiliados.id),
+    moeda: text('moeda').notNull(),
     percentualPontosBase: integer('percentual_pontos_base').notNull(),
     inicio: timestamp('inicio', { withTimezone: true }).notNull(),
     fim: timestamp('fim', { withTimezone: true }),
@@ -107,6 +109,7 @@ export const acordosAfiliados = pgTable(
       'acordos_afiliados_percentual_valido',
       sql`${t.percentualPontosBase} between 0 and 10000`,
     ),
+    check('acordos_afiliados_moeda_valida', sql`${t.moeda} ~ '^[A-Z]{3}$'`),
     check('acordos_afiliados_intervalo_valido', sql`${t.fim} is null or ${t.fim} > ${t.inicio}`),
   ],
 )
@@ -226,6 +229,9 @@ export const lotesImportacaoAfiliados = pgTable(
       .references(() => ofertasAfiliados.id),
     arquivoNome: text('arquivo_nome').notNull(),
     checksum: text('checksum').notNull(),
+    resumoPrevia: jsonb('resumo_previa')
+      .$type<{ erros: string[]; validas: number; pendentes: number; duplicadas: number }>()
+      .notNull(),
     estado: text('estado').notNull().default('PREVIA'),
     importadoPorId: uuid('importado_por_id').references(() => usuarios.id, {
       onDelete: 'set null',
@@ -258,6 +264,8 @@ export const itensImportacaoAfiliados = pgTable(
     ofertaId: uuid('oferta_id')
       .notNull()
       .references(() => ofertasAfiliados.id),
+    atribuicaoId: uuid('atribuicao_id').references(() => atribuicoesAfiliados.id),
+    acordoId: uuid('acordo_id').references(() => acordosAfiliados.id),
     parceiroId: uuid('parceiro_id').references(() => parceirosAfiliados.id),
     campanhaId: uuid('campanha_id').references(() => campanhasAfiliados.id),
     linkId: uuid('link_id').references(() => linksAfiliados.id),
@@ -305,7 +313,9 @@ export const comissoesAfiliados = pgTable(
     percentualPontosBase: integer('percentual_pontos_base').notNull(),
     parcelaParceiroCentavos: integer('parcela_parceiro_centavos').notNull(),
     estado: text('estado').notNull().default('CONFIRMADA'),
-    ajusteDeId: uuid('ajuste_de_id'),
+    ajusteDeId: uuid('ajuste_de_id').references((): AnyPgColumn => comissoesAfiliados.id, {
+      onDelete: 'restrict',
+    }),
     motivoAjuste: text('motivo_ajuste'),
     criadoEm: timestamp('criado_em', { withTimezone: true }).notNull().defaultNow(),
   },

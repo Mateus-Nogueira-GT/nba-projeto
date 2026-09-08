@@ -1,6 +1,6 @@
 import { createHash, randomBytes } from 'node:crypto'
 
-import { and, desc, eq, gt, gte, inArray, isNull, lt, lte, ne, or, sql } from 'drizzle-orm'
+import { and, desc, eq, gt, gte, inArray, lt, ne, sql } from 'drizzle-orm'
 
 import {
   acordosAfiliados,
@@ -204,6 +204,7 @@ export async function criarAcordo(
   entrada: {
     parceiroId: string
     ofertaId: string
+    moeda: string
     percentualPontosBase: number
     inicio: Date
     fim?: Date | null
@@ -212,6 +213,7 @@ export async function criarAcordo(
 ) {
   exigirAdmin(ator)
   calcularParcelaDoParceiro(0, entrada.percentualPontosBase)
+  if (!/^[A-Z]{3}$/.test(entrada.moeda)) throw new Error('Moeda inválida')
   const [acordo] = await db
     .insert(acordosAfiliados)
     .values({ ...entrada, fim: entrada.fim ?? null, criadoPorId: ator.usuarioId, criadoEm: agora })
@@ -465,7 +467,11 @@ export async function registrarClique(
       })
     }
     return {
-      destino: await resolverLinkSemRegistrar(tx, entrada.codigo),
+      destino:
+        configuracao.link.tipoDestino === 'NIP'
+          ? caminhoNipSeguro(configuracao.link.caminhoNip)
+          : destinoDaCasa(configuracao.link, configuracao.oferta),
+      atribuicaoId: atribuicao.id,
       parceiroTitularId: atribuicao.parceiroId,
       atribuicaoExpiraEm: atribuicao.expiraEm,
     }
@@ -484,6 +490,7 @@ export async function registrarSaidaParaCasa(
     .where(
       and(
         eq(atribuicoesAfiliados.visitanteHash, visitanteHash),
+        eq(atribuicoesAfiliados.estado, 'ATIVA'),
         gt(atribuicoesAfiliados.expiraEm, entrada.agora),
       ),
     )
@@ -537,7 +544,6 @@ export async function criarPreviaImportacao(
 ) {
   exigirAdmin(ator)
   const previa = prepararImportacaoCsv(entrada.conteudo)
-  if (previa.erros.length > 0) throw new Error(previa.erros.join('; '))
   const checksum = createHash('sha256').update(entrada.conteudo).digest('hex')
   const [oferta] = await db
     .select()
@@ -555,8 +561,7 @@ export async function criarPreviaImportacao(
       ),
     )
     .limit(1)
-  if (existente)
-    return { loteId: existente.id, reutilizada: true, validas: 0, pendentes: 0, duplicadas: 0 }
+  if (existente) return { loteId: existente.id, reutilizada: true, ...existente.resumoPrevia }
 
   return db.transaction(async (tx) => {
     const [lote] = await tx
@@ -566,50 +571,107 @@ export async function criarPreviaImportacao(
         ofertaId: oferta.id,
         arquivoNome: entrada.arquivoNome.slice(0, 180),
         checksum,
+        resumoPrevia: { erros: previa.erros, validas: 0, pendentes: 0, duplicadas: 0 },
         importadoPorId: ator.usuarioId,
         criadoEm: agora,
       })
       .returning()
+
+    const codigos = [
+      ...new Set(previa.linhas.map((linha) => linha.codigoLink).filter(Boolean)),
+    ] as string[]
+    const atribuicoesIds = [
+      ...new Set(previa.linhas.map((linha) => linha.atribuicaoId).filter(Boolean)),
+    ] as string[]
+    const acordosIds = [
+      ...new Set(previa.linhas.map((linha) => linha.acordoId).filter(Boolean)),
+    ] as string[]
+    const idsExternos = previa.linhas.map((linha) => linha.idExterno)
+    const [linksEncontrados, atribuicoes, acordos, existentes] = await Promise.all([
+      codigos.length
+        ? tx.select().from(linksAfiliados).where(inArray(linksAfiliados.codigo, codigos))
+        : Promise.resolve([]),
+      atribuicoesIds.length
+        ? tx
+            .select()
+            .from(atribuicoesAfiliados)
+            .where(inArray(atribuicoesAfiliados.id, atribuicoesIds))
+        : Promise.resolve([]),
+      acordosIds.length
+        ? tx.select().from(acordosAfiliados).where(inArray(acordosAfiliados.id, acordosIds))
+        : Promise.resolve([]),
+      idsExternos.length
+        ? tx
+            .select({ idExterno: itensImportacaoAfiliados.idExterno })
+            .from(itensImportacaoAfiliados)
+            .where(
+              and(
+                eq(itensImportacaoAfiliados.casaId, oferta.casaId),
+                inArray(itensImportacaoAfiliados.idExterno, idsExternos),
+              ),
+            )
+        : Promise.resolve([]),
+    ])
+    const campanhasIds = [...new Set(linksEncontrados.map((link) => link.campanhaId))]
+    const campanhas = campanhasIds.length
+      ? await tx
+          .select()
+          .from(campanhasAfiliados)
+          .where(inArray(campanhasAfiliados.id, campanhasIds))
+      : []
+    const linksPorCodigo = new Map(linksEncontrados.map((link) => [link.codigo, link]))
+    const campanhasPorId = new Map(campanhas.map((campanha) => [campanha.id, campanha]))
+    const atribuicoesPorId = new Map(atribuicoes.map((atribuicao) => [atribuicao.id, atribuicao]))
+    const acordosPorId = new Map(acordos.map((acordo) => [acordo.id, acordo]))
+    const idsExistentes = new Set(existentes.map((item) => item.idExterno))
+
     let validas = 0
     let pendentes = 0
     let duplicadas = 0
+    const itens: (typeof itensImportacaoAfiliados.$inferInsert)[] = []
     for (const linha of previa.linhas) {
-      const [jaExiste] = await tx
-        .select({ id: itensImportacaoAfiliados.id })
-        .from(itensImportacaoAfiliados)
-        .where(
-          and(
-            eq(itensImportacaoAfiliados.casaId, oferta.casaId),
-            eq(itensImportacaoAfiliados.idExterno, linha.idExterno),
-          ),
-        )
-        .limit(1)
-      if (jaExiste) {
+      if (idsExistentes.has(linha.idExterno)) {
         duplicadas += 1
         continue
       }
-      const [link] = linha.codigoLink
-        ? await tx
-            .select()
-            .from(linksAfiliados)
-            .where(eq(linksAfiliados.codigo, linha.codigoLink))
-            .limit(1)
-        : []
-      const [campanha] = link
-        ? await tx
-            .select()
-            .from(campanhasAfiliados)
-            .where(eq(campanhasAfiliados.id, link.campanhaId))
-            .limit(1)
-        : []
-      const conciliado = Boolean(campanha && campanha.ofertaId === oferta.id)
+      const link = linha.codigoLink ? linksPorCodigo.get(linha.codigoLink) : undefined
+      const campanha = link ? campanhasPorId.get(link.campanhaId) : undefined
+      const atribuicao = linha.atribuicaoId ? atribuicoesPorId.get(linha.atribuicaoId) : undefined
+      const acordo = linha.acordoId ? acordosPorId.get(linha.acordoId) : undefined
+      const motivos: string[] = []
+      if (!link || !campanha || campanha.ofertaId !== oferta.id)
+        motivos.push('link ausente ou incompatível com a oferta')
+      if (!atribuicao) motivos.push('atribuição explícita ausente ou inválida')
+      if (
+        atribuicao &&
+        link &&
+        (atribuicao.linkOrigemId !== link.id || atribuicao.parceiroId !== campanha?.parceiroId)
+      )
+        motivos.push('link diverge do titular do primeiro toque')
+      if (
+        atribuicao &&
+        (linha.ocorridoEm < atribuicao.inicio || linha.ocorridoEm >= atribuicao.expiraEm)
+      )
+        motivos.push('evento fora da janela de atribuição')
+      if (!acordo) motivos.push('versão de acordo explícita ausente ou inválida')
+      if (
+        acordo &&
+        (!atribuicao ||
+          acordo.parceiroId !== atribuicao.parceiroId ||
+          acordo.ofertaId !== oferta.id ||
+          acordo.moeda !== linha.moeda)
+      )
+        motivos.push('acordo incompatível com parceiro, oferta ou moeda')
+      const conciliado = motivos.length === 0
       if (conciliado) validas += 1
       else pendentes += 1
-      await tx.insert(itensImportacaoAfiliados).values({
+      itens.push({
         loteId: lote!.id,
         casaId: oferta.casaId,
         ofertaId: oferta.id,
-        parceiroId: conciliado ? campanha!.parceiroId : null,
+        atribuicaoId: atribuicao?.id ?? null,
+        acordoId: acordo?.id ?? null,
+        parceiroId: conciliado ? atribuicao!.parceiroId : null,
         campanhaId: conciliado ? campanha!.id : null,
         linkId: conciliado ? link!.id : null,
         idExterno: linha.idExterno,
@@ -622,15 +684,21 @@ export async function criarPreviaImportacao(
         totalCentavos: linha.totalCentavos,
         baseConfirmadaCentavos: linha.baseConfirmadaCentavos,
         estado: conciliado ? 'VALIDO' : 'PENDENTE',
-        motivoPendencia: conciliado ? null : 'link ausente ou incompatível com a oferta',
+        motivoPendencia: conciliado ? null : motivos.join('; '),
       })
     }
+    for (let inicio = 0; inicio < itens.length; inicio += 500) {
+      await tx.insert(itensImportacaoAfiliados).values(itens.slice(inicio, inicio + 500))
+    }
+    const resumoPrevia = { erros: previa.erros, validas, pendentes, duplicadas }
+    await tx
+      .update(lotesImportacaoAfiliados)
+      .set({ resumoPrevia })
+      .where(eq(lotesImportacaoAfiliados.id, lote!.id))
     await auditar(tx, ator.usuarioId, 'IMPORTACAO_PREPARADA', 'LOTE_IMPORTACAO', lote!.id, agora, {
-      validas,
-      pendentes,
-      duplicadas,
+      ...resumoPrevia,
     })
-    return { loteId: lote!.id, reutilizada: false, validas, pendentes, duplicadas }
+    return { loteId: lote!.id, reutilizada: false, ...resumoPrevia }
   })
 }
 
@@ -670,6 +738,26 @@ export async function definirStatusLink(
   if (!link) throw new Error('Link não encontrado')
   await auditar(db, ator.usuarioId, ativo ? 'LINK_ATIVADO' : 'LINK_PAUSADO', 'LINK', linkId, agora)
   return link
+}
+
+export async function definirStatusOferta(
+  db: Db,
+  ator: AtorAfiliados,
+  ofertaId: string,
+  status: 'RASCUNHO' | 'ATIVA' | 'PAUSADA' | 'ENCERRADA',
+  agora: Date,
+) {
+  exigirAdmin(ator)
+  const [oferta] = await db
+    .update(ofertasAfiliados)
+    .set({ status, atualizadoEm: agora })
+    .where(eq(ofertasAfiliados.id, ofertaId))
+    .returning()
+  if (!oferta) throw new Error('Oferta não encontrada')
+  await auditar(db, ator.usuarioId, 'OFERTA_STATUS_ALTERADO', 'OFERTA', ofertaId, agora, {
+    status,
+  })
+  return oferta
 }
 
 export async function registrarRecebimentoCasa(
@@ -770,6 +858,9 @@ export async function confirmarImportacao(
         parcelaParceirosCentavos: 0,
       }
     }
+    if (lote.resumoPrevia.erros.length > 0 || lote.resumoPrevia.pendentes > 0) {
+      throw new Error('A prévia possui erros ou pendências de conciliação')
+    }
     const itens = await tx
       .select()
       .from(itensImportacaoAfiliados)
@@ -779,31 +870,25 @@ export async function confirmarImportacao(
           eq(itensImportacaoAfiliados.estado, 'VALIDO'),
         ),
       )
+    if (itens.length === 0) throw new Error('A prévia não possui linhas válidas')
+    const acordosIds = [...new Set(itens.map((item) => item.acordoId).filter(Boolean))] as string[]
+    const acordos = acordosIds.length
+      ? await tx.select().from(acordosAfiliados).where(inArray(acordosAfiliados.id, acordosIds))
+      : []
+    const acordosPorId = new Map(acordos.map((acordo) => [acordo.id, acordo]))
     let baseNipCentavos = 0
     let parcelaParceirosCentavos = 0
     const comissaoIds: string[] = []
     for (const item of itens) {
-      if (!item.parceiroId) continue
-      const [acordo] = await tx
-        .select()
-        .from(acordosAfiliados)
-        .where(
-          and(
-            eq(acordosAfiliados.parceiroId, item.parceiroId),
-            eq(acordosAfiliados.ofertaId, item.ofertaId),
-            lte(acordosAfiliados.inicio, item.ocorridoEm),
-            or(isNull(acordosAfiliados.fim), gt(acordosAfiliados.fim, item.ocorridoEm)),
-          ),
-        )
-        .orderBy(desc(acordosAfiliados.inicio))
-        .limit(1)
-      if (!acordo) {
-        await tx
-          .update(itensImportacaoAfiliados)
-          .set({ estado: 'PENDENTE', motivoPendencia: 'acordo aplicável não encontrado' })
-          .where(eq(itensImportacaoAfiliados.id, item.id))
-        continue
-      }
+      if (!item.parceiroId || !item.acordoId) throw new Error('Linha sem conciliação explícita')
+      const acordo = acordosPorId.get(item.acordoId)
+      if (
+        !acordo ||
+        acordo.parceiroId !== item.parceiroId ||
+        acordo.ofertaId !== item.ofertaId ||
+        acordo.moeda !== item.moeda
+      )
+        throw new Error('Versão de acordo incompatível com a linha')
       const parcela = calcularParcelaDoParceiro(
         item.baseConfirmadaCentavos,
         acordo.percentualPontosBase,
@@ -854,6 +939,9 @@ export async function liberarComissao(
   if (!Number.isSafeInteger(entrada.valorCentavos) || entrada.valorCentavos <= 0)
     throw new Error('Valor inválido')
   return db.transaction(async (tx) => {
+    await tx.execute(
+      sql`select id from ${comissoesAfiliados} where id = ${entrada.comissaoId} for update`,
+    )
     const [comissao] = await tx
       .select()
       .from(comissoesAfiliados)
@@ -907,6 +995,10 @@ export async function registrarRepasse(
   if (
     !Number.isSafeInteger(entrada.valorCentavos) ||
     entrada.valorCentavos <= 0 ||
+    entrada.alocacoes.length === 0 ||
+    entrada.alocacoes.some(
+      (alocacao) => !Number.isSafeInteger(alocacao.valorCentavos) || alocacao.valorCentavos <= 0,
+    ) ||
     totalAlocado !== entrada.valorCentavos
   ) {
     throw new Error('Valor do repasse não fecha com as alocações')
@@ -1080,10 +1172,6 @@ export async function painelDoAfiliado(
         (evento) => evento.tipo === 'CLIQUE' && !evento.automatizado,
       ).length,
       saidasParaCasa: eventos.filter((evento) => evento.tipo === 'SAIDA_CASA').length,
-      comissaoConfirmadaCentavos: comissoes
-        .filter((c) => c.estado === 'CONFIRMADA')
-        .reduce((soma, c) => soma + c.parcelaParceiroCentavos, 0),
-      repassadoCentavos: repasses.reduce((soma, repasse) => soma + repasse.valorCentavos, 0),
     },
     totaisPorMoeda: moedas.map((moeda) => ({
       moeda,
@@ -1102,20 +1190,25 @@ export async function painelAdministrativo(db: Db, filtro: FiltroPeriodoAfiliado
     parceiros,
     casasCadastradas,
     ofertas,
+    acordos,
     campanhas,
     links,
+    atribuicoes,
     eventos,
     comissoes,
     liberacoes,
     repasses,
     recebimentos,
     lotes,
+    itens,
   ] = await Promise.all([
     db.select().from(parceirosAfiliados).orderBy(desc(parceirosAfiliados.criadoEm)),
     db.select().from(casas).orderBy(casas.nome),
     db.select().from(ofertasAfiliados).orderBy(desc(ofertasAfiliados.criadoEm)),
+    db.select().from(acordosAfiliados).orderBy(desc(acordosAfiliados.inicio)),
     db.select().from(campanhasAfiliados).orderBy(desc(campanhasAfiliados.criadoEm)),
     db.select().from(linksAfiliados).orderBy(desc(linksAfiliados.criadoEm)),
+    db.select().from(atribuicoesAfiliados).orderBy(desc(atribuicoesAfiliados.inicio)).limit(200),
     db
       .select()
       .from(eventosAfiliados)
@@ -1154,33 +1247,30 @@ export async function painelAdministrativo(db: Db, filtro: FiltroPeriodoAfiliado
         ),
       ),
     db.select().from(lotesImportacaoAfiliados).orderBy(desc(lotesImportacaoAfiliados.criadoEm)),
+    db
+      .select()
+      .from(itensImportacaoAfiliados)
+      .orderBy(desc(itensImportacaoAfiliados.criadoEm))
+      .limit(200),
   ])
   return {
     parceiros,
     casas: casasCadastradas,
     ofertas,
+    acordos,
     campanhas,
     links,
+    atribuicoes,
     comissoes,
     liberacoes,
     repasses,
     lotes,
+    itens,
     totais: {
       cliquesObservados: eventos.filter(
         (evento) => evento.tipo === 'CLIQUE' && !evento.automatizado,
       ).length,
       saidasParaCasa: eventos.filter((evento) => evento.tipo === 'SAIDA_CASA').length,
-      receitaNipCentavos: comissoes
-        .filter((c) => c.estado === 'CONFIRMADA')
-        .reduce((soma, c) => soma + c.baseNipCentavos, 0),
-      parcelaParceirosCentavos: comissoes
-        .filter((c) => c.estado === 'CONFIRMADA')
-        .reduce((soma, c) => soma + c.parcelaParceiroCentavos, 0),
-      repassadoCentavos: repasses.reduce((soma, repasse) => soma + repasse.valorCentavos, 0),
-      recebidoCentavos: recebimentos.reduce(
-        (soma, recebimento) => soma + recebimento.valorCentavos,
-        0,
-      ),
     },
     totaisPorMoeda: [
       ...new Set([

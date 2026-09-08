@@ -274,6 +274,9 @@
   color: #9c3b3b;
   margin-bottom: 18px;
 }
+.linha .alertaInline {
+  color: #9c3b3b;
+}
 @media (max-width: 980px) {
   .gradeMetricas {
     grid-template-columns: repeat(2, 1fr);

@@ -19,6 +19,7 @@ import {
   acaoRecebimento,
   acaoRepasse,
   acaoStatusLink,
+  acaoStatusOferta,
   acaoStatusParceiro,
 } from './acoes'
 import { FormularioConvite } from './FormularioConvite'
@@ -203,6 +204,10 @@ export default async function PaginaAdminAfiliados({
                 Percentual do parceiro
                 <input name="percentual" type="number" min="0" max="100" step="0.01" required />
               </label>
+              <label>
+                Moeda do acordo
+                <input name="moeda" defaultValue="BRL" maxLength={3} required />
+              </label>
               <button
                 className={estilos.botao}
                 disabled={!painel.parceiros.length || !painel.ofertas.length}
@@ -259,6 +264,60 @@ export default async function PaginaAdminAfiliados({
               </button>
             </form>
           </div>
+        </section>
+
+        <section className={`${estilos.painel} ${estilos.largo}`}>
+          <h2>Casas e ofertas</h2>
+          <p>Ative somente destinos e condições já homologados.</p>
+          <table className={estilos.tabela}>
+            <thead>
+              <tr>
+                <th>Oferta</th>
+                <th>Casa</th>
+                <th>Modalidade</th>
+                <th>Moeda</th>
+                <th>Acordos</th>
+                <th>Status</th>
+                <th>Ação</th>
+              </tr>
+            </thead>
+            <tbody>
+              {painel.ofertas.map((oferta) => (
+                <tr key={oferta.id}>
+                  <td>{oferta.nome}</td>
+                  <td>{painel.casas.find((casa) => casa.id === oferta.casaId)?.nome ?? '—'}</td>
+                  <td>{oferta.modalidade}</td>
+                  <td>{oferta.moeda}</td>
+                  <td>
+                    {painel.acordos
+                      .filter((acordo) => acordo.ofertaId === oferta.id)
+                      .map((acordo) => (
+                        <small key={acordo.id} className={estilos.codigo}>
+                          {acordo.id} · {acordo.moeda} · {acordo.percentualPontosBase / 100}%
+                        </small>
+                      ))}
+                  </td>
+                  <td>{oferta.status}</td>
+                  <td>
+                    <form action={acaoStatusOferta}>
+                      <input type="hidden" name="id" value={oferta.id} />
+                      <input
+                        type="hidden"
+                        name="status"
+                        value={oferta.status === 'ATIVA' ? 'PAUSADA' : 'ATIVA'}
+                      />
+                      <button className={estilos.botaoSecundario}>
+                        {oferta.status === 'ATIVA' ? 'Pausar' : 'Ativar'}
+                      </button>
+                    </form>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {painel.ofertas.length === 0 ? (
+            <div className={estilos.vazio}>Nenhuma oferta cadastrada.</div>
+          ) : null}
         </section>
 
         <section className={`${estilos.painel} ${estilos.largo}`} id="links">
@@ -345,16 +404,55 @@ export default async function PaginaAdminAfiliados({
               Validar prévia
             </button>
           </form>
+          <details>
+            <summary>IDs recentes para conciliação manual</summary>
+            <ul className={estilos.lista}>
+              {painel.atribuicoes.map((atribuicao) => {
+                const link = painel.links.find((item) => item.id === atribuicao.linkOrigemId)
+                const parceiro = painel.parceiros.find((item) => item.id === atribuicao.parceiroId)
+                return (
+                  <li key={atribuicao.id} className={estilos.linha}>
+                    <div>
+                      <strong>{parceiro?.nomePublico ?? 'Parceiro removido'}</strong>
+                      <small className={estilos.codigo}>{atribuicao.id}</small>
+                      <small>
+                        Link de origem: {link ? `/r/${link.codigo}` : 'indisponível'} · expira em{' '}
+                        {dataCurta(atribuicao.expiraEm)}
+                      </small>
+                    </div>
+                  </li>
+                )
+              })}
+            </ul>
+          </details>
           <ul className={estilos.lista}>
             {painel.lotes.map((lote) => (
               <li key={lote.id} className={estilos.linha}>
                 <div>
                   <strong>{lote.arquivoNome}</strong>
                   <small>
-                    {lote.estado} · {dataCurta(lote.criadoEm)}
+                    {lote.estado} · {dataCurta(lote.criadoEm)} · {lote.resumoPrevia.validas} válidas
+                    · {lote.resumoPrevia.pendentes} pendentes · {lote.resumoPrevia.duplicadas}{' '}
+                    duplicadas
                   </small>
+                  {lote.resumoPrevia.erros.map((erro) => (
+                    <small key={erro} className={estilos.alertaInline}>
+                      {erro}
+                    </small>
+                  ))}
+                  {painel.itens
+                    .filter((item) => item.loteId === lote.id)
+                    .map((item) => (
+                      <small key={item.id}>
+                        {item.idExterno} · {item.estado}
+                        {item.motivoPendencia ? ` · ${item.motivoPendencia}` : ''}
+                      </small>
+                    ))}
                 </div>
-                {lote.estado === 'PREVIA' ? (
+                {lote.estado === 'PREVIA' &&
+                lote.resumoPrevia.erros.length === 0 &&
+                lote.resumoPrevia.pendentes === 0 &&
+                lote.resumoPrevia.validas > 0 ? (
                   <form action={acaoConfirmarImportacao}>
                     <input type="hidden" name="loteId" value={lote.id} />
                     <button className={estilos.botaoSecundario}>Confirmar</button>

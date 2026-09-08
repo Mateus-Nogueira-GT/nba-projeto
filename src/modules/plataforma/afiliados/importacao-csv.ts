@@ -11,6 +11,8 @@ export type LinhaImportada = {
   totalCentavos: number | null
   baseConfirmadaCentavos: number
   codigoLink: string | null
+  atribuicaoId: string | null
+  acordoId: string | null
 }
 
 export type PreviaImportacao = { linhas: LinhaImportada[]; erros: string[] }
@@ -25,7 +27,28 @@ const COLUNAS = [
   'revshare_centavos',
   'total_centavos',
   'codigo_link',
+  'atribuicao_id',
+  'acordo_id',
 ] as const
+
+function identificadorMascarado(valor: string): string | null {
+  const limpo = valor.trim().slice(0, 160)
+  if (!limpo) return null
+  if (limpo.includes('*')) return limpo
+  const email = /^([^@]+)@([^@]+)$/.exec(limpo)
+  if (email) return `${email[1]!.slice(0, 2)}***@${email[2]}`
+  const digitos = limpo.replace(/\D/g, '')
+  if (digitos.length >= 8) return `***${digitos.slice(-4)}`
+  return limpo.length < 3 ? '***' : `${limpo[0]}***${limpo.at(-1)}`
+}
+
+function uuidOpcional(valor: string, campo: string): string | null {
+  if (!valor) return null
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(valor)) {
+    throw new Error(`${campo} deve ser UUID`)
+  }
+  return valor.toLowerCase()
+}
 
 function separarCsv(linha: string): string[] {
   const campos: string[] = []
@@ -99,8 +122,31 @@ export function prepararImportacaoCsv(conteudo: string): PreviaImportacao {
     try {
       const campos = separarCsv(linhasTexto[indice]!)
       if (campos.length !== COLUNAS.length) throw new Error('quantidade de colunas inválida')
-      const [idExterno, indicado, dataEvento, tipoBruto, moeda, cpa, revshare, total, codigo] =
-        campos as [string, string, string, string, string, string, string, string, string]
+      const [
+        idExterno,
+        indicado,
+        dataEvento,
+        tipoBruto,
+        moeda,
+        cpa,
+        revshare,
+        total,
+        codigo,
+        atribuicaoId,
+        acordoId,
+      ] = campos as [
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+      ]
       if (!idExterno || idExterno.length > 160) throw new Error('id_externo inválido')
       if (ids.has(idExterno)) throw new Error('id_externo duplicado no arquivo')
       ids.add(idExterno)
@@ -115,7 +161,7 @@ export function prepararImportacaoCsv(conteudo: string): PreviaImportacao {
       const baseConfirmadaCentavos = totalCentavos ?? (cpaCentavos ?? 0) + (revshareCentavos ?? 0)
       linhas.push({
         idExterno,
-        indicadoMascarado: indicado || null,
+        indicadoMascarado: identificadorMascarado(indicado),
         ocorridoEm: dataIso(dataEvento),
         tipo: tipoBruto as TipoComissaoImportada,
         moeda,
@@ -124,6 +170,8 @@ export function prepararImportacaoCsv(conteudo: string): PreviaImportacao {
         totalCentavos,
         baseConfirmadaCentavos,
         codigoLink: codigo || null,
+        atribuicaoId: uuidOpcional(atribuicaoId, 'atribuicao_id'),
+        acordoId: uuidOpcional(acordoId, 'acordo_id'),
       })
     } catch (erro) {
       erros.push(`linha ${indice + 1}: ${erro instanceof Error ? erro.message : 'inválida'}`)

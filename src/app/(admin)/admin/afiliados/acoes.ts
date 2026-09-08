@@ -15,6 +15,7 @@ import {
   criarParceiro,
   criarPreviaImportacao,
   definirStatusLink,
+  definirStatusOferta,
   definirStatusParceiro,
   liberarComissao,
   registrarRecebimentoCasa,
@@ -39,12 +40,14 @@ function atualizar() {
 }
 
 export async function acaoCriarCasa(formulario: FormData): Promise<void> {
+  const ator = await atorAdmin()
   const nome = z.string().min(2).max(120).parse(texto(formulario, 'nome'))
-  await criarCasaComercial(getDb(), await atorAdmin(), nome, new Date())
+  await criarCasaComercial(getDb(), ator, nome, new Date())
   atualizar()
 }
 
 export async function acaoCriarParceiro(formulario: FormData): Promise<void> {
+  const ator = await atorAdmin()
   const entrada = z
     .object({
       nomePublico: z.string().min(2).max(120),
@@ -56,7 +59,7 @@ export async function acaoCriarParceiro(formulario: FormData): Promise<void> {
       codigo: texto(formulario, 'codigo').toLowerCase(),
       usuarioId: texto(formulario, 'usuarioId') || undefined,
     })
-  await criarParceiro(getDb(), await atorAdmin(), entrada, new Date())
+  await criarParceiro(getDb(), ator, entrada, new Date())
   atualizar()
 }
 
@@ -67,6 +70,7 @@ export async function acaoCriarConvite(
   formulario: FormData,
 ): Promise<EstadoConvite> {
   try {
+    const ator = await atorAdmin()
     const entrada = z.object({ email: z.email(), nomePublico: z.string().min(2).max(120) }).parse({
       email: texto(formulario, 'email'),
       nomePublico: texto(formulario, 'nomePublico'),
@@ -74,7 +78,7 @@ export async function acaoCriarConvite(
     const agora = new Date()
     const resultado = await criarConvite(
       getDb(),
-      await atorAdmin(),
+      ator,
       { ...entrada, expiraEm: new Date(agora.getTime() + 7 * 24 * 60 * 60_000) },
       agora,
     )
@@ -88,6 +92,7 @@ export async function acaoCriarConvite(
 }
 
 export async function acaoCriarOferta(formulario: FormData): Promise<void> {
+  const ator = await atorAdmin()
   const entrada = z
     .object({
       casaId: z.string().uuid(),
@@ -107,29 +112,33 @@ export async function acaoCriarOferta(formulario: FormData): Promise<void> {
       hostDestino: texto(formulario, 'hostDestino'),
       status: texto(formulario, 'status'),
     })
-  await criarOferta(getDb(), await atorAdmin(), entrada, new Date())
+  await criarOferta(getDb(), ator, entrada, new Date())
   atualizar()
 }
 
 export async function acaoCriarAcordo(formulario: FormData): Promise<void> {
+  const ator = await atorAdmin()
   const entrada = z
     .object({
       parceiroId: z.string().uuid(),
       ofertaId: z.string().uuid(),
+      moeda: z.string().regex(/^[A-Z]{3}$/),
       percentual: z.coerce.number().min(0).max(100),
     })
     .parse({
       parceiroId: texto(formulario, 'parceiroId'),
       ofertaId: texto(formulario, 'ofertaId'),
+      moeda: texto(formulario, 'moeda').toUpperCase(),
       percentual: texto(formulario, 'percentual'),
     })
   const agora = new Date()
   await criarAcordo(
     getDb(),
-    await atorAdmin(),
+    ator,
     {
       parceiroId: entrada.parceiroId,
       ofertaId: entrada.ofertaId,
+      moeda: entrada.moeda,
       percentualPontosBase: Math.round(entrada.percentual * 100),
       inicio: agora,
     },
@@ -139,6 +148,7 @@ export async function acaoCriarAcordo(formulario: FormData): Promise<void> {
 }
 
 export async function acaoCriarCampanha(formulario: FormData): Promise<void> {
+  const ator = await atorAdmin()
   const entrada = z
     .object({
       parceiroId: z.string().uuid(),
@@ -158,7 +168,7 @@ export async function acaoCriarCampanha(formulario: FormData): Promise<void> {
     })
   await criarCampanhaComLink(
     getDb(),
-    await atorAdmin(),
+    ator,
     {
       ...entrada,
       caminhoNip: entrada.tipoDestino === 'NIP' ? `/oferta/${entrada.codigo}` : null,
@@ -170,13 +180,14 @@ export async function acaoCriarCampanha(formulario: FormData): Promise<void> {
 }
 
 export async function acaoImportar(formulario: FormData): Promise<void> {
+  const ator = await atorAdmin()
   const ofertaId = z.string().uuid().parse(texto(formulario, 'ofertaId'))
   const arquivo = formulario.get('arquivo')
   if (!(arquivo instanceof File) || arquivo.size === 0) throw new Error('Arquivo CSV obrigatório')
   if (arquivo.size > 1024 * 1024) throw new Error('Arquivo maior que 1 MB')
   await criarPreviaImportacao(
     getDb(),
-    await atorAdmin(),
+    ator,
     {
       ofertaId,
       arquivoNome: arquivo.name,
@@ -188,9 +199,10 @@ export async function acaoImportar(formulario: FormData): Promise<void> {
 }
 
 export async function acaoConfirmarImportacao(formulario: FormData): Promise<void> {
+  const ator = await atorAdmin()
   await confirmarImportacao(
     getDb(),
-    await atorAdmin(),
+    ator,
     z.string().uuid().parse(texto(formulario, 'loteId')),
     new Date(),
   )
@@ -198,6 +210,7 @@ export async function acaoConfirmarImportacao(formulario: FormData): Promise<voi
 }
 
 export async function acaoRecebimento(formulario: FormData): Promise<void> {
+  const ator = await atorAdmin()
   const entrada = z
     .object({
       casaId: z.string().uuid(),
@@ -212,16 +225,12 @@ export async function acaoRecebimento(formulario: FormData): Promise<void> {
       referenciaExterna: texto(formulario, 'referenciaExterna'),
     })
   const agora = new Date()
-  await registrarRecebimentoCasa(
-    getDb(),
-    await atorAdmin(),
-    { ...entrada, recebidoEm: agora },
-    agora,
-  )
+  await registrarRecebimentoCasa(getDb(), ator, { ...entrada, recebidoEm: agora }, agora)
   atualizar()
 }
 
 export async function acaoLiberar(formulario: FormData): Promise<void> {
+  const ator = await atorAdmin()
   const entrada = z
     .object({
       comissaoId: z.string().uuid(),
@@ -233,11 +242,12 @@ export async function acaoLiberar(formulario: FormData): Promise<void> {
       valorCentavos: texto(formulario, 'valorCentavos'),
       motivo: texto(formulario, 'motivo'),
     })
-  await liberarComissao(getDb(), await atorAdmin(), entrada, new Date())
+  await liberarComissao(getDb(), ator, entrada, new Date())
   atualizar()
 }
 
 export async function acaoAjustarComissao(formulario: FormData): Promise<void> {
+  const ator = await atorAdmin()
   const entrada = z
     .object({
       comissaoOriginalId: z.string().uuid(),
@@ -252,11 +262,12 @@ export async function acaoAjustarComissao(formulario: FormData): Promise<void> {
       baseNipCentavos: texto(formulario, 'baseNipCentavos'),
       motivo: texto(formulario, 'motivo'),
     })
-  await registrarAjusteComissao(getDb(), await atorAdmin(), entrada, new Date())
+  await registrarAjusteComissao(getDb(), ator, entrada, new Date())
   atualizar()
 }
 
 export async function acaoRepasse(formulario: FormData): Promise<void> {
+  const ator = await atorAdmin()
   const entrada = z
     .object({
       parceiroId: z.string().uuid(),
@@ -277,7 +288,7 @@ export async function acaoRepasse(formulario: FormData): Promise<void> {
   const agora = new Date()
   await registrarRepasse(
     getDb(),
-    await atorAdmin(),
+    ator,
     {
       parceiroId: entrada.parceiroId,
       moeda: entrada.moeda,
@@ -293,20 +304,26 @@ export async function acaoRepasse(formulario: FormData): Promise<void> {
 }
 
 export async function acaoStatusParceiro(formulario: FormData): Promise<void> {
+  const ator = await atorAdmin()
   const id = z.string().uuid().parse(texto(formulario, 'id'))
   const status = z.enum(['ATIVO', 'SUSPENSO']).parse(texto(formulario, 'status'))
-  await definirStatusParceiro(getDb(), await atorAdmin(), id, status, new Date())
+  await definirStatusParceiro(getDb(), ator, id, status, new Date())
   atualizar()
 }
 
 export async function acaoStatusLink(formulario: FormData): Promise<void> {
+  const ator = await atorAdmin()
   const id = z.string().uuid().parse(texto(formulario, 'id'))
-  await definirStatusLink(
-    getDb(),
-    await atorAdmin(),
-    id,
-    texto(formulario, 'ativo') === 'true',
-    new Date(),
-  )
+  await definirStatusLink(getDb(), ator, id, texto(formulario, 'ativo') === 'true', new Date())
+  atualizar()
+}
+
+export async function acaoStatusOferta(formulario: FormData): Promise<void> {
+  const ator = await atorAdmin()
+  const id = z.string().uuid().parse(texto(formulario, 'id'))
+  const status = z
+    .enum(['RASCUNHO', 'ATIVA', 'PAUSADA', 'ENCERRADA'])
+    .parse(texto(formulario, 'status'))
+  await definirStatusOferta(getDb(), ator, id, status, new Date())
   atualizar()
 }
