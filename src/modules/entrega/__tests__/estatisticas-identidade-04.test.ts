@@ -23,7 +23,10 @@ import { hierarquiaDoTime } from '../estatisticas/time'
 const ruleset = carregarRuleset(readFileSync('config/ruleset.v1.yaml', 'utf8'))
 const AGORA = new Date('2026-09-05T18:00:00.000Z')
 const HOJE = '2026-09-05'
-const TEMPORADA = temporadaDe(AGORA, calendarioDoRuleset(ruleset))
+const CALENDARIO = calendarioDoRuleset(ruleset)
+const TEMPORADA = temporadaDe(AGORA, CALENDARIO)
+/** O que `telaDoJogador` precisa saber para recortar a temporada. */
+const RECORTE = { temporada: TEMPORADA, calendario: CALENDARIO }
 
 let banco: Awaited<ReturnType<typeof bancoDeTeste>>
 
@@ -186,7 +189,7 @@ describe('telaDoJogador — o número do jogador e as duas visões de time', () 
   it('traz a nota média recente (3–10) e o time na lista do CJ, rotulado à parte do time atual', async () => {
     const dias = await conferirRodadas(banco.db, HOJE, 7)
     const algum = dias.flatMap((d) => d.jogadores).find((j) => j.valor !== null)!
-    const tela = (await telaDoJogador(banco.db, algum.jogadorId, { temporada: TEMPORADA }))!
+    const tela = (await telaDoJogador(banco.db, algum.jogadorId, RECORTE))!
     expect(tela).not.toBeNull()
     expect(tela.notaMediaRecente).not.toBeNull()
     expect(tela.notaMediaRecente!).toBeGreaterThanOrEqual(3)
@@ -263,14 +266,18 @@ describe('hierarquiaDoTime — o depth chart do CJ com o desfalque em prefixo', 
  * linhas de distância no perfil. Enquanto cada uma decidia mando e adversário
  * por uma fonte (a lista do CJ ali, `jogadores.time_id` aqui), a MESMA partida
  * saía "vs SAS" na de cima e "@ MIA" na de baixo.
+ *
+ * A regra que serve às duas: o lado do jogador é o time que ESTÁ na partida —
+ * o real quando ele joga ali, o da lista quando não (e no jogo do apito ele
+ * está sempre, porque é dele que o apito nasceu). Ver `mandoDoJogador`.
  */
-describe('mando e adversário — uma fonte só para a tela inteira', () => {
+describe('mando e adversário — uma regra só para a tela inteira', () => {
   /** Um jogador cuja MESMA partida aparece nas duas seções do perfil. */
   async function partidaNasDuasSecoes() {
     const dias = await conferirRodadas(banco.db, HOJE, 7)
     for (const j of dias.flatMap((d) => d.jogadores)) {
       const lista = await apitosDoJogador(banco.db, j.jogadorId, 20)
-      const tela = (await telaDoJogador(banco.db, j.jogadorId, { temporada: TEMPORADA }))!
+      const tela = (await telaDoJogador(banco.db, j.jogadorId, RECORTE))!
       const apito = lista.find((a) => tela.historico.some((l) => l.jogoId === a.jogoId))
       if (apito) return { jogadorId: j.jogadorId, jogoId: apito.jogoId }
     }
@@ -280,7 +287,7 @@ describe('mando e adversário — uma fonte só para a tela inteira', () => {
   /** As duas leituras da MESMA partida, do jeito que a tela as imprime. */
   async function osDoisLados(jogadorId: string, jogoId: string) {
     const lista = await apitosDoJogador(banco.db, jogadorId, 20)
-    const tela = (await telaDoJogador(banco.db, jogadorId, { temporada: TEMPORADA }))!
+    const tela = (await telaDoJogador(banco.db, jogadorId, RECORTE))!
     const apito = lista.find((a) => a.jogoId === jogoId)!
     const linha = tela.historico.find((l) => l.jogoId === jogoId)!
     return {
@@ -297,7 +304,7 @@ describe('mando e adversário — uma fonte só para a tela inteira', () => {
       .from(jogadores)
       .where(eq(jogadores.id, jogadorId))
       .limit(1)
-    const tela = (await telaDoJogador(banco.db, jogadorId, { temporada: TEMPORADA }))!
+    const tela = (await telaDoJogador(banco.db, jogadorId, RECORTE))!
     const naLista = tela.timeNaListaDoCj!.id
 
     // O time REAL passa a ser o outro lado da MESMA partida: a divergência é
@@ -311,8 +318,9 @@ describe('mando e adversário — uma fonte só para a tela inteira', () => {
       const { apito, tabela } = await osDoisLados(jogadorId, jogoId)
 
       expect(apito).toEqual(tabela)
-      // E a fonte é o time REAL do provedor — a exceção da aba de estatísticas
-      // (CLAUDE.md): aqui se exibe dado canônico, não o elenco da estratégia.
+      // Com o time real EM QUADRA naquela partida, é ele o lado do jogador —
+      // a exceção que o CLAUDE.md escreve para esta aba: aqui se exibe dado
+      // canônico, não o elenco da estratégia.
       expect(apito.emCasa).toBe(jogo!.timeCasaId === real)
     } finally {
       await banco.db
@@ -322,7 +330,13 @@ describe('mando e adversário — uma fonte só para a tela inteira', () => {
     }
   })
 
-  it('sem o jogador em nenhum dos dois lados não há mando — nunca "@ o próprio time"', async () => {
+  it('elenco projetado do CJ: o time real fora da partida não apaga o adversário', async () => {
+    // A NORMA do produto, não o canto raro. Os elencos da lista são PROJETADOS
+    // (CLAUDE.md: Giannis no Miami, LeBron no Philadelphia) e o apito nasce
+    // grudado num jogo do time da LISTA — `montarFatos` monta `jogadoresPorTime`
+    // por `niveis.time_id`. Decidindo o mando só por `jogadores.time_id`, o time
+    // real não é nenhum dos dois lados daquele jogo e a seção de apitos virava
+    // uma coluna de "—" justamente no caso mais comum da plataforma.
     const { jogadorId, jogoId } = await partidaNasDuasSecoes()
     const [jogo] = await banco.db.select().from(jogos).where(eq(jogos.id, jogoId)).limit(1)
     const [original] = await banco.db
@@ -330,6 +344,8 @@ describe('mando e adversário — uma fonte só para a tela inteira', () => {
       .from(jogadores)
       .where(eq(jogadores.id, jogadorId))
       .limit(1)
+    const tela = (await telaDoJogador(banco.db, jogadorId, RECORTE))!
+    const naLista = tela.timeNaListaDoCj!.id
     const forasteiro = (await banco.db.select().from(times)).find(
       (t) => t.id !== jogo!.timeCasaId && t.id !== jogo!.timeVisitanteId,
     )!
@@ -339,6 +355,56 @@ describe('mando e adversário — uma fonte só para a tela inteira', () => {
         .update(jogadores)
         .set({ timeId: forasteiro.id })
         .where(eq(jogadores.id, jogadorId))
+      const { apito, tabela } = await osDoisLados(jogadorId, jogoId)
+
+      // O lado do jogador é o time que ESTÁ na partida: aqui, o da lista.
+      expect(apito.adversario).not.toBeNull()
+      expect(apito.emCasa).toBe(jogo!.timeCasaId === naLista)
+      // E as duas seções continuam dando a MESMA resposta.
+      expect(apito).toEqual(tabela)
+    } finally {
+      await banco.db
+        .update(jogadores)
+        .set({ timeId: original!.timeId })
+        .where(eq(jogadores.id, jogadorId))
+    }
+  })
+
+  it('sem o jogador em NENHUM dos dois vínculos não há mando — nunca "@ o próprio time"', async () => {
+    const { jogadorId, jogoId } = await partidaNasDuasSecoes()
+    const [jogo] = await banco.db.select().from(jogos).where(eq(jogos.id, jogoId)).limit(1)
+    const [original] = await banco.db
+      .select()
+      .from(jogadores)
+      .where(eq(jogadores.id, jogadorId))
+      .limit(1)
+    const [versao] = await banco.db
+      .select()
+      .from(niveisVersao)
+      .where(eq(niveisVersao.ativa, true))
+      .limit(1)
+    const vinculos = await banco.db
+      .select()
+      .from(niveis)
+      .where(and(eq(niveis.niveisVersaoId, versao!.id), eq(niveis.jogadorId, jogadorId)))
+    const forasteiro = (await banco.db.select().from(times)).find(
+      (t) => t.id !== jogo!.timeCasaId && t.id !== jogo!.timeVisitanteId,
+    )!
+
+    try {
+      // Os DOIS vínculos fora da partida — o que sobra do jogador trocado no
+      // meio da temporada (`jogadores.time_id` é o time ATUAL) e da
+      // reconciliação de nomes ainda por confirmar.
+      await banco.db
+        .update(jogadores)
+        .set({ timeId: forasteiro.id })
+        .where(eq(jogadores.id, jogadorId))
+      for (const vinculo of vinculos) {
+        await banco.db
+          .update(niveis)
+          .set({ timeId: forasteiro.id })
+          .where(eq(niveis.id, vinculo.id))
+      }
       const { apito, tabela } = await osDoisLados(jogadorId, jogoId)
 
       // Chutar `emCasa: false` fazia a tela imprimir "@ <time da casa>" — que
@@ -352,6 +418,12 @@ describe('mando e adversário — uma fonte só para a tela inteira', () => {
         .update(jogadores)
         .set({ timeId: original!.timeId })
         .where(eq(jogadores.id, jogadorId))
+      for (const vinculo of vinculos) {
+        await banco.db
+          .update(niveis)
+          .set({ timeId: vinculo.timeId })
+          .where(eq(niveis.id, vinculo.id))
+      }
     }
   })
 })
@@ -469,6 +541,63 @@ describe('apitosDoJogador — minuto que não chegou não é minuto zero', () =>
   })
 })
 
+/**
+ * O JOGO A JOGO É DA TEMPORADA QUE A TELA NOMEIA.
+ *
+ * A seção sai rotulada "temporada 2025-26" (artboard) e o hero, duas linhas
+ * acima, conta `medias_jogador` — que É filtrado por temporada. Enquanto a
+ * consulta do histórico filtrava só por jogador, a tabela podia atravessar
+ * duas temporadas por baixo daquele rótulo: "3 jogos · 2025-26" no hero, 23
+ * linhas na tabela, o mesmo nome de temporada nos dois.
+ */
+describe('telaDoJogador — o histórico é da temporada, não de tudo o que existe', () => {
+  it('deixa de fora a partida de outra temporada, com médias e contagem junto', async () => {
+    const dias = await conferirRodadas(banco.db, HOJE, 7)
+    const algum = dias.flatMap((d) => d.jogadores).find((j) => j.valor !== null)!
+    const antes = (await telaDoJogador(banco.db, algum.jogadorId, RECORTE))!
+
+    const [casa, visitante] = await banco.db.select().from(times).limit(2)
+    // Março de 2025: com `mes_inicio: 10`, é a temporada ANTERIOR à do teste.
+    const instante = new Date('2025-03-15T23:00:00.000Z')
+    expect(temporadaDe(instante, CALENDARIO)).not.toBe(TEMPORADA)
+    const [antiga] = await banco.db
+      .insert(jogos)
+      .values({
+        dataHoraUtc: instante,
+        dataReferencia: '2025-03-15',
+        timeCasaId: casa!.id,
+        timeVisitanteId: visitante!.id,
+        status: 'ENCERRADO',
+        placarCasa: 101,
+        placarVisitante: 99,
+      })
+      .returning()
+
+    try {
+      await banco.db.insert(estatisticasJogo).values({
+        jogoId: antiga!.id,
+        jogadorId: algum.jogadorId,
+        minutos: '44.00',
+        pontos: 51,
+        rebotesTotal: 14,
+        assistencias: 11,
+      })
+      const depois = (await telaDoJogador(banco.db, algum.jogadorId, RECORTE))!
+
+      expect(depois.historico.map((l) => l.jogoId)).not.toContain(antiga!.id)
+      expect(depois.historico.length).toBe(antes.historico.length)
+      // As médias de "Números completos" nascem da MESMA janela: um jogo de
+      // outra temporada dentro dela contamina o que a seção chama de "médias
+      // de 2025-26". `posse.minutos` sai de `somar()`, sem passar por
+      // `medias_jogador` — é onde o vazamento apareceria primeiro.
+      expect(depois.perfilNumeros.posse.minutos).toBe(antes.perfilNumeros.posse.minutos)
+    } finally {
+      await banco.db.delete(estatisticasJogo).where(eq(estatisticasJogo.jogoId, antiga!.id))
+      await banco.db.delete(jogos).where(eq(jogos.id, antiga!.id))
+    }
+  })
+})
+
 describe('telaDoJogador — o histórico diz quando foi cortado', () => {
   it('anuncia o corte no limite, para a tela não chamar de temporada o que é recorte', async () => {
     // O hero lê `jogosDisputados` de `medias_jogador` (a temporada inteira) e a
@@ -478,12 +607,12 @@ describe('telaDoJogador — o histórico diz quando foi cortado', () => {
     const dias = await conferirRodadas(banco.db, HOJE, 7)
     const algum = dias.flatMap((d) => d.jogadores).find((j) => j.valor !== null)!
 
-    const inteiro = (await telaDoJogador(banco.db, algum.jogadorId, { temporada: TEMPORADA }))!
+    const inteiro = (await telaDoJogador(banco.db, algum.jogadorId, RECORTE))!
     expect(inteiro.historicoCortado).toBe(false)
     expect(inteiro.historico.length).toBeGreaterThan(1)
 
     const cortado = (await telaDoJogador(banco.db, algum.jogadorId, {
-      temporada: TEMPORADA,
+      ...RECORTE,
       limiteHistorico: 1,
     }))!
     expect(cortado.historico.length).toBe(1)
@@ -518,7 +647,7 @@ describe('telaDoJogador — o histórico diz quando foi cortado', () => {
       await banco.db.delete(mediasJogador).where(onde)
 
       const cortado = (await telaDoJogador(banco.db, algum.jogadorId, {
-        temporada: TEMPORADA,
+        ...RECORTE,
         limiteHistorico: 1,
       }))!
       expect(cortado.historicoCortado).toBe(true)
@@ -527,7 +656,7 @@ describe('telaDoJogador — o histórico diz quando foi cortado', () => {
 
       // Sem médias E sem corte, o número é tudo o que existe: continua sendo
       // um retrato da temporada, e o hero pode nomeá-la.
-      const inteiro = (await telaDoJogador(banco.db, algum.jogadorId, { temporada: TEMPORADA }))!
+      const inteiro = (await telaDoJogador(banco.db, algum.jogadorId, RECORTE))!
       expect(inteiro.historicoCortado).toBe(false)
       expect(inteiro.jogosDisputadosDoRecorte).toBe(false)
     } finally {

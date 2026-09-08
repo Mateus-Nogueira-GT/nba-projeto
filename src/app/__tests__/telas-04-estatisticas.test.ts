@@ -9,9 +9,11 @@ import {
   estatisticasJogo,
   jogadores,
   jogos,
+  lesoesEscalacao,
   mediasJogador,
   times,
 } from '../../modules/dominio/db/schema'
+import { dataDeReferencia } from '../../modules/dominio/rodada'
 import { calendarioDoRuleset, temporadaDe } from '../../modules/dominio/temporada'
 import {
   apitosDoJogador,
@@ -19,6 +21,9 @@ import {
   telaDoJogador,
 } from '../../modules/entrega/estatisticas/jogador'
 import type { ApitoDoJogador, TelaJogador } from '../../modules/entrega/estatisticas/jogador'
+import { telaJogosDoDia } from '../../modules/entrega/estatisticas/jogos-do-dia'
+import { hierarquiaDoTime } from '../../modules/entrega/estatisticas/time'
+import type { LinhaHierarquia } from '../../modules/entrega/estatisticas/time'
 import { rulesetAtivo } from '../../modules/entrega/ruleset-ativo'
 import { simularAte } from '../../modules/ingestao/demo/temporada'
 import { LLMFake } from '../../modules/ingestao/llm'
@@ -53,6 +58,10 @@ let historicoDeApitos: ApitoDoJogador[]
 let semApito: string
 let fuso: string
 let temporada: string
+let calendario: ReturnType<typeof calendarioDoRuleset>
+/** O time sob teste, o jogo dele hoje e a hierarquia do CJ em pontos. */
+type SujeitoDoTime = { timeId: string; jogoId: string; hierarquia: LinhaHierarquia[] }
+let sujeito: SujeitoDoTime
 
 const USUARIO_DEMO = '00000000-0000-4000-8000-000000000001'
 vi.mock('../../modules/plataforma/auth/cookies', () => ({
@@ -85,7 +94,8 @@ beforeAll(async () => {
     .onConflictDoNothing()
 
   fuso = ruleset.rodada.fuso
-  temporada = temporadaDe(AGORA, calendarioDoRuleset(ruleset))
+  calendario = calendarioDoRuleset(ruleset)
+  temporada = temporadaDe(AGORA, calendario)
 
   const linhas = await banco.db
     .select({ jogadorId: apitos.jogadorId })
@@ -116,11 +126,39 @@ beforeAll(async () => {
   semApito = todos.find((j) => !apitados.has(j.id))!.id
   expect(semApito, 'a liga tem mais jogadores do que a lista do CJ').toBeDefined()
 
-  tela = (await telaDoJogador(banco.db, alvo, { temporada }))!
+  // O calendário vai junto: a tabela jogo a jogo NOMEIA a temporada, e `jogos`
+  // guarda a data, não o rótulo — é o calendário que faz uma virar a outra.
+  tela = (await telaDoJogador(banco.db, alvo, { temporada, calendario }))!
+
+  const escolhido = await escolherTime()
+  expect(
+    escolhido,
+    'a temporada simulada precisa de um time jogando hoje com a hierarquia inteira em quadra',
+  ).toBeDefined()
+  sujeito = escolhido!
 
   vi.useFakeTimers({ toFake: ['Date'] })
   vi.setSystemTime(AGORA)
 }, 300_000)
+
+/**
+ * O TIME SOB TESTE: um que jogue HOJE — é o jogo do dia que marca desfalque —
+ * e cuja hierarquia esteja INTEIRA em quadra. O desfalque é semeado pelo
+ * teste; um FORA vindo da simulação faria a asserção do prefixo passar (ou
+ * falhar) por acidente, sobre um jogador que o teste não escolheu.
+ */
+async function escolherTime(): Promise<SujeitoDoTime | undefined> {
+  const doDia = await telaJogosDoDia(banco.db, dataDeReferencia(AGORA, fuso), fuso)
+  for (const jogo of doDia.jogos) {
+    for (const lado of [jogo.casa, jogo.visitante]) {
+      const linhas = await hierarquiaDoTime(banco.db, lado.id, 'PONTOS', jogo.id)
+      if (linhas.length >= 3 && !linhas.some((l) => l.fora)) {
+        return { timeId: lado.id, jogoId: jogo.id, hierarquia: linhas }
+      }
+    }
+  }
+  return undefined
+}
 
 afterAll(async () => {
   vi.useRealTimers()
@@ -130,6 +168,13 @@ afterAll(async () => {
 async function renderizarJogador(id: string): Promise<string> {
   const { default: Pagina } = await import('../(app)/estatisticas/jogador/[id]/page')
   return renderToStaticMarkup(await Pagina({ params: Promise.resolve({ id }) }))
+}
+
+async function renderizarTime(id: string, busca: Record<string, string> = {}): Promise<string> {
+  const { default: Pagina } = await import('../(app)/estatisticas/time/[id]/page')
+  return renderToStaticMarkup(
+    await Pagina({ params: Promise.resolve({ id }), searchParams: Promise.resolve(busca) }),
+  )
 }
 
 /** Texto visível, sem marcação — para afirmar sobre rótulo e valor vizinhos. */
@@ -600,6 +645,22 @@ describe('tela do jogador · as duas visões de time', () => {
         .where(eq(jogadores.id, alvo))
     }
   }, 60_000)
+
+  it('coincidindo, a sigla repetida não vira um segundo link para o mesmo lugar', async () => {
+    // O caso comum: o time do provedor e o da lista do CJ são o mesmo. O apoio
+    // do hero escrevia a sigla duas vezes, as duas como link laranja
+    // sublinhado para o MESMO href — ruído a poucos pixels de distância, e
+    // dois destinos iguais na lista de links do leitor de tela. O artboard
+    // escreve as duas em texto comum; aqui a primeira leva ao time.
+    expect(tela.perfil.timeId).toBe(tela.timeNaListaDoCj!.id)
+    const hero = trecho(await renderizarJogador(alvo), 'TIME ATUAL', 'NOTA · ÚLT. 5')
+
+    expect((hero.match(/<a [^>]*estatisticas\/time[^>]*>/g) ?? []).length).toBe(1)
+    // E as DUAS visões continuam escritas — é o rótulo que separa uma da outra.
+    const visivel = texto(hero)
+    expect(visivel).toMatch(new RegExp(`TIME ATUAL\\s+${tela.perfil.timeSigla}`))
+    expect(visivel).toMatch(new RegExp(`NA LISTA DO CJ\\s+${tela.timeNaListaDoCj!.sigla}`))
+  }, 60_000)
 })
 
 describe('tela do jogador · jogo a jogo', () => {
@@ -677,10 +738,61 @@ describe('tela do jogador · uma partida, um adversário', () => {
 
       expect(texto(secaoDeApitos(html))).toContain(certo)
       expect(texto(trecho(html, 'Jogo a jogo', 'Números completos'))).toContain(certo)
-      // O mando invertido apontaria para o time DO PRÓPRIO jogador — que não
-      // pode aparecer como adversário em lugar nenhum da tela.
-      expect(texto(html)).not.toContain(`vs ${siglaDe.get(real)}`)
-      expect(texto(html)).not.toContain(`@ ${siglaDe.get(real)}`)
+
+      // E o time DO PRÓPRIO jogador não sai como adversário NAQUELA partida —
+      // que é o que o mando invertido faria. O recorte é pela data porque,
+      // fora dela, esse mesmo time pode ser adversário de verdade: com o
+      // vínculo real fora do jogo o mando cai no time da LISTA, e a lista
+      // enfrenta os outros 29 ao longo da temporada.
+      const naquelaPartida = [
+        ...texto(html).matchAll(
+          new RegExp(`(?:^| )${diaMes(daTabela.data, fuso)} ([^]{0,40})`, 'g'),
+        ),
+      ].map((m) => m[1]!)
+      // Duas, no mínimo: a linha do apito e a linha da tabela.
+      expect(naquelaPartida.length).toBeGreaterThanOrEqual(2)
+      for (const pedaco of naquelaPartida) {
+        expect(pedaco).toContain(certo)
+        expect(pedaco).not.toContain(siglaDe.get(real)!)
+      }
+    } finally {
+      await banco.db
+        .update(jogadores)
+        .set({ timeId: original!.timeId })
+        .where(eq(jogadores.id, alvo))
+    }
+  }, 60_000)
+
+  it('com o elenco projetado do CJ, a seção de apitos continua nomeando o adversário', async () => {
+    // A NORMA que o CLAUDE.md descreve, não o canto raro: o time real do
+    // provedor não é nenhum dos dois lados do jogo do apito, porque o apito
+    // nasce de um jogo do time da LISTA. Lendo só `jogadores.time_id`, esta
+    // seção inteira virava uma coluna de "—".
+    const apito = historicoDeApitos[0]!
+    const [jogo] = await banco.db.select().from(jogos).where(eq(jogos.id, apito.jogoId)).limit(1)
+    const [original] = await banco.db
+      .select()
+      .from(jogadores)
+      .where(eq(jogadores.id, alvo))
+      .limit(1)
+    const naLista = tela.timeNaListaDoCj!
+    const todosOsTimes = await banco.db.select().from(times)
+    const siglaDe = new Map(todosOsTimes.map((t) => [t.id, t.sigla]))
+    const forasteiro = todosOsTimes.find(
+      (t) => t.id !== jogo!.timeCasaId && t.id !== jogo!.timeVisitanteId,
+    )!
+    const emCasa = jogo!.timeCasaId === naLista.id
+    const esperado = `${emCasa ? 'vs' : '@'} ${siglaDe.get(
+      emCasa ? jogo!.timeVisitanteId : jogo!.timeCasaId,
+    )}`
+
+    try {
+      await banco.db.update(jogadores).set({ timeId: forasteiro.id }).where(eq(jogadores.id, alvo))
+      const secao = texto(secaoDeApitos(await renderizarJogador(alvo)))
+
+      expect(secao).toContain(esperado)
+      // E nenhuma linha da seção fica sem confronto.
+      expect(secao).not.toContain('—')
     } finally {
       await banco.db
         .update(jogadores)
@@ -822,6 +934,52 @@ describe('tela do jogador · a tabela diz o recorte', () => {
   }, 60_000)
 })
 
+describe('tela do jogador · a tabela é da temporada que ela nomeia', () => {
+  it('não mistura partida de outra temporada por baixo do rótulo da seção', async () => {
+    // A consulta do histórico filtrava só por jogador: a tabela atravessava
+    // temporadas com o auxiliar dizendo "temporada 2025-26" por cima — e o
+    // hero, duas linhas acima, contando `medias_jogador`, que É filtrado por
+    // temporada. Dois números para a mesma coisa, com o mesmo rótulo.
+    const [casa, visitante] = await banco.db.select().from(times).limit(2)
+    // Março de 2025: com `mes_inicio: 10`, é a temporada ANTERIOR à da tela.
+    const instante = new Date('2025-03-15T23:00:00.000Z')
+    const [antiga] = await banco.db
+      .insert(jogos)
+      .values({
+        dataHoraUtc: instante,
+        dataReferencia: '2025-03-15',
+        timeCasaId: casa!.id,
+        timeVisitanteId: visitante!.id,
+        status: 'ENCERRADO',
+        placarCasa: 101,
+        placarVisitante: 99,
+      })
+      .returning()
+
+    try {
+      await banco.db.insert(estatisticasJogo).values({
+        jogoId: antiga!.id,
+        jogadorId: alvo,
+        minutos: '44.00',
+        pontos: 51,
+        rebotesTotal: 14,
+        assistencias: 11,
+      })
+      const secao = trecho(await renderizarJogador(alvo), 'Jogo a jogo', 'Números completos')
+      const visivel = texto(secao)
+
+      // O rótulo do artboard continua ali — e agora é verdade.
+      expect(visivel).toContain(`temporada ${temporada}`)
+      expect(visivel).not.toContain(diaMes(instante, fuso))
+      // Uma linha de corpo por partida DA TEMPORADA; o <tr> a mais é o cabeçalho.
+      expect((secao.match(/<tr/g) ?? []).length - 1).toBe(tela.historico.length)
+    } finally {
+      await banco.db.delete(estatisticasJogo).where(ondeBox(antiga!.id, alvo))
+      await banco.db.delete(jogos).where(eq(jogos.id, antiga!.id))
+    }
+  }, 60_000)
+})
+
 /**
  * A `Tabela` foi revestida na tela do jogador (condensada, cabeçalho de 10 px,
  * legenda fora da tela) e ela é COMPARTILHADA: o mesmo componente desenha as
@@ -837,8 +995,7 @@ describe('a Tabela condensada nas outras telas da aba', () => {
 
   it('a ordem das linhas continua visível na tela do time, não só no caption clipado', async () => {
     const [umTime] = await banco.db.select().from(times).limit(1)
-    const { default: Time } = await import('../(app)/estatisticas/time/[id]/page')
-    const html = renderToStaticMarkup(await Time({ params: Promise.resolve({ id: umTime!.id }) }))
+    const html = await renderizarTime(umTime!.id)
 
     // A legenda continua NOMEANDO a tabela para quem não vê...
     expect(html).toMatch(/<caption[^>]*clip:rect\(0 0 0 0\)[^>]*>[^<]+<\/caption>/)
@@ -867,5 +1024,185 @@ describe('a Tabela condensada nas outras telas da aba', () => {
     const visivel = texto(semLegendaOculta(html))
     expect(visivel).toContain('Pontos por quarto')
     expect(visivel).toContain('Box score')
+  }, 60_000)
+})
+
+/**
+ * O nível do JOGADOR por extenso, escrito à mão de propósito: se o teste
+ * importasse o dicionário da tela, uma troca de rótulo passaria despercebida
+ * nos dois lugares ao mesmo tempo.
+ */
+const NIVEL_ESCRITO: Record<LinhaHierarquia['nivel'], string> = {
+  MVP: 'MVP',
+  ALL_STAR: 'All Star',
+  SUPORTE: 'Suporte',
+  RANDOLA: 'Randola',
+}
+
+/** O texto de cada `<li>` de um trecho, na ordem em que sai. */
+function itensDaLista(html: string): string[] {
+  return html
+    .split('<li')
+    .slice(1)
+    .map((pedaco) => texto(pedaco.slice(0, pedaco.indexOf('</li>'))).trim())
+}
+
+/** O HTML de cada `<li>` de um trecho — para afirmar sobre cor e borda. */
+function marcacaoDaLista(html: string): string[] {
+  return html
+    .split('<li')
+    .slice(1)
+    .map((pedaco) => pedaco.slice(0, pedaco.indexOf('</li>')))
+}
+
+/** A seção da hierarquia, do título dela até o da seguinte. */
+function secaoDaHierarquia(html: string): string {
+  return trecho(html, 'Hierarquia do CJ', 'Box score por jogo')
+}
+
+describe('tela do time · a hierarquia do CJ', () => {
+  it('lista as posições do CJ em ordem, cada uma com o nível do jogador no atributo', async () => {
+    const html = await renderizarTime(sujeito.timeId)
+    await gravarConferencia('estatisticas-time', html)
+    const linhas = itensDaLista(secaoDaHierarquia(html))
+    const esperadas = [...sujeito.hierarquia].sort((a, b) => a.posicao - b.posicao)
+
+    expect(esperadas.length).toBeGreaterThan(2)
+    expect(linhas.length).toBe(esperadas.length)
+    esperadas.forEach((linha, indice) => {
+      expect(linhas[indice]).toContain(String(linha.posicao))
+      expect(linhas[indice]).toContain(linha.nome)
+      expect(linhas[indice]).toContain(NIVEL_ESCRITO[linha.nivel])
+    })
+  }, 60_000)
+
+  it('o desfalque do nº 1 vira PREFIXO em destaque, e o rótulo FORA sai só nele', async () => {
+    const primeiro = [...sujeito.hierarquia].sort((a, b) => a.posicao - b.posicao)[0]!
+
+    try {
+      await banco.db
+        .insert(lesoesEscalacao)
+        .values({ jogoId: sujeito.jogoId, jogadorId: primeiro.jogadorId, status: 'FORA' })
+      const secao = secaoDaHierarquia(await renderizarTime(sujeito.timeId))
+
+      // Um "FORA" só, e ele é o do nº 1: o prefixo é a corrida inicial de
+      // ausências, e aqui ela tem tamanho 1.
+      expect((texto(secao).match(/FORA/g) ?? []).length).toBe(1)
+
+      const [linhaDoPrimeiro, ...demais] = marcacaoDaLista(secao)
+      expect(texto(linhaDoPrimeiro!)).toContain(primeiro.nome)
+      expect(linhaDoPrimeiro).toContain(semantico.aoVivoTinta)
+      expect(linhaDoPrimeiro).toContain(semantico.aoVivoBorda)
+      // Quem está em quadra não recebe moldura de oportunidade.
+      for (const linha of demais) expect(linha).not.toContain(semantico.aoVivoTinta)
+    } finally {
+      await banco.db
+        .delete(lesoesEscalacao)
+        .where(
+          and(
+            eq(lesoesEscalacao.jogoId, sujeito.jogoId),
+            eq(lesoesEscalacao.jogadorId, primeiro.jogadorId),
+          ),
+        )
+    }
+  }, 60_000)
+
+  it('sem desfalque no jogo do dia, nenhuma linha vira oportunidade', async () => {
+    const secao = secaoDaHierarquia(await renderizarTime(sujeito.timeId))
+
+    expect(texto(secao)).not.toContain('FORA')
+    expect(secao).not.toContain(semantico.aoVivoTinta)
+  }, 60_000)
+
+  it('o seletor PTS · REB · AST troca o atributo LIDO, não só o título', async () => {
+    const pontos = sujeito.hierarquia
+    const rebotes = await hierarquiaDoTime(banco.db, sujeito.timeId, 'REBOTES', sujeito.jogoId)
+    // A hierarquia de rebotes tem os mesmos jogadores e níveis DIFERENTES: é o
+    // nível que prova qual atributo a tela leu.
+    const divergente = pontos.find(
+      (p) => rebotes.find((r) => r.jogadorId === p.jogadorId)?.nivel !== p.nivel,
+    )
+    expect(divergente, 'a lista do CJ classifica o mesmo jogador por atributo').toBeDefined()
+    const emRebotes = rebotes.find((r) => r.jogadorId === divergente!.jogadorId)!
+
+    const padrao = await renderizarTime(sujeito.timeId)
+    expect(texto(padrao)).toContain('Hierarquia do CJ · PONTOS')
+    const linhaEmPontos = itensDaLista(secaoDaHierarquia(padrao)).find((l) =>
+      l.includes(divergente!.nome),
+    )!
+    expect(linhaEmPontos).toContain(NIVEL_ESCRITO[divergente!.nivel])
+
+    const html = await renderizarTime(sujeito.timeId, { atributo: 'REBOTES' })
+    expect(texto(html)).toContain('Hierarquia do CJ · REBOTES')
+    const linhaEmRebotes = itensDaLista(secaoDaHierarquia(html)).find((l) =>
+      l.includes(divergente!.nome),
+    )!
+    expect(linhaEmRebotes).toContain(NIVEL_ESCRITO[emRebotes.nivel])
+    expect(linhaEmRebotes).not.toContain(NIVEL_ESCRITO[divergente!.nivel])
+
+    // Os três atributos ficam a um clique, e o ativo se anuncia — a cor nunca
+    // é o único canal.
+    const seletor = trecho(html, 'Hierarquia do CJ', '</nav>')
+    for (const [curto, valor] of [
+      ['PTS', 'PONTOS'],
+      ['REB', 'REBOTES'],
+      ['AST', 'ASSISTENCIAS'],
+    ] as const) {
+      expect(seletor).toContain(`?atributo=${valor}`)
+      expect(texto(seletor)).toContain(curto)
+    }
+    expect(seletor).toMatch(/atributo=REBOTES"[^>]*aria-current="page"/)
+  }, 60_000)
+
+  it('atributo desconhecido na URL cai em PONTOS, sem quebrar a tela', async () => {
+    const html = await renderizarTime(sujeito.timeId, { atributo: 'CHUTES' })
+    expect(texto(html)).toContain('Hierarquia do CJ · PONTOS')
+  }, 60_000)
+})
+
+describe('tela do time · as duas visões de time', () => {
+  it('a hierarquia é rotulada "lista do CJ" e o elenco, "time atual"', async () => {
+    // A divergência (Giannis no Miami) é intencional; sem rótulo ela é lida
+    // como bug — a crítica ao Sofascore que a spec §4.5 cita.
+    const html = await renderizarTime(sujeito.timeId)
+
+    expect(texto(secaoDaHierarquia(html))).toContain('lista do CJ')
+
+    const elenco = html.slice(html.indexOf('Elenco'))
+    expect(texto(elenco)).toContain('time atual')
+    // O elenco é a lista real do provedor: `jogadores.time_id`.
+    const doProvedor = await banco.db
+      .select({ id: jogadores.id, nome: jogadores.nomeCompleto })
+      .from(jogadores)
+      .where(eq(jogadores.timeId, sujeito.timeId))
+    expect(doProvedor.length).toBeGreaterThan(0)
+    for (const jogador of doProvedor) expect(texto(elenco)).toContain(jogador.nome)
+  }, 60_000)
+})
+
+describe('tela do time · regras de escrita', () => {
+  it('nada de probabilidade, de "nível" solto, de meia linha ou de reticências', async () => {
+    const visivel = texto(await renderizarTime(sujeito.timeId))
+    const minusculo = visivel.toLowerCase()
+
+    expect(minusculo).not.toContain('probabilidade')
+
+    // "nível" é do JOGADOR ou do APITO — nunca a nota da partida, nunca solto.
+    for (const ocorrencia of visivel.match(/nível.{0,16}/gi) ?? []) {
+      expect(ocorrencia.toLowerCase()).toMatch(/^nível (do jogador|do apito)/)
+    }
+
+    // Linha sempre inteira, com "+". Nunca meio ponto.
+    expect(visivel).not.toMatch(/\d+,\d+\+/)
+    expect(minusculo).not.toContain('meio ponto')
+
+    // Odd, quando aparecer, é sempre FAIXA (1,30–1,70).
+    for (const pedaco of visivel.match(/ODD[^·]{0,24}/g) ?? []) {
+      expect(pedaco).toMatch(/\d,\d{2}\s*–\s*\d,\d{2}/)
+    }
+
+    expect(minusculo).not.toContain('altíssimo valor')
+    expect(visivel).not.toContain('...')
+    expect(visivel).not.toContain('…')
   }, 60_000)
 })

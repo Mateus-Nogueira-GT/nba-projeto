@@ -11,3 +11,8 @@ export { NotaPartida, type NotaPartidaProps } from './NotaPartida'
 export { IconeVeredito, type IconeVereditoProps } from './IconeVeredito'
 export { CabecalhoJogo, type CabecalhoJogoProps } from './CabecalhoJogo'
 export { SeloContexto, type SeloContextoProps } from './SeloContexto'
+export {
+  HierarquiaDoTime,
+  type HierarquiaDoTimeProps,
+  type LinhaDaHierarquia,
+} from './HierarquiaDoTime'

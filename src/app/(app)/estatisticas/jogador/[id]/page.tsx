@@ -429,11 +429,18 @@ export default async function PaginaJogador({ params }: { params: Promise<{ id: 
   const agora = new Date()
   const ruleset = await rulesetAtivo()
   const db = getDb()
-  const temporada = temporadaDe(agora, calendarioDoRuleset(ruleset))
-  const tela = await telaDoJogador(db, id, { temporada })
+  const calendario = calendarioDoRuleset(ruleset)
+  const temporada = temporadaDe(agora, calendario)
+  // O calendário vai junto porque a tabela jogo a jogo NOMEIA a temporada:
+  // `jogos` guarda a data, não o rótulo, e sem ele a leitura não teria como
+  // recortar a janela — o auxiliar voltaria a afirmar "temporada 2025-26"
+  // sobre linhas que podem atravessar duas.
+  const tela = await telaDoJogador(db, id, { temporada, calendario })
   if (tela === null) notFound()
 
   const { perfil, aoVivo, timeNaListaDoCj } = tela
+  /** O caso comum: o time do provedor e o da lista do CJ são o mesmo. */
+  const mesmoTimeNasDuasVisoes = timeNaListaDoCj !== null && timeNaListaDoCj.id === perfil.timeId
   // UM A MAIS que o limite: é assim que a tela sabe que cortou. Sem isso "14
   // de 20 bateu" era lido como o retrospecto inteiro de um jogador que tem 60
   // apitos — numa seção que a spec §4.5 chama de confiança verificável.
@@ -516,12 +523,21 @@ export default async function PaginaJogador({ params }: { params: Promise<{ id: 
                 '—'
               )}{' '}
               · <RotuloDeTime>NA LISTA DO CJ</RotuloDeTime>{' '}
-              {timeNaListaDoCj ? (
+              {/* As DUAS visões são escritas sempre — é o rótulo que separa
+                  uma da outra, e sem ele a divergência é lida como bug. Mas
+                  quando elas coincidem (o caso comum) o destino é o MESMO:
+                  dois links laranja sublinhados idênticos a poucos pixels um
+                  do outro são ruído para quem vê e dois destinos iguais na
+                  lista de links do leitor de tela. A sigla repetida fica em
+                  texto — que é como o artboard escreve as duas. */}
+              {timeNaListaDoCj === null ? (
+                '—'
+              ) : mesmoTimeNasDuasVisoes ? (
+                timeNaListaDoCj.sigla
+              ) : (
                 <LinkDeTime href={rotaDoTime(timeNaListaDoCj.id)}>
                   {timeNaListaDoCj.sigla}
                 </LinkDeTime>
-              ) : (
-                '—'
               )}
               {timeNaListaDoCj && ` · ${NIVEL_ROTULO[timeNaListaDoCj.nivel]} em pontos`}
             </p>
