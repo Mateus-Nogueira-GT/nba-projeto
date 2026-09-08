@@ -320,9 +320,11 @@ export function CardEntrada(props: CardEntradaProps) {
           height: componente.faixaNivelAltura,
           borderRadius: 2,
           background: nivel.cor,
+          marginBottom: 4,
           // Recuada 14px: alinha com o avatar em vez de encostar na borda
-          // lateral do grau (artboard, `.faixa-nivel`).
-          margin: '0 0 4px 14px',
+          // lateral do grau (artboard, `.faixa-nivel`). Forma LONGA de
+          // propósito: é assim que o teste afirma o recuo.
+          marginLeft: 14,
         }}
       />
       <article

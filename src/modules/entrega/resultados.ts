@@ -118,9 +118,27 @@ async function vinculosDaListaDoCj(db: Db, idsJogador: string[]): Promise<Map<st
   return new Map(vinculos.map((v) => [v.jogadorId, v.timeId] as const))
 }
 
-/** A regra de participação de `sincronizar/medias.ts`: minutos positivos. */
-function entrouEmQuadra(linha: { minutos: string | null }): boolean {
-  return linha.minutos !== null && Number(linha.minutos) > 0
+/**
+ * ENTROU EM QUADRA — a mesma regra que o perfil do jogador usa
+ * (`estatisticas/jogador.ts`), e por isso as duas telas nunca discordam sobre a
+ * mesma (jogo, jogador, atributo).
+ *
+ * Minutos positivos OU produção: `minutos` é NULLABLE e o adaptador emite linha
+ * sem ele. Quem marcou ponto, pegou rebote ou deu assistência JOGOU — tratá-lo
+ * como DNP apagaria um veredito real e, pior, tiraria esse apito do
+ * denominador da taxa da temporada.
+ */
+function entrouEmQuadra(linha: {
+  minutos: string | null
+  pontos: number
+  rebotes: number | null
+  assistencias: number | null
+}): boolean {
+  // Minuto REGISTRADO manda, inclusive quando é zero: zero é o provedor dizendo
+  // que o jogador não entrou. Só quando o minuto NÃO veio a produção decide —
+  // aí ela é a única prova de que houve jogo.
+  if (linha.minutos !== null) return Number(linha.minutos) > 0
+  return linha.pontos > 0 || (linha.rebotes ?? 0) > 0 || (linha.assistencias ?? 0) > 0
 }
 
 /** As linhas de um `db.execute`, seja qual for a forma que o driver devolve. */
@@ -517,9 +535,14 @@ export async function taxaDaTemporada(db: Db, ate: string, dias: number): Promis
              -- PARCIAL em estatisticas_jogo (o 1º quarto do Fire Live), e
              -- contá-lo daria "não bateu" a quem ainda está em quadra — o teste
              -- da janela exclusiva pegou exatamente isso. E SÓ QUEM ENTROU EM
-             -- QUADRA: a linha sem minutos positivos é DNP, neutro (§4.4) — a
-             -- mesma regra de participação das médias.
-             max(case when j.status = 'ENCERRADO' and e.minutos > 0 then
+             -- QUADRA: DNP é neutro (§4.4). Entrou em quadra quem tem minuto
+             -- positivo OU produção: a coluna de minutos é nullable, e quem
+             -- marcou ponto jogou. Mesma regra do perfil do jogador.
+             max(case when j.status = 'ENCERRADO'
+                       and (case when e.minutos is not null then e.minutos > 0
+                                 else e.pontos > 0
+                                      or coalesce(e.rebotes_total, 0) > 0
+                                      or coalesce(e.assistencias, 0) > 0 end) then
                    case a.atributo
                      when 'PONTOS' then e.pontos
                      when 'REBOTES' then e.rebotes_total
@@ -568,7 +591,10 @@ export async function ultimaRodadaConferida(db: Db, ate: string): Promise<string
       from apitos a
       join jogos j on j.id = a.jogo_id
       left join estatisticas_jogo e
-        on e.jogo_id = a.jogo_id and e.jogador_id = a.jogador_id and e.minutos > 0
+        on e.jogo_id = a.jogo_id and e.jogador_id = a.jogador_id
+       and (case when e.minutos is not null then e.minutos > 0
+                 else e.pontos > 0 or coalesce(e.rebotes_total, 0) > 0
+                      or coalesce(e.assistencias, 0) > 0 end)
      where a.estrategia = 'LISTA_SECRETA'
        and a.linha is not null
        and j.data_referencia <= ${ate}

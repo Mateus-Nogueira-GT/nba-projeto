@@ -688,6 +688,13 @@ export async function apitosDoJogador(
     // falam da mesma (jogo, jogador, atributo).
     const minutos = numero(l.minutos)
     const produziu = (l.pontos ?? 0) > 0 || (l.rebotes ?? 0) > 0 || (l.assistencias ?? 0) > 0
+    // PRODUÇÃO VENCE. Não se marca ponto sem jogar, e o provedor que arredonda
+    // para baixo quem entrou nos segundos finais manda 0 minuto COM pontos na
+    // linha: chamar isso de DNP escreveria "não jogou" bem em cima do "pts N"
+    // que a tabela imprime três linhas abaixo. O DNP de verdade é a linha
+    // ZERADA. Mesma ordem de `entrouEmQuadra` em `resultados.ts`: é o que
+    // impede as duas telas de discordarem sobre a mesma (jogo, jogador,
+    // atributo).
     const estado: EstadoDoApito =
       !encerrado || !temBox
         ? 'AGUARDANDO_OFICIAL'

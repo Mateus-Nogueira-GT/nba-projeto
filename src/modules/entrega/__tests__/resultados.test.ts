@@ -6,7 +6,12 @@ import { bancoDeTeste } from '../../dominio/__tests__/ajuda-banco'
 import { somarDias } from '../../dominio/rodada'
 import { simularAte } from '../../ingestao/demo/temporada'
 import { carregarRuleset } from '../../motor/ruleset/carregar'
-import { conferirRodadas, recapDaNoite, taxaDaTemporada, ultimaRodadaConferida } from '../resultados'
+import {
+  conferirRodadas,
+  recapDaNoite,
+  taxaDaTemporada,
+  ultimaRodadaConferida,
+} from '../resultados'
 
 const ruleset = carregarRuleset(readFileSync('config/ruleset.v1.yaml', 'utf8'))
 const AGORA = new Date('2026-09-05T18:00:00.000Z')

@@ -80,9 +80,9 @@ describe('CardEntrada — contratos de conteúdo (desde a identidade 02)', () =>
   })
 
   it('a faixa metálica do nível fica recuada, alinhada com o avatar', () => {
-    // `.faixa-nivel{margin:0 0 4px 14px}` — encostada na borda esquerda ela
-    // brigava com a borda lateral do grau.
-    expect(render({ ...base, linha: 20 })).toContain('margin:0 0 4px 14px')
+    // `.faixa-nivel{margin:0 0 4px 14px}` do artboard — encostada na borda
+    // esquerda ela brigava com a borda lateral do grau.
+    expect(render({ ...base, linha: 20 })).toContain('margin-left:14px')
   })
 
   it('os links do card são <Link>: tocar num card não recarrega a Lista nem volta ao topo', async () => {
@@ -600,6 +600,9 @@ describe('CardEntrada — regras de escrita (docs/04-design-system.md)', () => {
     expect(telas).not.toContain('ALTÍSSIMO VALOR')
     expect(telas).not.toContain('...')
     expect(telas).not.toContain('…')
+  })
+})
+
 /**
  * O QUE O CARD NÃO PODE DEDUZIR (revisão adversarial da 04, rodada 1).
  *
@@ -666,10 +669,5 @@ describe('CardEntrada — mando e fileira, identidade 04', () => {
     expect(html.indexOf('outline:2px')).toBeGreaterThan(html.indexOf('>13<'))
     expect(html.indexOf('>25<')).toBeGreaterThan(html.indexOf('outline:2px'))
     expect(html).toContain('a última é a desta rodada')
-  })
-
-  it('a faixa metálica nasce recuada, alinhada ao conteúdo do card', () => {
-    const html = render({ ...base, linha: 20 })
-    expect(html).toContain('margin-left:14px')
   })
 })

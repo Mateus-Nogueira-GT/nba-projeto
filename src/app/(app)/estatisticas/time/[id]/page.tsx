@@ -245,8 +245,8 @@ function AbasDeAtributo({ timeId, ativo }: { timeId: string; ativo: AtributoDaHi
               letterSpacing: 1.2,
               textTransform: 'uppercase',
               textDecoration: 'none',
-              border: `1px solid ${ativa ? abas.bordaAtiva : abas.bordaInativa}`,
-              background: ativa ? abas.fundoAtiva : 'transparent',
+              border: `1px solid ${ativa ? abas.ativaNeutra.borda : abas.bordaInativa}`,
+              background: ativa ? abas.ativaNeutra.fundo : 'transparent',
               color: ativa ? abas.textoAtiva : abas.textoInativa,
             }}
           >

@@ -132,6 +132,8 @@ export const semantico = {
   // do nível 3, fundo na tinta dele. Alias, como o teste de paridade exige.
   apitoNivel1Tinta: p.ambarVeu12,
   apitoNivel2Tinta: p.laranjaVeu12,
+  /** Véu do laranja de UI — fundo de estado ativo em seletor de TELA. */
+  acentoVeu: p.laranjaVeu,
   apitoNivel3Tinta: p.verdeVeu12,
   apitoTurboTinta: p.azulVeu12,
   // Par do turbo — para brilho e fundo. O categórico continua sendo apitoTurbo.

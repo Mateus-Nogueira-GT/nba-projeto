@@ -507,11 +507,24 @@ describe('Resultados · o estado vem do jogo, não do que a tela não achou', ()
     expect(html).not.toContain('APITO DA NOITE')
   }, 60_000)
 
-  it('% de confiança sem casa decimal — na rodada em curso, que é onde ele aparece', async () => {
+  it('a nota de confiança é inteira e SEM "%" — na rodada em curso, que é onde ela aparece', async () => {
+    // A identidade 04 tirou o "%" do card (o número puro é o que os cinco
+    // artboards desenham; o "%" sobrou só para TAXA, no cabeçalho da noite e na
+    // faixa da temporada). O que continua valendo é a regra antiga: a nota
+    // nunca tem casa decimal.
     const html = await renderizar(HOJE)
     const cards = cardsDaTela(html)
-    expect(cards.some((c) => textoDaTela(c).includes('%'))).toBe(true)
-    for (const card of cards) expect(textoDaTela(card)).not.toMatch(/\d+,\d+\s?%/)
+    expect(cards.length).toBeGreaterThan(0)
+
+    // A nota é o número grande do card (Anton 30) — o mesmo elemento nos cinco
+    // artboards. Casar por ele evita confundir a nota com a média ou a odd, que
+    // são decimais legítimos no rodapé.
+    const notas = cards.flatMap((card) => [
+      ...card.matchAll(/font-size:30px[^"]*"[^>]*>([\d,.]+)</g),
+    ])
+    expect(notas.length).toBeGreaterThan(0)
+    for (const [, nota] of notas) expect(nota).toMatch(/^\d+$/)
+    for (const card of cards) expect(textoDaTela(card)).not.toContain('%')
   }, 60_000)
 
   it('box do jogo chegou e o apitado não jogou: DNP, não "aguardando dado oficial"', async () => {
@@ -655,7 +668,9 @@ describe('Resultados · o estado vem do jogo, não do que a tela não achou', ()
     const item = (feed?.conteudo.itens ?? [])
       .filter(
         (i) =>
-          i.jogoId === alvo.jogoId && i.jogadorId === alvo.jogadorId && i.atributo === alvo.atributo,
+          i.jogoId === alvo.jogoId &&
+          i.jogadorId === alvo.jogadorId &&
+          i.atributo === alvo.atributo,
       )
       .sort((a, b) => (a.linha ?? Infinity) - (b.linha ?? Infinity))[0]!
 

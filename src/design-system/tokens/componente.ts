@@ -114,6 +114,13 @@ export const componente = {
       3: { borda: s.apitoNivel3, fundo: s.apitoNivel3Tinta },
     },
     ativaTurbo: { borda: s.apitoTurbo, fundo: s.apitoTurboTinta },
+    /**
+     * Par NEUTRO, para o seletor que não pertence a um apito — o de atributo
+     * na tela do time, por exemplo. Sem nível para vestir, ele usa o laranja de
+     * UI dos outros seletores de tela, e não empresta a cor de um nível que
+     * não existe ali.
+     */
+    ativaNeutra: { borda: s.acento, fundo: s.acentoVeu },
     textoAtiva: s.texto100,
     bordaInativa: s.divisor,
     textoInativa: s.textoSecundario,
