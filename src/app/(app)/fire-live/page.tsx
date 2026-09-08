@@ -368,7 +368,7 @@ export default async function PaginaFireLive({
       {visiveis.map((grupo) => (
         <section key={grupo.jogoId}>
           {/* A ÚNICA fronteira de seção da tela. Quente, com o placar do 1º
-              quarto entre as siglas; MUDO, com o horário, enquanto o jogo não
+              quarto entre os times e quadra ilustrativa; MUDO, com o horário, enquanto o jogo não
               começou (spec 04, §4.2). */}
           <CabecalhoJogo
             casaSigla={grupo.casaSigla}
@@ -381,6 +381,7 @@ export default async function PaginaFireLive({
             placarVisitante={grupo.placarVisitante}
             primeiroQuartoEncerrado={grupo.estado === 'FIM_1Q'}
             temperatura="quente"
+            mostrarQuadra
           />
 
           {grupo.estado === 'AGUARDANDO' && (

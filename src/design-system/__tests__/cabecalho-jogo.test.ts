@@ -22,16 +22,17 @@ const render = (props: CabecalhoJogoProps) =>
   renderToStaticMarkup(createElement(CabecalhoJogo, props))
 
 describe('CabecalhoJogo — a única fronteira de seção da varredura', () => {
-  it('escreve visitante @ mandante, nessa ordem, com a sigla em Anton e sem escudo', () => {
+  it('escreve visitante @ mandante com nome completo e logo local, nessa ordem', () => {
     const html = render(base)
-    const visitante = html.indexOf('MIA')
+    const visitante = html.indexOf('Miami Heat')
     const arroba = html.indexOf('@')
-    const casa = html.indexOf('IND')
+    const casa = html.indexOf('Indiana Pacers')
     expect(visitante).toBeGreaterThan(-1)
     expect(visitante).toBeLessThan(arroba)
     expect(arroba).toBeLessThan(casa)
-    expect(html).toContain('var(--fonte-anton)')
-    expect(html).not.toContain('<img')
+    expect(html).toContain('src="/times/MIA.svg"')
+    expect(html).toContain('src="/times/IND.svg"')
+    expect(html.match(/alt=""/g)).toHaveLength(2)
   })
 
   it('horário no fuso pedido, nunca no do servidor', () => {
@@ -55,7 +56,7 @@ describe('CabecalhoJogo — a única fronteira de seção da varredura', () => {
     expect(html).not.toContain('19:30')
   })
 
-  it('quente e ao vivo: placar visitante · casa em Anton 24 entre as siglas, no gradiente quente', () => {
+  it('quente e ao vivo: placar visitante · casa em Anton 30 entre os nomes, no gradiente quente', () => {
     const html = render({
       ...base,
       status: 'AO_VIVO',
@@ -64,9 +65,9 @@ describe('CabecalhoJogo — a única fronteira de seção da varredura', () => {
       placarVisitante: 48,
     })
     expect(html).toContain('48 · 33')
-    expect(html.indexOf('MIA')).toBeLessThan(html.indexOf('48 · 33'))
-    expect(html.indexOf('48 · 33')).toBeLessThan(html.indexOf('IND'))
-    expect(html).toContain('font-size:24px')
+    expect(html.indexOf('Miami Heat')).toBeLessThan(html.indexOf('48 · 33'))
+    expect(html.indexOf('48 · 33')).toBeLessThan(html.indexOf('Indiana Pacers'))
+    expect(html).toContain('font-size:30px')
     expect(html).toContain(componente.cabecalhoJogo.fundoQuente)
     expect(html).toContain('1º Q · AO VIVO')
   })
@@ -102,6 +103,37 @@ describe('CabecalhoJogo — a única fronteira de seção da varredura', () => {
     const html = render({ ...base, status: 'AO_VIVO', placarCasa: 33, placarVisitante: 48 })
     expect(html).not.toContain(componente.cabecalhoJogo.fundoQuente)
     expect(html).not.toContain(componente.cabecalhoJogo.bordaQuente)
+  })
+
+  it.each([
+    { placarCasa: null, placarVisitante: null },
+    { placarCasa: 12, placarVisitante: null },
+    { placarCasa: null, placarVisitante: 18 },
+  ])('placar incompleto fica indisponível, sem inventar zero: %o', (placar) => {
+    const html = render({ ...base, ...placar, status: 'AO_VIVO', temperatura: 'quente' })
+    expect(html).toContain('>—</span>')
+    expect(html).not.toMatch(/>\d+ · \d+<\/span>/)
+    expect(html).toContain('1º Q · AO VIVO')
+  })
+
+  it('zero informado é placar real; o agendado continua exibindo somente horário', () => {
+    const placar = { placarCasa: 0, placarVisitante: 0, temperatura: 'quente' as const }
+    expect(render({ ...base, ...placar, status: 'AO_VIVO' })).toContain('0 · 0')
+    const agendado = render({ ...base, ...placar })
+    expect(agendado).toContain('19:30')
+    expect(agendado).not.toContain('0 · 0')
+  })
+
+  it('a quadra é decorativa e só aparece quando a tela quente a solicita', () => {
+    expect(render({ ...base, temperatura: 'quente' })).not.toContain('quadra-ao-vivo')
+    expect(render({ ...base, mostrarQuadra: true })).not.toContain('quadra-ao-vivo')
+    for (const status of ['AGENDADO', 'AO_VIVO', 'ENCERRADO'] as const) {
+      const html = render({ ...base, status, temperatura: 'quente', mostrarQuadra: true })
+      expect(html).toContain('class="quadra-ao-vivo" aria-hidden="true"')
+      expect(html).toContain('focusable="false"')
+      // Sem fonte de eventos: a ilustração não anuncia jogador, posse ou arremesso.
+      expect(html).not.toMatch(/posse|arremesso|data-jogador|<animate\b/i)
+    }
   })
 
   it('nunca escreve "probabilidade"', () => {
@@ -146,9 +178,9 @@ describe('CabecalhoJogo · a noite encerrada (identidade 04)', () => {
     expect(corDe(html, 93)).toBe(semantico.texto55)
     expect(html).toContain('font-size:22px')
     // a ordem da varredura não muda: visitante à esquerda, mandante à direita
-    expect(html.indexOf('MIA')).toBeLessThan(html.indexOf('117'))
+    expect(html.indexOf('Miami Heat')).toBeLessThan(html.indexOf('117'))
     expect(html.indexOf('117')).toBeLessThan(html.indexOf('93'))
-    expect(html.indexOf('93')).toBeLessThan(html.indexOf('IND'))
+    expect(html.indexOf('93')).toBeLessThan(html.indexOf('Indiana Pacers'))
   })
 
   it('a quebra por quarto sai em duas linhas: visitante em cima, mandante embaixo', () => {

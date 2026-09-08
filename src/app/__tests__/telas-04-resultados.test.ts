@@ -15,6 +15,7 @@ import {
 import { rulesetAtivo } from '../../modules/entrega/ruleset-ativo'
 import { simularAte } from '../../modules/ingestao/demo/temporada'
 import { LLMFake } from '../../modules/ingestao/llm'
+import { identidadeDoTime } from '../../design-system/times'
 
 /**
  * RESULTADOS POR RODADA — o recap da noite (spec 04, §4.4).
@@ -572,19 +573,28 @@ describe('Resultados · o estado vem do jogo, não do que a tela não achou', ()
 
   it('o mando sai no apoio do card: "@ ADV" para o visitante, "vs ADV" para o mandante', async () => {
     const recap = await recapDaNoite(banco.db, ONTEM)
-    const texto = textoDaTela(await renderizar(ONTEM))
+    const html = await renderizar(ONTEM)
+    const artigos = cardsDaTela(html)
+    expect(html).not.toContain('quadra-ao-vivo')
 
     let fora = 0
     let casa = 0
     for (const { jogo, cards } of recap.porJogo) {
       for (const card of cards) {
+        const artigo = artigos.find((a) => a.includes(`/estatisticas/jogador/${card.jogadorId}`))
+        expect(artigo).toBeDefined()
+        const texto = textoSeparado(artigo!).replace(/\s+/g, ' ').trim()
         // O lado é decidido por ID — o time da LISTA do CJ contra os dois
         // times do jogo —, nunca por sigla.
         if (card.timeId === jogo.visitanteId) {
-          expect(texto).toContain(`· ${card.timeSigla} · @ ${jogo.casaSigla}`)
+          expect(texto).toContain(
+            `${identidadeDoTime(card.timeSigla).nome} @ ${identidadeDoTime(jogo.casaSigla).nome}`,
+          )
           fora++
         } else if (card.timeId === jogo.casaId) {
-          expect(texto).toContain(`· ${card.timeSigla} · vs ${jogo.visitanteSigla}`)
+          expect(texto).toContain(
+            `${identidadeDoTime(card.timeSigla).nome} vs ${identidadeDoTime(jogo.visitanteSigla).nome}`,
+          )
           casa++
         }
       }
@@ -594,7 +604,7 @@ describe('Resultados · o estado vem do jogo, não do que a tela não achou', ()
     expect(casa).toBeGreaterThan(0)
   }, 60_000)
 
-  it('o mando e a sigla vêm da LISTA do CJ: o time REAL do provedor não mexe no card', async () => {
+  it('o mando e a identidade vêm da LISTA do CJ: o time REAL do provedor não mexe no card', async () => {
     const { jogadores, times } = await import('../../modules/dominio/db/schema')
     const recap = await recapDaNoite(banco.db, ONTEM)
     const grupo = recap.porJogo.find((g) => g.cards.some((c) => c.timeId !== null))!
@@ -612,8 +622,8 @@ describe('Resultados · o estado vem do jogo, não do que a tela não achou', ()
     )!
     const emCasa = alvo.timeId === grupo.jogo.casaId
     const apoio = emCasa
-      ? `· ${alvo.timeSigla} · vs ${grupo.jogo.visitanteSigla}`
-      : `· ${alvo.timeSigla} · @ ${grupo.jogo.casaSigla}`
+      ? `${identidadeDoTime(alvo.timeSigla).nome} vs ${identidadeDoTime(grupo.jogo.visitanteSigla).nome}`
+      : `${identidadeDoTime(alvo.timeSigla).nome} @ ${identidadeDoTime(grupo.jogo.casaSigla).nome}`
 
     try {
       await banco.db
@@ -623,8 +633,8 @@ describe('Resultados · o estado vem do jogo, não do que a tela não achou', ()
       const html = await renderizar(ONTEM)
       const artigo = cardsDaTela(html).find((c) => c.includes(alvo.nome))!
       expect(artigo).toBeDefined()
-      expect(textoDaTela(artigo)).toContain(apoio)
-      expect(textoDaTela(artigo)).not.toContain(forasteiro.sigla)
+      expect(textoSeparado(artigo).replace(/\s+/g, ' ')).toContain(apoio)
+      expect(textoDaTela(artigo)).not.toContain(identidadeDoTime(forasteiro.sigla).nome)
     } finally {
       await banco.db
         .update(jogadores)

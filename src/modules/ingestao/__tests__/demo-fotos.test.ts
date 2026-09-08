@@ -47,8 +47,12 @@ describe('fotos da demonstração', () => {
   })
 
   it('com o CDN respondendo, pelo menos 90% dos jogadores semeados ganham foto', async () => {
+    const antes = new Map(
+      (await banco.db.select().from(jogadores)).map((jogador) => [jogador.id, jogador]),
+    )
     const r = await aplicarFotos(banco.db, async () => true)
     expect(r.puladas).toEqual([])
+    expect(r.gravadas).toBe(Object.values(MAPA_FOTOS).filter((id) => id !== null).length)
     // O único sem foto é ambiguidade declarada, não falha de curadoria.
     expect(r.semId).toEqual(['Wiggins'])
     const [todos, comFoto] = await Promise.all([
@@ -56,6 +60,11 @@ describe('fotos da demonstração', () => {
       banco.db.select().from(jogadores).where(isNotNull(jogadores.fotoUrl)),
     ])
     expect(comFoto.length / todos.length).toBeGreaterThanOrEqual(0.9)
+    for (const jogador of todos) {
+      const original = antes.get(jogador.id)!
+      // Somente a URL muda: UUID, nome, time e todos os demais dados ficam.
+      expect({ ...jogador, fotoUrl: original.fotoUrl }).toEqual(original)
+    }
   })
 
   it('só grava URL que o verificador aprovou', async () => {
@@ -69,5 +78,21 @@ describe('fotos da demonstração', () => {
     const comFoto = await banco.db.select().from(jogadores).where(isNotNull(jogadores.fotoUrl))
     expect(comFoto).toHaveLength(1)
     expect(comFoto[0]!.fotoUrl).toContain('cdn.nba.com')
+  })
+
+  it('uma falha de rede deixa só aquela foto pendente e permite preencher o restante', async () => {
+    await banco.db.update(jogadores).set({ fotoUrl: null })
+    const indisponivel = urlDaFoto(MAPA_FOTOS['Brunson']!)
+    const resultado = await aplicarFotos(banco.db, async (url) => {
+      if (url === indisponivel) throw new TypeError('fetch failed')
+      return true
+    })
+
+    expect(resultado.puladas).toEqual(['Brunson'])
+    expect(resultado.semId).toEqual(['Wiggins'])
+    const comId = Object.values(MAPA_FOTOS).filter((id) => id !== null).length
+    expect(resultado.gravadas).toBe(comId - 1)
+    const comFoto = await banco.db.select().from(jogadores).where(isNotNull(jogadores.fotoUrl))
+    expect(comFoto).toHaveLength(comId - 1)
   })
 })

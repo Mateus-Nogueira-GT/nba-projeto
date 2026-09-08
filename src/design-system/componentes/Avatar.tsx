@@ -1,4 +1,4 @@
-import Image from 'next/image'
+import { FotoJogador } from './FotoJogador'
 import type { NivelApito } from '../../modules/motor/tipos'
 import { componente } from '../tokens/componente'
 import { semantico } from '../tokens/semantico'
@@ -72,26 +72,12 @@ export function Avatar({
           placeItems: 'center',
         }}
       >
-        {fotoUrl ? (
-          <Image
-            src={fotoUrl}
-            alt=""
-            width={tamanho}
-            height={tamanho}
-            style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'top' }}
-          />
-        ) : (
-          <span
-            style={{
-              fontFamily: semantico.fonteTitulo,
-              fontSize: tamanho * 0.34,
-              color: semantico.textoSecundario,
-              letterSpacing: 1,
-            }}
-          >
-            {iniciaisDe(nome)}
-          </span>
-        )}
+        <FotoJogador
+          key={fotoUrl}
+          fotoUrl={fotoUrl}
+          tamanho={tamanho}
+          iniciais={iniciaisDe(nome)}
+        />
       </div>
       {anel && (
         <span

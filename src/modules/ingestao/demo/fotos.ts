@@ -290,7 +290,7 @@ export function urlDaFoto(personId: number): string {
 
 export type ResultadoFotos = {
   gravadas: number
-  /** Sem jogador correspondente ou URL que não respondeu 200 — é problema. */
+  /** Sem jogador correspondente ou falha na verificação da URL — é problema. */
   puladas: string[]
   /** `null` no mapa: ambiguidade declarada, fica sem foto de propósito. */
   semId: string[]
@@ -324,7 +324,18 @@ export async function aplicarFotos(
     }
     const id = porNome.get(nome.toLowerCase())
     const url = urlDaFoto(personId)
-    if (id === undefined || !(await verificar(url))) {
+    if (id === undefined) {
+      puladas.push(nome)
+      continue
+    }
+    let disponivel = false
+    try {
+      disponivel = await verificar(url)
+    } catch {
+      // Uma URL indisponível não impede as demais fotos de serem preenchidas.
+      // A pendência aparece no resultado para permitir nova tentativa do CLI.
+    }
+    if (!disponivel) {
       puladas.push(nome)
       continue
     }

@@ -20,6 +20,11 @@ const base = {
 }
 
 const render = (props: CardEntradaProps) => renderToStaticMarkup(createElement(CardEntrada, props))
+const texto = (html: string) =>
+  html
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
 
 /**
  * O `style` do `<article>` — a caixa do card. O brilho do universo quente
@@ -58,18 +63,25 @@ describe('CardEntrada — contratos de conteúdo (desde a identidade 02)', () =>
   })
 
   it('mostra contra quem o jogador está jogando, quando a tela sabe', () => {
-    expect(render({ ...base, linha: 20, adversarioSigla: 'DEN' })).toContain('vs DEN')
-    expect(render({ ...base, linha: 20 })).not.toContain('vs ')
+    const html = render({ ...base, linha: 20, adversarioSigla: 'DEN' })
+    expect(texto(html)).toContain('Los Angeles Lakers vs Denver Nuggets')
+    expect(html).toContain('src="/times/LAL.svg"')
+    expect(html).toContain('src="/times/DEN.svg"')
+    const semAdversario = render({ ...base, linha: 20 })
+    expect(texto(semAdversario)).not.toContain('vs ')
+    expect(semAdversario).not.toContain('src="/times/DEN.svg"')
   })
 
-  it('diz de que LADO o jogador está: "@ DEN" fora de casa, "vs DEN" em casa', () => {
-    // O artboard alterna `MIA · @ IND` e `IND · vs MIA`. Em POR NÍVEL, sem
-    // cabeçalho de jogo, essa é a única pista de onde a partida acontece.
-    expect(render({ ...base, linha: 20, adversarioSigla: 'DEN', emCasa: false })).toContain('@ DEN')
-    expect(render({ ...base, linha: 20, adversarioSigla: 'DEN', emCasa: false })).not.toContain(
-      'vs DEN',
+  it('preserva o mando ao substituir as siglas por nomes completos', () => {
+    expect(texto(render({ ...base, linha: 20, adversarioSigla: 'DEN', emCasa: false }))).toContain(
+      '@ Denver Nuggets',
     )
-    expect(render({ ...base, linha: 20, adversarioSigla: 'DEN', emCasa: true })).toContain('vs DEN')
+    expect(
+      texto(render({ ...base, linha: 20, adversarioSigla: 'DEN', emCasa: false })),
+    ).not.toContain('vs Denver Nuggets')
+    expect(texto(render({ ...base, linha: 20, adversarioSigla: 'DEN', emCasa: true }))).toContain(
+      'vs Denver Nuggets',
+    )
   })
 
   it('a nota de confiança é número puro — o artboard 04 tirou o "%" do card', () => {
@@ -97,8 +109,8 @@ describe('CardEntrada — contratos de conteúdo (desde a identidade 02)', () =>
 
   it('toda prop obrigatória do card aparece na saída renderizada', () => {
     const html = render({ ...base, linha: 20, adversarioSigla: 'DEN' })
-    for (const valor of ['D. Malloy', 'LAL', 'G', '20', 'MVP', '92'])
-      expect(html, `prop com valor ${valor} não chegou à tela`).toContain(valor)
+    for (const valor of ['D. Malloy', 'Los Angeles Lakers', 'G', '20', 'MVP', '92'])
+      expect(texto(html), `prop com valor ${valor} não chegou à tela`).toContain(valor)
   })
 
   it('nível do jogador e do apito têm redundância textual', () => {
@@ -623,15 +635,17 @@ describe('CardEntrada — mando e fileira, identidade 04', () => {
 
   it('o visitante joga "@ ADV"; o mandante, "vs ADV"', () => {
     const fora = render({ ...base, linha: 20, adversarioSigla: 'DEN', emCasa: false })
-    expect(fora).toContain('@ DEN')
-    expect(fora).not.toContain('vs DEN')
+    expect(texto(fora)).toContain('@ Denver Nuggets')
+    expect(texto(fora)).not.toContain('vs Denver Nuggets')
 
     const casa = render({ ...base, linha: 20, adversarioSigla: 'DEN', emCasa: true })
-    expect(casa).toContain('vs DEN')
-    expect(casa).not.toContain('@ DEN')
+    expect(texto(casa)).toContain('vs Denver Nuggets')
+    expect(texto(casa)).not.toContain('@ Denver Nuggets')
 
     // Sem dizer o lado, o card segue como antes das telas por jogo.
-    expect(render({ ...base, linha: 20, adversarioSigla: 'DEN' })).toContain('vs DEN')
+    expect(texto(render({ ...base, linha: 20, adversarioSigla: 'DEN' }))).toContain(
+      'vs Denver Nuggets',
+    )
   })
 
   it('a fileira sai na ordem em que chega: quem monta a fileira decide a direção, o card não inverte', () => {

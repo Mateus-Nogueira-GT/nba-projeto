@@ -8,6 +8,7 @@ import { rulesetAtivo } from '../../modules/entrega/ruleset-ativo'
 import { simularAte } from '../../modules/ingestao/demo/temporada'
 import { LLMFake } from '../../modules/ingestao/llm'
 import type { FeedFireLive } from '../../modules/entrega/fire-live/leitura'
+import { identidadeDoTime } from '../../design-system/times'
 
 /**
  * O FIRE LIVE DA IDENTIDADE 04 — a tela ao vivo, quente.
@@ -234,9 +235,14 @@ describe('Fire Live · 04 — por jogo, com os três estados', () => {
     expect(ocorrencias(html, 'º Q · AO VIVO')).toBe(emPrimeiroQuarto.length)
     for (const jogo of emPrimeiroQuarto) {
       expect(html).toContain(`${jogo.placarVisitante} · ${jogo.placarCasa}`)
-      expect(html).toContain(jogo.casaSigla)
-      expect(html).toContain(jogo.visitanteSigla)
+      expect(html).toContain(identidadeDoTime(jogo.casaSigla).nome)
+      expect(html).toContain(identidadeDoTime(jogo.visitanteSigla).nome)
+      expect(html).toContain(`src="/times/${jogo.casaSigla}.svg"`)
+      expect(html).toContain(`src="/times/${jogo.visitanteSigla}.svg"`)
     }
+    expect(ocorrencias(html, 'class="quadra-ao-vivo"')).toBe(
+      ocorrencias(html, 'class="jogo-placar-quente"'),
+    )
   }, 60_000)
 
   it('os três chips são os três estados, e recortam a tela pela URL', async () => {
