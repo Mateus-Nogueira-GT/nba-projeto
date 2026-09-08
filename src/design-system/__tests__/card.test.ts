@@ -1,9 +1,11 @@
+import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 
 import { CardEntrada, type CardEntradaProps } from '../componentes/CardEntrada'
 import { componente } from '../tokens/componente'
+import { MODO_FIRE } from '../tokens/css'
 
 const base = {
   nome: 'D. Malloy',
@@ -36,7 +38,7 @@ describe('CardEntrada — contratos de conteúdo (desde a identidade 02)', () =>
       progresso1Q: { observado: 14, alvo: 12 },
     })
     expect(batida).toContain('VIVO')
-    expect(batida).toContain('LINHA BATIDA')
+    expect(batida).toContain('ALVO BATIDO')
 
     const parcial = render({
       ...base,
@@ -217,9 +219,26 @@ describe('errata pós-merge — alvo desconhecido nunca vira linha batida', () =
     expect(html).not.toContain('width:100%')
   })
 
-  it('card quente sem progresso não afirma LINHA BATIDA', () => {
+  it('card quente sem progresso não afirma ALVO BATIDO', () => {
     const html = render({ ...base, temperatura: 'quente', progresso1Q: null })
-    expect(html).not.toContain('LINHA BATIDA')
+    expect(html).not.toContain('ALVO BATIDO')
+  })
+
+  it('alvo ZERO também não é alvo: nem "ALVO BATIDO", nem "FALTA", nem "ALVO 1º Q · 0"', () => {
+    // A barra se recusa a desenhar contra régua zero (`alvo > 0`): sem marco,
+    // sem ponto, sem legenda. O rodapé do MESMO card não pode afirmar o
+    // contrário — 0 de 0 lido como alvo cumprido é exatamente a linha batida
+    // inventada que esta errata existe para impedir, e "FALTA 0" mente do
+    // outro lado.
+    for (const progresso1Q of [
+      { observado: 0, alvo: 0 },
+      { observado: 3, alvo: 0 },
+    ]) {
+      const html = render({ ...base, temperatura: 'quente', alvo1Q: 0, progresso1Q })
+      expect(html, JSON.stringify(progresso1Q)).not.toContain('ALVO BATIDO')
+      expect(html, JSON.stringify(progresso1Q)).not.toContain('FALTA')
+      expect(html, JSON.stringify(progresso1Q)).not.toContain('ALVO 1º Q · 0')
+    }
   })
 })
 
@@ -415,5 +434,148 @@ describe('CardEntrada — identidade 04: abas de atributo e lente da zona 2', ()
       render({ ...base, linha: 4, lente: 'HIERARQUIA', hierarquia: { posicao: 1, total: 5 } }),
     ].join('\n')
     expect(todos.toLowerCase()).not.toContain('probabilidade')
+  })
+})
+
+describe('CardEntrada — identidade 04: o card QUENTE do Fire Live', () => {
+  // Como o Fire Live monta o card (fire-live/page.tsx): sem confiança — ela é
+  // conceito pré-live —, temperatura quente e o progresso contra o alvo do 1º Q.
+  const quente = {
+    ...base,
+    confianca: null,
+    grauConfianca: null,
+    temperatura: 'quente' as const,
+    vivo: true,
+    alvo1Q: 11,
+    progresso1Q: { observado: 9, alvo: 11 },
+  }
+
+  it('rodapé quente: "ALVO 1º Q · 11 PTS" à esquerda, o que FALTA à direita', () => {
+    const html = render(quente)
+    expect(html).toContain('ALVO 1º Q · 11 PTS')
+    expect(html).toContain('FALTA 2 PTS')
+    // Os dois lados escrevem número, e a tela se recarrega a cada 30 s: sem
+    // largura fixa de dígito (`body{font-variant-numeric:tabular-nums}` no
+    // artboard) o "FALTA n" muda de largura e o rodapé pula.
+    expect(html).toMatch(/font-variant-numeric:tabular-nums[^"]*">ALVO 1º Q · 11 PTS</)
+    expect(html).toMatch(/font-variant-numeric:tabular-nums[^"]*">FALTA 2 PTS</)
+  })
+
+  it('alvo alcançado é "ALVO BATIDO" — a LINHA é do jogo inteiro, o alvo é do 1º Q', () => {
+    const html = render({ ...quente, progresso1Q: { observado: 12, alvo: 11 } })
+    expect(html).toContain('ALVO BATIDO')
+    expect(html).not.toContain('LINHA BATIDA')
+    expect(html).not.toContain('FALTA')
+  })
+
+  it('mesmo com linha do jogo inteiro, o rodapé quente fala do alvo do 1º Q', () => {
+    // No pré-live a linha manda; na tela ao vivo o assinante acompanha o alvo.
+    const html = render({ ...quente, linha: 24 })
+    expect(html).toContain('ALVO 1º Q · 11 PTS')
+    expect(html).not.toContain('PONTOS 24+')
+  })
+
+  it('o marco do modo fire chega à barra com o rótulo que a ENTREGA escreveu', () => {
+    // O percentual do modo fire é regra de estratégia (ruleset): o card recebe
+    // o valor E o texto prontos. Nenhum "75" mora neste componente.
+    const html = render({ ...quente, alvoFire: { valor: 8, rotulo: '75% da média' } })
+    expect(html).toContain('75% da média · 8')
+    expect(html).toContain('left:72.7%')
+    expect(html).toContain(`background:${MODO_FIRE.cor}`)
+
+    const fonte = readFileSync('src/design-system/componentes/CardEntrada.tsx', 'utf8')
+    expect(fonte.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '')).not.toContain('75%')
+  })
+
+  it('"apitou aqui" nasce do valor no instante do push, com a unidade do atributo', () => {
+    const html = render({ ...quente, apitouEm: 6 })
+    expect(html).toContain('aria-label="apitou aqui · 6 pts"')
+    expect(html).toContain('apitou aqui · 6 pts')
+
+    // SEM O DADO A BARRA CALA. O card do Fire Live já É um apito: escrever
+    // "ainda sem apito" embaixo dele seria falso na tela do assinante. A frase
+    // só sai quando quem monta o card AFIRMA que o push não veio (`null`) — o
+    // alvo aguardando o 1º quarto, terceiro card do artboard.
+    expect(render(quente)).not.toContain('ainda sem apito')
+    expect(render(quente)).not.toContain('apitou aqui')
+    expect(render({ ...quente, apitouEm: null })).toContain('ainda sem apito')
+  })
+
+  it('o status de largura fixa acompanha o ciclo: PRÉ · 1º Q ao vivo · FIM 1º Q neutro', () => {
+    const largura = `width:${componente.statusCiclo.largura};box-sizing:border-box`
+
+    const antes = render({ ...quente, estado: 'PRE' })
+    expect(antes).toContain(largura)
+    expect(antes).toContain('>PRÉ<')
+    expect(antes).toContain(componente.statusCiclo.fundoNeutro)
+
+    const noQuarto = render({ ...quente, estado: 'Q1' })
+    expect(noQuarto).toContain(largura)
+    expect(noQuarto).toContain('>1º Q<')
+    expect(noQuarto).toContain(componente.statusCiclo.fundoAoVivo)
+    expect(noQuarto).toContain(componente.statusCiclo.bordaAoVivo)
+
+    // FIM 1º Q congela: o apito não some da tela, mas para de piscar
+    const depois = render({ ...quente, estado: 'FIM_Q1' })
+    expect(depois).toContain(largura)
+    expect(depois).toContain('>FIM 1º Q<')
+    expect(depois).toContain(componente.statusCiclo.fundoNeutro)
+    expect(depois).not.toContain(componente.statusCiclo.fundoAoVivo)
+  })
+})
+
+describe('CardEntrada — regras de escrita (docs/04-design-system.md)', () => {
+  const telas = [
+    render({
+      ...base,
+      linha: 24,
+      mediaTemporada: 25.7,
+      oddFaixa: { min: 1.3, max: 1.7, qtdCasas: 4 },
+    }),
+    render({ ...base, linha: 24, estado: 'CONFERIDO', fez: 27, bateu: true }),
+    render({
+      ...base,
+      confianca: null,
+      grauConfianca: null,
+      temperatura: 'quente',
+      alvo1Q: 11,
+      progresso1Q: { observado: 9, alvo: 11 },
+      alvoFire: { valor: 8, rotulo: '75% da média' },
+      apitouEm: 6,
+      estado: 'Q1',
+    }),
+  ].join('\n')
+
+  it('nunca escreve "probabilidade"', () => {
+    expect(telas.toLowerCase()).not.toContain('probabilidade')
+  })
+
+  it('a nota da partida NÃO entra no card do apito, e "nível" segue sendo do jogador e do apito', () => {
+    // Spec 04 §4.5: a nota competiria com o nível do apito e o grau.
+    expect(telas.toLowerCase()).not.toContain('nota')
+    expect(telas.toLowerCase()).not.toContain('nível da partida')
+  })
+
+  it('a nota de confiança não tem casa decimal', () => {
+    const html = render({ ...base, confianca: 92.4, linha: 24 })
+    expect(html).toContain('>92<')
+    expect(html).not.toContain('92,4')
+    expect(html).not.toContain('92.4')
+  })
+
+  it('linha sempre INTEIRA com "+", nunca meio ponto', () => {
+    expect(telas).toContain('PONTOS 24+')
+    expect(telas.toLowerCase()).not.toContain('meio ponto')
+    expect(telas).not.toMatch(/\d+,5\+/)
+  })
+
+  it('odd sempre em FAIXA, com travessão — "1,30–1,70"', () => {
+    expect(telas).toContain('1,30–1,70')
+  })
+
+  it('sem "ALTÍSSIMO VALOR" e sem reticências', () => {
+    expect(telas).not.toContain('ALTÍSSIMO VALOR')
+    expect(telas).not.toContain('...')
+    expect(telas).not.toContain('…')
   })
 })

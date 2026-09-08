@@ -82,6 +82,23 @@ export type CardEntradaProps = {
   linha?: number | null
   /** Alvo do 1º quarto, no Fire Live. */
   alvo1Q?: number | null
+  /**
+   * Marco do MODO FIRE na barra (spec 04, §4.2) — o valor e o rótulo vêm do
+   * item, calculados pela entrega a partir do ruleset. O card não sabe que o
+   * marco é "75% da média": se o percentual mudar no YAML, o texto muda com
+   * ele sem tocar em componente nenhum (regra 1 do CLAUDE.md).
+   */
+  alvoFire?: { valor: number; rotulo: string } | null
+  /**
+   * Quanto o jogador tinha no atributo no instante do push — o ponto "apitou
+   * aqui" da barra.
+   *
+   * `null` é a AFIRMAÇÃO de que o push ainda não veio (o alvo aguardando o 1º
+   * quarto, terceiro card do artboard) e vira "ainda sem apito" na legenda.
+   * AUSENTE é "não sei", e aí a barra cala: o card do Fire Live já É um apito,
+   * e a frase embaixo dele seria informação falsa na tela do assinante.
+   */
+  apitouEm?: number | null
   /** Selo VIVO — fire live em andamento. */
   vivo?: boolean
   /** Progresso observado no 1º quarto, contra o alvo. */
@@ -193,19 +210,32 @@ export function CardEntrada(props: CardEntradaProps) {
         : undefined
   const corPercentual = props.turbo ? TURBO.cor : corGrau
 
+  // Na tela ao vivo o assunto é o ALVO do 1º quarto (artboard, `.rodape` do
+  // card quente): a linha é do jogo inteiro e volta a mandar no pré-live.
+  // ALVO ZERO NÃO É ALVO. A barra já se recusa a desenhar contra régua zero
+  // (`alvo > 0` em BarraAlvo: sem marco, sem ponto, sem legenda) e o card
+  // inteiro precisa dizer a mesma coisa: "ALVO 1º Q · 0" e, do outro lado,
+  // "ALVO BATIDO" com 0 de 0 — ou "FALTA 0" — são a régua inventada que a
+  // errata pós-merge existe para impedir.
+  const rotuloAlvo1Q =
+    props.alvo1Q != null && props.alvo1Q > 0
+      ? `ALVO 1º Q · ${props.alvo1Q} ${ATRIBUTO_CURTO[props.atributo]}`
+      : null
   const rotuloLinha =
-    props.linha != null
-      ? `${ATRIBUTO_ROTULO[props.atributo]} ${props.linha}+`
-      : props.alvo1Q != null
-        ? `ALVO 1Q · ${props.alvo1Q} ${ATRIBUTO_CURTO[props.atributo]}`
-        : ATRIBUTO_ROTULO[props.atributo]
-  const p = props.progresso1Q
+    quente && rotuloAlvo1Q != null
+      ? rotuloAlvo1Q
+      : props.linha != null
+        ? `${ATRIBUTO_ROTULO[props.atributo]} ${props.linha}+`
+        : (rotuloAlvo1Q ?? ATRIBUTO_ROTULO[props.atributo])
+  const p = props.progresso1Q != null && props.progresso1Q.alvo > 0 ? props.progresso1Q : null
   const faltam = p ? Math.max(0, p.alvo - p.observado) : 0
 
   const rodapeDireita = quente
     ? p
-      ? p.observado >= p.alvo
-        ? `LINHA BATIDA · ${p.observado} ${ATRIBUTO_CURTO[props.atributo]}`
+      ? // "ALVO BATIDO", nunca "linha batida": cruzar o alvo do 1º quarto não
+        // é bater a linha do jogo — e a contagem da barra já diz quanto fez.
+        p.observado >= p.alvo
+        ? 'ALVO BATIDO'
         : `FALTA ${faltam} ${ATRIBUTO_CURTO[props.atributo]}`
       : null
     : [
@@ -416,7 +446,21 @@ export function CardEntrada(props: CardEntradaProps) {
         {/* zona 2 · contexto — barrinhas no pré-live, barra rumo ao alvo no fire */}
         {quente && p && (
           <div style={{ padding: '0 14px 12px' }}>
-            <BarraAlvo observado={p.observado} alvo={p.alvo} />
+            <BarraAlvo
+              observado={p.observado}
+              alvo={p.alvo}
+              unidade={ATRIBUTO_CURTO[props.atributo].toLowerCase()}
+              // O marco do modo fire veste a cor DELE (a mesma do selo 🔥); o
+              // alvo, a barra desenha sozinha em texto cheio.
+              marcos={props.alvoFire ? [{ ...props.alvoFire, cor: MODO_FIRE.cor }] : undefined}
+              // Os três estados chegam inteiros à barra: valor, "não veio"
+              // (`null`) e "não sei" (ausente) são coisas diferentes na tela.
+              apitouEm={
+                props.apitouEm == null
+                  ? props.apitouEm
+                  : { valor: props.apitouEm, rotulo: 'apitou aqui' }
+              }
+            />
           </div>
         )}
         {barrinhas && (
@@ -524,7 +568,14 @@ export function CardEntrada(props: CardEntradaProps) {
               ))}
             </div>
           ) : (
-            <span style={{ fontSize: 13, fontWeight: 600, color: componente.cardTexto }}>
+            <span
+              style={{
+                fontSize: 13,
+                fontWeight: 600,
+                color: componente.cardTexto,
+                fontVariantNumeric: 'tabular-nums',
+              }}
+            >
               {rotuloLinha}
             </span>
           )}
@@ -547,7 +598,15 @@ export function CardEntrada(props: CardEntradaProps) {
             </span>
           ) : (
             rodapeDireita && (
-              <span style={{ fontSize: 12, color: componente.cardTextoApoio }}>
+              <span
+                style={{
+                  fontSize: 12,
+                  color: componente.cardTextoApoio,
+                  // O "FALTA n" muda a cada refresh de 30 s: dígito de largura
+                  // fixa impede o rodapé de pular (artboard, `body`).
+                  fontVariantNumeric: 'tabular-nums',
+                }}
+              >
                 {rodapeDireita}
               </span>
             )

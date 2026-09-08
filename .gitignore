@@ -1,4 +1,7 @@
-node_modules/
+# Sem barra final: em worktree `node_modules` costuma ser um SYMLINK, e
+# `node_modules/` casa só com DIRETÓRIO — foi por essa fresta que um link
+# para um caminho do notebook entrou no repositório com `git add -A`.
+node_modules
 .next/
 out/
 build/

@@ -309,7 +309,7 @@ describe('Fire Live', () => {
     // CardEntrada, que renderiza como `>VIVO<` (span sem filhos além do
     // texto); a sobrancelha nunca produz esse padrão.
     expect(html).toMatch(/>VIVO</)
-    expect(html).toMatch(/LINHA BATIDA|FALTA \d/)
+    expect(html).toMatch(/ALVO BATIDO|FALTA \d/)
   }, 60_000)
 })
 
