@@ -35,10 +35,22 @@ export function fundoDoTime(sigla: string): string {
  * do projeto: cor nunca é canal único). `nivelApito` null = sem anel.
  */
 export function Avatar({
-  nome, fotoUrl, timeSigla, nivelApito, turbo = false, tamanho = 52,
+  nome,
+  fotoUrl,
+  timeSigla,
+  nivelApito,
+  turbo = false,
+  tamanho = 52,
+  raio = 12,
 }: {
-  nome: string; fotoUrl: string | null; timeSigla: string
-  nivelApito: NivelApito | null; turbo?: boolean; tamanho?: number
+  nome: string
+  fotoUrl: string | null
+  timeSigla: string
+  nivelApito: NivelApito | null
+  turbo?: boolean
+  tamanho?: number
+  /** Raio do rosto. 12 nos cards; 16 no hero do perfil (artboard da 04). */
+  raio?: number
 }) {
   const anel = nivelApito === null ? null : turbo ? TURBO : APITO[nivelApito]
   const selo = nivelApito === null ? null : turbo ? 'T' : `N${nivelApito}`
@@ -48,19 +60,35 @@ export function Avatar({
       <div
         aria-hidden
         style={{
-          width: '100%', height: '100%', borderRadius: 12, overflow: 'hidden',
+          width: '100%',
+          height: '100%',
+          borderRadius: raio,
+          overflow: 'hidden',
           background: fundoDoTime(timeSigla),
-          border: anel ? `${componente.avatarAnelEspessura} solid ${anel.cor}` : `1px solid ${semantico.divisor}`,
-          display: 'grid', placeItems: 'center',
+          border: anel
+            ? `${componente.avatarAnelEspessura} solid ${anel.cor}`
+            : `1px solid ${semantico.divisor}`,
+          display: 'grid',
+          placeItems: 'center',
         }}
       >
         {fotoUrl ? (
           <Image
-            src={fotoUrl} alt="" width={tamanho} height={tamanho}
+            src={fotoUrl}
+            alt=""
+            width={tamanho}
+            height={tamanho}
             style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'top' }}
           />
         ) : (
-          <span style={{ fontFamily: semantico.fonteTitulo, fontSize: tamanho * 0.34, color: semantico.textoSecundario, letterSpacing: 1 }}>
+          <span
+            style={{
+              fontFamily: semantico.fonteTitulo,
+              fontSize: tamanho * 0.34,
+              color: semantico.textoSecundario,
+              letterSpacing: 1,
+            }}
+          >
             {iniciaisDe(nome)}
           </span>
         )}
@@ -69,9 +97,17 @@ export function Avatar({
         <span
           aria-label={turbo ? 'Turbo' : `Nível do apito ${nivelApito}`}
           style={{
-            position: 'absolute', right: -4, bottom: -4, fontSize: 9, fontWeight: 700,
-            fontFamily: semantico.fonteRotulo, color: semantico.textoSobreCor,
-            background: anel.cor, borderRadius: 5, padding: '1px 4px', lineHeight: 1.4,
+            position: 'absolute',
+            right: -4,
+            bottom: -4,
+            fontSize: 9,
+            fontWeight: 700,
+            fontFamily: semantico.fonteRotulo,
+            color: semantico.textoSobreCor,
+            background: anel.cor,
+            borderRadius: 5,
+            padding: '1px 4px',
+            lineHeight: 1.4,
           }}
         >
           {selo}

@@ -251,8 +251,9 @@ async function principal() {
 
   const alvo = itensFeed[0]
   if (alvo) {
-    const temporada = temporadaDe(new Date(), calendarioDoRuleset(ruleset))
-    const tela = await telaDoJogador(db, alvo.jogadorId, { temporada })
+    const calendario = calendarioDoRuleset(ruleset)
+    const temporada = temporadaDe(new Date(), calendario)
+    const tela = await telaDoJogador(db, alvo.jogadorId, { temporada, calendario })
     const jogos = tela?.historico.length ?? 0
     registrar('Estatísticas · jogador', jogos > 0, `${jogos} jogos no histórico de ${alvo.nome}`)
     const arremessos = tela?.perfilNumeros.ataque.doisPercentual ?? null

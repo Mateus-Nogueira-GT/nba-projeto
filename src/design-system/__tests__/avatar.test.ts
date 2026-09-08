@@ -33,6 +33,25 @@ describe('Avatar', () => {
     expect(com).toContain('<img')
   })
 
+  it('o raio do rosto acompanha o contexto: 12 no card, 16 no hero do perfil', () => {
+    const noCard = renderToStaticMarkup(
+      createElement(Avatar, { nome: 'X', fotoUrl: null, timeSigla: 'LAL', nivelApito: null }),
+    )
+    expect(noCard).toContain('border-radius:12px')
+
+    const noHero = renderToStaticMarkup(
+      createElement(Avatar, {
+        nome: 'X',
+        fotoUrl: null,
+        timeSigla: 'LAL',
+        nivelApito: null,
+        tamanho: 72,
+        raio: 16,
+      }),
+    )
+    expect(noHero).toContain('border-radius:16px')
+  })
+
   it('o numeral do nível acompanha o anel (redundância do canal)', () => {
     const html = renderToStaticMarkup(
       createElement(Avatar, { nome: 'X', fotoUrl: null, timeSigla: 'LAL', nivelApito: 2 }),

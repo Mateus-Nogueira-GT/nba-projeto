@@ -23,6 +23,15 @@ import { telaDaClassificacao, telaDoTime } from '../estatisticas/time'
 import { rotaDoJogador, rotaDoTime } from '../estatisticas/rotas'
 
 const TEMPORADA = '2026'
+/**
+ * O calendário que faz as datas desta fixture caírem em `TEMPORADA`.
+ *
+ * `telaDoJogador` recorta o histórico pela temporada, e `jogos` guarda a data,
+ * não o rótulo: quem lê precisa dizer como um vira o outro (`temporadaDe`).
+ * Aqui a temporada é o ano civil, que é o que os jogos de agosto de 2026 dão.
+ */
+const CALENDARIO = { mesInicio: 1, formato: 'ano_inicial', fuso: 'UTC' } as const
+const RECORTE = { temporada: TEMPORADA, calendario: CALENDARIO }
 const HOJE = '2026-08-19'
 const AGORA = new Date('2026-08-19T23:30:00.000Z')
 
@@ -243,16 +252,14 @@ describe('os dois caminhos chegam na mesma tela', () => {
 
     // O destino não pode ser só uma string bonita: tem que carregar.
     const idNaRota = decodeURIComponent(rota.split('/').pop()!)
-    const tela = await telaDoJogador(banco.db, idNaRota, { temporada: TEMPORADA })
+    const tela = await telaDoJogador(banco.db, idNaRota, RECORTE)
 
     expect(tela).not.toBeNull()
     expect(tela!.perfil.nome).toBe('Luka Dončić')
   })
 
   it('2 pontos deriva de FG − 3P, com percentual próprio (proposta comercial)', async () => {
-    const tela = await telaDoJogador(banco.db, idPorNome.get('Luka Dončić')!, {
-      temporada: TEMPORADA,
-    })
+    const tela = await telaDoJogador(banco.db, idPorNome.get('Luka Dončić')!, RECORTE)
     // Fixture: cestas 12/22, três 4/9 → dois 8/13 = 61,5%
     expect(tela!.perfilNumeros.ataque.doisPercentual).toBe(61.5)
     // E lances livres seguem visíveis: 6/7 = 85,7%
@@ -344,9 +351,7 @@ describe('busca por grafia aproximada', () => {
 
 describe('tela do jogador', () => {
   it('traz o histórico linha a linha com adversário, resultado e percentuais', async () => {
-    const tela = await telaDoJogador(banco.db, idPorNome.get('Luka Dončić')!, {
-      temporada: TEMPORADA,
-    })
+    const tela = await telaDoJogador(banco.db, idPorNome.get('Luka Dončić')!, RECORTE)
 
     expect(tela).not.toBeNull()
     const linha = tela!.historico.find((h) => h.jogoId === jogoDeOntemId)
@@ -363,9 +368,7 @@ describe('tela do jogador', () => {
   })
 
   it('mostra o bloco ao vivo enquanto o jogador está em jogo', async () => {
-    const tela = await telaDoJogador(banco.db, idPorNome.get('Luka Dončić')!, {
-      temporada: TEMPORADA,
-    })
+    const tela = await telaDoJogador(banco.db, idPorNome.get('Luka Dončić')!, RECORTE)
 
     expect(tela!.aoVivo).not.toBeNull()
     expect(tela!.aoVivo!.jogoId).toBe(jogoDeHojeId)
@@ -383,7 +386,7 @@ describe('tela do jogador', () => {
       .values({ nomeCompleto: 'Fora da Rodada', timeId: phi!.id })
       .returning()
 
-    const tela = await telaDoJogador(banco.db, j!.id, { temporada: TEMPORADA })
+    const tela = await telaDoJogador(banco.db, j!.id, RECORTE)
     expect(tela!.aoVivo).toBeNull()
   })
 
@@ -391,9 +394,7 @@ describe('tela do jogador', () => {
     // Brunson está no LAL, que tem jogo AO_VIVO, mas não tem linha em
     // estatisticas_quarto. O bloco tem que existir — sumir com ele faria a
     // tela parecer quebrada — e tem que mostrar zero, não inventar número.
-    const tela = await telaDoJogador(banco.db, idPorNome.get('Jalen Brunson')!, {
-      temporada: TEMPORADA,
-    })
+    const tela = await telaDoJogador(banco.db, idPorNome.get('Jalen Brunson')!, RECORTE)
 
     expect(tela!.aoVivo).not.toBeNull()
     expect(tela!.aoVivo!.jogoId).toBe(jogoDeHojeId)
@@ -402,9 +403,7 @@ describe('tela do jogador', () => {
   })
 
   it('traz números completos de ataque, defesa e posse', async () => {
-    const tela = await telaDoJogador(banco.db, idPorNome.get('Luka Dončić')!, {
-      temporada: TEMPORADA,
-    })
+    const tela = await telaDoJogador(banco.db, idPorNome.get('Luka Dončić')!, RECORTE)
     const n = tela!.perfilNumeros
 
     // PTS/REB/AST vêm de medias_jogador — a MESMA média que a estratégia usa.
@@ -421,7 +420,7 @@ describe('tela do jogador', () => {
 
   it('devolve null para jogador que não existe', async () => {
     const inexistente = '00000000-0000-0000-0000-000000000000'
-    expect(await telaDoJogador(banco.db, inexistente, { temporada: TEMPORADA })).toBeNull()
+    expect(await telaDoJogador(banco.db, inexistente, RECORTE)).toBeNull()
   })
 
   it('percentual sem tentativa é nulo, nunca 0%', async () => {
@@ -437,7 +436,7 @@ describe('tela do jogador', () => {
       cestasT: 0,
     })
 
-    const tela = await telaDoJogador(banco.db, j!.id, { temporada: TEMPORADA })
+    const tela = await telaDoJogador(banco.db, j!.id, RECORTE)
     expect(tela!.historico[0]!.fgPercentual).toBeNull()
   })
 })
@@ -495,7 +494,7 @@ describe('tela do time', () => {
     expect(tela!.elenco.length).toBeGreaterThan(0)
 
     const primeiro = tela!.elenco[0]!
-    const doJogador = await telaDoJogador(banco.db, primeiro.id, { temporada: TEMPORADA })
+    const doJogador = await telaDoJogador(banco.db, primeiro.id, RECORTE)
     expect(doJogador).not.toBeNull()
   })
 
@@ -547,7 +546,7 @@ describe('horário da última atualização', () => {
     const telas = [
       await telaJogosDoDia(banco.db, HOJE, 'America/Sao_Paulo'),
       await telaDaClassificacao(banco.db, TEMPORADA),
-      (await telaDoJogador(banco.db, idPorNome.get('Luka Dončić')!, { temporada: TEMPORADA }))!,
+      (await telaDoJogador(banco.db, idPorNome.get('Luka Dončić')!, RECORTE))!,
       (await telaDoTime(banco.db, lalId, { temporada: TEMPORADA }))!,
     ]
 
@@ -721,7 +720,7 @@ describe('ingestão parcial', () => {
         .values({ jogoId: j!.id, jogadorId: p!.id, minutos, pontos: 10 })
     }
 
-    const tela = await telaDoJogador(banco.db, p!.id, { temporada: TEMPORADA })
+    const tela = await telaDoJogador(banco.db, p!.id, RECORTE)
     // Jogou 36 e 34: a média de quem jogou é 35. Contar o nulo como 0 daria
     // 23,3 e faria o titular parecer reserva por causa de um buraco no dado.
     expect(tela!.perfilNumeros.posse.minutos).toBe(35)

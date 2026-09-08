@@ -503,7 +503,7 @@ describe('Estatísticas — identidade 03 (conferência em lote)', () => {
     const [umTime] = await banco.db.select().from(times).limit(1)
     const { default: Time } = await import('../(app)/estatisticas/time/[id]/page')
     const htmlTime = renderToStaticMarkup(
-      await Time({ params: Promise.resolve({ id: umTime!.id }) }),
+      await Time({ params: Promise.resolve({ id: umTime!.id }), searchParams: Promise.resolve({}) }),
     )
 
     await gravarConferencia(

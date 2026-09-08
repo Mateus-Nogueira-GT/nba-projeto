@@ -38,6 +38,21 @@ describe('badge da nota da partida', () => {
     }
   })
 
+  it('no bloco dos quatro números o badge cresce — ali ele é O número do jogador', () => {
+    // Duas medidas no artboard: 14px sem largura mínima no hero dos quatro
+    // números, 12px com largura mínima na célula da tabela. Uma medida só
+    // fazia o quarto "número grande" sair mais fraco que os três em Anton.
+    const naTabela = renderToStaticMarkup(createElement(NotaPartida, { nota: 6.5 }))
+    const noDestaque = renderToStaticMarkup(
+      createElement(NotaPartida, { nota: 6.5, destaque: true }),
+    )
+
+    expect(naTabela).toContain('font-size:12px')
+    expect(naTabela).toContain('min-width:34px')
+    expect(noDestaque).toContain('font-size:14px')
+    expect(noDestaque).not.toContain('min-width')
+  })
+
   it('nunca escreve "probabilidade" nem "nível"', () => {
     const html = renderToStaticMarkup(createElement(NotaPartida, { nota: 7 })).toLowerCase()
     expect(html).not.toContain('probabilidade')

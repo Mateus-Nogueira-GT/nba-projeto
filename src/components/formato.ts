@@ -50,6 +50,21 @@ export function diaCompleto(quando: Date, fuso: string): string {
 }
 
 /**
+ * "5/9" — dia e mês SEM zero à esquerda, a forma curta da identidade 04.
+ *
+ * Distinta de `diaCurto` ("05/09") de propósito: onde a data é apoio de uma
+ * linha densa (o apito, a linha da tabela jogo a jogo), o zero à esquerda só
+ * ocupa espaço. Uma tela usa UMA forma — foi ver "8/1" e "08/01" a quinze
+ * linhas de distância, sobre os mesmos jogos, que criou esta função.
+ */
+export function diaMes(quando: Date, fuso: string): string {
+  const [dia, mes] = quando
+    .toLocaleDateString('pt-BR', { timeZone: fuso, day: '2-digit', month: '2-digit' })
+    .split('/')
+  return `${Number(dia)}/${Number(mes)}`
+}
+
+/**
  * "segunda-feira, 24 de ago" a partir de um dia de referência (YYYY-MM-DD).
  *
  * A data de referência não tem hora: é um rótulo de calendário, não um

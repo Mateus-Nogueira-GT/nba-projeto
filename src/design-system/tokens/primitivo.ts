@@ -110,6 +110,9 @@ export const primitivo = {
   // (PRÉ · 1º Q · FIM 1º Q · FT), derivadas do vermelho400 do ao vivo.
   vermelhoVeu14: 'rgba(255,107,107,.14)',
   vermelhoVeu45: 'rgba(255,107,107,.45)',
+  // O divisor (tinta500) a meia força: a linha ENTRE registros de uma tabela
+  // densa. A régua cheia por linha vira grade; a meia força separa sem pesar.
+  tinta500Veu50: 'rgba(42,56,82,.5)',
   // Tinta do verde do nível 3 (verde400) para o FUNDO da aba de atributo ativa
   // no rodapé do card: a borda é o verde cheio, o fundo é ele a 12%.
   verdeVeu12: 'rgba(61,211,126,.12)',
