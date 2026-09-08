@@ -1,7 +1,8 @@
 # Identidade 04 · Varredura e análise: a passada de UX com os aspectos do Sofascore
 
 **Data:** 07/09/2026 · **Status:** brainstorm fechado por grilling (22 perguntas, 3 rodadas) e
-confirmado pelo parceiro; mockups em produção, aguardando aprovação antes de qualquer código
+confirmado pelo parceiro; **os cinco artboards foram aprovados em 07/09** e as fases 1–7 estão
+em execução; o fechamento inclui o loop de depuração automática da §10
 **Herda de:** [`02 Rota Transmissão`](2026-08-24-identidade-rota-transmissao-design.md) e
 [`03 Broadcast`](2026-08-25-identidade-03-broadcast-design.md), que ficam. Depende de
 [`temporada simulada`](2026-09-06-temporada-simulada-design.md) mesclada (PR #12).
@@ -341,3 +342,88 @@ Cada tela: mockup aprovado → tarefa → fumaça renderizada → `demo:conferir
 lançamento, **anatomia do card e posição das abas congelam pela temporada**; mudança só
 com feature junto — o app é ritual diário e cada reorganização cobra reaprendizado de
 toda a base.
+
+## 10 · Depuração automática — o loop de fechamento
+
+Pedido do parceiro em 07/09, depois de ver as telas prontas: **"debugue tudo automático,
+como se fosse um loop"**. Esta seção é o contrato desse loop.
+
+### 10.1 · Por que ele existe
+
+A suíte prova que cada peça responde. Ela não prova que **a noite inteira fecha**. Esta
+passada mexeu em nove telas por três frentes paralelas, e os defeitos que sobram depois de
+uma integração assim não são de unidade — são de **costura**: a mesma partida com data
+diferente em duas seções da mesma tela (achado real da revisão da 5.1, causado por ler o
+rótulo da rodada em UTC de um lado e o horário do jogo no fuso do outro); o mesmo apito com
+linha de um jeito na Lista e de outro no detalhe; um estado de borda que nenhum teste
+visitou porque o sorteio da temporada não o produziu naquele dia.
+
+Achado de costura não aparece para quem olha um arquivo. Aparece para quem **roda a noite
+inteira e compara o que as telas dizem entre si**. É isso que o loop faz, e é por isso que
+ele roda **depois** da integração, nunca no lugar da revisão por tarefa.
+
+### 10.2 · O ciclo
+
+Cada rodada tem quatro passos, nesta ordem:
+
+1. **Bateria fixa**, sem julgamento humano: `typecheck`, `lint`, `boundaries`, a suíte
+   inteira, `demo:conferir` sobre um banco PGlite semeado por `simularAte`, e a captura das
+   telas a 390 px (`scripts/captura-telas.sh`). Qualquer vermelho aqui é defeito, ponto.
+2. **Varredura por lentes independentes**, cada uma cega para as outras — ver 10.3.
+3. **Verificação adversarial de cada achado**: quem acha não conserta, e quem verifica
+   tenta **refutar**. Achado que não sobrevive à tentativa de refutação é registrado como
+   rejeitado, com o motivo, e **não volta na rodada seguinte** (o loop guarda o que já viu;
+   sem isso ele nunca converge).
+4. **Correção com teste primeiro**: o achado confirmado vira um teste que falha, depois a
+   correção, depois o commit. Um commit por achado ou por grupo coeso de achados.
+
+### 10.3 · As lentes
+
+Independentes de propósito: uma varredura única encontra o que ela sabe procurar, e o
+defeito de costura mora exatamente onde ninguém estava olhando.
+
+- **Escrita** — as regras de 3.8 varridas no HTML renderizado de *todas* as telas, não no
+  código: "probabilidade" (a única ocorrência lícita é a frase do rodapé do detalhe que a
+  nega), nota da partida chamada de "nível", linha com meio ponto, odd fora de faixa,
+  decimal no score de confiança, e a regra nova de 4.4 — taxa da noite ou da temporada no
+  mesmo elemento que uma nota de confiança.
+- **Estados de borda**, que o sorteio não garante: dia sem lista publicada, jogo encerrado
+  sem box score, jogador sem foto, filtro que zera a lista, parâmetro inválido na URL, DNP,
+  turbo, jogador oculto, primeiro dia da temporada (sem histórico), e o jogo que atravessa
+  a meia-noite de Brasília.
+- **Coerência entre telas** — a lente que só existe aqui. O **mesmo apito** lido na Lista,
+  no detalhe, no Fire Live, nos Resultados e no perfil do jogador tem de contar a **mesma
+  história**: mesma linha, mesma data, mesmo veredito, mesma média, mesma faixa de odd.
+  Divergência entre duas telas é defeito mesmo quando as duas passam nos seus testes.
+- **Acessibilidade e fronteiras** — texto alternativo, ordem de leitura, `aria-current`,
+  contraste dos pares novos; `boundaries` limpo, motor intocado, aba de estatísticas sem
+  importar do motor nem como tipo.
+- **Fidelidade visual** — cada captura a 390 px contra o artboard aprovado: estrutura,
+  ordem das seções, rótulos. Acabamento de um ou dois pixels é nota, não defeito.
+
+### 10.4 · Quando para
+
+**Duas rodadas seguidas sem achado novo.** Não é contagem de achados nem número fixo de
+rodadas: o alvo é o silêncio, e o silêncio só conta quando se repete.
+
+### 10.5 · O que o loop não pode fazer
+
+Estes limites valem mais que qualquer achado:
+
+- **Não inventa regra de estratégia.** Achado que depende de decisão do CJ ou do parceiro
+  vira linha em "decisões pendentes" no relatório — nunca código. Vale a regra 3 do
+  `CLAUDE.md`: regra inventada aqui vira push errado no celular de assinante pagante.
+- **Não toca o ruleset nem o motor.** Se a correção exige mudar o motor, o achado é da
+  próxima passada.
+- **Não mexe na anatomia do card nem na posição das abas** — congeladas pela temporada
+  (§9).
+- **Não silencia teste.** Teste vermelho é defeito até prova em contrário; apagar asserção
+  para ficar verde é o oposto do que o loop existe para fazer.
+- **Não roda contra o Neon.** PGlite e o arnês de captura bastam, e a árvore da
+  apresentação fica fora.
+
+### 10.6 · Saída
+
+Um relatório com três listas: **corrigidos** (com o commit e o teste que os trava),
+**rejeitados** (com o motivo da refutação) e **decisões pendentes** (o que precisa do CJ ou
+do parceiro). O relatório é a prova de que o loop parou por silêncio, e não por cansaço.

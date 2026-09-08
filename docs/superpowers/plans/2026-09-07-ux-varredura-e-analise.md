@@ -364,10 +364,29 @@ lente?: Lente                          // decide a zona 2: ULT5 (Barrinhas) · M
 
 ---
 
+# Fase 7 · Loop de depuração automática — **gate: integração concluída**
+
+Contrato completo na **§10 da spec**. Aqui só o que é executável.
+
+### Task 7.1: Rodar o loop até o silêncio
+
+**Files:** qualquer arquivo desta passada; nenhum em `src/modules/motor/**`, `config/` ou na anatomia do card.
+
+- [ ] **Step 1: Bateria fixa** — `npm run typecheck && npm run lint && npm run boundaries && npm test`, `demo:conferir` em PGlite, e `scripts/captura-telas.sh 1800`. Vermelho aqui é defeito, sem julgamento.
+- [ ] **Step 2: Varredura pelas cinco lentes** da §10.3, independentes: escrita no HTML renderizado · estados de borda · **coerência entre telas** (o mesmo apito conta a mesma história na Lista, no detalhe, no Fire Live, nos Resultados e no perfil) · acessibilidade e fronteiras · fidelidade visual contra os artboards.
+- [ ] **Step 3: Verificação adversarial** de cada achado — quem acha não conserta; quem verifica tenta refutar. Rejeitado entra no conjunto do que já foi visto e não volta.
+- [ ] **Step 4: Correção com teste primeiro**, um commit por achado ou grupo coeso.
+- [ ] **Step 5: Repetir** até **duas rodadas seguidas sem achado novo** (§10.4).
+- [ ] **Step 6: Relatório** com corrigidos, rejeitados (com motivo) e **decisões pendentes** — o que precisa do CJ ou do parceiro nunca vira código (§10.5).
+
+---
+
 ## Auto-revisão
 
 **Cobertura da spec.** 3.1–3.8 princípios → constraints globais e Task 0.7 (refresh). 4.1 → Tasks 0.5, 1.1, 1.2. 4.2 → 0.7, 2.1, 2.2. 4.3 → 0.5 (fatores, últimos 10), 3.1. 4.4 → 0.5 (recap, taxa), 4.1. 4.5 → 0.5 (histórico, hierarquia), 5.1–5.3. 5.1 ciclo → 0.5 (`estadoDoCiclo`), 1.1, 4.1. 5.2 nota → 5.1, constraint. 5.3 imagem → 0.1, 0.3, constraint dos escudos. 5.4 acabamento → 0.6, 1.1. 5.5 narrativa → 0.2. 7 mockups → gates por fase. 8 fora de escopo → nenhuma tarefa. 9 ordem → fases.
 
 **Consistência de nomes.** `GrupoDeJogo`/`agruparPorJogo` (0.5 → 1.2, 2.2); `EstadoDoCiclo`/`estadoDoCiclo` (0.5 → 1.1, 4.1); `Fator`/`construirPorque` (0.5 → 3.1); `apitosDoJogador`/`ApitoDoJogador` (0.5 → 5.1); `hierarquiaDoTime`/`LinhaHierarquia` (0.5 → 5.2); `PreferenciasUsuario`/`OrdemLista`/`Lente` (0.4 → 1.1, 1.2); `recapDaNoite`/`taxaDaTemporada` (0.5 → 4.1); `SeloContexto`/`CabecalhoJogo` (1.1 → 2.2, 4.1).
+
+**Cobertura da spec (adendo).** 10 loop de depuração → Fase 7 (Task 7.1), que roda depois da Fase 6 e é o último gate antes do PR.
 
 **Riscos.** (1) `taxaDaTemporada` por render: é uma consulta agregada; se pesar, cache de 5 min no servidor — decidir na 4.1 medindo. (2) A curadoria dos 229 rostos (0.3) é a tarefa mais lenta e a de maior risco de erro humano; o teste exige `null` justificado em vez de palpite. (3) O agrupamento por jogo depende de `ItemFeed.jogoId` — existe. (4) A regra de escrita "taxa vs confiança" é nova e precisa estar no `docs/04` antes da 4.1 virar código.
