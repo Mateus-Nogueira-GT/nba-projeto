@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest'
 
-import { agruparPorJogo, estadoDoCiclo, ordenarPorSinal } from '../lista-por-jogo'
+import {
+  agruparPorJogo,
+  cartoesPorJogador,
+  confrontoDoItem,
+  estadoDoCiclo,
+  ordenarPorSinal,
+  posicoesNaHierarquia,
+} from '../lista-por-jogo'
 import type { JogoResumo } from '../lista-por-jogo'
 import type { ItemFeed } from '../tipos-feed'
 
@@ -63,7 +70,9 @@ describe('ordenarPorSinal — dentro do jogo, o sinal mais forte primeiro', () =
     const n3grau4mais = item({ nivelApito: 3, grauConfianca: 4, confianca: 91 })
     const turbo = item({ nivelApito: 3, turbo: true, grauConfianca: 2, confianca: 84 })
 
-    const ordem = ordenarPorSinal([n1, n2, n3grau3, n3grau4, turbo, n3grau4mais]).map((i) => i.chave)
+    const ordem = ordenarPorSinal([n1, n2, n3grau3, n3grau4, turbo, n3grau4mais]).map(
+      (i) => i.chave,
+    )
     expect(ordem).toEqual([turbo, n3grau4mais, n3grau4, n3grau3, n2, n1].map((i) => i.chave))
   })
 
@@ -77,9 +86,26 @@ describe('ordenarPorSinal — dentro do jogo, o sinal mais forte primeiro', () =
 })
 
 describe('agruparPorJogo — um grupo por jogo, em ordem de horário', () => {
-  const j1 = jogo({ id: 'j1', dataHoraUtc: new Date('2026-09-07T23:00:00.000Z'), casaSigla: 'SAS', visitanteSigla: 'PHI' })
-  const j2 = jogo({ id: 'j2', dataHoraUtc: new Date('2026-09-07T22:30:00.000Z'), status: 'AO_VIVO', quartoAtual: 1, placarCasa: 33, placarVisitante: 48 })
-  const j3 = jogo({ id: 'j3', dataHoraUtc: new Date('2026-09-08T01:30:00.000Z'), casaSigla: 'BOS', visitanteSigla: 'NOP' })
+  const j1 = jogo({
+    id: 'j1',
+    dataHoraUtc: new Date('2026-09-07T23:00:00.000Z'),
+    casaSigla: 'SAS',
+    visitanteSigla: 'PHI',
+  })
+  const j2 = jogo({
+    id: 'j2',
+    dataHoraUtc: new Date('2026-09-07T22:30:00.000Z'),
+    status: 'AO_VIVO',
+    quartoAtual: 1,
+    placarCasa: 33,
+    placarVisitante: 48,
+  })
+  const j3 = jogo({
+    id: 'j3',
+    dataHoraUtc: new Date('2026-09-08T01:30:00.000Z'),
+    casaSigla: 'BOS',
+    visitanteSigla: 'NOP',
+  })
 
   it('agrupa pelo jogoId, ordena os grupos pelo horário e os itens pelo sinal', () => {
     const itens = [
@@ -120,7 +146,12 @@ describe('agruparPorJogo — um grupo por jogo, em ordem de horário', () => {
     // Perder o apito em silêncio seria pior do que mostrá-lo sem cabeçalho.
     const grupos = agruparPorJogo([item({ jogoId: 'j1' }), item({ jogoId: 'orfao' })], [j1])
     expect(grupos).toHaveLength(2)
-    expect(grupos[1]).toMatchObject({ jogoId: 'orfao', casaSigla: '—', visitanteSigla: '—', status: 'AGENDADO' })
+    expect(grupos[1]).toMatchObject({
+      jogoId: 'orfao',
+      casaSigla: '—',
+      visitanteSigla: '—',
+      status: 'AGENDADO',
+    })
   })
 })
 
@@ -140,5 +171,113 @@ describe('estadoDoCiclo — o card sabe em que ponto da noite está', () => {
   it('o quarto do Fire Live vem do ruleset, não é 1 por decreto', () => {
     // Se o CJ um dia observar outro quarto, o estado acompanha sem código novo.
     expect(estadoDoCiclo({ status: 'AO_VIVO', quartoAtual: 2 }, false, 2)).toBe('Q1')
+  })
+})
+
+/**
+ * UM CARD POR JOGADOR (spec 04, §4.1). A regra é da ENTREGA, não da tela: o
+ * Fire Live (task 2.2) precisa do mesmo card, e o que mora em `page.tsx` só é
+ * testável renderizando a tela inteira.
+ */
+describe('cartoesPorJogador — o mesmo jogador em dois atributos é UM card', () => {
+  it('agrupa por jogador e o principal é o de MAIOR sinal, na ordem em que a lista veio', () => {
+    const forte = item({ jogadorId: 'p1', atributo: 'PONTOS', nivelApito: 3 })
+    const fraco = item({ jogadorId: 'p1', atributo: 'REBOTES', nivelApito: 1 })
+    const outro = item({ jogadorId: 'p2', atributo: 'PONTOS', nivelApito: 2 })
+
+    const cartoes = cartoesPorJogador(ordenarPorSinal([fraco, outro, forte]))
+    expect(cartoes.map((c) => c.principal.jogadorId)).toEqual(['p1', 'p2'])
+    expect(cartoes[0]!.principal.atributo).toBe('PONTOS')
+    expect(cartoes[0]!.atributos).toHaveLength(2)
+  })
+
+  it('as abas saem em ordem FIXA PTS · REB · AST, igual em todos os cards', () => {
+    // Numa tela de varredura, rodapé que muda de ordem de card para card
+    // obriga a LER em vez de varrer — o artboard fixa PTS · REB · AST.
+    const cartoes = cartoesPorJogador(
+      ordenarPorSinal([
+        item({ jogadorId: 'p1', atributo: 'ASSISTENCIAS', nivelApito: 3 }),
+        item({ jogadorId: 'p1', atributo: 'REBOTES', nivelApito: 2 }),
+        item({ jogadorId: 'p1', atributo: 'PONTOS', nivelApito: 1 }),
+      ]),
+    )
+    expect(cartoes[0]!.atributos.map((i) => i.atributo)).toEqual([
+      'PONTOS',
+      'REBOTES',
+      'ASSISTENCIAS',
+    ])
+    // a ordem das abas NÃO mexe em quem manda: o principal segue o maior sinal
+    expect(cartoes[0]!.principal.atributo).toBe('ASSISTENCIAS')
+  })
+
+  it('a aba aberta troca o apito VISÍVEL, nunca o principal — o card não pula de lugar', () => {
+    const itens = ordenarPorSinal([
+      item({ jogadorId: 'p1', atributo: 'PONTOS', nivelApito: 3 }),
+      item({ jogadorId: 'p1', atributo: 'REBOTES', nivelApito: 1 }),
+      item({ jogadorId: 'p2', atributo: 'PONTOS', nivelApito: 2 }),
+    ])
+    const cartoes = cartoesPorJogador(itens, (id) => (id === 'p1' ? 'REBOTES' : undefined))
+    expect(cartoes[0]!.visivel.atributo).toBe('REBOTES')
+    expect(cartoes[0]!.principal.atributo).toBe('PONTOS')
+    // o card do vizinho não se mexeu
+    expect(cartoes[1]!.visivel.atributo).toBe('PONTOS')
+  })
+
+  it('aba pedida que o jogador não tem hoje cai no principal, sem card vazio', () => {
+    const cartoes = cartoesPorJogador(
+      [item({ jogadorId: 'p1', atributo: 'PONTOS' })],
+      () => 'REBOTES',
+    )
+    expect(cartoes[0]!.visivel.atributo).toBe('PONTOS')
+  })
+})
+
+describe('confrontoDoItem — mandante e visitante, como o artboard escreve', () => {
+  const j = jogo({ id: 'j1', casaSigla: 'IND', visitanteSigla: 'MIA' })
+
+  it('jogador do time da casa recebe "vs"; o do visitante, "@"', () => {
+    expect(confrontoDoItem({ timeSigla: 'IND' }, j)).toEqual({
+      adversarioSigla: 'MIA',
+      emCasa: true,
+    })
+    expect(confrontoDoItem({ timeSigla: 'MIA' }, j)).toEqual({
+      adversarioSigla: 'IND',
+      emCasa: false,
+    })
+  })
+
+  it('time que não é nenhum dos dois lados não vira confronto inventado', () => {
+    // O vínculo jogador↔time é curadoria do CJ e pode não bater com a partida
+    // real (Giannis no Miami). Sem certeza, o card não fala em confronto.
+    expect(confrontoDoItem({ timeSigla: 'LAL' }, j)).toBeNull()
+    expect(confrontoDoItem({ timeSigla: 'IND' }, null)).toBeNull()
+  })
+})
+
+describe('posicoesNaHierarquia — a lente HIERARQUIA lê a lista do CJ', () => {
+  const linhas = [
+    { jogadorId: 'p1', timeId: 't1', atributo: 'PONTOS' as const, posicaoHierarquia: 1 },
+    { jogadorId: 'p2', timeId: 't1', atributo: 'PONTOS' as const, posicaoHierarquia: 2 },
+    { jogadorId: 'p3', timeId: 't1', atributo: 'PONTOS' as const, posicaoHierarquia: 3 },
+    { jogadorId: 'p1', timeId: 't1', atributo: 'REBOTES' as const, posicaoHierarquia: 2 },
+    { jogadorId: 'p9', timeId: 't2', atributo: 'PONTOS' as const, posicaoHierarquia: 1 },
+  ]
+
+  it('devolve a posição no time E o total daquele time NAQUELE atributo', () => {
+    const mapa = posicoesNaHierarquia(linhas, [
+      { jogadorId: 'p2', atributo: 'PONTOS' },
+      { jogadorId: 'p1', atributo: 'REBOTES' },
+      { jogadorId: 'p9', atributo: 'PONTOS' },
+    ])
+    expect(mapa.get('p2:PONTOS')).toEqual({ posicao: 2, total: 3 })
+    // o total é do atributo pedido: em REBOTES só há um jogador cadastrado
+    expect(mapa.get('p1:REBOTES')).toEqual({ posicao: 2, total: 1 })
+    // e é do TIME do jogador, não da liga
+    expect(mapa.get('p9:PONTOS')).toEqual({ posicao: 1, total: 1 })
+  })
+
+  it('jogador sem linha na versão ativa fica de fora — a lente escreve "—", nunca um palpite', () => {
+    const mapa = posicoesNaHierarquia(linhas, [{ jogadorId: 'p4', atributo: 'PONTOS' }])
+    expect(mapa.has('p4:PONTOS')).toBe(false)
   })
 })

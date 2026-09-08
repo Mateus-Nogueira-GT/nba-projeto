@@ -126,7 +126,11 @@ async function gravarConferencia(nome: string, html: string) {
 }
 
 describe('Lista Secreta', () => {
-  it('mostra um card por jogador e atributo, com o filtro de atributo', async () => {
+  // O "card por jogador E atributo" virou UM card por jogador com abas de
+  // atributo na identidade 04 — quem prova isso é `telas-04-lista.test.ts`.
+  // Aqui fica o que continua valendo: o recorte por atributo existe e o link
+  // do detalhe carrega o atributo.
+  it('mostra a lista do dia, com o recorte por atributo', async () => {
     const { default: Pagina } = await import('../(app)/page')
     const html = renderToStaticMarkup(await Pagina({ searchParams: Promise.resolve({}) }))
 
@@ -184,13 +188,14 @@ describe('Lista Secreta', () => {
     expect(html).toMatch(/href="\/\?atributo=REBOTES"/)
   }, 60_000)
 
-  it('cabeçalho do mockup + seletor Hoje/Resultados + grau na pílula', async () => {
+  it('cabeçalho do mockup + grau na pílula', async () => {
     const { default: Pagina } = await import('../(app)/page')
     const html = renderToStaticMarkup(await Pagina({ searchParams: Promise.resolve({}) }))
-    expect(html).toContain('LISTA SECRETA · PRÉ-LIVE')
+    // Na identidade 04 a sobrancelha perdeu o "· PRÉ-LIVE" (virou o selo de
+    // contexto no canto) e os chips HOJE/RESULTADOS deram lugar ao seletor
+    // POR JOGO · POR NÍVEL — ver `telas-04-lista.test.ts`.
+    expect(html).toContain('LISTA SECRETA')
     expect(html).toContain('LISTA DO DIA')
-    expect(html).toContain('HOJE')
-    expect(html).toContain('RESULTADOS')
     expect(html).toMatch(/PONTOS \d+\+/)
     // Nenhuma LINHA com meio ponto. Cegar em /\d,5/ seria errado: a tela de
     // Gestão exibe "0,5 unidade" legitimamente.
@@ -304,7 +309,7 @@ describe('Fire Live', () => {
     // CardEntrada, que renderiza como `>VIVO<` (span sem filhos além do
     // texto); a sobrancelha nunca produz esse padrão.
     expect(html).toMatch(/>VIVO</)
-    expect(html).toMatch(/LINHA BATIDA|FALTA \d/)
+    expect(html).toMatch(/ALVO BATIDO|FALTA \d/)
   }, 60_000)
 })
 
@@ -374,8 +379,10 @@ describe('a rodada segue o fuso do cliente', () => {
       const { default: Pagina } = await import('../(app)/page')
       const html = renderToStaticMarkup(await Pagina({ searchParams: Promise.resolve({}) }))
 
-      expect(html).not.toContain('ainda não foi publicada')
-      expect(html).toContain('sugerida')
+      // O estado "sem lista" da 04 é "Próxima lista às HH:MM"; publicada, o
+      // subtítulo conta a rodada: "N entradas em M jogos".
+      expect(html).not.toContain('Próxima lista às')
+      expect(html).toMatch(/\d+ entradas em \d+ jogos/)
     } finally {
       vi.setSystemTime(AGORA)
     }

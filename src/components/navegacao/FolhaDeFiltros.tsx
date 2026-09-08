@@ -113,7 +113,8 @@ export function FolhaDeFiltros({
             height="14"
             viewBox="0 0 14 14"
             fill="none"
-            stroke="currentColor"
+            // Cinza do artboard, não a cor do texto do botão: o ícone é apoio.
+            stroke={semantico.textoSecundario}
             strokeWidth="1.5"
           >
             <path d="M1 3h12M3 7h8M5 11h4" />

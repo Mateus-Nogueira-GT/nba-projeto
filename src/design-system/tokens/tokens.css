@@ -66,7 +66,10 @@
   --ao-vivo-solido: #FF6B6B;
   --ao-vivo-tinta: rgba(255,107,107,.14);
   --ao-vivo-borda: rgba(255,107,107,.45);
+  --apito-nivel1-tinta: rgba(255,201,61,.12);
+  --apito-nivel2-tinta: rgba(255,152,56,.12);
   --apito-nivel3-tinta: rgba(61,211,126,.12);
+  --apito-turbo-tinta: rgba(77,163,255,.12);
   --turbo-claro: #8CC4FF;
   --turbo-escuro: #2A7FD9;
   --duracao-estado: 200ms;

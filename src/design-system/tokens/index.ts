@@ -7,11 +7,4 @@
 export { semantico, type Semantico } from './semantico'
 export { componente, type Componente } from './componente'
 export { NIVEL_JOGADOR, APITO, gerarCss } from './css'
-export {
-  razaoDeContraste,
-  luminancia,
-  passaAA,
-  melhorTextoSobre,
-  AA,
-  type Rgb,
-} from './contraste'
+export { razaoDeContraste, luminancia, passaAA, melhorTextoSobre, AA, type Rgb } from './contraste'

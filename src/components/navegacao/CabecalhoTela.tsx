@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import type { ReactNode } from 'react'
+import type { CSSProperties, ReactNode } from 'react'
 
 import { semantico } from '@/design-system/tokens/semantico'
 
@@ -12,6 +12,17 @@ export type GrupoDeOpcoes = {
   ativa: string
   /** Nome do grupo para leitor de tela. */
   rotulo?: string
+  /**
+   * Server action que GRAVA a escolha na conta antes de navegar (identidade
+   * 04: ordem da lista e lente do card são preferência por conta). Com ela o
+   * grupo vira um `<form>` e cada opção vira `<button name="destino">` com o
+   * próprio href no valor — submete sem JavaScript, e a ação redireciona para
+   * o destino, deixando a URL coerente com o que a tela passa a mostrar.
+   *
+   * Ausente, o grupo continua sendo links: navegação não é preferência (é o
+   * caso do seletor HOJE · RESULTADOS).
+   */
+  acao?: (formulario: FormData) => void | Promise<void>
 }
 
 /**
@@ -76,7 +87,9 @@ export function CabecalhoTela({
               fontFamily: semantico.fonteRotulo,
               fontSize: 12,
               letterSpacing: 2,
-              color: corMarcador,
+              // O TEXTO da sobrancelha é cinza (artboard 04, `.sobr`); quem
+              // carrega a cor do contexto é o marcador ao lado.
+              color: semantico.textoSecundario,
               textTransform: 'uppercase',
             }}
           >
@@ -150,42 +163,106 @@ export function CabecalhoTela({
  * SELETOR SEGMENTADO — POR JOGO · POR NÍVEL. A opção ativa é preenchida no
  * acento e marcada com `aria-current`, redundante com a cor.
  */
-function Seletor({ opcoes, ativa, rotulo = 'Ordenação' }: GrupoDeOpcoes) {
+function Seletor({ opcoes, ativa, rotulo = 'Ordenação', acao }: GrupoDeOpcoes) {
+  const moldura: CSSProperties = {
+    display: 'inline-flex',
+    border: `1.5px solid ${semantico.divisor}`,
+    borderRadius: 999,
+    overflow: 'hidden',
+  }
+  const estilo = (ativo: boolean): CSSProperties => ({
+    padding: '6px 14px',
+    fontFamily: semantico.fonteRotulo,
+    fontSize: 12,
+    letterSpacing: 1.2,
+    textTransform: 'uppercase',
+    textDecoration: 'none',
+    whiteSpace: 'nowrap',
+    fontWeight: ativo ? 700 : 600,
+    color: ativo ? semantico.textoSobreCor : semantico.textoSecundario,
+    background: ativo ? semantico.acento : 'transparent',
+  })
+
   return (
-    <nav
-      aria-label={rotulo}
-      style={{
-        display: 'inline-flex',
-        border: `1.5px solid ${semantico.divisor}`,
-        borderRadius: 999,
-        overflow: 'hidden',
-      }}
-    >
-      {opcoes.map((opcao) => {
-        const ativo = opcao.valor === ativa
-        return (
-          <Link
-            key={opcao.valor}
-            href={opcao.href}
-            aria-current={ativo ? 'page' : undefined}
-            style={{
-              padding: '6px 14px',
-              fontFamily: semantico.fonteRotulo,
-              fontSize: 12,
-              letterSpacing: 1.2,
-              textTransform: 'uppercase',
-              textDecoration: 'none',
-              whiteSpace: 'nowrap',
-              fontWeight: ativo ? 700 : 600,
-              color: ativo ? semantico.textoSobreCor : semantico.textoSecundario,
-              background: ativo ? semantico.acento : 'transparent',
-            }}
-          >
-            {opcao.rotulo}
-          </Link>
-        )
-      })}
+    <Grupo rotulo={rotulo} acao={acao} estiloDoGrupo={moldura}>
+      {opcoes.map((opcao) => (
+        <Opcao
+          key={opcao.valor}
+          opcao={opcao}
+          ativo={opcao.valor === ativa}
+          acao={acao}
+          estilo={estilo(opcao.valor === ativa)}
+        />
+      ))}
+    </Grupo>
+  )
+}
+
+/**
+ * O invólucro do grupo: `<nav>` de links, ou `<form>` de botões quando a
+ * escolha também precisa ser GRAVADA. Um só lugar decide — os dois grupos
+ * (seletor e lentes) herdam o mesmo comportamento.
+ */
+function Grupo({
+  rotulo,
+  acao,
+  estiloDoGrupo,
+  children,
+}: {
+  rotulo: string
+  acao?: GrupoDeOpcoes['acao']
+  estiloDoGrupo: CSSProperties
+  children: ReactNode
+}) {
+  return acao ? (
+    <form action={acao} aria-label={rotulo} style={estiloDoGrupo}>
+      {children}
+    </form>
+  ) : (
+    <nav aria-label={rotulo} style={estiloDoGrupo}>
+      {children}
     </nav>
+  )
+}
+
+/**
+ * A opção: `<a>` quando só navega, `<button name="destino">` quando grava.
+ *
+ * O destino viaja no VALOR do botão, e não num `formAction` por opção: React
+ * ignora o `name` de um botão que declara `formAction` como função (precisa
+ * dele para codificar qual ação chamar), e sem o `name` a ação não saberia
+ * para onde ir. Com a ação no `<form>` e o destino no botão, a submissão
+ * funciona com JavaScript desligado.
+ */
+function Opcao({
+  opcao,
+  ativo,
+  acao,
+  estilo,
+}: {
+  opcao: OpcaoDeNavegacao
+  ativo: boolean
+  acao?: GrupoDeOpcoes['acao']
+  estilo: CSSProperties
+}) {
+  return acao ? (
+    <button
+      type="submit"
+      name="destino"
+      value={opcao.href}
+      aria-current={ativo ? 'page' : undefined}
+      // A borda é do ESTILO do grupo, não do botão: zerá-la aqui comia a
+      // borda divisória da lente ativa (e o `1px solid transparent` das
+      // inativas, que segura a fileira no lugar). Só quem não pediu borda
+      // nenhuma cai no `none` que o <button> precisa.
+      style={{ ...estilo, border: estilo.border ?? 'none', cursor: 'pointer' }}
+    >
+      {opcao.rotulo}
+    </button>
+  ) : (
+    <Link href={opcao.href} aria-current={ativo ? 'page' : undefined} style={estilo}>
+      {opcao.rotulo}
+    </Link>
   )
 }
 
@@ -194,36 +271,38 @@ function Seletor({ opcoes, ativa, rotulo = 'Ordenação' }: GrupoDeOpcoes) {
  * texto55; a ativa sobe para texto100 sobre a superfície elevada, com
  * `aria-current`. Trocar a lente troca a zona 2 de todos os cards de uma vez.
  */
-function Lentes({ opcoes, ativa, rotulo = 'Lente' }: GrupoDeOpcoes) {
+function Lentes({ opcoes, ativa, rotulo = 'Lente', acao }: GrupoDeOpcoes) {
+  const estilo = (ativo: boolean): CSSProperties => ({
+    padding: '4px 10px',
+    borderRadius: 999,
+    fontFamily: semantico.fonteRotulo,
+    fontSize: 11,
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+    fontWeight: 600,
+    whiteSpace: 'nowrap',
+    textDecoration: 'none',
+    color: ativo ? semantico.texto100 : semantico.texto55,
+    border: `1px solid ${ativo ? semantico.divisor : 'transparent'}`,
+    background: ativo ? semantico.superficieElevada : 'transparent',
+  })
+
   return (
-    <nav aria-label={rotulo} style={{ display: 'flex', gap: 6, marginTop: 10, overflowX: 'auto' }}>
-      {opcoes.map((opcao) => {
-        const ativo = opcao.valor === ativa
-        return (
-          <Link
-            key={opcao.valor}
-            href={opcao.href}
-            aria-current={ativo ? 'page' : undefined}
-            style={{
-              padding: '4px 10px',
-              borderRadius: 999,
-              fontFamily: semantico.fonteRotulo,
-              fontSize: 11,
-              letterSpacing: 1,
-              textTransform: 'uppercase',
-              fontWeight: 600,
-              whiteSpace: 'nowrap',
-              textDecoration: 'none',
-              color: ativo ? semantico.texto100 : semantico.texto55,
-              border: `1px solid ${ativo ? semantico.divisor : 'transparent'}`,
-              background: ativo ? semantico.superficieElevada : 'transparent',
-            }}
-          >
-            {opcao.rotulo}
-          </Link>
-        )
-      })}
-    </nav>
+    <Grupo
+      rotulo={rotulo}
+      acao={acao}
+      estiloDoGrupo={{ display: 'flex', gap: 6, marginTop: 10, overflowX: 'auto' }}
+    >
+      {opcoes.map((opcao) => (
+        <Opcao
+          key={opcao.valor}
+          opcao={opcao}
+          ativo={opcao.valor === ativa}
+          acao={acao}
+          estilo={estilo(opcao.valor === ativa)}
+        />
+      ))}
+    </Grupo>
   )
 }
 
