@@ -10,10 +10,10 @@ import {
   estatisticasTimeJogo,
   feedSnapshot,
   fireLiveExecucoes,
-  jogadores,
   jogos,
   lesoesEscalacao,
   mediasJogador,
+  mapaJogadores,
   niveis,
   niveisVersao,
   oddsAgregada,
@@ -29,7 +29,7 @@ import { conferirRodadas } from '../../entrega/resultados'
 import { carregarRuleset } from '../../motor/ruleset/carregar'
 import { LLMFake } from '../llm'
 import { lerListaDeNiveis } from '../niveis/parser'
-import { ARQUIVO_LISTA, chaveDeNome } from '../demo/cadastro'
+import { ARQUIVO_LISTA, chaveDeNome, PROVEDOR_DEMO } from '../demo/cadastro'
 import { semearBoxScoreDoTime, semearPlacares } from '../demo/jogos'
 import {
   boxScoreDoTime,
@@ -121,9 +121,7 @@ async function conferirHonestidade(db: Db): Promise<number> {
       const esperada =
         anteriores.length === 0
           ? null
-          : Number(
-              (anteriores.reduce((t, l) => t + l[atributo], 0) / anteriores.length).toFixed(2),
-            )
+          : Number((anteriores.reduce((t, l) => t + l[atributo], 0) / anteriores.length).toFixed(2))
 
       if (esperada === null) {
         expect(item.mediaTemporada, `média de ${item.nome} em ${s.dataReferencia}`).toBeNull()
@@ -201,10 +199,7 @@ describe('simularAte — dias passados (PGlite)', () => {
         .select()
         .from(feedSnapshot)
         .where(
-          and(
-            eq(feedSnapshot.dataReferencia, dia),
-            eq(feedSnapshot.estrategia, 'LISTA_SECRETA'),
-          ),
+          and(eq(feedSnapshot.dataReferencia, dia), eq(feedSnapshot.estrategia, 'LISTA_SECRETA')),
         )
         .limit(1)
       expect(snapshot, `snapshot de ${dia}`).toBeDefined()
@@ -297,9 +292,12 @@ describe('simularAte — dias passados (PGlite)', () => {
       (await banco.db.select().from(times)).map((t) => [t.sigla, t.id] as const),
     )
     const idPorChave = new Map(
-      (await banco.db.select().from(jogadores)).map(
-        (j) => [chaveDeNome(j.nomeCompleto), j.id] as const,
-      ),
+      (await banco.db.select().from(mapaJogadores))
+        .filter(
+          (vinculo): vinculo is typeof vinculo & { jogadorId: string } =>
+            vinculo.provedor === PROVEDOR_DEMO && vinculo.jogadorId !== null,
+        )
+        .map((vinculo) => [chaveDeNome(vinculo.nomeNaLista), vinculo.jogadorId] as const),
     )
     // O mesmo vínculo que a simulação usa: `niveis.time_id` da versão ativa —
     // é ele que decide de quem é o homônimo (há dois "Wiggins" na lista).
@@ -375,7 +373,8 @@ describe('simularAte — dias passados (PGlite)', () => {
       .select({ jogadorId: estatisticasJogo.jogadorId, pontos: estatisticasJogo.pontos })
       .from(estatisticasJogo)
     const porJogador = new Map<string, number[]>()
-    for (const l of linhas) porJogador.set(l.jogadorId, [...(porJogador.get(l.jogadorId) ?? []), l.pontos])
+    for (const l of linhas)
+      porJogador.set(l.jogadorId, [...(porJogador.get(l.jogadorId) ?? []), l.pontos])
     const comDois = [...porJogador.values()].filter((p) => p.length >= 2)
     expect(comDois.length).toBeGreaterThan(100)
     const cravados = comDois.filter((p) => p.every((v) => v === p[0]))
@@ -625,7 +624,10 @@ describe('simularAte — dias passados (PGlite)', () => {
     const antes = await banco.db.select().from(jogos)
     const assinatura = (linhas: typeof antes) =>
       linhas
-        .map((j) => `${j.dataReferencia}|${j.timeCasaId}|${j.timeVisitanteId}|${j.dataHoraUtc.toISOString()}`)
+        .map(
+          (j) =>
+            `${j.dataReferencia}|${j.timeCasaId}|${j.timeVisitanteId}|${j.dataHoraUtc.toISOString()}`,
+        )
         .sort()
     // A chave inclui estratégia e jogo: o dia de hoje tem DOIS snapshots (a
     // Lista Secreta do dia e o Fire Live do jogo ao vivo), e indexar só pela
@@ -697,14 +699,12 @@ describe('simularAte — dias passados (PGlite)', () => {
       .update(jogos)
       .set({ status: 'AO_VIVO', quartoAtual: ruleset.fire_live.quarto })
       .where(eq(jogos.id, aoVivo.id))
-    await banco.db
-      .delete(estatisticasJogo)
-      .where(
-        inArray(
-          estatisticasJogo.jogoId,
-          ids.filter((id) => id !== aoVivo.id),
-        ),
-      )
+    await banco.db.delete(estatisticasJogo).where(
+      inArray(
+        estatisticasJogo.jogoId,
+        ids.filter((id) => id !== aoVivo.id),
+      ),
+    )
     // Box PARCIAL do 1º quarto, e nele uma linha fantasma: alguém que a versão
     // anterior pôs em quadra e o dia refeito não põe. Um upsert a deixaria
     // para trás, contando na média para sempre.
@@ -758,10 +758,7 @@ describe('simularAte — dias passados (PGlite)', () => {
     it('com ids, mexe só nos jogos pedidos', async () => {
       // Só os ENCERRADOS: a rodada de hoje está agendada (e um jogo ao vivo),
       // e as duas funções ignoram partida que ainda não acabou.
-      const encerrados = await banco.db
-        .select()
-        .from(jogos)
-        .where(eq(jogos.status, 'ENCERRADO'))
+      const encerrados = await banco.db.select().from(jogos).where(eq(jogos.status, 'ENCERRADO'))
       const alvo = encerrados[0]!
       expect(await semearPlacares(banco.db, [alvo.id])).toBe(1)
       expect(await semearBoxScoreDoTime(banco.db, AGORA, [alvo.id])).toBe(2)
@@ -893,16 +890,13 @@ describe('simularAte — o dia de HOJE (PGlite)', () => {
     const emFire = fire.itens.filter((i) => i.modoFire)
     expect(emFire.length).toBeGreaterThan(0)
     // Modo fire é de MVP e All Star — o ruleset diz quais, nunca este teste.
-    expect(
-      emFire.every((i) => ruleset.fire_live.modo_fire.aplica_a.includes(i.nivelJogador)),
-    ).toBe(true)
+    expect(emFire.every((i) => ruleset.fire_live.modo_fire.aplica_a.includes(i.nivelJogador))).toBe(
+      true,
+    )
   })
 
   it('ao longo de três semanas a estratégia produz apitos de níveis diferentes', async () => {
-    const todos = await banco.db
-      .select()
-      .from(apitos)
-      .where(eq(apitos.estrategia, 'LISTA_SECRETA'))
+    const todos = await banco.db.select().from(apitos).where(eq(apitos.estrategia, 'LISTA_SECRETA'))
     const niveisApito = new Set(todos.map((a) => a.nivelApito))
     // Os três níveis do documento do CJ, produzidos pelas regras — nenhum
     // deles foi escrito por este seed.
@@ -989,13 +983,10 @@ describe('simularAte — o dia de HOJE (PGlite)', () => {
     expect(
       inteiro.every(
         (b) =>
-          Number(b.minutos) >= MINUTOS_ALVO.RANDOLA[0] &&
-          Number(b.minutos) <= MINUTOS_ALVO.MVP[1],
+          Number(b.minutos) >= MINUTOS_ALVO.RANDOLA[0] && Number(b.minutos) <= MINUTOS_ALVO.MVP[1],
       ),
     ).toBe(true)
-    expect(inteiro.reduce((s, b) => s + Number(b.minutos), 0)).toBeGreaterThan(
-      minutosParciais * 2,
-    )
+    expect(inteiro.reduce((s, b) => s + Number(b.minutos), 0)).toBeGreaterThan(minutosParciais * 2)
     // SUBSTITUIU, não somou: o box gravado é exatamente o que o gerador
     // produz para a chave da convenção, com os desfalques que o BANCO tem
     // (inclusive o forçado da OPD de hoje).
@@ -1031,7 +1022,12 @@ async function boxEsperado(
   const elencos = elencosDaLista(analise.jogadores)
   const siglaPorId = new Map((await db.select().from(times)).map((t) => [t.id, t.sigla] as const))
   const idPorChave = new Map(
-    (await db.select().from(jogadores)).map((j) => [chaveDeNome(j.nomeCompleto), j.id] as const),
+    (await db.select().from(mapaJogadores))
+      .filter(
+        (vinculo): vinculo is typeof vinculo & { jogadorId: string } =>
+          vinculo.provedor === PROVEDOR_DEMO && vinculo.jogadorId !== null,
+      )
+      .map((vinculo) => [chaveDeNome(vinculo.nomeNaLista), vinculo.jogadorId] as const),
   )
   const timeDoJogador = new Map(
     (
@@ -1102,7 +1098,10 @@ describe('simularAte — orçamento', () => {
        *     exatamente o cenário do cron com `maxDuration` curto.
        */
       let orcamentoMs = 32
-      let parcial = await simularAte(banco.db, ruleset, AGORA, { diasDeHistorico: DIAS, orcamentoMs })
+      let parcial = await simularAte(banco.db, ruleset, AGORA, {
+        diasDeHistorico: DIAS,
+        orcamentoMs,
+      })
       while (parcial.diasProduzidos === 0 && orcamentoMs < 60_000) {
         orcamentoMs *= 2
         parcial = await simularAte(banco.db, ruleset, AGORA, { diasDeHistorico: DIAS, orcamentoMs })
@@ -1116,7 +1115,9 @@ describe('simularAte — orçamento', () => {
       // E o dia de HOJE não nasce com o passado pela metade: a lista de hoje
       // lê `medias_jogador`, e média com buraco não é a média que o motor
       // leria na véspera. Ele nasce na execução que fecha o passado.
-      expect(await banco.db.select().from(jogos).where(eq(jogos.dataReferencia, HOJE))).toHaveLength(0)
+      expect(
+        await banco.db.select().from(jogos).where(eq(jogos.dataReferencia, HOJE)),
+      ).toHaveLength(0)
 
       // 3 · A execução seguinte continua de onde parou.
       const completo = await simularAte(banco.db, ruleset, AGORA, { diasDeHistorico: DIAS })
@@ -1213,10 +1214,7 @@ describe('simularAte — banco que já tinha jogos de outra origem', () => {
         .select()
         .from(feedSnapshot)
         .where(
-          and(
-            eq(feedSnapshot.dataReferencia, dia),
-            eq(feedSnapshot.estrategia, 'LISTA_SECRETA'),
-          ),
+          and(eq(feedSnapshot.dataReferencia, dia), eq(feedSnapshot.estrategia, 'LISTA_SECRETA')),
         )
         .limit(1)
       expect(snapshot, `lista de ${dia}`).toBeDefined()

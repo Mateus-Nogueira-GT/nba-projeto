@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto'
 import { and, eq, inArray } from 'drizzle-orm'
 
 import { montarFatos, primeiroJogoDoDia } from '../dominio/fatos'
+import { identidadesDeApresentacao } from '../dominio/identidade-apresentacao'
 import {
   feedSnapshot,
   jogadores,
@@ -92,7 +93,12 @@ export async function publicarListaSecreta(
     }
   }
 
-  const fatos = await montarFatos(db, opcoes.dataReferencia, calendarioDoRuleset(ruleset), ruleset.media.janela)
+  const fatos = await montarFatos(
+    db,
+    opcoes.dataReferencia,
+    calendarioDoRuleset(ruleset),
+    ruleset.media.janela,
+  )
   if (fatos.times.length === 0) return { publicou: false, motivo: 'sem-lista-ativa' }
 
   const apitos = avaliar(fatos, ruleset).filter((a) => a.estrategia === 'LISTA_SECRETA')
@@ -218,30 +224,37 @@ async function enriquecer(db: Db, ruleset: Ruleset, apitos: Apito[]): Promise<It
 
   const idsJogos = [...new Set(apitos.map((a) => a.jogoId))]
   const idsJogadores = [...new Set(apitos.map((a) => a.jogadorId))]
-  const [elenco, listaTimes, vinculos, jogosDaLista, medias, oddsLinhas] = await Promise.all([
-    db.select().from(jogadores),
-    db.select().from(times),
-    db
-      .select({ jogadorId: niveis.jogadorId, atributo: niveis.atributo, timeId: niveis.timeId })
-      .from(niveis)
-      .innerJoin(niveisVersao, eq(niveis.niveisVersaoId, niveisVersao.id))
-      .where(and(eq(niveisVersao.ativa, true), inArray(niveis.jogadorId, idsJogadores))),
-    db.select().from(jogos).where(inArray(jogos.id, idsJogos)),
-    db
-      .select()
-      .from(mediasJogador)
-      .where(
-        and(
-          // A janela vem do RULESET (regra 1) — a mesma tradução da sincronização.
-          eq(mediasJogador.janela, janelaNoBanco(ruleset.media.janela)),
-          inArray(mediasJogador.jogadorId, idsJogadores),
+  const [elenco, listaTimes, vinculos, jogosDaLista, medias, oddsLinhas, identidades] =
+    await Promise.all([
+      db.select().from(jogadores),
+      db.select().from(times),
+      db
+        .select({ jogadorId: niveis.jogadorId, atributo: niveis.atributo, timeId: niveis.timeId })
+        .from(niveis)
+        .innerJoin(niveisVersao, eq(niveis.niveisVersaoId, niveisVersao.id))
+        .where(and(eq(niveisVersao.ativa, true), inArray(niveis.jogadorId, idsJogadores))),
+      db.select().from(jogos).where(inArray(jogos.id, idsJogos)),
+      db
+        .select()
+        .from(mediasJogador)
+        .where(
+          and(
+            // A janela vem do RULESET (regra 1) — a mesma tradução da sincronização.
+            eq(mediasJogador.janela, janelaNoBanco(ruleset.media.janela)),
+            inArray(mediasJogador.jogadorId, idsJogadores),
+          ),
         ),
-      ),
-    db
-      .select()
-      .from(oddsAgregada)
-      .where(and(inArray(oddsAgregada.jogoId, idsJogos), inArray(oddsAgregada.jogadorId, idsJogadores))),
-  ])
+      db
+        .select()
+        .from(oddsAgregada)
+        .where(
+          and(
+            inArray(oddsAgregada.jogoId, idsJogos),
+            inArray(oddsAgregada.jogadorId, idsJogadores),
+          ),
+        ),
+      identidadesDeApresentacao(db, idsJogadores),
+    ])
 
   const nomePorJogador = new Map(elenco.map((j) => [j.id, j.nomeCompleto] as const))
   const posicaoPorJogador = new Map(elenco.map((j) => [j.id, j.posicao] as const))
@@ -257,7 +270,9 @@ async function enriquecer(db: Db, ruleset: Ruleset, apitos: Apito[]): Promise<It
   const calendario = calendarioDoRuleset(ruleset)
   const mediaPorChave = new Map(medias.map((m) => [`${m.jogadorId}|${m.temporada}`, m] as const))
   const oddPorChave = new Map(
-    oddsLinhas.map((o) => [`${o.jogoId}|${o.jogadorId}|${o.atributo}|${Number(o.linha)}`, o] as const),
+    oddsLinhas.map(
+      (o) => [`${o.jogoId}|${o.jogadorId}|${o.atributo}|${Number(o.linha)}`, o] as const,
+    ),
   )
 
   // Histórico recente — a MESMA consulta do detalhe, rodando na publicação.
@@ -266,7 +281,11 @@ async function enriquecer(db: Db, ruleset: Ruleset, apitos: Apito[]): Promise<It
   const chavesHistorico = new Map<string, { jogadorId: string; corte: Date }>()
   for (const a of apitos) {
     const jogo = jogoPorId.get(a.jogoId)
-    if (jogo) chavesHistorico.set(`${a.jogadorId}|${a.jogoId}`, { jogadorId: a.jogadorId, corte: jogo.dataHoraUtc })
+    if (jogo)
+      chavesHistorico.set(`${a.jogadorId}|${a.jogoId}`, {
+        jogadorId: a.jogadorId,
+        corte: jogo.dataHoraUtc,
+      })
   }
   const historicoPorChave = new Map(
     await Promise.all(
@@ -295,7 +314,7 @@ async function enriquecer(db: Db, ruleset: Ruleset, apitos: Apito[]): Promise<It
       chave: a.chaveDeduplicacao,
       jogoId: a.jogoId,
       jogadorId: a.jogadorId,
-      nome: nomePorJogador.get(a.jogadorId) ?? a.jogadorId,
+      nome: identidades.get(a.jogadorId)?.nome ?? nomePorJogador.get(a.jogadorId) ?? a.jogadorId,
       timeSigla: time?.sigla ?? '—',
       timeNome: time?.nome ?? '—',
       fotoUrl: fotoPorJogador.get(a.jogadorId) ?? null,
@@ -448,12 +467,13 @@ export async function lerFeed(
     .limit(1)
 
   if (!linha) return null
-  const conteudo = await comFotosAoVivo(db, linha.conteudoJson as ConteudoFeed)
+  const conteudo = await comIdentidadeAtual(db, linha.conteudoJson as ConteudoFeed)
   return { conteudo, geradoEm: linha.geradoEm }
 }
 
 /**
- * A FOTO É LIDA AO VIVO, não do snapshot.
+ * Nome oficial e foto são apresentação atual, resolvida pelo UUID do snapshot.
+ * A leitura preserva os fatos, a chave do apito e a narrativa histórica.
  *
  * O snapshot continua gravando `fotoUrl` (o hash cobre o item inteiro — ver o
  * teste "trocar a foto REGRAVA o snapshot"), mas a leitura sobrescreve com o
@@ -461,20 +481,26 @@ export async function lerFeed(
  * 07/09/2026: `demo:fotos` roda depois da publicação, ninguém republica, e a
  * tela abriu com 0 de 137 cards com rosto embora três apitados tivessem foto.
  * Foto é apresentação; congelá-la dentro de um JSON de estratégia era prender
- * uma coisa dentro da outra. Uma consulta a mais por leitura, sobre ≤ 150 ids
- * por chave primária, na mesma região do banco (ADR-0008) — milissegundos.
+ * uma coisa dentro da outra. As consultas são em lote por UUID, sem N+1.
  */
-async function comFotosAoVivo(db: Db, conteudo: ConteudoFeed): Promise<ConteudoFeed> {
+async function comIdentidadeAtual(db: Db, conteudo: ConteudoFeed): Promise<ConteudoFeed> {
   const ids = [...new Set(conteudo.itens.map((i) => i.jogadorId))]
   if (ids.length === 0) return conteudo
-  const fotos = await db
-    .select({ id: jogadores.id, fotoUrl: jogadores.fotoUrl })
-    .from(jogadores)
-    .where(inArray(jogadores.id, ids))
+  const [fotos, identidades] = await Promise.all([
+    db
+      .select({ id: jogadores.id, fotoUrl: jogadores.fotoUrl })
+      .from(jogadores)
+      .where(inArray(jogadores.id, ids)),
+    identidadesDeApresentacao(db, ids),
+  ])
   const porId = new Map(fotos.map((f) => [f.id, f.fotoUrl] as const))
   return {
     ...conteudo,
-    itens: conteudo.itens.map((i) => ({ ...i, fotoUrl: porId.get(i.jogadorId) ?? null })),
+    itens: conteudo.itens.map((i) => ({
+      ...i,
+      nome: identidades.get(i.jogadorId)?.nome ?? i.nome,
+      fotoUrl: porId.get(i.jogadorId) ?? null,
+    })),
   }
 }
 

@@ -1,3 +1,4 @@
+import { identidadesDeApresentacao } from '../../dominio/identidade-apresentacao'
 import { and, eq } from 'drizzle-orm'
 
 import { classificacao, jogadores, times } from '../../dominio/db/schema'
@@ -87,15 +88,23 @@ export async function buscar(
       db.select().from(jogadores),
       db.select().from(times),
     ])
+    const identidades = await identidadesDeApresentacao(
+      db,
+      elenco.map((j) => j.id),
+    )
     const siglaPorTime = new Map(listaTimes.map((t) => [t.id, t.sigla] as const))
 
     for (const j of elenco) {
-      const score = pontuarNome(termo, j.nomeCompleto)
+      const identidade = identidades.get(j.id)
+      const score = Math.max(
+        ...(identidade?.aliases ?? [j.nomeCompleto]).map((nome) => pontuarNome(termo, nome)),
+        pontuarNome(termo, identidade?.nome ?? j.nomeCompleto),
+      )
       if (score < SCORE_MINIMO) continue
       resultados.push({
         tipo: 'JOGADOR',
         id: j.id,
-        nome: j.nomeCompleto,
+        nome: identidade?.nome ?? j.nomeCompleto,
         fotoUrl: j.fotoUrl,
         posicao: j.posicao,
         timeSigla: j.timeId === null ? null : (siglaPorTime.get(j.timeId) ?? null),

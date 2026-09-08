@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs'
 import { isNotNull } from 'drizzle-orm'
 import { bancoDeTeste } from '../../dominio/__tests__/ajuda-banco'
 import { jogadores } from '../../dominio/db/schema'
+import { identidadesDeApresentacao } from '../../dominio/identidade-apresentacao'
 import { carregarRuleset } from '../../motor/ruleset/carregar'
 import { semearDemo } from '../demo/semear'
 import { aplicarFotos, MAPA_FOTOS, urlDaFoto } from '../demo/fotos'
@@ -20,16 +21,13 @@ describe('fotos da demonstração', () => {
   afterAll(async () => banco.fechar())
 
   it('todo nome do mapa resolve para um jogador semeado', async () => {
-    // O guard continua sendo "nenhuma foto cai no vazio por erro de digitação".
-    // O que mudou é a REGRA de casamento: `nomeCompleto` guarda o nome de
-    // exibição ("Stephen Curry") e as chaves vêm do documento do CJ
-    // ("stephen Curry"), então quem resolve é a caixa baixa — a mesma
-    // comparação que `aplicarFotos` faz.
-    const nomes = new Set(
-      (await banco.db.select().from(jogadores)).map((j) => j.nomeCompleto.toLowerCase()),
-    )
-    for (const nome of Object.keys(MAPA_FOTOS))
-      expect(nomes.has(nome.toLowerCase()), nome).toBe(true)
+    // A foto resolve o UUID pela identidade, mesmo após corrigir o nome exibido.
+    const identidades = [...(await identidadesDeApresentacao(banco.db)).values()]
+    for (const [alias, personId] of Object.entries(MAPA_FOTOS)) {
+      const matches = identidades.filter((i) => i.aliases.includes(alias))
+      expect(matches, alias).toHaveLength(1)
+      expect(matches[0]!.personId, alias).toBe(personId)
+    }
   })
 
   it('todo nome da lista do CJ tem entrada no mapa — na grafia exata do documento', () => {

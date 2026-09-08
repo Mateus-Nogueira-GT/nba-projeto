@@ -116,7 +116,7 @@ describe('detalhe do apito', () => {
     const idDe = async (nome: string) =>
       (await banco.db.select().from(jogadores).where(eq(jogadores.nomeCompleto, nome)))[0]!.id
 
-    const intrusos = [await idDe('Barlow'), await idDe('Sexton')]
+    const intrusos = [await idDe('Dominick Barlow'), await idDe('Collin Sexton')]
     for (const jogadorId of intrusos) {
       await banco.db
         .insert(lesoesEscalacao)

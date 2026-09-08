@@ -12,6 +12,7 @@ import {
 } from '../dominio/db/schema'
 import type { Db } from '../dominio/db/tipos'
 import { chavesEstrategiaConfirmadas } from '../dominio/fatos-editoriais'
+import { identidadesDeApresentacao } from '../dominio/identidade-apresentacao'
 import { janelaNoBanco } from '../dominio/janela'
 import { entrouEmQuadraSql } from '../dominio/participacao'
 import { dataDeReferencia, intervaloDoDia } from '../dominio/rodada'
@@ -189,16 +190,19 @@ export async function detalheDoApito(
   // Quem está FORA desta partida — lido UMA vez: a seção "O jogo" mostra os
   // nomes e a OPD peneira deles o prefixo da hierarquia que abre a regra.
   //
-  // Com ORDER BY porque a TELA imprime esta lista: sem ele o Postgres não
-  // promete ordem nenhuma, e dois renders da mesma página poderiam nomear
-  // desfalques diferentes sem que nada tivesse mudado no jogo. Por nome, que
-  // é o que o assinante lê — a hierarquia é da OPD, e ela ordena a sua.
-  const foraDaPartida = await db
+  // Ordenada pelo nome de apresentação após resolver identidades em lote.
+  const foraCanonicos = await db
     .select({ jogadorId: lesoesEscalacao.jogadorId, nome: jogadores.nomeCompleto })
     .from(lesoesEscalacao)
     .innerJoin(jogadores, eq(jogadores.id, lesoesEscalacao.jogadorId))
     .where(and(eq(lesoesEscalacao.jogoId, item.jogoId), eq(lesoesEscalacao.status, 'FORA')))
-    .orderBy(asc(jogadores.nomeCompleto))
+  const identidadesFora = await identidadesDeApresentacao(
+    db,
+    foraCanonicos.map((f) => f.jogadorId),
+  )
+  const foraDaPartida = foraCanonicos
+    .map((f) => ({ ...f, nome: identidadesFora.get(f.jogadorId)?.nome ?? f.nome }))
+    .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR') || a.jogadorId.localeCompare(b.jogadorId))
 
   const idsTimes = new Set<string>()
   for (const h of historico) {
@@ -394,12 +398,16 @@ async function fatosDoPorque(
       .orderBy(asc(niveis.posicaoHierarquia))
 
     const desfalcados = contexto.foraDaPartida
+    const identidades = await identidadesDeApresentacao(
+      db,
+      hierarquia.map((j) => j.jogadorId),
+    )
 
     // Mesmo laço do motor: para no primeiro que NÃO está fora.
     const nomes: string[] = []
     for (const j of hierarquia) {
       if (!desfalcados.has(j.jogadorId)) break
-      nomes.push(j.nome)
+      nomes.push(identidades.get(j.jogadorId)?.nome ?? j.nome)
     }
     fatos.opd = { nomes }
   }
