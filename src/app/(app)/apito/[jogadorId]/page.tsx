@@ -40,7 +40,7 @@ const ATRIBUTO_ROTULO: Record<Atributo, string> = {
   REBOTES: 'REBOTES',
   ASSISTENCIAS: 'ASSISTÊNCIAS',
 }
-export const metadata = { title: 'Linhas e confiança · IA da NBA' }
+export const metadata = { title: 'Linhas e confiança' }
 
 function formatarOdd(v: number): string {
   return v.toFixed(2).replace('.', ',')
@@ -763,7 +763,7 @@ export default async function PaginaApito({
       <footer
         style={{ margin: '16px 0 0', fontSize: 12, lineHeight: 1.5, color: semantico.texto40 }}
       >
-        O número é a <strong>nota de confiança</strong> da análise do CJ, não uma probabilidade.
+        O número é a <strong>nota de confiança</strong> da análise NIP, não uma probabilidade.
         {geradoEmFinal
           ? ` Última atualização: ${dataHora(geradoEmFinal, ruleset.rodada.fuso)}.`
           : ''}

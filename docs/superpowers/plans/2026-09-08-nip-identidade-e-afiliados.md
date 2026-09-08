@@ -1,7 +1,7 @@
 # NIP — plano de identidade e operação de afiliados
 
 **Spec:** [Decisões, contratos e aceite](../specs/2026-09-08-nip-identidade-e-afiliados-design.md).
-**Estado:** proposto para revisão; nenhuma etapa implementada.
+**Estado:** implementação concluída na branch; validação final em andamento.
 **Base:** `origin/main` em `cc6390a8`, 08/09/2026.
 **Branch dos documentos:** `codex/spec-nip-afiliados`.
 

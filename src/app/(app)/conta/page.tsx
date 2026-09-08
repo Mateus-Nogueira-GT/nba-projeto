@@ -20,7 +20,7 @@ import { PainelExperiencia } from '@/components/preferencias/PainelExperiencia'
 import { identidadeDoTime } from '@/design-system/times'
 
 export const dynamic = 'force-dynamic'
-export const metadata = { title: 'Minha conta · IA da NBA' }
+export const metadata = { title: 'Minha conta' }
 
 function data(valor: Date | null, fuso: string): string {
   return valor ? diaCompleto(valor, fuso) : '—'

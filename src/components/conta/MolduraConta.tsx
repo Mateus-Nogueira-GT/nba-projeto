@@ -33,7 +33,7 @@ export function MolduraConta({
     >
       <div style={{ width: '100%', maxWidth: 560, margin: '0 auto' }}>
         <Link href="/" style={{ color: semantico.textoSecundario, fontSize: 13 }}>
-          ← IA da NBA
+          ← NIP
         </Link>
         <header style={{ margin: '20px 0' }}>
           <h1

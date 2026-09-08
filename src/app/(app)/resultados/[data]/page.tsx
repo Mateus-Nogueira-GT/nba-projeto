@@ -35,7 +35,7 @@ import type { Atributo, NivelApito } from '@/modules/motor/tipos'
 import '@/design-system/tokens/tokens.css'
 
 export const dynamic = 'force-dynamic'
-export const metadata = { title: 'Resultados · IA da NBA' }
+export const metadata = { title: 'Resultados' }
 
 const ATRIBUTO_ROTULO: Record<Atributo, string> = {
   PONTOS: 'Pontos',
@@ -370,7 +370,7 @@ export default async function PaginaResultadosDaRodada({
         },
         {
           nome: 'time',
-          rotulo: 'Time da lista do CJ',
+          rotulo: 'Time da curadoria NIP',
           atual: filtros.timeId ?? '',
           opcoes: [
             ['', 'Todos'],

@@ -140,7 +140,7 @@ export function AtivarAlertas({
   return (
     <section className={estilos.painel} aria-labelledby="titulo-alertas">
       <h2 id="titulo-alertas" className={estilos.titulo}>
-        Alertas da IA da NBA
+        Alertas da NIP
       </h2>
 
       {estado === 'convite' && (
@@ -164,7 +164,7 @@ export function AtivarAlertas({
           <ol className={estilos.passos}>
             <li>Toque em Compartilhar.</li>
             <li>Escolha “Adicionar à Tela de Início”.</li>
-            <li>Abra a IA da NBA pelo novo ícone e volte a esta opção.</li>
+            <li>Abra a NIP pelo novo ícone e volte a esta opção.</li>
           </ol>
         </>
       )}

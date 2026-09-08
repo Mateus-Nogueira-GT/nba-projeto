@@ -214,7 +214,7 @@ function Desfalques({ lado }: { lado: LadoDaPartida }) {
             {!d.confirmado && ' · não confirmado'}
             {d.hierarquiaPontos && (
               <span style={{ display: 'block', color: semantico.textoSecundario, fontSize: 12 }}>
-                Lista do CJ · {d.hierarquiaPontos.timeSigla} · PONTOS · nº{' '}
+                Curadoria NIP · {d.hierarquiaPontos.timeSigla} · PONTOS · nº{' '}
                 {d.hierarquiaPontos.posicao}
                 {' · '}
                 {NIVEL_JOGADOR[d.hierarquiaPontos.nivel].rotulo}

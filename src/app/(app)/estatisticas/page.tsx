@@ -19,7 +19,7 @@ import '@/design-system/tokens/tokens.css'
 import { Secao, SemBanco, SOBRANCELHA_STATS } from './moldura'
 
 export const dynamic = 'force-dynamic'
-export const metadata = { title: 'Estatísticas · IA da NBA' }
+export const metadata = { title: 'Estatísticas' }
 
 function Campo({ valor }: { valor: string }) {
   return (

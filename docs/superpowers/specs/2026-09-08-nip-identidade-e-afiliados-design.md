@@ -1,8 +1,9 @@
 # NIP — identidade profissional e operação de afiliados
 
-**Data:** 08/09/2026. **Estado:** proposta consolidada para revisão do usuário.
-As decisões D01–D18 foram confirmadas no grilling; as soluções técnicas abaixo são
-propostas. Não representam implementação, integração contratada ou publicação.
+**Data:** 08/09/2026. **Estado:** implementada na branch `codex/spec-nip-afiliados`;
+aguarda migração externa e homologação comercial antes de ativação real.
+As decisões D01–D18 foram confirmadas no grilling. Integrações com casas, migração
+externa e publicação continuam fora desta entrega até existirem contratos homologados.
 
 **Plano:** [Etapas de implementação](../plans/2026-09-08-nip-identidade-e-afiliados.md).
 **Base inspecionada:** `origin/main`, commit `cc6390a8`; árvore igual à branch de UX

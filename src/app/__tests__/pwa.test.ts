@@ -15,8 +15,8 @@ describe('manifest PWA', () => {
     const resultado = manifest()
     expect(resultado).toMatchObject({
       id: '/',
-      name: 'IA da NBA',
-      short_name: 'IA da NBA',
+      name: 'NIP',
+      short_name: 'NIP',
       lang: 'pt-BR',
       start_url: '/',
       scope: '/',

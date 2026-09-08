@@ -42,7 +42,7 @@ import { estadoExperienciaDoUsuario } from '@/modules/plataforma/experiencia/ser
 import { BotaoAcompanharJogador } from '@/components/preferencias/BotaoAcompanharJogador'
 
 export const dynamic = 'force-dynamic'
-export const metadata = { title: 'Fire Live · IA da NBA' }
+export const metadata = { title: 'Fire Live' }
 
 /**
  * OS TRÊS ESTADOS COMO CHIPS — e como ORDEM da tela (spec 04, §4.2).

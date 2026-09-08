@@ -41,7 +41,7 @@ export function HierarquiaDoTime({ linhas, hrefDoJogador, vazio }: HierarquiaDoT
   if (linhas.length === 0) {
     return (
       <p style={{ margin: 0, fontSize: 13, color: semantico.textoSecundario }}>
-        {vazio ?? 'A lista do CJ ainda não tem hierarquia neste atributo.'}
+        {vazio ?? 'A curadoria NIP ainda não tem hierarquia neste atributo.'}
       </p>
     )
   }

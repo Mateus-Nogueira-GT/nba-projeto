@@ -543,7 +543,7 @@ export default async function PaginaJogador({
               ) : (
                 '—'
               )}{' '}
-              · <RotuloDeTime>NA LISTA DO CJ</RotuloDeTime>{' '}
+              · <RotuloDeTime>NA CURADORIA NIP</RotuloDeTime>{' '}
               {/* As DUAS visões são escritas sempre — é o rótulo que separa
                   uma da outra, e sem ele a divergência é lida como bug. Mas
                   quando elas coincidem (o caso comum) o destino é o MESMO:

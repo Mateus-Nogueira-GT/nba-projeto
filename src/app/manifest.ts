@@ -1,13 +1,14 @@
 import type { MetadataRoute } from 'next'
 
 import { semantico } from '@/design-system/tokens/semantico'
+import { marcaNip } from '@/design-system/marca'
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
     id: '/',
-    name: 'IA da NBA',
-    short_name: 'IA da NBA',
-    description: 'Leitura rápida de entradas e estatísticas da NBA.',
+    name: marcaNip.nome,
+    short_name: marcaNip.nome,
+    description: marcaNip.descricao,
     lang: 'pt-BR',
     start_url: '/',
     scope: '/',

@@ -124,7 +124,7 @@ export function PainelPwa() {
         </span>
         <div>
           <h2 id="titulo-pwa" className={estilos.titulo}>
-            {atualizacao ? 'Atualização disponível' : 'Instale a IA da NBA'}
+            {atualizacao ? 'Atualização disponível' : 'Instale a NIP'}
           </h2>
           <p className={estilos.texto}>
             {atualizacao
