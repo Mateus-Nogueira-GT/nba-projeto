@@ -1,5 +1,23 @@
 # Repasse da Identidade 04 — estado em 08/09/2026, 10h
 
+## Continuação após a apresentação — 08/09/2026
+
+A publicação anterior foi concluída: PRs #12 e #13 integrados, `main` em
+`d2bfc50`, migração aditiva `0017` aplicada e deploy de produção confirmado.
+O pedido seguinte mudou a entrega para **uma branch**, com depuração da lógica
+do DOCX `Introdução I.A  da NBA.docx` e continuação da revisão da interface.
+
+O trabalho está em `codex/debug-logica-identidade-04`, no worktree
+`nba-projeto-debug`. UUID inválido, virada de meia-noite, regras por atributo,
+participação, identidade editorial, janela das médias, explicação dos apitos e
+acessibilidade foram reproduzidos e corrigidos. A árvore da apresentação foi
+preservada; esta continuação não executou migrações nem alterações em produção.
+
+O [relatório de depuração](../reviews/2026-09-08-debug-logica-identidade-04.md)
+registra as evidências finais, os limites da conferência visual e as decisões
+de curadoria ainda necessárias. O histórico abaixo permanece como registro da
+publicação anterior; as pendências técnicas corrigidas não devem ser retomadas.
+
 ## Atualização de publicação — 08/09/2026
 
 O parceiro pediu o commit e a publicação imediata na `main` para apresentar o
@@ -34,10 +52,10 @@ Fire Live após a virada real de meia-noite. Eles não foram corrigidos nem
 declarados refutados nesta publicação. As decisões comerciais/editoriais
 da seção 5 continuam pendentes, com o comportamento existente preservado.
 
-**Publicação:** aplicar somente a migração aditiva `0017`, confirmar o schema,
-mesclar o PR #12 e publicar a integração de UX. Preservar o checkout da
-apresentação e os dados já semeados. A confirmação do deploy deve ser feita
-separadamente da confirmação do merge.
+**Publicação concluída:** migração aditiva `0017` aplicada e schema confirmado;
+PRs #12 e #13 mesclados, com a integração de UX na `main` em `d2bfc50`.
+O deploy de produção foi verificado separadamente do merge. O checkout da
+apresentação e os dados semeados foram preservados.
 
 ---
 
