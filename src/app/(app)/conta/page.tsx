@@ -1,4 +1,4 @@
-import { desc, eq } from 'drizzle-orm'
+import { desc, eq, inArray } from 'drizzle-orm'
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
 
@@ -7,13 +7,17 @@ import { dataHora, diaCompleto } from '@/components/formato'
 import { rulesetAtivo } from '@/modules/entrega/ruleset-ativo'
 import { semantico } from '@/design-system/tokens/semantico'
 import { getDb } from '@/modules/dominio/db/cliente'
-import { assinaturas } from '@/modules/dominio/db/schema'
+import { assinaturas, times } from '@/modules/dominio/db/schema'
 import { dispositivosDoUsuario } from '@/modules/plataforma/admin/usuarios'
 import { avaliarAcesso } from '@/modules/plataforma/assinatura/direito'
 import { sessaoAtual } from '@/modules/plataforma/auth/cookies'
-import { preferenciasPushDoUsuario } from '@/modules/plataforma/push/inscricoes'
+import { AtivarAlertas } from '@/components/pwa'
 import { sair } from '../entrar/acoes'
 import { cancelarAssinatura } from './acoes'
+import { estadoExperienciaDoUsuario } from '@/modules/plataforma/experiencia/servico'
+import { identidadesDeApresentacao } from '@/modules/dominio/identidade-apresentacao'
+import { PainelExperiencia } from '@/components/preferencias/PainelExperiencia'
+import { identidadeDoTime } from '@/design-system/times'
 
 export const dynamic = 'force-dynamic'
 export const metadata = { title: 'Minha conta · IA da NBA' }
@@ -31,10 +35,10 @@ export default async function PaginaConta({
   if (!sessao) redirect('/entrar?destino=/conta')
   const { fuso } = (await rulesetAtivo()).rodada
   const db = getDb()
-  const [acesso, dispositivos, preferencias, linhas, parametros] = await Promise.all([
+  const [acesso, dispositivos, experiencia, linhas, parametros] = await Promise.all([
     avaliarAcesso(db, sessao.usuarioId),
     dispositivosDoUsuario(db, sessao.usuarioId),
-    preferenciasPushDoUsuario(db, sessao.usuarioId),
+    estadoExperienciaDoUsuario(db, sessao.usuarioId),
     db
       .select()
       .from(assinaturas)
@@ -43,12 +47,25 @@ export default async function PaginaConta({
       .limit(1),
     searchParams,
   ])
+  const idsJogadores = [
+    ...new Set([...experiencia.jogadoresAcompanhados, ...experiencia.jogadoresSilenciados]),
+  ]
+  const [identidades, timesSeguidos] = await Promise.all([
+    identidadesDeApresentacao(db, idsJogadores),
+    experiencia.timesAcompanhados.length === 0
+      ? Promise.resolve([])
+      : db
+          .select({ id: times.id, nome: times.nome, sigla: times.sigla })
+          .from(times)
+          .where(inArray(times.id, experiencia.timesAcompanhados)),
+  ])
   const assinatura = linhas[0] ?? null
   const estadoCancelamento = Array.isArray(parametros.cancelamento)
     ? parametros.cancelamento[0]
     : parametros.cancelamento
   const podeCancelar = Boolean(
-    assinatura?.mercadopagoId && !['CANCELADA', 'CANCELED', 'CANCELLED'].includes(assinatura.status),
+    assinatura?.mercadopagoId &&
+    !['CANCELADA', 'CANCELED', 'CANCELLED'].includes(assinatura.status),
   )
 
   return (
@@ -63,10 +80,7 @@ export default async function PaginaConta({
             role="status"
             style={{
               margin: 0,
-              color:
-                estadoCancelamento === 'confirmado'
-                  ? semantico.apitoNivel3
-                  : semantico.alerta,
+              color: estadoCancelamento === 'confirmado' ? semantico.apitoNivel3 : semantico.alerta,
             }}
           >
             {estadoCancelamento === 'confirmado'
@@ -123,13 +137,21 @@ export default async function PaginaConta({
           {dispositivos.length === 0 && <p style={{ margin: 0 }}>Nenhum dispositivo.</p>}
         </section>
 
+        <AtivarAlertas />
+
         <section>
-          <h2 style={{ margin: '0 0 10px', fontSize: 17 }}>Notificações</h2>
-          <p style={{ margin: 0, fontSize: 13, lineHeight: 1.7 }}>
-            Lista Secreta: {preferencias.LISTA_SECRETA ? 'ativada' : 'desativada'} · Fire Live:{' '}
-            {preferencias.FIRE_LIVE_APITO ? 'ativado' : 'desativado'} · Green:{' '}
-            {preferencias.GREEN ? 'ativado' : 'desativado'}
-          </p>
+          <h2 style={{ margin: '0 0 10px', fontSize: 17 }}>Experiência e alertas</h2>
+          <PainelExperiencia
+            inicial={experiencia}
+            jogadores={idsJogadores.map((id) => ({
+              id,
+              nome: identidades.get(id)?.nome ?? 'Jogador',
+            }))}
+            times={timesSeguidos.map((time) => ({
+              id: time.id,
+              nome: identidadeDoTime(time.sigla).nome,
+            }))}
+          />
         </section>
 
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>

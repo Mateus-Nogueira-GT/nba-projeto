@@ -1,0 +1,169 @@
+.raiz {
+  position: relative;
+}
+
+.controleSom {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 2px 0 0;
+  padding: 5px 9px;
+  border: 1px solid var(--divisor);
+  border-radius: 999px;
+  background: var(--superficie);
+  color: var(--texto70);
+  cursor: pointer;
+  font-family: var(--fonte-rotulo);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.7px;
+  text-transform: uppercase;
+}
+
+.controleSom:focus-visible {
+  outline: 2px solid var(--acento);
+  outline-offset: 2px;
+}
+
+.anuncio {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.eventoProgresso,
+.eventoAlvo,
+.eventoFire {
+  position: relative;
+}
+
+.eventoProgresso::after {
+  content: attr(data-delta);
+  position: absolute;
+  z-index: 4;
+  top: 46px;
+  right: 12px;
+  padding: 3px 7px;
+  border-radius: 999px;
+  background: var(--superficie-elevada);
+  color: var(--texto100);
+  font-family: var(--fonte-rotulo);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.8px;
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .raiz[data-intensidade='PADRAO']
+    .eventoPlacar
+    :global(.jogo-placar-quente)
+    > div
+    > span:first-child,
+  .raiz[data-intensidade='INTENSAS']
+    .eventoPlacar
+    :global(.jogo-placar-quente)
+    > div
+    > span:first-child {
+    animation: placar-responde 560ms ease both;
+  }
+
+  .raiz[data-intensidade='PADRAO'] .eventoProgresso::after,
+  .raiz[data-intensidade='INTENSAS'] .eventoProgresso::after {
+    animation: delta-entra 900ms ease both;
+  }
+
+  .raiz[data-intensidade='PADRAO'] .eventoProgresso :global(.barra-alvo-preenchimento),
+  .raiz[data-intensidade='INTENSAS'] .eventoProgresso :global(.barra-alvo-preenchimento) {
+    animation: progresso-responde 620ms ease both;
+  }
+
+  .raiz[data-intensidade='PADRAO'] .eventoAlvo > div > article,
+  .raiz[data-intensidade='INTENSAS'] .eventoAlvo > div > article {
+    animation: alvo-atingido 760ms ease both;
+  }
+
+  .raiz[data-intensidade='PADRAO'] .eventoFire > div > article,
+  .raiz[data-intensidade='INTENSAS'] .eventoFire > div > article {
+    animation: fire-ativado 860ms ease both;
+  }
+
+  .raiz[data-intensidade='INTENSAS'] .eventoAlvo > div > article,
+  .raiz[data-intensidade='INTENSAS'] .eventoFire > div > article {
+    animation-duration: 1100ms;
+  }
+}
+
+@keyframes placar-responde {
+  0%,
+  100% {
+    transform: scale(1);
+    text-shadow: none;
+  }
+  40% {
+    transform: scale(1.12);
+    text-shadow: 0 0 18px var(--veu-fire);
+  }
+}
+
+@keyframes progresso-responde {
+  0% {
+    filter: brightness(1);
+  }
+  45% {
+    filter: brightness(1.65);
+  }
+  100% {
+    filter: brightness(1);
+  }
+}
+
+@keyframes delta-entra {
+  0% {
+    opacity: 0;
+    transform: translateY(6px) scale(0.9);
+  }
+  25%,
+  70% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-7px) scale(0.96);
+  }
+}
+
+@keyframes alvo-atingido {
+  0%,
+  100% {
+    transform: translateY(0);
+    filter: none;
+  }
+  35% {
+    transform: translateY(-3px);
+    filter: drop-shadow(0 0 14px var(--veu-fire));
+  }
+  55% {
+    transform: translateY(-1px);
+  }
+}
+
+@keyframes fire-ativado {
+  0%,
+  100% {
+    filter: none;
+  }
+  35% {
+    filter: brightness(1.22) drop-shadow(0 0 18px var(--veu-fire));
+  }
+  60% {
+    filter: brightness(1.08) drop-shadow(0 0 10px var(--veu-fire));
+  }
+}

@@ -194,7 +194,7 @@ const px = (valor: string | undefined) => Number((valor ?? '').replace('px', '')
 const larguraDaBorda = (borda: string | undefined) => px(borda?.split(' ')[0])
 
 const TRILHO = /<div style="(height:[^"]*position:relative)"/
-const CHEIO = /<div style="(position:absolute;left:0;[^"]*)"/
+const CHEIO = /<div class="barra-alvo-preenchimento" style="(position:absolute;left:0;[^"]*)"/
 const MARCO_ALVO = /<div aria-hidden="true" style="(position:absolute;left:100%[^"]*)"/
 const MARCO_FIRE = /<div aria-hidden="true" style="(position:absolute;left:72\.7%[^"]*)"/
 const PONTO = /<span role="img"[^>]*style="([^"]*)"/
