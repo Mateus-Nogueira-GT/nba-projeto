@@ -600,5 +600,76 @@ describe('CardEntrada — regras de escrita (docs/04-design-system.md)', () => {
     expect(telas).not.toContain('ALTÍSSIMO VALOR')
     expect(telas).not.toContain('...')
     expect(telas).not.toContain('…')
+/**
+ * O QUE O CARD NÃO PODE DEDUZIR (revisão adversarial da 04, rodada 1).
+ *
+ * Duas afirmações que o card fazia sozinho e não tinha como saber: de que lado
+ * o jogo foi (escrevia "vs" para todo mundo) e qual quadrado da fileira é o
+ * desta rodada (derivava do estado CONFERIDO, e acertava só em quem reordena
+ * a fileira — a galeria, que passa a fileira canônica, ganhava o contorno no
+ * jogo mais ANTIGO).
+ */
+describe('CardEntrada — mando e fileira, identidade 04', () => {
+  const cinco = [
+    { valor: 25, bateu: true },
+    { valor: 19, bateu: true },
+    { valor: 22, bateu: true },
+    { valor: 17, bateu: true },
+    { valor: 13, bateu: false },
+  ]
+
+  it('o visitante joga "@ ADV"; o mandante, "vs ADV"', () => {
+    const fora = render({ ...base, linha: 20, adversarioSigla: 'DEN', emCasa: false })
+    expect(fora).toContain('@ DEN')
+    expect(fora).not.toContain('vs DEN')
+
+    const casa = render({ ...base, linha: 20, adversarioSigla: 'DEN', emCasa: true })
+    expect(casa).toContain('vs DEN')
+    expect(casa).not.toContain('@ DEN')
+
+    // Sem dizer o lado, o card segue como antes das telas por jogo.
+    expect(render({ ...base, linha: 20, adversarioSigla: 'DEN' })).toContain('vs DEN')
+  })
+
+  it('a fileira sai na ordem em que chega: quem monta a fileira decide a direção, o card não inverte', () => {
+    const html = render({ ...base, linha: 20, ultimos5: cinco })
+    const fileira = html.slice(html.indexOf('ÚLT. 5 NA LINHA'))
+    const quadrados = [...fileira.matchAll(/>(\d+)<\/span>/g)].map((m) => m[1])
+    expect(quadrados).toEqual(['25', '19', '22', '17', '13'])
+  })
+
+  it('o contorno da rodada é EXPLÍCITO: sem a prop, nem o card conferido marca nada', () => {
+    const semProp = render({
+      ...base,
+      linha: 20,
+      ultimos5: cinco,
+      estado: 'CONFERIDO',
+      fez: 25,
+      bateu: true,
+    })
+    expect(semProp).not.toContain('outline')
+    expect(semProp).not.toContain('desta rodada')
+  })
+
+  it('com destacarUltima, o contorno cai na ÚLTIMA da prop — quem monta a fileira põe o jogo desta rodada no fim', () => {
+    const html = render({
+      ...base,
+      linha: 20,
+      ultimos5: [...cinco].reverse(),
+      estado: 'CONFERIDO',
+      fez: 25,
+      bateu: true,
+      destacarUltima: true,
+    })
+    expect(html.match(/outline:2px/g)).toHaveLength(1)
+    // A fileira chegou cronológica (13 … 25): o contorno está no quadrado do 25.
+    expect(html.indexOf('outline:2px')).toBeGreaterThan(html.indexOf('>13<'))
+    expect(html.indexOf('>25<')).toBeGreaterThan(html.indexOf('outline:2px'))
+    expect(html).toContain('a última é a desta rodada')
+  })
+
+  it('a faixa metálica nasce recuada, alinhada ao conteúdo do card', () => {
+    const html = render({ ...base, linha: 20 })
+    expect(html).toContain('margin-left:14px')
   })
 })

@@ -2,6 +2,7 @@ import Link from 'next/link'
 import type { CSSProperties, ReactNode } from 'react'
 
 import { semantico } from '@/design-system/tokens/semantico'
+import { BotaoVoltar } from './BotaoVoltar'
 
 /** Uma opção de seletor ou de lente: o valor identifica a ativa, o href leva até ela. */
 export type OpcaoDeNavegacao = { valor: string; rotulo: string; href: string }
@@ -94,22 +95,7 @@ export function CabecalhoTela({
             }}
           >
             {voltarHref ? (
-              <Link
-                href={voltarHref}
-                aria-label="Voltar"
-                style={{
-                  display: 'grid',
-                  placeItems: 'center',
-                  width: 34,
-                  height: 34,
-                  borderRadius: 10,
-                  border: `1.5px solid ${semantico.acento}`,
-                  color: semantico.acento,
-                  textDecoration: 'none',
-                }}
-              >
-                ←
-              </Link>
+              <BotaoVoltar href={voltarHref} />
             ) : (
               <span
                 aria-hidden

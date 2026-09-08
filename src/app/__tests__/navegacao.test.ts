@@ -26,6 +26,22 @@ describe('navegação (identidade 02)', () => {
     expect(html).toContain(`fill="${semantico.acento}"`)
   })
 
+  it('o botão de voltar é o chevron do artboard, com nome acessível — em TODA tela', () => {
+    // O detalhe do apito adotou o chevron do mockup; adotá-lo só lá deixaria
+    // metade do app com o glifo "←" e a outra metade com o traço, contra a
+    // gramática aprendida uma vez (spec 04, §2/§3). O componente é um só.
+    const html = renderToStaticMarkup(
+      createElement(CabecalhoTela, {
+        sobrancelha: 'METODOLOGIA DO CJ',
+        titulo: 'COMO FUNCIONA',
+        voltarHref: '/',
+      }),
+    )
+    expect(html).toContain('aria-label="Voltar"')
+    expect(html).toContain('<svg')
+    expect(html).not.toContain('←')
+  })
+
   it('cabeçalho: sobrancelha + título; contexto aoVivo muda a cor do marcador', () => {
     const padrao = renderToStaticMarkup(
       createElement(CabecalhoTela, {

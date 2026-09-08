@@ -16,6 +16,15 @@ export type CabecalhoJogoProps = {
   placarCasa?: number | null
   placarVisitante?: number | null
   /**
+   * Pontos por quarto de cada lado — a quebra do jogo ENCERRADO (identidade
+   * 04, §4.4). Opcionais: sem elas o cabeçalho é exatamente o de antes, e a
+   * Lista Secreta e o Fire Live não passam nenhuma. Só saem com o jogo
+   * encerrado: no jogo em andamento a linha `49 · 0 · 0 · 0` afirmaria que os
+   * três quartos que ainda não foram jogados terminaram em zero.
+   */
+  quartosCasa?: number[]
+  quartosVisitante?: number[]
+  /**
    * Frio (Lista Secreta, Resultados): uma linha, siglas à esquerda e o
    * horário/status à direita. Quente (Fire Live): bloco no gradiente quente
    * com o placar entre as siglas — e MUDO, mais apagado, enquanto o jogo não
@@ -63,6 +72,21 @@ export function CabecalhoJogo(props: CabecalhoJogoProps) {
     </span>
   )
 
+  /** Um lado do placar final. `color` fecha o estilo: é o canal do vencedor. */
+  const pontos = (feitos: number, vencedor: boolean) => (
+    <span
+      style={{
+        fontFamily: semantico.fonteTitulo,
+        fontSize: 22,
+        letterSpacing: 1,
+        fontVariantNumeric: 'tabular-nums',
+        color: vencedor ? semantico.texto100 : semantico.texto55,
+      }}
+    >
+      {feitos}
+    </span>
+  )
+
   const statusAoVivo = (
     <span
       style={{
@@ -89,32 +113,81 @@ export function CabecalhoJogo(props: CabecalhoJogoProps) {
   const statusEncerrado = <span style={{ ...ROTULO, color: semantico.texto55 }}>ENCERRADO</span>
 
   if (!quente) {
+    // O jogo encerrado COM placar troca as siglas soltas pelo resultado: o
+    // vencedor em texto100, o perdedor em texto55 — a hierarquia é a mesma
+    // que a transmissão dá, e o número escrito continua sendo a redundância
+    // da cor. Sem placar, o cabeçalho é o de sempre (spec 04, §4.4).
+    const encerradoComPlacar = props.status === 'ENCERRADO' && temPlacar
+    const quartosVisitante = props.quartosVisitante ?? []
+    const quartosCasa = props.quartosCasa ?? []
+    const mostraQuartos =
+      props.status === 'ENCERRADO' && quartosVisitante.length > 0 && quartosCasa.length > 0
+
     return (
       <div
         style={{
           display: 'flex',
-          alignItems: 'baseline',
+          // Com a quebra por quarto o lado direito tem DUAS linhas: alinhar
+          // pela primeira deixaria o bloco pendurado abaixo do placar. É a
+          // diferença entre o artboard de Resultados (center, 24px) e o da
+          // Lista Secreta (baseline, 22px) — a mesma peça nas duas telas.
+          alignItems: mostraQuartos ? 'center' : 'baseline',
           justifyContent: 'space-between',
           gap: 10,
-          margin: '22px 0 10px',
+          margin: mostraQuartos ? '24px 0 10px' : '22px 0 10px',
           padding: '0 2px',
         }}
       >
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
           {sigla(props.visitanteSigla)}
-          <span
-            style={{
-              fontFamily: semantico.fonteRotulo,
-              fontSize: 12,
-              letterSpacing: 1,
-              color: semantico.texto40,
-            }}
-          >
-            @
-          </span>
+          {encerradoComPlacar ? (
+            <>
+              {pontos(props.placarVisitante!, props.placarVisitante! >= props.placarCasa!)}
+              <span
+                style={{
+                  fontFamily: semantico.fonteRotulo,
+                  fontSize: 12,
+                  letterSpacing: 1,
+                  color: semantico.texto40,
+                }}
+              >
+                ·
+              </span>
+              {pontos(props.placarCasa!, props.placarCasa! >= props.placarVisitante!)}
+            </>
+          ) : (
+            <span
+              style={{
+                fontFamily: semantico.fonteRotulo,
+                fontSize: 12,
+                letterSpacing: 1,
+                color: semantico.texto40,
+              }}
+            >
+              @
+            </span>
+          )}
           {sigla(props.casaSigla)}
         </div>
-        {props.status === 'AGENDADO' ? (
+        {mostraQuartos ? (
+          <div
+            role="img"
+            aria-label={`Pontos por quarto: ${props.visitanteSigla} ${quartosVisitante.join(', ')}; ${props.casaSigla} ${quartosCasa.join(', ')}`}
+            style={{
+              fontFamily: semantico.fonteRotulo,
+              fontSize: 10,
+              letterSpacing: 1,
+              textTransform: 'uppercase',
+              textAlign: 'right',
+              lineHeight: 1.35,
+              color: semantico.texto40,
+              fontVariantNumeric: 'tabular-nums',
+            }}
+          >
+            <div>{quartosVisitante.join(' · ')}</div>
+            <div>{quartosCasa.join(' · ')}</div>
+          </div>
+        ) : props.status === 'AGENDADO' ? (
           <span
             style={{
               fontFamily: semantico.fonteRotulo,

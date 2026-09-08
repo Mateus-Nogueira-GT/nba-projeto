@@ -217,7 +217,8 @@ describe('detalhe do apito', () => {
       }),
     )
 
-    expect(html).toContain('Linhas de rebotes')
+    // Identidade 04: o título da seção é o rótulo do atributo, em caixa alta.
+    expect(html).toContain('LINHAS DE REBOTES')
     expect(html).toContain('REB')
     // O seed cotou três casas: a tela não pode cair na tabela de referência.
     expect(html).toContain('Faixa entre 3 casas')
@@ -238,21 +239,33 @@ describe('detalhe do apito', () => {
     )
     expect(alvo, 'lista de hoje sem apito de PONTOS com histórico na linha').toBeDefined()
     const { default: Pagina } = await import('../(app)/apito/[jogadorId]/page')
-    const html = renderToStaticMarkup(await Pagina({
-      params: Promise.resolve({ jogadorId: alvo!.jogadorId }),
-      searchParams: Promise.resolve({ atributo: 'PONTOS' }),
-    }))
-    expect(html).toMatch(/CONFIANÇA (BOA|SÓLIDA|FORTE|MUITO FORTE|MÁXIMA)/)
+    const html = renderToStaticMarkup(
+      await Pagina({
+        params: Promise.resolve({ jogadorId: alvo!.jogadorId }),
+        searchParams: Promise.resolve({ atributo: 'PONTOS' }),
+      }),
+    )
+    // Identidade 04: sob a pílula sai só o GRAU, em uma linha de 10 px como no
+    // artboard; o rótulo inteiro do ruleset ("CONFIANÇA MUITO FORTE") não cabe
+    // na coluna do hero — e o que sobra dele não se esconde num `title`, que
+    // em toque não existe.
+    expect(html).toMatch(/>(BOA|SÓLIDA|FORTE|MUITO FORTE|MÁXIMA)</)
+    expect(html).not.toMatch(/title="[^"]*CONFIANÇA/)
     expect(html).toContain('MÉDIA')
-    expect(html).toContain('BATEU')
-    expect(html).toContain('ÚLTIMOS 5 JOGOS NA LINHA')
+    // Identidade 04: os últimos CINCO em quadrados viraram a forma no atributo
+    // — dez barras com a linha marcada, e o "bateu x de y" saiu da caixa para
+    // o auxiliar da seção. As asserções finas estão em telas-04-detalhe.test.ts.
+    expect(html).toMatch(/bateu \d+ de \d+/)
+    expect(html).toContain('FORMA NO ATRIBUTO · ÚLTIMOS 10')
     expect(html).toContain('POR QUE ENTROU')
     expect(html).toContain('VER ESTATÍSTICAS')
     expect(html).not.toContain('ALTÍSSIMO VALOR')
     expect(html).not.toContain('MÉDIA 5J')
-    // Redundância obrigatória (mesmo padrão de resultados/page.tsx): bateu/não-bateu
-    // não pode depender só da cor de fundo do bloco — precisa do sinal textual.
-    expect(html).toMatch(/width:44px;height:44px;[^"]*"\s*>\s*(✓|·)\s?\d/)
+    // Redundância obrigatória: bateu/não-bateu não pode depender só da cor. No
+    // gráfico dos últimos 10 cada barra leva ✓ ou · junto do valor, e a régua
+    // nomeia a linha — inteira e com "+" — contra a qual tudo é comparado.
+    expect(html).toMatch(/LINHA \d+\+/)
+    expect(html).toMatch(/[✓·] \d+/)
   }, 60_000)
 })
 
@@ -270,13 +283,19 @@ describe('Fire Live', () => {
     const vivos = await banco.db.select().from(jogos).where(eq(jogos.status, 'AO_VIVO'))
     try {
       for (const j of vivos) {
-        await banco.db.update(jogos).set({ status: 'AGENDADO', quartoAtual: null }).where(eq(jogos.id, j.id))
+        await banco.db
+          .update(jogos)
+          .set({ status: 'AGENDADO', quartoAtual: null })
+          .where(eq(jogos.id, j.id))
       }
       const semJogo = renderToStaticMarkup(await Pagina({ searchParams: Promise.resolve({}) }))
       expect(semJogo).not.toContain('data-atualiza-ao-vivo')
     } finally {
       for (const j of vivos) {
-        await banco.db.update(jogos).set({ status: j.status, quartoAtual: j.quartoAtual }).where(eq(jogos.id, j.id))
+        await banco.db
+          .update(jogos)
+          .set({ status: j.status, quartoAtual: j.quartoAtual })
+          .where(eq(jogos.id, j.id))
       }
     }
   }, 60_000)
@@ -292,11 +311,7 @@ describe('Fire Live', () => {
     // Quem joga hoje é decisão do calendário simulado, então nomear um time
     // aqui ('OKC', como era) só voltaria a testar o roteiro.
     const { jogos, times } = await import('../../modules/dominio/db/schema')
-    const [aoVivo] = await banco.db
-      .select()
-      .from(jogos)
-      .where(eq(jogos.status, 'AO_VIVO'))
-      .limit(1)
+    const [aoVivo] = await banco.db.select().from(jogos).where(eq(jogos.status, 'AO_VIVO')).limit(1)
     expect(aoVivo).toBeDefined()
     const [casa] = await banco.db
       .select()
@@ -314,23 +329,19 @@ describe('Fire Live', () => {
 })
 
 describe('tela de Resultados', () => {
-  it('renderiza a conferência das rodadas encerradas', async () => {
+  // A tela mora em `/resultados/[data]` desde a identidade 04 (§4.4) e é
+  // testada em `telas-04-resultados.test.ts`. Aqui fica só o atalho: quem
+  // chega em `/resultados` vai para a ÚLTIMA rodada com conferência — a noite
+  // que terminou —, não para a rodada em curso.
+  it('o atalho leva à última rodada com conferência', async () => {
+    const { ultimaRodadaConferida } = await import('../../modules/entrega/resultados')
     const { default: Pagina } = await import('../(app)/resultados/page')
-    const html = renderToStaticMarkup(await Pagina())
-
-    expect(html).toContain('RESULTADOS')
-    expect(html).toContain('bateram a linha')
-    // Se a conferência viesse vazia, a tela cairia no estado vazio — e a demo
-    // abriria numa tela em branco.
-    expect(html).not.toContain('Nenhuma rodada encerrada ainda')
-    expect(html).toMatch(/bateu \d+/)
-  }, 60_000)
-
-  it('divide o cabeçalho com Entradas', async () => {
-    const { default: Pagina } = await import('../(app)/resultados/page')
-    const html = renderToStaticMarkup(await Pagina())
-    expect(html).toContain('LISTA SECRETA')
-    expect(html).toContain('HOJE') // o seletor aparece nos dois lados
+    const destino = await ultimaRodadaConferida(banco.db, HOJE)
+    expect(destino).not.toBeNull()
+    expect(destino).not.toBe(HOJE)
+    await expect(Pagina()).rejects.toMatchObject({
+      digest: expect.stringContaining(`/resultados/${destino}`),
+    })
   }, 60_000)
 })
 
@@ -433,7 +444,11 @@ describe('Estatísticas — identidade 03 (conferência em lote)', () => {
       .from(jogos)
       .where(igual(jogos.status, 'ENCERRADO'))
       .limit(1)
-    const [time] = await banco.db.select().from(times).where(igual(times.id, encerrado!.timeCasaId)).limit(1)
+    const [time] = await banco.db
+      .select()
+      .from(times)
+      .where(igual(times.id, encerrado!.timeCasaId))
+      .limit(1)
 
     const { telaDoTime } = await import('../../modules/entrega/estatisticas/time')
     const { temporadaDe, calendarioDoRuleset } = await import('../../modules/dominio/temporada')
@@ -445,7 +460,9 @@ describe('Estatísticas — identidade 03 (conferência em lote)', () => {
     // Jogo AO VIVO tem placar parcial e NÃO tem box score fechado — a
     // asserção é sobre os encerrados, que a tela promete completos.
     const idsEncerrados = new Set(
-      (await banco.db.select().from(jogos).where(igual(jogos.status, 'ENCERRADO'))).map((j) => j.id),
+      (await banco.db.select().from(jogos).where(igual(jogos.status, 'ENCERRADO'))).map(
+        (j) => j.id,
+      ),
     )
     const encerrados = tela!.jogosDoTime.filter((j) => idsEncerrados.has(j.jogoId))
     expect(encerrados.length).toBeGreaterThan(0)
@@ -515,15 +532,21 @@ describe('tela de Gestão de banca', () => {
     // clicável, e o único jeito de chegar ao detalhe era voltar à lista e
     // procurar o jogador de novo.
     const { default: Pagina } = await import('../(app)/gestao/page')
-    const html = renderToStaticMarkup(await Pagina({ searchParams: Promise.resolve({ banca: '1000' }) }))
+    const html = renderToStaticMarkup(
+      await Pagina({ searchParams: Promise.resolve({ banca: '1000' }) }),
+    )
 
-    const detalhes = [...html.matchAll(/href="\/apito\/[0-9a-f-]+\?atributo=(PONTOS|REBOTES|ASSISTENCIAS)"/g)]
+    const detalhes = [
+      ...html.matchAll(/href="\/apito\/[0-9a-f-]+\?atributo=(PONTOS|REBOTES|ASSISTENCIAS)"/g),
+    ]
     expect(detalhes.length).toBeGreaterThan(0)
   }, 60_000)
 
   it('renderiza o plano do dia com o aviso de modelo de demonstração', async () => {
     const { default: Pagina } = await import('../(app)/gestao/page')
-    const html = renderToStaticMarkup(await Pagina({ searchParams: Promise.resolve({ banca: '1000' }) }))
+    const html = renderToStaticMarkup(
+      await Pagina({ searchParams: Promise.resolve({ banca: '1000' }) }),
+    )
 
     expect(html).toContain('GESTÃO DE BANCA')
     expect(html).toContain('PLANO DO DIA')
@@ -535,7 +558,9 @@ describe('tela de Gestão de banca', () => {
 
   it('banca inválida cai no padrão em vez de espalhar NaN pela tela', async () => {
     const { default: Pagina } = await import('../(app)/gestao/page')
-    const html = renderToStaticMarkup(await Pagina({ searchParams: Promise.resolve({ banca: 'abc' }) }))
+    const html = renderToStaticMarkup(
+      await Pagina({ searchParams: Promise.resolve({ banca: 'abc' }) }),
+    )
 
     expect(html).not.toContain('NaN')
   }, 60_000)
@@ -545,7 +570,13 @@ describe('a aba teórica', () => {
   it('mostra a régua de 5 faixas turquesa com rótulos, não a escala antiga', async () => {
     const { default: Pagina } = await import('../(app)/como-funciona/page')
     const html = renderToStaticMarkup(await Pagina())
-    for (const r of ['CONFIANÇA BOA', 'CONFIANÇA SÓLIDA', 'CONFIANÇA FORTE', 'CONFIANÇA MUITO FORTE', 'CONFIANÇA MÁXIMA'])
+    for (const r of [
+      'CONFIANÇA BOA',
+      'CONFIANÇA SÓLIDA',
+      'CONFIANÇA FORTE',
+      'CONFIANÇA MUITO FORTE',
+      'CONFIANÇA MÁXIMA',
+    ])
       expect(html).toContain(r)
   }, 60_000)
 
@@ -576,13 +607,13 @@ describe('a aba teórica', () => {
 
 describe('telas restantes — identidade 03 (conferência em lote)', () => {
   it('resultados, gestão, como-funciona e entrar vestem o gradiente — e nada de universo quente', async () => {
-    const { default: Resultados } = await import('../(app)/resultados/page')
+    const { default: Resultados } = await import('../(app)/resultados/[data]/page')
     const { default: Gestao } = await import('../(app)/gestao/page')
     const { default: ComoFunciona } = await import('../(app)/como-funciona/page')
     const { default: Entrar } = await import('../(app)/entrar/page')
 
     const htmls = [
-      renderToStaticMarkup(await Resultados()),
+      renderToStaticMarkup(await Resultados({ params: Promise.resolve({ data: HOJE }) })),
       renderToStaticMarkup(await Gestao({ searchParams: Promise.resolve({}) })),
       renderToStaticMarkup(await ComoFunciona()),
       renderToStaticMarkup(await Entrar({ searchParams: Promise.resolve({}) })),
@@ -608,9 +639,11 @@ describe('regras transversais da identidade', () => {
       expect(html).not.toContain('3 PONTOS')
     }
 
-    // /resultados não recebe searchParams.
-    const { default: Resultados } = await import('../(app)/resultados/page')
-    const htmlResultados = renderToStaticMarkup(await Resultados())
+    // A rodada de /resultados vem da ROTA, não de searchParams.
+    const { default: Resultados } = await import('../(app)/resultados/[data]/page')
+    const htmlResultados = renderToStaticMarkup(
+      await Resultados({ params: Promise.resolve({ data: HOJE }) }),
+    )
     expect(htmlResultados).not.toMatch(/(PONTOS|REBOTES|ASSISTÊNCIAS)\s+\d+,\d/)
     expect(htmlResultados).not.toContain('ALTÍSSIMO VALOR')
     expect(htmlResultados).not.toContain('3 PONTOS')
@@ -649,7 +682,9 @@ describe('Fire Live — identidade 03', () => {
       expect(depois).toContain('mostrar de novo')
     } finally {
       const { eq: igual } = await import('drizzle-orm')
-      await banco.db.delete(jogadoresOcultos).where(igual(jogadoresOcultos.jogadorId, alvo.jogadorId))
+      await banco.db
+        .delete(jogadoresOcultos)
+        .where(igual(jogadoresOcultos.jogadorId, alvo.jogadorId))
     }
   }, 60_000)
 
@@ -926,7 +961,10 @@ describe('a foto do jogador', () => {
     const escolhido = (await lerFeed(banco.db, HOJE))!.conteudo.itens[0]
     expect(escolhido, 'lista de hoje vazia').toBeDefined()
 
-    await banco.db.update(jogadores).set({ fotoUrl: FOTO }).where(eq(jogadores.id, escolhido!.jogadorId))
+    await banco.db
+      .update(jogadores)
+      .set({ fotoUrl: FOTO })
+      .where(eq(jogadores.id, escolhido!.jogadorId))
     // Republicar basta: o hash cobre o item inteiro, então a foto nova conta
     // como mudança. Antes era preciso apagar o snapshot à mão aqui.
     await publicarListaSecreta(banco.db, ruleset, {

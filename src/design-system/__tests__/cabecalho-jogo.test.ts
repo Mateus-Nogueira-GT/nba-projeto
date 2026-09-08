@@ -101,3 +101,85 @@ describe('CabecalhoJogo — a única fronteira de seção da varredura', () => {
     expect(todos.toLowerCase()).not.toContain('probabilidade')
   })
 })
+
+/**
+ * O CABEÇALHO DA NOITE ENCERRADA — identidade 04, §4.4.
+ *
+ * Nos Resultados o cabeçalho de jogo deixa de ser só a fronteira de seção e
+ * passa a ser o resultado: placar final com o vencedor em destaque e a quebra
+ * por quarto à direita. Tudo por prop opcional — quem não passa placar nem
+ * quartos continua vendo o cabeçalho de sempre.
+ */
+describe('CabecalhoJogo · a noite encerrada (identidade 04)', () => {
+  const encerrado = {
+    ...base,
+    status: 'ENCERRADO' as const,
+    placarCasa: 93,
+    placarVisitante: 117,
+  }
+  /** A cor com que o cabeçalho escreveu aquele número. */
+  const corDe = (html: string, numero: number) =>
+    html.match(new RegExp(`color:([^"]+)">${numero}<`))?.[1]
+
+  it('placar final: o vencedor em texto100, o perdedor em texto55, em Anton 22', () => {
+    const html = render(encerrado)
+    expect(corDe(html, 117)).toBe(semantico.texto100)
+    expect(corDe(html, 93)).toBe(semantico.texto55)
+    expect(html).toContain('font-size:22px')
+    // a ordem da varredura não muda: visitante à esquerda, mandante à direita
+    expect(html.indexOf('MIA')).toBeLessThan(html.indexOf('117'))
+    expect(html.indexOf('117')).toBeLessThan(html.indexOf('93'))
+    expect(html.indexOf('93')).toBeLessThan(html.indexOf('IND'))
+  })
+
+  it('a quebra por quarto sai em duas linhas: visitante em cima, mandante embaixo', () => {
+    const html = render({
+      ...encerrado,
+      quartosVisitante: [30, 28, 29, 30],
+      quartosCasa: [24, 22, 23, 24],
+    })
+    expect(html).toContain('30 · 28 · 29 · 30')
+    expect(html).toContain('24 · 22 · 23 · 24')
+    expect(html.indexOf('30 · 28 · 29 · 30')).toBeLessThan(html.indexOf('24 · 22 · 23 · 24'))
+    expect(html).toContain(semantico.texto40)
+    expect(html).toContain('font-size:10px')
+    // cor não é canal único: o leitor de tela ouve de quem é cada linha
+    expect(html).toContain('aria-label="Pontos por quarto')
+  })
+
+  it('sem os quartos, o encerrado continua dizendo ENCERRADO por escrito', () => {
+    expect(render(encerrado)).toContain('ENCERRADO')
+  })
+
+  it('nada muda para quem não passa placar: o agendado é o de sempre', () => {
+    expect(render(base)).toContain('19:30')
+    expect(render(base)).not.toContain('font-size:22px')
+  })
+})
+
+/**
+ * ALINHAMENTO — o artboard de Resultados usa `align-items:center`; o da Lista
+ * Secreta, `baseline`. A diferença tem causa: só nos Resultados o lado direito
+ * tem DUAS linhas (a quebra por quarto), e alinhar pela primeira deixaria o
+ * bloco pendurado abaixo do placar. O cabeçalho decide pelo que está mostrando.
+ */
+describe('CabecalhoJogo · o alinhamento segue o conteúdo do lado direito', () => {
+  const encerrado = { ...base, status: 'ENCERRADO' as const, placarCasa: 93, placarVisitante: 117 }
+
+  it('com a quebra por quarto o bloco centra; sem ela, a linha única segue na baseline', () => {
+    const comQuartos = render({
+      ...encerrado,
+      quartosVisitante: [30, 28, 29, 30],
+      quartosCasa: [24, 22, 23, 24],
+    })
+    // O trecho inteiro do bloco EXTERNO: o interno (o placar) é sempre baseline.
+    expect(comQuartos).toContain(
+      'align-items:center;justify-content:space-between;gap:10px;margin:24px 0 10px',
+    )
+
+    const semQuartos = render(base)
+    expect(semQuartos).toContain(
+      'align-items:baseline;justify-content:space-between;gap:10px;margin:22px 0 10px',
+    )
+  })
+})

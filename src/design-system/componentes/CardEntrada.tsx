@@ -135,6 +135,17 @@ export type CardEntradaProps = {
   /** Bateu a linha? `null` = não jogou → neutro, nem ✓ nem ✗. */
   bateu?: boolean | null
   /**
+   * Contorna a ÚLTIMA barrinha da fileira — o jogo desta rodada, nos
+   * Resultados, que a tela põe no fim.
+   *
+   * É EXPLÍCITA de propósito. Derivar de `estado === 'CONFERIDO'` marcaria a
+   * fileira de todo chamador conferido, inclusive os que não acrescentaram o
+   * jogo da rodada (a galeria), e o contorno cairia num jogo antigo afirmando
+   * ser o de agora. Quem monta a fileira decide a ordem e sabe qual é a nova;
+   * o card só repassa a `Barrinhas.destacarUltima`.
+   */
+  destacarUltima?: boolean
+  /**
    * Abas PTS · REB · AST no rodapé: o mesmo jogador com dois ou três
    * atributos é UM card, e as abas trocam o mercado — no lugar do rótulo
    * longo do atributo. A entrega decide quem ganha abas; o card só desenha.
@@ -466,7 +477,16 @@ export function CardEntrada(props: CardEntradaProps) {
         )}
         {barrinhas && (
           <div style={{ padding: '0 14px 10px' }}>
-            <Barrinhas jogos={props.ultimos5!} rotulo="ÚLT. 5 NA LINHA" />
+            {/* A fileira sai na ORDEM EM QUE CHEGA: quem a monta decide a
+                direção — a Lista passa a ordem canônica da entrega; os
+                Resultados montam a cronológica, com o jogo da rodada no fim
+                (artboard). O card não inverte: inverter aqui mudaria todo
+                chamador, inclusive a galeria congelada. */}
+            <Barrinhas
+              jogos={props.ultimos5!}
+              rotulo="ÚLT. 5 NA LINHA"
+              destacarUltima={props.destacarUltima ?? false}
+            />
           </div>
         )}
         {textoDaLente && (
