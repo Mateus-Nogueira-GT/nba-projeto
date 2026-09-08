@@ -1,7 +1,8 @@
 # UX de transmissão e identidade oficial — plano de implementação
 
 **Spec:** [Decisões e critérios de aceite](../specs/2026-09-08-ux-transmissao-e-identidade-oficial-design.md).
-**Estado:** plano criado; tarefas de produto ainda não executadas.
+**Estado:** P1–P8 implementados em 08/09/2026; P9 aguarda homologação comercial;
+P10 concluiu automação e capturas, com a matriz interativa ainda pendente.
 **Base inspecionada:** `c49c96d`, `codex/ux-ao-vivo-identidade`, worktree
 `nba-projeto-debug`. Revalidar Git e migrações ao iniciar a implementação.
 
@@ -14,6 +15,22 @@ Reutilizar a identidade visual e os componentes existentes. O plano descreve nom
 
 Somente este documento e a spec são entregues agora. Não executar as tarefas abaixo,
 instalar dependências, alterar dados ou publicar como consequência de criar o plano.
+
+### Registro de execução de 08/09/2026
+
+| Etapa | Estado | Evidência principal |
+| --- | --- | --- |
+| P1 | concluída com uma pendência explícita | catálogo oficial por `personId`, projeção em lote e `npm run identidades:relatorio`; Wiggins permanece sem vínculo inferido |
+| P2 | concluída | migration aditiva `0018`, APIs autenticadas e testes de upgrade/rollback em PGlite |
+| P3–P5 | concluídas | um jogo selecionado, painel sticky, quadra, cartões por alvo, motion, áudio coordenado e acompanhamento otimista |
+| P6 | concluída | URL e consultas unificadas para últimos 5, últimos 10 e temporada |
+| P7 | concluída | painel de experiência, acompanhados e filtros aplicados ao fan-out |
+| P8 | concluída | resumo e filtros por estratégia, atributo e time com linha prevista versus observado |
+| P9 | bloqueada pela spec | falta homologar comprometimento/liberação, DNP/cancelamento, encerramento e significado de disponível |
+| P10 | parcial | 1.447 testes, lint, typecheck, boundaries, build Webpack e capturas 390/1280 verdes; áudio real, duas abas e toda a matriz interativa ainda exigem navegador autenticado |
+
+O registro acima substitui a instrução histórica de “somente plano” para esta execução,
+explicitamente autorizada pelo usuário. Nenhuma migration foi aplicada em ambiente externo.
 
 ### Regras de execução
 

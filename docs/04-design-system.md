@@ -386,3 +386,30 @@ verificações de componentes e a regressão de participação entre telas. O he
 capturas de 390 px e desktop. `demo:conferir -- --pglite` semeia sete semanas com
 `simularAte` e verifica leituras reais sem acessar o Neon. Captura estática verifica
 apresentação; não substitui um smoke autenticado do deploy.
+
+## Transmissão ao vivo e identidade oficial
+
+A experiência de 08/09/2026 mantém a anatomia da Identidade 04 e acrescenta uma
+camada de transmissão. O Fire Live apresenta um jogo por vez: o seletor horizontal
+usa nome completo e escudo do catálogo oficial, e o painel sticky conserva placar do
+primeiro quarto e quadra durante a rolagem. Cada alvo continua em cartão separado.
+
+As transições são respostas finitas a mudanças reais de snapshot. Placar, progresso,
+alvo batido e entrada em Modo Fire possuem movimentos distintos; não há relógio,
+posse ou pulso contínuo inventado. `prefers-reduced-motion` prevalece sobre a intensidade
+salva. Hover e foco do Modo Fire usam o mesmo vocabulário e preservam o rótulo textual.
+
+O som local abre ligado em 50%, mas depende do primeiro gesto aceito pelo navegador.
+Um lote de apitos produz um toque curto. Eventos vistos são limitados aos 100 mais
+recentes, compartilhados por `BroadcastChannel`/`storage` e serializados por Web Locks
+quando disponível. Mute local não altera Push; exclusões por jogador, atributo e canal
+valem para os dois meios identificáveis.
+
+Nomes de jogador exibidos vêm da projeção oficial por UUID/`personId`; aliases continuam
+válidos para busca e regras editoriais. Casos sem vínculo confirmado permanecem no
+relatório de reconciliação, sem fusão por sobrenome. Times usam `TIMES_NBA`, com nome
+completo e SVG local, e podem ser acompanhados como atalhos sem expandir o elenco.
+
+As preferências ficam em Perfil: intensidade, som, volume, somente acompanhados,
+atributos e jogadores silenciados. Lista, Fire Live e perfis estatísticos oferecem o
+controle de acompanhamento; páginas de time oferecem o equivalente para times.
