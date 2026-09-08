@@ -1,4 +1,5 @@
 import { notFound } from 'next/navigation'
+import { z } from 'zod'
 
 import { getDb } from '@/modules/dominio/db/cliente'
 import { dataDeReferencia } from '@/modules/dominio/rodada'
@@ -267,6 +268,7 @@ export default async function PaginaTime({
 }) {
   await exigirAcessoEstatisticasSeConfigurado()
   const { id } = await params
+  if (!z.uuid().safeParse(id).success) notFound()
   const { atributo: atributoBruto } = await searchParams
   if (!process.env.DATABASE_URL) return <SemBanco />
 

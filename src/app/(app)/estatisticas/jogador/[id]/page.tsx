@@ -1,4 +1,5 @@
 import { notFound } from 'next/navigation'
+import { z } from 'zod'
 
 import { getDb } from '@/modules/dominio/db/cliente'
 import { calendarioDoRuleset, temporadaDe } from '@/modules/dominio/temporada'
@@ -424,6 +425,7 @@ function LinkDeTime({ href, children }: { href: string; children: React.ReactNod
 export default async function PaginaJogador({ params }: { params: Promise<{ id: string }> }) {
   await exigirAcessoEstatisticasSeConfigurado()
   const { id } = await params
+  if (!z.uuid().safeParse(id).success) notFound()
   if (!process.env.DATABASE_URL) return <SemBanco />
 
   const agora = new Date()

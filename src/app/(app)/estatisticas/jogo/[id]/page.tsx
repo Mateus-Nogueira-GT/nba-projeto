@@ -1,4 +1,5 @@
 import { notFound } from 'next/navigation'
+import { z } from 'zod'
 
 import { getDb } from '@/modules/dominio/db/cliente'
 import { telaDoJogo } from '@/modules/entrega/estatisticas/jogo'
@@ -204,6 +205,7 @@ export default async function PaginaDoJogo({
   await exigirAcessoEstatisticasSeConfigurado()
 
   const { id } = await params
+  if (!z.uuid().safeParse(id).success) notFound()
   // Preserva a data que a lista de jogos passou na URL (`?data=`), para o
   // "voltar" pousar no MESMO dia navegado, não sempre em hoje — sem
   // validar aqui: `/estatisticas` já sabe cair para hoje diante de
