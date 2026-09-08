@@ -1,10 +1,14 @@
 import { createHash } from 'node:crypto'
 import { send } from '@vercel/queue'
-import { and, asc, desc, eq, gt, inArray, isNull, lt, lte, or } from 'drizzle-orm'
+import { and, asc, desc, eq, gt, inArray, isNull, lt, lte, or, sql } from 'drizzle-orm'
 import { z } from 'zod'
 
 import {
+  atributosSilenciados,
   dispositivos,
+  jogadoresAcompanhados,
+  jogadoresSilenciados,
+  preferenciasUsuario,
   direitosAcesso,
   preferenciasNotificacao,
   pushInscricoes,
@@ -12,6 +16,11 @@ import {
   usuarios,
 } from '../../dominio/db/schema'
 import type { Db } from '../../dominio/db/tipos'
+import {
+  alertaPermitido,
+  estadoExperienciaPadrao,
+  type AlvoAlerta,
+} from '../../plataforma/experiencia/contrato'
 import { invalidarInscricoes } from '../../plataforma/push/inscricoes'
 import { mensagemPushExpirada, mensagemPushV1Schema, type MensagemPushV1 } from './contrato'
 import type { InscricaoPush, PortaEnvioPush, ResultadoEnvioPush } from './porta'
@@ -218,6 +227,11 @@ async function inscricoesElegiveis(
 ): Promise<InscricaoElegivel[]> {
   if (ids.length === 0 || mensagemPushExpirada(evento, agora)) return []
 
+  const alvo: AlvoAlerta =
+    evento.canal === 'LISTA_SECRETA'
+      ? { canal: evento.canal }
+      : { canal: evento.canal, jogadorId: evento.dados.jogadorId, atributo: evento.dados.atributo }
+
   const linhas = await db
     .selectDistinct({
       id: pushInscricoes.id,
@@ -228,6 +242,10 @@ async function inscricoesElegiveis(
       chaveP256dh: pushInscricoes.chaveP256dh,
       chaveAuth: pushInscricoes.chaveAuth,
       direitoId: direitosAcesso.id,
+      apenasAcompanhados: preferenciasUsuario.apenasAcompanhados,
+      jogadorAcompanhado: jogadoresAcompanhados.jogadorId,
+      jogadorSilenciado: jogadoresSilenciados.jogadorId,
+      atributoSilenciado: atributosSilenciados.atributo,
     })
     .from(pushInscricoes)
     .innerJoin(
@@ -254,6 +272,36 @@ async function inscricoesElegiveis(
         eq(preferenciasNotificacao.canal, evento.canal),
       ),
     )
+    // Relações únicas por conta/alvo: uma consulta por lote, sem buscar elencos
+    // ou todas as preferências de cada assinante. Lista geral não tem alvo.
+    .leftJoin(preferenciasUsuario, eq(preferenciasUsuario.usuarioId, usuarios.id))
+    .leftJoin(
+      jogadoresAcompanhados,
+      alvo.jogadorId
+        ? and(
+            eq(jogadoresAcompanhados.usuarioId, usuarios.id),
+            eq(jogadoresAcompanhados.jogadorId, alvo.jogadorId),
+          )
+        : sql`false`,
+    )
+    .leftJoin(
+      jogadoresSilenciados,
+      alvo.jogadorId
+        ? and(
+            eq(jogadoresSilenciados.usuarioId, usuarios.id),
+            eq(jogadoresSilenciados.jogadorId, alvo.jogadorId),
+          )
+        : sql`false`,
+    )
+    .leftJoin(
+      atributosSilenciados,
+      alvo.atributo
+        ? and(
+            eq(atributosSilenciados.usuarioId, usuarios.id),
+            eq(atributosSilenciados.atributo, alvo.atributo),
+          )
+        : sql`false`,
+    )
     .leftJoin(
       direitosAcesso,
       and(
@@ -274,13 +322,23 @@ async function inscricoesElegiveis(
       ),
     )
 
-  return linhas.filter((linha) =>
-    politica.permitido({
-      id: linha.usuarioId,
-      email: linha.email,
-      direitoAtivo: linha.direitoId !== null,
-    }),
-  )
+  return linhas.filter((linha) => {
+    if (
+      !politica.permitido({
+        id: linha.usuarioId,
+        email: linha.email,
+        direitoAtivo: linha.direitoId !== null,
+      })
+    )
+      return false
+    // Mesmo predicado do som local; mute/volume nunca participam do push.
+    const estado = estadoExperienciaPadrao()
+    estado.preferencias.apenasAcompanhados = linha.apenasAcompanhados ?? false
+    estado.jogadoresAcompanhados = linha.jogadorAcompanhado ? [linha.jogadorAcompanhado] : []
+    estado.jogadoresSilenciados = linha.jogadorSilenciado ? [linha.jogadorSilenciado] : []
+    estado.atributosSilenciados = linha.atributoSilenciado ? [linha.atributoSilenciado] : []
+    return alertaPermitido(estado, alvo)
+  })
 }
 
 export async function expandirEventoPush(

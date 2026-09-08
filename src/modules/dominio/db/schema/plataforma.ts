@@ -13,8 +13,9 @@ import {
   uuid,
 } from 'drizzle-orm/pg-core'
 import { sql } from 'drizzle-orm'
-import { jogadores } from './dominio'
+import { jogadores, times } from './dominio'
 import {
+  atributoEnum,
   canalNotificacaoEnum,
   papelUsuarioEnum,
   statusUsuarioEnum,
@@ -167,10 +168,7 @@ export const direitosAcesso = pgTable(
       t.inicio,
       t.fim,
     ),
-    check(
-      'direitos_acesso_intervalo_valido',
-      sql`${t.fim} is null or ${t.fim} > ${t.inicio}`,
-    ),
+    check('direitos_acesso_intervalo_valido', sql`${t.fim} is null or ${t.fim} > ${t.inicio}`),
     check(
       'direitos_acesso_revogacao_tem_motivo',
       sql`${t.revogadoEm} is null or ${t.motivoRevogacao} is not null`,
@@ -221,7 +219,9 @@ export const tentativasOperacaoConta = pgTable(
     sucesso: boolean('sucesso').notNull(),
     tentadoEm: timestamp('tentado_em', { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [index('tentativas_operacao_conta_janela_idx').on(t.operacao, t.identificadorHash, t.tentadoEm)],
+  (t) => [
+    index('tentativas_operacao_conta_janela_idx').on(t.operacao, t.identificadorHash, t.tentadoEm),
+  ],
 )
 
 export const pushInscricoes = pgTable(
@@ -361,7 +361,7 @@ export const eventosConta = pgTable(
 )
 
 /**
- * Jogadores que o usuário escolheu NÃO acompanhar no Fire Live — a primeira
+ * Jogadores que o usuário escolheu ocultar visualmente no Fire Live — a primeira
  * preferência por CONTA do produto (sincroniza entre dispositivos, ao
  * contrário de tudo que vive na URL).
  *
@@ -391,19 +391,94 @@ export const jogadoresOcultos = pgTable(
  * pegar os melhores) e a lente da zona 2 do card (últimos 5, média × linha,
  * odds, hierarquia). Uma linha por usuário; ausência é o padrão.
  *
- * Mesmo espírito de `jogadores_ocultos`: recorte de LEITURA na tela. O feed
- * é materializado por evento e não sabe quem está olhando. Guardadas como
+ * Ordem/lente são recortes de leitura; motion e áudio controlam a experiência.
+ * Apenas acompanhados é opt-in de alertas, não filtro do feed. Guardadas como
  * texto (não enum do banco) de propósito — os valores válidos são do tipo em
  * `plataforma/preferencias.ts`; acrescentar uma lente não pede migração.
  */
-export const preferenciasUsuario = pgTable('preferencias_usuario', {
-  usuarioId: uuid('usuario_id')
-    .primaryKey()
-    .references(() => usuarios.id, { onDelete: 'cascade' }),
-  ordemLista: text('ordem_lista'),
-  lente: text('lente'),
-  atualizadoEm: timestamp('atualizado_em', { withTimezone: true }).notNull().defaultNow(),
-})
+export const preferenciasUsuario = pgTable(
+  'preferencias_usuario',
+  {
+    usuarioId: uuid('usuario_id')
+      .primaryKey()
+      .references(() => usuarios.id, { onDelete: 'cascade' }),
+    ordemLista: text('ordem_lista'),
+    lente: text('lente'),
+    intensidade: text('intensidade').notNull().default('PADRAO'),
+    somHabilitado: boolean('som_habilitado').notNull().default(true),
+    volume: integer('volume').notNull().default(50),
+    apenasAcompanhados: boolean('apenas_acompanhados').notNull().default(false),
+    atualizadoEm: timestamp('atualizado_em', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    check('preferencias_volume_valido', sql`${t.volume} BETWEEN 0 AND 100`),
+    check(
+      'preferencias_intensidade_valida',
+      sql`${t.intensidade} IN ('REDUZIDAS', 'PADRAO', 'INTENSAS')`,
+    ),
+  ],
+)
+
+/** Acompanhamento positivo. Não altera política de alertas por si só. */
+export const jogadoresAcompanhados = pgTable(
+  'jogadores_acompanhados',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    usuarioId: uuid('usuario_id')
+      .notNull()
+      .references(() => usuarios.id, { onDelete: 'cascade' }),
+    jogadorId: uuid('jogador_id')
+      .notNull()
+      .references(() => jogadores.id, { onDelete: 'cascade' }),
+    criadoEm: timestamp('criado_em', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [unique('jogadores_acompanhados_unico').on(t.usuarioId, t.jogadorId)],
+)
+
+/** Atalho de consulta; não implica acompanhar os jogadores do elenco. */
+export const timesAcompanhados = pgTable(
+  'times_acompanhados',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    usuarioId: uuid('usuario_id')
+      .notNull()
+      .references(() => usuarios.id, { onDelete: 'cascade' }),
+    timeId: uuid('time_id')
+      .notNull()
+      .references(() => times.id, { onDelete: 'cascade' }),
+    criadoEm: timestamp('criado_em', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [unique('times_acompanhados_unico').on(t.usuarioId, t.timeId)],
+)
+
+/** Exclusões de alerta não removem cartões nem acompanhamento. */
+export const jogadoresSilenciados = pgTable(
+  'jogadores_silenciados',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    usuarioId: uuid('usuario_id')
+      .notNull()
+      .references(() => usuarios.id, { onDelete: 'cascade' }),
+    jogadorId: uuid('jogador_id')
+      .notNull()
+      .references(() => jogadores.id, { onDelete: 'cascade' }),
+    criadoEm: timestamp('criado_em', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [unique('jogadores_silenciados_unico').on(t.usuarioId, t.jogadorId)],
+)
+
+export const atributosSilenciados = pgTable(
+  'atributos_silenciados',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    usuarioId: uuid('usuario_id')
+      .notNull()
+      .references(() => usuarios.id, { onDelete: 'cascade' }),
+    atributo: atributoEnum('atributo').notNull(),
+    criadoEm: timestamp('criado_em', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [unique('atributos_silenciados_unico').on(t.usuarioId, t.atributo)],
+)
 
 /**
  * OBSERVABILIDADE DE LLM — uma linha por chamada, sucesso ou falha.

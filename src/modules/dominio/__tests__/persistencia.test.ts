@@ -42,10 +42,10 @@ afterAll(async () => {
 // ---------------------------------------------------------------------------
 
 describe('migrations sobem e descem limpas', () => {
-  it('a subida cria as 48 tabelas dos grupos persistidos', async () => {
-    // 48 desde preferencias_usuario (identidade 04); 47 desde llm_chamadas e
+  it('a subida cria as 52 tabelas dos grupos persistidos', async () => {
+    // 52 desde acompanhamento e exclusões de alerta por conta; 47 desde llm_chamadas e
     // chat_mensagens (roteamento de LLM)
-    expect(await banco.contarTabelas()).toBe(48)
+    expect(await banco.contarTabelas()).toBe(52)
   })
 
   it('desce zerando o schema e sobe de novo sem resíduo', async () => {
@@ -53,8 +53,8 @@ describe('migrations sobem e descem limpas', () => {
     expect(await banco.contarTabelas()).toBe(0)
 
     await banco.subir()
-    // 48 desde preferencias_usuario (identidade 04)
-    expect(await banco.contarTabelas()).toBe(48)
+    // 52 desde acompanhamento e exclusões de alerta por conta
+    expect(await banco.contarTabelas()).toBe(52)
   })
 })
 
@@ -357,8 +357,14 @@ describe('feed_snapshot por jogo (spec 05, fatia 1)', () => {
 
   beforeAll(async () => {
     const sufixo = 'FS'
-    const [casa] = await banco.db.insert(times).values({ sigla: `H${sufixo}`, nome: 'Casa' }).returning()
-    const [vis] = await banco.db.insert(times).values({ sigla: `W${sufixo}`, nome: 'Visitante' }).returning()
+    const [casa] = await banco.db
+      .insert(times)
+      .values({ sigla: `H${sufixo}`, nome: 'Casa' })
+      .returning()
+    const [vis] = await banco.db
+      .insert(times)
+      .values({ sigla: `W${sufixo}`, nome: 'Visitante' })
+      .returning()
     const valores = {
       dataHoraUtc: new Date('2026-08-22T23:00:00Z'),
       dataReferencia: '2026-08-22',
@@ -394,7 +400,9 @@ describe('feed_snapshot por jogo (spec 05, fatia 1)', () => {
   })
 
   it('mesmo (data, estrategia, jogo) conflita — chave de upsert', async () => {
-    await banco.db.insert(feedSnapshot).values({ ...base, estrategia: 'FIRE_LIVE', jogoId: jogoIdA })
+    await banco.db
+      .insert(feedSnapshot)
+      .values({ ...base, estrategia: 'FIRE_LIVE', jogoId: jogoIdA })
     const erro = await banco.db
       .insert(feedSnapshot)
       .values({ ...base, estrategia: 'FIRE_LIVE', jogoId: jogoIdA })
