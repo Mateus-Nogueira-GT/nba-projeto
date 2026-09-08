@@ -23,10 +23,24 @@ function sobre(cor: string, fundo: string): string {
 
 describe('identidade 04 · texto de apoio legível', () => {
   it('o estado DNP preserva contraste do texto neutro após compor a opacidade do card', () => {
-    const html = renderToStaticMarkup(createElement(CardEntrada, {
-      nome: 'Jogador DNP', timeSigla: 'LAL', atributo: 'PONTOS', nivelJogador: 'MVP',
-      nivelApito: 1, confianca: 90, fotoUrl: null, estado: 'NAO_JOGOU', linha: 20,
-    }))
+    const html = renderToStaticMarkup(
+      createElement(CardEntrada, {
+        nome: 'Jogador DNP',
+        timeSigla: 'LAL',
+        posicao: 'G',
+        grauConfianca: 4,
+        atributo: 'PONTOS',
+        nivelJogador: 'MVP',
+        nivelApito: 1,
+        confianca: 90,
+        fotoUrl: null,
+        estado: 'CONFERIDO',
+        fez: null,
+        bateu: null,
+        linha: 20,
+      }),
+    )
+    expect(html).toContain('não jogou · neutro')
     const estilo = html.match(/<article style="([^"]*)"/)?.[1] ?? ''
     const opacidade = Number(estilo.match(/(?:^|;)opacity:([\d.]+)/)?.[1] ?? '1')
     const comporCard = (cor: string) => {

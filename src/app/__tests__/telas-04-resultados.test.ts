@@ -355,8 +355,8 @@ describe('Resultados · o card conferido fecha o ciclo', () => {
       const html = await renderizar(ONTEM)
       expect(textoDaTela(html)).toContain('não jogou · neutro')
       expect(html.match(/>DNP</g) ?? []).toHaveLength(doAlvo.length)
-      // O card recua sem sumir, e não ganha barrinha nova.
-      expect(html).toContain('opacity:0.75')
+      // DNP usa texto neutro sem reduzir o contraste de todo o card.
+      expect(html).not.toContain('opacity:0.75')
       expect(html.match(/outline:2px/g) ?? []).toHaveLength(
         recap.porJogo.flatMap((g) => g.cards).filter((c) => c.fez !== null).length - doAlvo.length,
       )
@@ -375,10 +375,17 @@ describe('Resultados · o card conferido fecha o ciclo', () => {
     try {
       await banco.db.delete(estatisticasJogo).where(onde)
       const html = await renderizar(ONTEM)
-      const texto = textoDaTela(html)
+      // Outro jogo pode ter legitimamente o mesmo valor (por exemplo, fez 0).
+      // O estado sem box pertence somente ao jogo que acabamos de alterar.
+      const secao = html
+        .match(/<section\b[\s\S]*?<\/section>/g)
+        ?.find((s) => s.includes(`/estatisticas/jogador/${grupo.cards[0]!.jogadorId}`))
+      expect(secao).toBeDefined()
+      expect(secao!.match(/<article\b/g) ?? []).toHaveLength(grupo.cards.length)
+      const texto = textoDaTela(secao!)
       expect(texto.toLowerCase()).toContain('aguardando dado oficial')
       // Nem ✓, nem ✗, nem DNP para quem ninguém conferiu ainda.
-      for (const card of grupo.cards) expect(texto).not.toContain(`fez ${card.fez}`)
+      expect(texto).not.toMatch(/fez \d/)
       expect(texto).not.toContain('não jogou · neutro')
       // O carimbo é a data e a hora da última atualização, no fuso da rodada.
       expect(texto).toMatch(/\d{2}\/\d{2}\/\d{4}/)

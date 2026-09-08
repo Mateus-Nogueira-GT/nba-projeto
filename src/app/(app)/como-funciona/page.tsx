@@ -230,7 +230,7 @@ export default async function PaginaComoFunciona() {
           <Caixa destaque>
             <p style={{ margin: 0, fontSize: 13 }}>
               O número é a <strong>nota de confiança da análise do CJ</strong>, sem sinal de
-              porcentagem. Ele expressa a força da análise, sem promessa de resultado.
+              porcentagem. Não é probabilidade de acerto nem promessa de resultado.
             </p>
           </Caixa>
 

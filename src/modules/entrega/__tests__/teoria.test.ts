@@ -85,7 +85,7 @@ describe('a página /como-funciona', () => {
     expect(fonte).toContain('montarTeoria')
   })
 
-  it('chama o percentual de nota de confiança e nega ser probabilidade (P12)', () => {
+  it('chama o número de nota de confiança e nega ser probabilidade (P12)', () => {
     expect(fonte).toContain('nota de confiança da análise')
     // A palavra só pode aparecer NEGADA — a ressalva que o P12 exige.
     const ocorrencias = [...fonte.matchAll(/probabilidade/gi)]

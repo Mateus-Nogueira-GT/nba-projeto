@@ -94,14 +94,15 @@ describe('escrita da identidade 04 · guia', () => {
   it('explica confiança como nota numérica e bônus em pontos da nota', async () => {
     const html = await guia()
     const confianca = texto(secao(html, 'linhas de pontos'))
-    expect(confianca).not.toMatch(/%|percentual|probabilidade/i)
+    expect(confianca).not.toMatch(/%|percentual/i)
     expect(confianca).toContain('nota de confiança')
+    expect(confianca).toContain('Não é probabilidade de acerto')
     for (const faixa of ruleset.confianca_exibicao.faixas) {
       expect(confianca).toContain(`${faixa.de} ou mais`)
     }
     const bonus = ruleset.confianca.bonus_por_nivel_apito.MVP?.['3'] ?? 0
     expect(confianca).toContain(`${bonus} pontos na nota`)
-    expect(texto(html)).not.toMatch(/percentuais|probabilidade/i)
+    expect(texto(html)).not.toMatch(/percentuais/i)
   })
 
   it('orienta abrir o card e conserva linhas inteiras com +', async () => {
