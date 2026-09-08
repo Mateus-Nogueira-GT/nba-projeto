@@ -53,6 +53,22 @@ export function resumoDosApitos(
 }
 
 /**
+ * O AUXILIAR DAS SEÇÕES QUE LEEM O HISTÓRICO DE PARTIDAS.
+ *
+ * `telaDoJogador` corta o histórico num limite (25 por padrão) e as duas
+ * seções que nascem dele — a tabela jogo a jogo e as médias de "Números
+ * completos" — valiam só pelas últimas N partidas enquanto o auxiliar
+ * continuava NOMEANDO a temporada. Numa temporada de 82 jogos, o hero escreve
+ * "68 jogos · 2025-26" duas linhas acima de uma tabela de 25 linhas rotulada
+ * "temporada 2025-26": ou o rótulo muda, ou o corte aparece. Aqui ele aparece.
+ *
+ * Sem corte o rótulo é o do artboard, intacto.
+ */
+export function recorteDoHistorico(partidas: number, cortado: boolean, inteiro: string): string {
+  return cortado ? `últimas ${partidas} partidas` : inteiro
+}
+
+/**
  * TÍTULO DE SEÇÃO (identidade 04): rótulo condensado em maiúsculas à
  * esquerda, um auxiliar discreto à direita — "temporada 2025-26", "1 de 3
  * bateu". O auxiliar existe para tirar o contexto de dentro do conteúdo; é

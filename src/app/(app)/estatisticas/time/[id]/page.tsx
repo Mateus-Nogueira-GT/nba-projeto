@@ -223,7 +223,11 @@ export default async function PaginaTime({ params }: { params: Promise<{ id: str
         )}
       </Secao>
 
-      <Secao titulo="Box score por jogo">
+      {/* A ORDEM das linhas era dita só pela legenda da tabela, que a
+          identidade 04 mandou para o leitor de tela (`Tabela` clipa o
+          `caption`, e o título da seção acima já a nomeia). Ela volta ao texto
+          visível pelo auxiliar da seção — nenhuma outra parte da tela dizia. */}
+      <Secao titulo="Box score por jogo" aux="da mais recente para a mais antiga">
         <Tabela
           legenda="Pontos por quarto, da partida mais recente para a mais antiga"
           colunas={colunas(temProrrogacao, ruleset.rodada.fuso)}
@@ -276,7 +280,12 @@ export default async function PaginaTime({ params }: { params: Promise<{ id: str
         )}
       </Secao>
 
-      <UltimaAtualizacao em={tela.atualizacao.em} fonte={tela.atualizacao.fonte} agora={agora} fuso={ruleset.rodada.fuso} />
+      <UltimaAtualizacao
+        em={tela.atualizacao.em}
+        fonte={tela.atualizacao.fonte}
+        agora={agora}
+        fuso={ruleset.rodada.fuso}
+      />
     </Moldura>
   )
 }

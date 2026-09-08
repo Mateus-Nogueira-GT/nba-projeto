@@ -27,6 +27,7 @@ import { semantico } from '@/design-system/tokens/semantico'
 import '@/design-system/tokens/tokens.css'
 import {
   LIMITE_DE_APITOS_DO_JOGADOR,
+  recorteDoHistorico,
   resumoDosApitos,
   Secao,
   SemBanco,
@@ -68,6 +69,20 @@ const NIVEL_ROTULO: Record<NivelDaLista, string> = {
   RANDOLA: 'Randola',
 }
 
+/**
+ * "vs SAS" / "@ SAS" — o confronto do ponto de vista do jogador, na MESMA
+ * forma nas duas seções que o imprimem (o histórico de apitos e a tabela jogo
+ * a jogo). As duas leem o mesmo mando, de `mandoDoJogador`.
+ *
+ * "—" quando não há mando: o vínculo jogador↔time não põe o jogador em nenhum
+ * dos dois lados. Chutar "@ <time da casa>" dava como adversário um time que
+ * podia ser o DELE.
+ */
+function confronto(l: { emCasa: boolean | null; adversarioSigla: string | null }): string {
+  if (l.emCasa === null || l.adversarioSigla === null) return '—'
+  return `${l.emCasa ? 'vs' : '@'} ${l.adversarioSigla}`
+}
+
 function num(v: number | null, casas = 1): string {
   if (v === null) return '—'
   return v.toFixed(casas).replace('.', ',')
@@ -90,9 +105,7 @@ function colunas(fuso: string): Coluna<LinhaHistorico>[] {
           <span style={{ color: semantico.texto40, fontSize: 11, letterSpacing: 0.8 }}>
             {diaMes(l.data, fuso)}
           </span>{' '}
-          <span style={{ color: semantico.texto70, fontWeight: 600 }}>
-            {l.emCasa ? 'vs' : '@'} {l.adversarioSigla}
-          </span>
+          <span style={{ color: semantico.texto70, fontWeight: 600 }}>{confronto(l)}</span>
         </span>
       ),
     },
@@ -278,7 +291,7 @@ function LinhaDeApito({ apito, fuso }: { apito: ApitoDoJogador; fuso: string }) 
             marginLeft: 6,
           }}
         >
-          {apito.emCasa ? 'vs' : '@'} {apito.adversarioSigla}
+          {confronto(apito)}
         </span>
       </span>
       <Veredito apito={apito} />
@@ -379,20 +392,24 @@ function RotuloDeTime({ children }: { children: React.ReactNode }) {
  * Na cor do parágrafo e sem sublinhado eles eram indistinguíveis de texto
  * estático (WCAG 1.4.1: a cor, quando existe, nunca é canal único — aqui não
  * havia canal nenhum), e mais fracos que os rótulos vizinhos, que não são
- * links. O acento MAIS o sublinhado são dois canais; o `inline-block` com
- * padding tira o alvo de toque dos ~30x18 px de uma sigla de três letras em
- * 12 px e o leva acima do mínimo de 24 px (WCAG 2.2 · 2.5.8). Os links de
- * BLOCO da aba (índice, tabela do time) dispensam sublinhado porque a borda e
- * o fundo já os anunciam; este é inline, no meio de uma frase.
+ * links. O acento MAIS o sublinhado são dois canais, e é só isso que este link
+ * faz. Os links de BLOCO da aba (índice, tabela do time) dispensam sublinhado
+ * porque a borda e o fundo já os anunciam; este é inline, no meio de uma frase.
+ *
+ * SEM `inline-block` com padding, que estava aqui em nome do alvo de toque: o
+ * alvo produzido parava em ~22 px (12 px de texto + 8 de padding), abaixo do
+ * mínimo de 24 que ele dizia atingir, e o critério 2.5.8 do WCAG 2.2 tem
+ * exceção explícita para alvo *Inline* — link dentro de frase, com o tamanho
+ * limitado pela entrelinha do texto vizinho, que é exatamente este caso. O
+ * custo, esse, era real: a caixa de linha de 18 px (12 px · 1,5) estourava e a
+ * segunda linha do apoio ficava mais alta que a primeira, quebrando o ritmo do
+ * `.apoio` do artboard.
  */
 function LinkDeTime({ href, children }: { href: string; children: React.ReactNode }) {
   return (
     <a
       href={href}
       style={{
-        display: 'inline-block',
-        padding: '4px 6px',
-        margin: '0 -2px',
         fontWeight: 700,
         color: semantico.acento,
         textDecoration: 'underline',
@@ -424,10 +441,24 @@ export default async function PaginaJogador({ params }: { params: Promise<{ id: 
   const apitos = lista.slice(0, LIMITE_DE_APITOS_DO_JOGADOR)
   const truncado = lista.length > LIMITE_DE_APITOS_DO_JOGADOR
 
+  /** O rótulo das seções que leem o histórico — com o corte, quando há corte. */
+  const recorte = (inteiro: string) =>
+    recorteDoHistorico(tela.historico.length, tela.historicoCortado, inteiro)
+
+  // O APOIO DO HERO diz a temporada — e por isso ele responde ao recorte igual
+  // às duas seções de baixo. `jogosDisputados` conta a temporada inteira
+  // (`medias_jogador`), MENOS quando essa linha não existe: aí ele cai no
+  // tamanho da janela já cortada, e "25 jogos · 2025-26" duas linhas acima de
+  // uma tabela que diz "últimas 25 partidas" é a mesma afirmação que o recorte
+  // acabou de tirar dali. Com a linha de médias no lugar, nada muda: o número
+  // continua sendo o da temporada mesmo com a tabela cortada.
   const identidade = [
     perfil.posicao,
-    `${tela.jogosDisputados} jogo${tela.jogosDisputados === 1 ? '' : 's'}`,
-    temporada,
+    recorteDoHistorico(
+      tela.jogosDisputados,
+      tela.jogosDisputadosDoRecorte,
+      `${tela.jogosDisputados} jogo${tela.jogosDisputados === 1 ? '' : 's'} · ${temporada}`,
+    ),
   ]
     .filter(Boolean)
     .join(' · ')
@@ -605,7 +636,9 @@ export default async function PaginaJogador({ params }: { params: Promise<{ id: 
         )}
       </Secao>
 
-      <Secao titulo="Jogo a jogo" aux={`temporada ${temporada}`}>
+      {/* O auxiliar PRECISA dizer o corte: a tabela para no limite do histórico
+          e o hero, duas linhas acima, conta a temporada inteira. */}
+      <Secao titulo="Jogo a jogo" aux={recorte(`temporada ${temporada}`)}>
         <Tabela
           legenda="Uma linha por partida, da mais recente para a mais antiga"
           colunas={colunas(ruleset.rodada.fuso)}
@@ -615,7 +648,9 @@ export default async function PaginaJogador({ params }: { params: Promise<{ id: 
         />
       </Secao>
 
-      <Secao titulo="Números completos" aux={`médias de ${temporada}`}>
+      {/* Estas médias (FG%, 2P%, LL%, rebotes, roubos, saldo…) nascem da MESMA
+          janela cortada — o recorte vale para elas do mesmo jeito. */}
+      <Secao titulo="Números completos" aux={recorte(`médias de ${temporada}`)}>
         <NumerosCompletos n={tela.perfilNumeros} />
       </Secao>
 
