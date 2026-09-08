@@ -38,6 +38,43 @@ module.exports = {
         path: 'node_modules/(next|react|react-dom|pg|postgres|drizzle-orm|@neondatabase|@vercel|axios|node-fetch)(/|$)',
       },
     },
+    /*
+     * O gerador da temporada simulada é PURO pelo mesmo motivo que o motor: é o
+     * que permite testar a distribuição — quantas oscilações, que sequências,
+     * que médias — sem subir banco. Dia, elencos e semente entram como
+     * argumento. Ele vive em `ingestao/`, onde I/O é a regra e não a exceção,
+     * e por isso precisa de guarda própria: as três regras acima só olham para
+     * `motor/`, e sem estas a pureza dele seria promessa de comentário — foi
+     * exatamente o que a revisão da spec da temporada simulada apontou.
+     * Ver docs/superpowers/specs/2026-09-06-temporada-simulada-design.md.
+     */
+    {
+      name: 'simulacao-sem-outras-camadas',
+      severity: 'error',
+      comment:
+        'O gerador da temporada simulada não pode depender de domínio, entrega, plataforma ' +
+        'nem app. O que ele precisa saber entra como argumento.',
+      from: { path: '^src/modules/ingestao/demo/simulacao\\.ts$' },
+      to: { path: '^src/(modules/(dominio|entrega|plataforma)|app|design-system|workflows)' },
+    },
+    {
+      name: 'simulacao-sem-builtin-node',
+      severity: 'error',
+      comment:
+        'Nada de builtin do Node no gerador: ler arquivo é I/O e Date/crypto é estado ' +
+        'externo. A lista de jogadores chega pronta; o dia chega como string.',
+      from: { path: '^src/modules/ingestao/demo/simulacao\\.ts$' },
+      to: { dependencyTypes: ['core'] },
+    },
+    {
+      name: 'simulacao-sem-io-externo',
+      severity: 'error',
+      comment: 'O gerador não pode depender de banco, framework web ou cliente de rede.',
+      from: { path: '^src/modules/ingestao/demo/simulacao\\.ts$' },
+      to: {
+        path: 'node_modules/(next|react|react-dom|pg|postgres|drizzle-orm|@neondatabase|@vercel|@electric-sql|axios|node-fetch)(/|$)',
+      },
+    },
     {
       name: 'estatisticas-nao-passam-pelo-motor',
       severity: 'error',

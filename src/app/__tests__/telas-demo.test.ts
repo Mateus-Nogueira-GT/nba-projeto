@@ -7,7 +7,7 @@ import { feedSnapshot, jogadores } from '../../modules/dominio/db/schema'
 import { diaLongo } from '../../components/formato'
 import { dataDeReferencia, somarDias } from '../../modules/dominio/rodada'
 import { rulesetAtivo } from '../../modules/entrega/ruleset-ativo'
-import { semearDemo } from '../../modules/ingestao/demo/semear'
+import { simularAte } from '../../modules/ingestao/demo/temporada'
 import { LLMFake } from '../../modules/ingestao/llm'
 import type { ConteudoFeed } from '../../modules/entrega/lista-secreta'
 
@@ -22,6 +22,21 @@ import type { ConteudoFeed } from '../../modules/entrega/lista-secreta'
  * Renderiza o componente de servidor de verdade, com o banco de verdade
  * semeado pela demo. Só sessão e direito de acesso são simulados — são a
  * fronteira de autenticação, não o que está sob teste.
+ *
+ * O SEED É A TEMPORADA SIMULADA, não o dia roteirizado.
+ *
+ * `semearDemo` continua existindo — é a fixture dos exemplos literais do
+ * documento do CJ (Luka fora abrindo OPD para Reaves, LeBron em oscilação,
+ * Curry turbo) que outras suítes usam para ficarem legíveis. Mas esta suíte é
+ * a fumaça das telas de PRODUÇÃO, e produção semeia com `simularAte`: o que o
+ * cliente vê é uma temporada sorteada, com quem joga hoje decidido pelo
+ * calendário e os apitos publicados pelo motor antes de o dia ser jogado.
+ * Testar as telas contra o roteiro seria testá-las contra um mundo que
+ * ninguém mais monta.
+ *
+ * Consequência para quem editar este arquivo: NENHUMA asserção pode nomear um
+ * jogador, um time ou um horário. Quando a tela precisa de um sujeito
+ * concreto, ele é LIDO do banco (ou do feed) e a asserção é sobre ele.
  */
 
 // Pelo carregador da ENTREGA, não pelo do motor: a fronteira proíbe `src/app`
@@ -63,7 +78,17 @@ beforeAll(async () => {
   // OPENROUTER_API_KEY) e é o que faz a lista nascer com narrativa nos cards e
   // resumo no cabeçalho — sem ela, a tela seria testada num estado que o
   // cliente não vê.
-  await semearDemo(banco.db, await rulesetAtivo(), AGORA, new LLMFake())
+  //
+  // 21 DIAS, e não os 49 da spec: é o menor histórico que sustenta ao mesmo
+  // tempo as três coisas que estas telas mostram — variedade de nível do apito
+  // (1/2/3), a janela de 7 dias da tela de Resultados com green E red, e média
+  // amostral suficiente para o Fire Live acender. Com 5 dias a tela de
+  // Resultados fica pobre e a variedade de níveis some; com 49 a suíte paga
+  // minutos de PGlite por nada.
+  await simularAte(banco.db, await rulesetAtivo(), AGORA, {
+    diasDeHistorico: 21,
+    llm: new LLMFake(),
+  })
   // O usuário da sessão simulada existe de verdade: telas passaram a consultar
   // preferências por usuarioId (jogadores_ocultos), e uuid inválido quebraria.
   const { usuarios } = await import('../../modules/dominio/db/schema')
@@ -198,10 +223,18 @@ describe('detalhe do apito', () => {
   it('detalhe redesenhado: faixa, três caixas, blocos e por quê', async () => {
     const { lerFeed } = await import('../../modules/entrega/lista-secreta')
     const feed = await lerFeed(banco.db, HOJE)
-    const lebron = feed!.conteudo.itens.find((i) => i.nome === 'LeBron James')!
+    // Um apitado de PONTOS COM histórico na linha. Era o LeBron, porque o seed
+    // roteirizado o punha em oscilação de propósito; na temporada simulada
+    // quem apita é consequência do sorteio, então o sujeito é procurado pela
+    // PROPRIEDADE que a tela exige (os cinco blocos só existem com `ultimos5`)
+    // e nunca pelo nome.
+    const alvo = feed!.conteudo.itens.find(
+      (i) => i.atributo === 'PONTOS' && i.linha !== null && i.ultimos5.length > 0,
+    )
+    expect(alvo, 'lista de hoje sem apito de PONTOS com histórico na linha').toBeDefined()
     const { default: Pagina } = await import('../(app)/apito/[jogadorId]/page')
     const html = renderToStaticMarkup(await Pagina({
-      params: Promise.resolve({ jogadorId: lebron.jogadorId }),
+      params: Promise.resolve({ jogadorId: alvo!.jogadorId }),
       searchParams: Promise.resolve({ atributo: 'PONTOS' }),
     }))
     expect(html).toMatch(/CONFIANÇA (BOA|SÓLIDA|FORTE|MUITO FORTE|MÁXIMA)/)
@@ -225,7 +258,23 @@ describe('Fire Live', () => {
     expect(html).toContain('FIRE LIVE · AO VIVO')
     expect(html).toContain('ACONTECENDO')
     expect(html).toContain('1º Q')
-    expect(html).toContain('OKC') // placar do jogo ao vivo da demo
+
+    // O PLACAR DO JOGO AO VIVO APARECE — pela sigla da CASA, lida do banco.
+    // Quem joga hoje é decisão do calendário simulado, então nomear um time
+    // aqui ('OKC', como era) só voltaria a testar o roteiro.
+    const { jogos, times } = await import('../../modules/dominio/db/schema')
+    const [aoVivo] = await banco.db
+      .select()
+      .from(jogos)
+      .where(eq(jogos.status, 'AO_VIVO'))
+      .limit(1)
+    expect(aoVivo).toBeDefined()
+    const [casa] = await banco.db
+      .select()
+      .from(times)
+      .where(eq(times.id, aoVivo!.timeCasaId))
+      .limit(1)
+    expect(html).toContain(casa!.sigla)
     // A sobrancelha da tela já contém "AO VIVO" — `toContain('VIVO')` passaria
     // mesmo sem o selo do card. O selo é a Pilula `texto="VIVO"` de
     // CardEntrada, que renderiza como `>VIVO<` (span sem filhos além do
@@ -312,10 +361,28 @@ describe('a rodada segue o fuso do cliente', () => {
     const { default: Pagina } = await import('../(app)/estatisticas/page')
     const html = renderToStaticMarkup(await Pagina({ searchParams: Promise.resolve({}) }))
 
-    // O seed marca os jogos às 20h, 21h, 22h e 23h LOCAIS — o das 20h está ao
-    // vivo e mostra o placar no lugar do horário. Num servidor em UTC, sem o
-    // fuso explícito, o das 21h sairia como 00:00 (e no dia seguinte).
-    expect(html).toContain('21:00')
+    // O calendário simulado sorteia os horários entre 19:00 e 22:30 LOCAIS, em
+    // meia-horas — não há mais horário fixo para nomear aqui. Então o teste lê
+    // um jogo AGENDADO de hoje, formata no fuso do ruleset e exige ESSE
+    // horário na tela. (O primeiro jogo do dia está AO VIVO e mostra o placar
+    // no lugar do horário; por isso a busca é pelos AGENDADOS.)
+    const { jogos } = await import('../../modules/dominio/db/schema')
+    const [agendado] = await banco.db
+      .select()
+      .from(jogos)
+      .where(and(eq(jogos.dataReferencia, HOJE), eq(jogos.status, 'AGENDADO')))
+      .limit(1)
+    expect(agendado).toBeDefined()
+    const local = new Intl.DateTimeFormat('pt-BR', {
+      hour: '2-digit',
+      minute: '2-digit',
+      timeZone: FUSO,
+      hourCycle: 'h23',
+    }).format(agendado!.dataHoraUtc)
+    expect(html).toContain(local)
+    // A âncora que pega o bug de verdade: num servidor em UTC, sem o fuso
+    // explícito, um jogo das 21:00 de Brasília sairia como 00:00 — e no dia
+    // seguinte. Nenhum horário sorteado entre 19:00 e 22:30 vira 00:00 local.
     expect(html).not.toContain('00:00')
   }, 60_000)
 })
@@ -595,13 +662,23 @@ describe('Fire Live — identidade 03', () => {
 describe('Detalhe do apito — identidade 03', () => {
   it('hero frio, blocos no par das barrinhas e nunca a palavra probabilidade', async () => {
     const { lerFeed } = await import('../../modules/entrega/lista-secreta')
-    const item = (await lerFeed(banco.db, HOJE))!.conteudo.itens.find((i) => i.linha !== null)!
+    // Um apitado que BATEU a linha em pelo menos um dos últimos 5 — é o que a
+    // asserção do verde `#2FBF71` (bloco "bateu") exige para ter o que
+    // comparar. Sob o seed roteirizado qualquer item servia, porque o roteiro
+    // desenhava histórico misto; a temporada simulada sorteia, e há apitado
+    // com os cinco blocos vermelhos. Escolher pela propriedade em vez de
+    // afrouxar o `toContain` mantém a asserção provando o que provava: o par
+    // das barrinhas, e nunca o verde categórico do apito nível 3.
+    const item = (await lerFeed(banco.db, HOJE))!.conteudo.itens.find(
+      (i) => i.linha !== null && i.ultimos5.some((u) => u.bateu),
+    )
+    expect(item, 'lista de hoje sem apitado que tenha batido a linha nos últimos 5').toBeDefined()
 
     const { default: Detalhe } = await import('../(app)/apito/[jogadorId]/page')
     const html = renderToStaticMarkup(
       await Detalhe({
-        params: Promise.resolve({ jogadorId: item.jogadorId }),
-        searchParams: Promise.resolve({ atributo: item.atributo }),
+        params: Promise.resolve({ jogadorId: item!.jogadorId }),
+        searchParams: Promise.resolve({ atributo: item!.atributo }),
       }),
     )
     await gravarConferencia('detalhe-apito', html)
@@ -754,17 +831,28 @@ describe('tela de partida', () => {
   })
 
   it('H2H vazio mostra a linha prometida pela spec (§6), não esconde a seção', async () => {
-    // Duas siglas fora do rodízio da demo (as únicas com jogo semeado) nunca
-    // se enfrentaram no histórico — H2H genuinamente vazio, sem precisar
-    // mexer no `limiteH2H` (a página sempre usa o padrão da função).
+    // Um par que NUNCA se enfrentou no histórico — H2H genuinamente vazio,
+    // sem precisar mexer no `limiteH2H` (a página sempre usa o padrão).
+    //
+    // Antes bastava sair do rodízio de 8 times do seed roteirizado; agora os
+    // 30 times jogam, e cada um encara só uma parte da liga na janela. Então o
+    // par é DERIVADO do banco: o primeiro confronto que o calendário simulado
+    // não marcou, em nenhuma das duas ordens de mando.
     const { jogos, times } = await import('../../modules/dominio/db/schema')
-    const { notInArray } = await import('drizzle-orm')
-    const RODIZIO_DA_DEMO = ['OKC', 'DEN', 'LAL', 'PHI', 'GSW', 'BOS', 'MIA', 'NYK']
-    const [casa, visitante] = await banco.db
-      .select()
-      .from(times)
-      .where(notInArray(times.sigla, RODIZIO_DA_DEMO))
-      .limit(2)
+    const todosOsTimes = await banco.db.select().from(times)
+    const marcados = await banco.db
+      .select({ casaId: jogos.timeCasaId, visitanteId: jogos.timeVisitanteId })
+      .from(jogos)
+    const jaSeEnfrentaram = new Set(
+      marcados.flatMap((j) => [`${j.casaId}|${j.visitanteId}`, `${j.visitanteId}|${j.casaId}`]),
+    )
+    const inedito = todosOsTimes.flatMap((a) =>
+      todosOsTimes
+        .filter((b) => b.id !== a.id && !jaSeEnfrentaram.has(`${a.id}|${b.id}`))
+        .map((b) => [a, b] as const),
+    )[0]
+    expect(inedito, 'todos os pares de times já se enfrentaram na janela simulada').toBeDefined()
+    const [casa, visitante] = inedito!
 
     const amanha = somarDias(HOJE, 1)
     const [novoJogo] = await banco.db
@@ -798,13 +886,16 @@ describe('a foto do jogador', () => {
     // trouxesse a URL. O assinante via a headshot no card, tocava em "linhas e
     // confiança →" e encontrava o monograma "LJ" — o mesmo jogador, dois
     // rostos. /gestao, /resultados e /estatisticas já passavam a foto.
-    const { publicarListaSecreta } = await import('../../modules/entrega/lista-secreta')
+    const { lerFeed, publicarListaSecreta } = await import('../../modules/entrega/lista-secreta')
     const ruleset = await rulesetAtivo()
 
-    await banco.db
-      .update(jogadores)
-      .set({ fotoUrl: FOTO })
-      .where(eq(jogadores.nomeCompleto, 'LeBron James'))
+    // O apitado que ganha a foto é LIDO da lista de hoje — o roteiro (que
+    // punha o LeBron ali de propósito) não decide mais quem apita. Só ele
+    // recebe `fotoUrl`, e é por isso que `<img>` na tela prova o caminho.
+    const escolhido = (await lerFeed(banco.db, HOJE))!.conteudo.itens[0]
+    expect(escolhido, 'lista de hoje vazia').toBeDefined()
+
+    await banco.db.update(jogadores).set({ fotoUrl: FOTO }).where(eq(jogadores.id, escolhido!.jogadorId))
     // Republicar basta: o hash cobre o item inteiro, então a foto nova conta
     // como mudança. Antes era preciso apagar o snapshot à mão aqui.
     await publicarListaSecreta(banco.db, ruleset, {
@@ -813,11 +904,10 @@ describe('a foto do jogador', () => {
       ignorarAntecedencia: true,
     })
 
-    const { lerFeed } = await import('../../modules/entrega/lista-secreta')
-    const lebron = (await lerFeed(banco.db, HOJE))!.conteudo.itens.find(
-      (i) => i.nome === 'LeBron James',
+    const comFoto = (await lerFeed(banco.db, HOJE))!.conteudo.itens.find(
+      (i) => i.jogadorId === escolhido!.jogadorId,
     )!
-    expect(lebron.fotoUrl).toBe(FOTO)
+    expect(comFoto.fotoUrl).toBe(FOTO)
 
     const { default: Lista } = await import('../(app)/page')
     const htmlLista = renderToStaticMarkup(await Lista({ searchParams: Promise.resolve({}) }))
@@ -826,11 +916,14 @@ describe('a foto do jogador', () => {
     const { default: Detalhe } = await import('../(app)/apito/[jogadorId]/page')
     const htmlDetalhe = renderToStaticMarkup(
       await Detalhe({
-        params: Promise.resolve({ jogadorId: lebron.jogadorId }),
-        searchParams: Promise.resolve({ atributo: lebron.atributo }),
+        params: Promise.resolve({ jogadorId: comFoto.jogadorId }),
+        searchParams: Promise.resolve({ atributo: comFoto.atributo }),
       }),
     )
     expect(htmlDetalhe).toContain('<img')
-    expect(htmlDetalhe).not.toContain('>LJ<')
+    // O monograma DELE — "LJ" era o do LeBron. Pela mesma função que o Avatar
+    // usa, para o teste não se afastar do componente se a regra mudar.
+    const { iniciaisDe } = await import('../../design-system/componentes')
+    expect(htmlDetalhe).not.toContain(`>${iniciaisDe(comFoto.nome)}<`)
   }, 60_000)
 })

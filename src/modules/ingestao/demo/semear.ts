@@ -1,5 +1,4 @@
-import { and, eq, inArray, isNotNull, or, sql } from 'drizzle-orm'
-import { readFile } from 'node:fs/promises'
+import { eq, sql } from 'drizzle-orm'
 
 import {
   casas,
@@ -21,32 +20,35 @@ import {
 import type { Db } from '../../dominio/db/tipos'
 import { dataDeReferencia, intervaloDoDia, somarDias } from '../../dominio/rodada'
 import { calendarioDoRuleset, temporadaDe } from '../../dominio/temporada'
-import { ativarVersaoNiveis } from '../../dominio/repositorios/niveis'
 import { executarCiclo } from '../../entrega/fire-live/ciclo'
 import { FilaEmMemoria } from '../../entrega/fila/memoria'
-import { lerFeed, publicarListaSecreta } from '../../entrega/lista-secreta'
-import { deltaOscilacao, faixaEstatica, marcosDoNivel } from '../../motor/atributos'
-import { agregar } from '../../motor/odds/agregar'
+import { publicarListaSecreta } from '../../entrega/lista-secreta'
+import { deltaOscilacao } from '../../motor/atributos'
 import type { Ruleset } from '../../motor/ruleset/schema'
-import { ATRIBUTOS } from '../../motor/tipos'
 import type { Atributo } from '../../motor/tipos'
 import type { PortaLLM } from '../llm'
-import { lerListaDeNiveis } from '../niveis/parser'
-import { importarListaDeNiveis } from '../niveis/importar'
+import { semearJogoAoVivo } from './ao-vivo'
+import type { JogadorAoVivo } from './ao-vivo'
+import { chaveDeNome, semearCadastro } from './cadastro'
 import {
   boxComplementar,
   decomporPontos,
   historicoOscilacao,
   mediaDe,
-  naFaixa,
   niveisDoJogador,
-  nomeDeExibicao,
-  posicaoDe,
   rodadaDoDia,
 } from './dados'
+import {
+  semearBoxScoreDoTime,
+  semearClassificacao,
+  semearPlacares,
+  upsertJogoDemo,
+} from './jogos'
+import { semearOdds } from './odds'
 
-export const ARQUIVO_LISTA = 'data/fontes/introducao-ia-nba.md'
-const PROVEDOR_DEMO = 'demo'
+// Reexportado porque `semear.ts` foi o endereço original da constante — quem
+// importa daqui continua funcionando depois da extração para `./cadastro`.
+export { ARQUIVO_LISTA } from './cadastro'
 
 export type ResumoDemo = {
   times: number
@@ -95,96 +97,14 @@ export async function semearDemo(
   agora: Date,
   llm?: PortaLLM,
 ): Promise<ResumoDemo> {
-  const conteudo = await readFile(ARQUIVO_LISTA, 'utf8')
-  const analise = lerListaDeNiveis(conteudo)
-
-  // 1 · Times e jogadores canônicos. Na demo, a lista do CJ é a autoridade
-  //     sobre quem existe — e o vínculo é confirmado aqui, no lugar da
-  //     curadoria humana que a produção exige.
-  const siglas = [...new Set(analise.jogadores.map((j) => j.timeSigla).filter((s): s is string => s !== null))]
-  for (const sigla of siglas) {
-    const nome = analise.jogadores.find((j) => j.timeSigla === sigla)?.timeNaLista ?? sigla
-    await db.insert(times).values({ sigla, nome }).onConflictDoNothing({ target: times.sigla })
-  }
-  const timePorSigla = new Map((await db.select().from(times)).map((t) => [t.sigla, t.id] as const))
-
-  // A CHAVE é o nome do CJ em caixa baixa, não o nome gravado. `nomeCompleto`
-  // recebe a versão de exibição ("Stephen Curry"), então casar por igualdade
-  // exata faria a REEXECUÇÃO inserir todo mundo de novo — o seed precisa ser
-  // idempotente (o cron diário o reexecuta).
-  const chaveDeNome = (nome: string) => nome.toLowerCase()
-  const jaExistentes = new Map(
-    (await db.select().from(jogadores)).map((j) => [chaveDeNome(j.nomeCompleto), j.id] as const),
-  )
-  for (const j of analise.jogadores) {
-    if (jaExistentes.has(chaveDeNome(j.nomeNaLista))) continue
-    const timeId = j.timeSigla ? timePorSigla.get(j.timeSigla) : undefined
-    const [novo] = await db
-      .insert(jogadores)
-      .values({
-        nomeCompleto: nomeDeExibicao(j.nomeNaLista),
-        // ATENÇÃO: jogadores.time_id é o time REAL do provedor e alimenta a aba
-        // de estatísticas. Na demo não há provedor, então espelha a lista.
-        timeId: timeId ?? null,
-        posicao: posicaoDe(j.nomeNaLista),
-      })
-      .returning()
-    if (novo) jaExistentes.set(chaveDeNome(j.nomeNaLista), novo.id)
-  }
-
-  for (const j of analise.jogadores) {
-    const jogadorId = jaExistentes.get(chaveDeNome(j.nomeNaLista))
-    if (!jogadorId) continue
-    await db
-      .insert(mapaJogadores)
-      .values({
-        nomeNaLista: j.nomeNaLista,
-        provedor: PROVEDOR_DEMO,
-        jogadorId,
-        confirmadoPor: 'demo-seed',
-        confirmadoEm: agora,
-      })
-      .onConflictDoUpdate({
-        target: [mapaJogadores.nomeNaLista, mapaJogadores.provedor],
-        set: { jogadorId, confirmadoPor: 'demo-seed', confirmadoEm: agora },
-      })
-  }
-
-  const relatorio = await importarListaDeNiveis(db, conteudo, {
-    provedor: PROVEDOR_DEMO,
-    origemArquivo: ARQUIVO_LISTA,
-    importadoPor: 'demo-seed',
-  })
-  await ativarVersaoNiveis(db, relatorio.versaoId)
-
-  // 1b · REBOTES e ASSISTÊNCIAS. O importador só sabe classificar PONTOS,
-  //      porque é o único atributo que o CJ enviou. Estas linhas são
-  //      INVENTADAS e entram na MESMA versão de níveis — o motor as trata
-  //      exatamente como trataria a lista real, sem saber a diferença.
-  //      Quando as listas verdadeiras chegarem, elas vêm pelo importador e
-  //      este bloco desaparece.
-  const niveisDerivados: (typeof niveis.$inferInsert)[] = []
-  for (const j of analise.jogadores) {
-    const jogadorId = jaExistentes.get(chaveDeNome(j.nomeNaLista))
-    const timeId = j.timeSigla ? timePorSigla.get(j.timeSigla) : undefined
-    if (!jogadorId || !timeId) continue
-
-    const derivados = niveisDoJogador(j.nomeNaLista, j.nivel)
-    for (const atributo of ATRIBUTOS) {
-      if (atributo === 'PONTOS') continue
-      niveisDerivados.push({
-        niveisVersaoId: relatorio.versaoId,
-        jogadorId,
-        timeId,
-        atributo,
-        nivel: derivados[atributo],
-        posicaoHierarquia: j.posicaoHierarquia,
-      })
-    }
-  }
-  if (niveisDerivados.length > 0) {
-    await db.insert(niveis).values(niveisDerivados).onConflictDoNothing()
-  }
+  // 1 · Times, jogadores, vínculo e níveis — o cadastro que os dois seeders
+  //     compartilham (ver `./cadastro`).
+  const {
+    analise,
+    timePorSigla,
+    jogadorPorChave: jaExistentes,
+    versaoNiveis,
+  } = await semearCadastro(db, agora)
 
   // 2 · Médias da temporada — a MESMA que montarFatos vai consultar.
   const temporada = temporadaDe(agora, calendarioDoRuleset(ruleset))
@@ -218,60 +138,26 @@ export async function semearDemo(
   const dataReferencia = dataDeReferencia(agora, fuso)
   const idDoTime = (sigla: string) => timePorSigla.get(sigla)
 
-  async function criarJogo(
+  // O upsert pelas DUAS chaves naturais mora em `./jogos` (com o comentário
+  // que explica o 23505). Aqui sobra só a tradução SIGLA → id: a fixture fala
+  // em siglas, e sigla desconhecida continua significando "não criei jogo".
+  const criarJogo = async (
     casa: string,
     visitante: string,
     quandoUtc: Date,
     dia: string,
     extra: { status?: 'AGENDADO' | 'AO_VIVO' | 'ENCERRADO'; quartoAtual?: number | null } = {},
-  ): Promise<string | null> {
+  ): Promise<string | null> => {
     const timeCasaId = idDoTime(casa)
     const timeVisitanteId = idDoTime(visitante)
     if (!timeCasaId || !timeVisitanteId) return null
-    const situacao = {
-      status: extra.status ?? ('AGENDADO' as const),
-      quartoAtual: extra.quartoAtual ?? null,
-    }
-
-    // DUAS chaves naturais, não uma. `jogos` tem unique sobre
-    // (data_referencia, casa, visitante) E sobre (data_jogo, casa, visitante),
-    // onde `data_jogo` é GERADA de `data_hora_utc`. Um jogo às 20h em Brasília
-    // acontece no dia UTC seguinte — é exatamente por isso que a rodada
-    // (`data_referencia`) existe separada do dia do calendário (`data_jogo`).
-    //
-    // O upsert daqui mirava só a primeira. Quando a linha existente tinha
-    // outra `data_referencia` mas a MESMA `data_jogo`, o ON CONFLICT não
-    // casava, o insert prosseguia e estourava na segunda (23505) — e o seed
-    // inteiro morria. Acontecia entre execuções de dias diferentes, que é
-    // justamente o que o cron diário faz.
-    //
-    // Procurar antes por QUALQUER uma das duas custa uma consulta por jogo
-    // (28 num seed) e devolve a idempotência que o script promete.
-    const dataJogoUtc = quandoUtc.toISOString().slice(0, 10)
-    const [existente] = await db
-      .select({ id: jogos.id })
-      .from(jogos)
-      .where(
-        and(
-          eq(jogos.timeCasaId, timeCasaId),
-          eq(jogos.timeVisitanteId, timeVisitanteId),
-          or(eq(jogos.dataReferencia, dia), eq(jogos.dataJogo, dataJogoUtc)),
-        ),
-      )
-      .limit(1)
-
-    if (existente) {
-      // A rodada e o horário do jogo NÃO são reescritos: quem manda sobre eles
-      // é a linha que já existe. Só o que muda com o tempo é atualizado.
-      await db.update(jogos).set(situacao).where(eq(jogos.id, existente.id))
-      return existente.id
-    }
-
-    const [linha] = await db
-      .insert(jogos)
-      .values({ dataHoraUtc: quandoUtc, dataReferencia: dia, timeCasaId, timeVisitanteId, ...situacao })
-      .returning()
-    return linha?.id ?? null
+    return upsertJogoDemo(db, {
+      timeCasaId,
+      timeVisitanteId,
+      quandoUtc,
+      dataReferencia: dia,
+      ...extra,
+    })
   }
 
   // 3 · Histórico — box scores moldados para os exemplos do documento.
@@ -397,10 +283,10 @@ export async function semearDemo(
         // DoUpdate, não DoNothing: o MESMO jogoId reaparece em runs futuros
         // quando a rodada de hoje de um dia vira "i dias atrás" do dia
         // seguinte (a chave natural do jogo é `dataReferencia` — ver
-        // `criarJogo`). Sem sobrescrever, um jogo que foi o AO VIVO parcial
-        // de ontem ficaria preso no box PARCIAL de ontem depois de virar
-        // ENCERRADO hoje (achado da revisão, motivado pelo box parcial que o
-        // bloco "1º quarto ao vivo", abaixo, passou a gravar).
+        // `upsertJogoDemo`). Sem sobrescrever, um jogo que foi o AO VIVO
+        // parcial de ontem ficaria preso no box PARCIAL de ontem depois de
+        // virar ENCERRADO hoje (achado da revisão, motivado pelo box parcial
+        // que `semearJogoAoVivo`, abaixo, passou a gravar).
         .onConflictDoUpdate({
           target: [estatisticasJogo.jogoId, estatisticasJogo.jogadorId],
           set: valoresBox,
@@ -444,145 +330,35 @@ export async function semearDemo(
       })
   }
 
-  // 1º quarto ao vivo — o elenco INTEIRO dos dois times, não só o protagonista.
-  // Com uma linha só, a tela do Fire Live abria com um card solitário e a
-  // trava de alvo mínimo do ruleset nunca aparecia em ação.
+  // 1º quarto ao vivo — o bloco vive em `./ao-vivo`, parametrizado. Aqui a
+  // fixture escolhe o jogo do documento (OKC × DEN) e seus protagonistas.
+  // `chave: '1Q'` reproduz, caractere a caractere, a variação de sempre.
   if (jogoAoVivo !== null) {
-    const quarto = ruleset.fire_live.quarto
-    const quartos = ruleset.fire_live.quartos_por_jogo
-    // Placar do jogo ao vivo: nada digitado — é a SOMA dos pontos do 1º
-    // quarto que o laço abaixo já está gravando. OKC é a casa do confronto
-    // (CONFRONTOS[0] = ['OKC', 'DEN']).
-    let pontosOkc = 0
-    let pontosDen = 0
-
-    for (const j of analise.jogadores) {
-      if (j.timeSigla !== 'OKC' && j.timeSigla !== 'DEN') continue
-      const jogadorId = jaExistentes.get(chaveDeNome(j.nomeNaLista))
-      if (jogadorId === undefined) continue
-
-      const m = mediaDe(j.nomeNaLista, j.nivel)
-      const derivados = niveisDoJogador(j.nomeNaLista, j.nivel)
-      // Um quarto é um quarto do jogo: a média dividida pelos quartos é o
-      // desempenho neutro. A variação vem do mesmo gerador do histórico.
-      const noQuarto = (media: number, atributo: Atributo): number => {
-        const sequencia = historicoOscilacao(media / quartos, 1, 0, {
-          variacao: `1Q|${j.nomeNaLista}|${atributo}`,
+    const timeCasaId = idDoTime('OKC')
+    const timeVisitanteId = idDoTime('DEN')
+    if (timeCasaId && timeVisitanteId) {
+      const elenco: JogadorAoVivo[] = []
+      for (const j of analise.jogadores) {
+        if (j.timeSigla !== 'OKC' && j.timeSigla !== 'DEN') continue
+        const jogadorId = jaExistentes.get(chaveDeNome(j.nomeNaLista))
+        if (jogadorId === undefined) continue
+        elenco.push({
+          nome: j.nomeNaLista,
+          jogadorId,
+          nivel: j.nivel,
+          timeId: j.timeSigla === 'OKC' ? timeCasaId : timeVisitanteId,
         })
-        return Math.max(0, sequencia[0] ?? Math.round(media / quartos))
       }
-
-      // Um protagonista POR ATRIBUTO cruza o primeiro marco de green — os três
-      // canais do push aparecem na demonstração, não só o de pontos. O número
-      // do marco sai sempre do ruleset (`marcosDoNivel`), nunca digitado aqui.
-      //
-      // Os marcos de rebotes e assistências são de JOGO INTEIRO e a demo os faz
-      // acontecer dentro do 1º quarto — irreal de propósito, para o canal ficar
-      // visível. Ver a pergunta ao CJ em docs/specs/README (marco de 1Q).
-      const cruzarMarco = (atributo: Atributo, media: number): number | null => {
-        const marco = marcosDoNivel(derivados[atributo], atributo, ruleset)[0]
-        if (marco === undefined) return null
-        // Pontos ainda precisa passar dos 75% da média: é o que acende o modo
-        // fire do protagonista, e o marco sozinho poderia ficar abaixo disso.
-        return atributo === 'PONTOS'
-          ? Math.max(Math.ceil(media * ruleset.fire_live.modo_fire.percentual_media), marco)
-          : marco
-      }
-
-      const PROTAGONISTA: Record<Atributo, string> = {
-        PONTOS: 'Shai',
-        REBOTES: 'Jokic',
-        ASSISTENCIAS: 'Jamal Murray',
-      }
-      const valorDoQuarto = (atributo: Atributo, media: number): number =>
-        j.nomeNaLista === PROTAGONISTA[atributo]
-          ? (cruzarMarco(atributo, media) ?? noQuarto(media, atributo))
-          : noQuarto(media, atributo)
-
-      const valores = {
-        pontos: valorDoQuarto('PONTOS', m.ppg),
-        rebotes: valorDoQuarto('REBOTES', m.rpg),
-        assistencias: valorDoQuarto('ASSISTENCIAS', m.apg),
-      }
-
-      await db
-        .insert(estatisticasQuarto)
-        .values({ jogoId: jogoAoVivo, jogadorId, quarto, ...valores })
-        .onConflictDoUpdate({
-          target: [estatisticasQuarto.jogoId, estatisticasQuarto.jogadorId, estatisticasQuarto.quarto],
-          set: valores,
-        })
-
-      // BOX PARCIAL DA TELA DE PARTIDA — mesma fonte que acabou de gravar em
-      // `estatisticas_quarto` (`valores`, acima), nunca recalculado: se os
-      // dois discordassem, a tela de partida contradiria a própria tela que
-      // motivou o refresh de 30s. Antes desta linha a tela lia
-      // `estatisticas_jogo`, que o jogo AO VIVO nunca escrevia, e o jogo em
-      // destaque da demo caía sempre em "Box score em atualização" (achado
-      // da revisão). `minutos` é fração de quarto — os outros jogos do seed
-      // usam `'30.00'` (jogo inteiro, mais abaixo); dar isso aqui diria que
-      // a partida já acabou.
-      const minutosParciais = naFaixa(j.nomeNaLista, '1q-min', [4, 11])
-      const valoresBox = {
-        pontos: valores.pontos,
-        rebotesTotal: valores.rebotes,
-        assistencias: valores.assistencias,
-        minutos: minutosParciais.toFixed(2),
-        ...decomporPontos(valores.pontos),
-        ...boxComplementar(`${j.nomeNaLista}|1Q`, valores.rebotes),
-      }
-      await db
-        .insert(estatisticasJogo)
-        .values({ jogoId: jogoAoVivo, jogadorId, ...valoresBox })
-        .onConflictDoUpdate({
-          target: [estatisticasJogo.jogoId, estatisticasJogo.jogadorId],
-          set: valoresBox,
-        })
-
-      if (j.timeSigla === 'OKC') pontosOkc += valores.pontos
-      else pontosDen += valores.pontos
+      await semearJogoAoVivo(db, ruleset, {
+        jogoId: jogoAoVivo,
+        timeCasaId,
+        timeVisitanteId,
+        elenco,
+        protagonistas: { PONTOS: 'Shai', REBOTES: 'Jokic', ASSISTENCIAS: 'Jamal Murray' },
+        chave: '1Q',
+        agora,
+      })
     }
-
-    await db
-      .update(jogos)
-      .set({ placarCasa: pontosOkc, placarVisitante: pontosDen })
-      .where(eq(jogos.id, jogoAoVivo))
-
-    // BOX DO TIME, só o 1º quarto — o único que já aconteceu. Espalhar o
-    // placar pelos quatro quartos (como `semearBoxScoreDoTime` faz para os
-    // ENCERRADOS) inventaria pontos em quartos que ainda não existem. Sem isto a Tela de Partida não tinha "Pontos por quarto" nem
-    // TOT para o jogo ao vivo em destaque da demo (achado da revisão).
-    for (const [sigla, pontosTime] of [
-      ['OKC', pontosOkc],
-      ['DEN', pontosDen],
-    ] as const) {
-      const timeId = idDoTime(sigla)
-      if (!timeId) continue
-      // A coluna sai do MESMO `quarto` que `estatisticas_quarto` acabou de
-      // receber — hoje o ruleset diz 1 e sempre dirá (Fire Live é só o 1º
-      // quarto), mas escrever `pontosQ1` à mão faria as duas tabelas
-      // discordarem em silêncio se esse número um dia mudasse.
-      const valoresTime = {
-        pontos: pontosTime,
-        pontosQ1: quarto === 1 ? pontosTime : 0,
-        pontosQ2: quarto === 2 ? pontosTime : 0,
-        pontosQ3: quarto === 3 ? pontosTime : 0,
-        pontosQ4: quarto === 4 ? pontosTime : 0,
-        pontosProrrogacao: 0,
-      }
-      await db
-        .insert(estatisticasTimeJogo)
-        .values({ jogoId: jogoAoVivo, timeId, ...valoresTime })
-        .onConflictDoUpdate({
-          target: [estatisticasTimeJogo.jogoId, estatisticasTimeJogo.timeId],
-          set: valoresTime,
-        })
-    }
-
-    await db
-      .insert(fireLiveExecucoes)
-      .values({ jogoId: jogoAoVivo, iniciadoEm: agora })
-      .onConflictDoNothing()
   }
 
   // 5 · O MOTOR calcula. Nada abaixo desta linha escreve apito à mão.
@@ -672,7 +448,7 @@ export async function semearDemo(
   return {
     times: timePorSigla.size,
     jogadores: jaExistentes.size,
-    versaoNiveis: relatorio.versao,
+    versaoNiveis,
     jogosHoje: contarJogosHoje.length,
     itensListaSecreta: publicacao.publicou ? publicacao.itens : 0,
     apitosFireLive,
@@ -682,116 +458,6 @@ export async function semearDemo(
     boxScoresDeTime,
     classificados,
   }
-}
-
-/**
- * CASAS DE APOSTA DA DEMONSTRAÇÃO — nomes fictícios de propósito.
- *
- * Usar "Bet365" ou "Betano" numa tela de apresentação insinua um contrato que
- * não existe (G4 continua aberto). Nomes neutros deixam claro que a integração
- * é a arquitetura, não o parceiro.
- */
-const CASAS_DEMO = ['Casa Alfa', 'Casa Beta', 'Casa Gama'] as const
-
-/**
- * Escreve cotações e deixa a agregação REAL do motor produzir a faixa.
- *
- * O documento do CJ é explícito: a plataforma não tem acesso à odd exata da
- * casa do usuário e trabalha com uma aproximação. Por isso as três casas
- * discordam entre si dentro da faixa de referência do ruleset — é a discordância
- * que dá sentido à mediana, e é a mediana que a tela mostra.
- */
-async function semearOdds(
-  db: Db,
-  ruleset: Ruleset,
-  dataReferencia: string,
-  agora: Date,
-): Promise<number> {
-  const feed = await lerFeed(db, dataReferencia)
-  if (feed === null) return 0
-
-  for (const nome of CASAS_DEMO) {
-    await db
-      .insert(casas)
-      .values({ nome, tipoApi: 'demo', ativa: true })
-      .onConflictDoNothing({ target: casas.nome })
-  }
-  const idPorCasa = new Map((await db.select().from(casas)).map((c) => [c.nome, c.id] as const))
-
-  // `odds_snapshot` é série temporal e não tem UNIQUE — reexecutar o seed
-  // empilharia cotação em cima de cotação. Limpar o dia antes de escrever é o
-  // que mantém a promessa de idempotência do seed.
-  const idsDeHoje = [...new Set(feed.conteudo.itens.map((i) => i.jogoId))]
-  if (idsDeHoje.length > 0) {
-    await db.delete(oddsSnapshot).where(inArray(oddsSnapshot.jogoId, idsDeHoje))
-  }
-
-  let linhas = 0
-  for (const item of feed.conteudo.itens) {
-    if (item.linha === null) continue
-
-    const referencia = faixaEstatica(item.nivelJogador, item.atributo, item.linha, ruleset)
-    if (referencia === undefined) continue
-
-    // Espalha as casas DENTRO da faixa de referência, em passos iguais. Sem
-    // sorteio: reexecutar o seed precisa dar a mesma odd.
-    const [min, max] = referencia
-    const passo = (max - min) / (CASAS_DEMO.length + 1)
-    const cotacoes = CASAS_DEMO.map((casa, k) => ({
-      casa,
-      oddOver: Math.round((min + passo * (k + 1)) * 100) / 100,
-    }))
-
-    for (const c of cotacoes) {
-      const casaId = idPorCasa.get(c.casa)
-      if (!casaId) continue
-      await db.insert(oddsSnapshot).values({
-        casaId,
-        jogoId: item.jogoId,
-        jogadorId: item.jogadorId,
-        atributo: item.atributo,
-        linha: item.linha.toFixed(1),
-        oddOver: c.oddOver.toFixed(3),
-        oddUnder: null,
-        capturadoEm: agora,
-      })
-    }
-
-    const faixa = agregar(cotacoes, item.nivelJogador, item.atributo, item.linha, ruleset)
-    if (faixa === null) continue
-
-    await db
-      .insert(oddsAgregada)
-      .values({
-        jogoId: item.jogoId,
-        jogadorId: item.jogadorId,
-        atributo: item.atributo,
-        linha: item.linha.toFixed(1),
-        oddMin: faixa.min.toFixed(3),
-        oddMax: faixa.max.toFixed(3),
-        oddMediana: faixa.mediana.toFixed(3),
-        // Na demo a média acompanha a mediana — o suficiente para o rodapé
-        // ODD MÉDIA do card existir na apresentação.
-        oddMedia: faixa.mediana.toFixed(3),
-        qtdCasas: faixa.qtdCasas,
-        origem: faixa.origem,
-        calculadoEm: agora,
-      })
-      .onConflictDoUpdate({
-        target: [oddsAgregada.jogoId, oddsAgregada.jogadorId, oddsAgregada.atributo, oddsAgregada.linha],
-        set: {
-          oddMin: faixa.min.toFixed(3),
-          oddMax: faixa.max.toFixed(3),
-          oddMediana: faixa.mediana.toFixed(3),
-          qtdCasas: faixa.qtdCasas,
-          origem: faixa.origem,
-          calculadoEm: agora,
-        },
-      })
-    linhas += 1
-  }
-
-  return linhas
 }
 
 /**
@@ -822,6 +488,13 @@ export async function limparDemo(db: Db): Promise<Record<string, number>> {
   await apagar('estatisticas_jogo', () =>
     db.delete(estatisticasJogo).returning({ id: estatisticasJogo.id }),
   )
+  // O box do TIME sempre foi apagado — a FK para `jogos` é ON DELETE CASCADE —
+  // mas em silêncio: `demo:limpar` imprime as contagens desta função, e quem
+  // lia a saída não via as duas linhas por jogo que sumiram. Apagar aqui não
+  // muda o efeito; muda o que o operador consegue conferir.
+  await apagar('estatisticas_time_jogo', () =>
+    db.delete(estatisticasTimeJogo).returning({ id: estatisticasTimeJogo.id }),
+  )
   await apagar('lesoes_escalacao', () =>
     db.delete(lesoesEscalacao).returning({ id: lesoesEscalacao.id }),
   )
@@ -845,40 +518,6 @@ export async function limparDemo(db: Db): Promise<Record<string, number>> {
 
   return contagens
 }
-
-/**
- * PLACAR DOS JOGOS ENCERRADOS — derivado, nunca digitado.
- *
- * Soma os pontos que cada elenco fez no jogo (o vínculo jogador↔time é o da
- * LISTA do CJ, versão ativa — nunca `jogadores.time_id`, que é o time real do
- * provedor). Placar baixo é esperado: a lista do CJ tem ~8 jogadores por time,
- * não os 15 do elenco inteiro.
- */
-async function semearPlacares(db: Db): Promise<number> {
-  const resultado = await db.execute(sql`
-    with pontos_por_time as (
-      select ej.jogo_id, n.time_id, sum(ej.pontos)::int as pontos
-      from estatisticas_jogo ej
-      join niveis n on n.jogador_id = ej.jogador_id and n.atributo = 'PONTOS'
-      join niveis_versao nv on nv.id = n.niveis_versao_id and nv.ativa = true
-      group by 1, 2
-    )
-    update jogos j
-       set placar_casa = casa.pontos,
-           placar_visitante = fora.pontos
-      from pontos_por_time casa, pontos_por_time fora
-     where j.status = 'ENCERRADO'
-       and casa.jogo_id = j.id and casa.time_id = j.time_casa_id
-       and fora.jogo_id = j.id and fora.time_id = j.time_visitante_id
-    returning j.id
-  `)
-  const linhas = Array.isArray(resultado)
-    ? (resultado as unknown[])
-    : ((resultado as { rows?: unknown[] }).rows ?? [])
-  return linhas.length
-}
-
-
 
 /**
  * JOGOS DISPUTADOS na média da temporada — derivado, nunca digitado.
@@ -909,189 +548,3 @@ async function corrigirJogosDisputados(db: Db): Promise<number> {
     : ((resultado as { rows?: unknown[] }).rows ?? [])
   return linhas.length
 }
-
-/**
- * BOX SCORE DO TIME — derivado do box score dos JOGADORES, nunca digitado.
- *
- * A tela do time (`estatisticas/time/[id]`) lê `estatisticas_time_jogo`, uma
- * tabela que a demo nunca escrevia: cada partida encerrada aparecia com
- * quartos, REB, AST, TO e percentuais todos em "—". Tudo funcionava; só
- * faltava o dado.
- *
- * Soma o que cada elenco (a LISTA do CJ, versão ativa — nunca
- * `jogadores.time_id`) produziu no jogo. Só jogos ENCERRADOS: partida ao vivo
- * ou agendada segue sem box score, e a tela mostra a ausência como ausência.
- *
- * A QUEBRA POR QUARTO é distribuição de apresentação, não estatística: a demo
- * não tem parciais por quarto de jogo inteiro (só do 1º, do Fire Live).
- * Os três primeiros quartos saem de proporções fixas e o QUARTO recebe o
- * RESTO — é isso que garante `q1+q2+q3+q4 == total` para qualquer número.
- * Box score que não fecha é pior que box score ausente: parece dado.
- */
-async function semearBoxScoreDoTime(db: Db, agora: Date): Promise<number> {
-  const resultado = await db.execute(sql`
-    with por_time as (
-      select ej.jogo_id,
-             n.time_id,
-             sum(ej.pontos)::int        as pontos,
-             sum(ej.rebotes_total)::int as rebotes_total,
-             sum(ej.rebotes_of)::int    as rebotes_of,
-             sum(ej.rebotes_def)::int   as rebotes_def,
-             sum(ej.assistencias)::int  as assistencias,
-             sum(ej.cestas_c)::int      as cestas_c,
-             sum(ej.cestas_t)::int      as cestas_t,
-             sum(ej.tres_c)::int        as tres_c,
-             sum(ej.tres_t)::int        as tres_t,
-             sum(ej.lance_c)::int       as lance_c,
-             sum(ej.lance_t)::int       as lance_t,
-             sum(ej.roubos)::int        as roubos,
-             sum(ej.bloqueios)::int     as bloqueios,
-             sum(ej.turnovers)::int     as turnovers,
-             sum(ej.faltas)::int        as faltas
-        from estatisticas_jogo ej
-        join jogos j on j.id = ej.jogo_id and j.status = 'ENCERRADO'
-        join niveis n on n.jogador_id = ej.jogador_id and n.atributo = 'PONTOS'
-        join niveis_versao nv on nv.id = n.niveis_versao_id and nv.ativa = true
-       group by 1, 2
-    ),
-    com_quartos as (
-      select *,
-             floor(pontos * 0.26)::int as q1,
-             floor(pontos * 0.24)::int as q2,
-             floor(pontos * 0.25)::int as q3
-        from por_time
-    )
-    insert into estatisticas_time_jogo (
-      jogo_id, time_id, pontos, pontos_q1, pontos_q2, pontos_q3, pontos_q4,
-      pontos_prorrogacao, rebotes_total, rebotes_of, rebotes_def, assistencias,
-      cestas_c, cestas_t, tres_c, tres_t, lance_c, lance_t,
-      roubos, bloqueios, turnovers, faltas, capturado_em, atualizado_em
-    )
-    select jogo_id, time_id, pontos, q1, q2, q3,
-           pontos - q1 - q2 - q3,  -- o resto fecha a conta, sempre
-           0, rebotes_total, rebotes_of, rebotes_def, assistencias,
-           cestas_c, cestas_t, tres_c, tres_t, lance_c, lance_t,
-           roubos, bloqueios, turnovers, faltas, ${agora}, ${agora}
-      from com_quartos
-    on conflict on constraint estatisticas_time_jogo_unica do update set
-      pontos = excluded.pontos,
-      pontos_q1 = excluded.pontos_q1,
-      pontos_q2 = excluded.pontos_q2,
-      pontos_q3 = excluded.pontos_q3,
-      pontos_q4 = excluded.pontos_q4,
-      rebotes_total = excluded.rebotes_total,
-      rebotes_of = excluded.rebotes_of,
-      rebotes_def = excluded.rebotes_def,
-      assistencias = excluded.assistencias,
-      cestas_c = excluded.cestas_c,
-      cestas_t = excluded.cestas_t,
-      tres_c = excluded.tres_c,
-      tres_t = excluded.tres_t,
-      lance_c = excluded.lance_c,
-      lance_t = excluded.lance_t,
-      roubos = excluded.roubos,
-      bloqueios = excluded.bloqueios,
-      turnovers = excluded.turnovers,
-      faltas = excluded.faltas,
-      atualizado_em = excluded.atualizado_em
-    returning id
-  `)
-  const linhas = Array.isArray(resultado)
-    ? (resultado as unknown[])
-    : ((resultado as { rows?: unknown[] }).rows ?? [])
-  return linhas.length
-}
-
-/**
- * CLASSIFICAÇÃO DA DEMONSTRAÇÃO — derivada, nunca digitada.
- *
- * Conta vitórias e derrotas a partir dos jogos ENCERRADOS que a própria demo
- * semeou (placar de casa × visitante) e ordena por aproveitamento dentro de
- * cada conferência. Reexecutável: o upsert recalcula.
- */
-async function semearClassificacao(
-  db: Db,
-  ruleset: Ruleset,
-  dataReferencia: string,
-): Promise<number> {
-  const temporada = temporadaDe(
-    intervaloDoDia(dataReferencia, ruleset.rodada.fuso).inicio,
-    calendarioDoRuleset(ruleset),
-  )
-
-  const encerrados = await db
-    .select()
-    .from(jogos)
-    .where(and(eq(jogos.status, 'ENCERRADO'), isNotNull(jogos.placarCasa)))
-
-  const campanha = new Map<string, { v: number; d: number; sequencia: string[] }>()
-  const anotar = (timeId: string, venceu: boolean) => {
-    const atual = campanha.get(timeId) ?? { v: 0, d: 0, sequencia: [] }
-    if (venceu) atual.v += 1
-    else atual.d += 1
-    atual.sequencia.push(venceu ? 'V' : 'D')
-    campanha.set(timeId, atual)
-  }
-  for (const j of encerrados) {
-    if (j.placarCasa === null || j.placarVisitante === null) continue
-    const casaVenceu = j.placarCasa > j.placarVisitante
-    anotar(j.timeCasaId, casaVenceu)
-    anotar(j.timeVisitanteId, !casaVenceu)
-  }
-  if (campanha.size === 0) return 0
-
-  const listaTimes = await db.select().from(times)
-  const conferenciaPorTime = new Map(listaTimes.map((t) => [t.id, t.conferencia] as const))
-
-  const ordenados = [...campanha.entries()]
-    .map(([timeId, c]) => ({
-      timeId,
-      ...c,
-      aproveitamento: c.v + c.d === 0 ? 0 : c.v / (c.v + c.d),
-      conferencia: conferenciaPorTime.get(timeId) ?? null,
-    }))
-    .sort((a, b) => b.aproveitamento - a.aproveitamento)
-
-  // Posição é POR CONFERÊNCIA, como a NBA classifica.
-  const proximaPosicao = new Map<string, number>()
-  for (const time of ordenados) {
-    const chave = time.conferencia ?? 'LIGA'
-    const posicao = (proximaPosicao.get(chave) ?? 0) + 1
-    proximaPosicao.set(chave, posicao)
-
-    // A sequência é o rabo da campanha: "V3" = três vitórias seguidas.
-    const ultimos = [...time.sequencia].reverse()
-    const marca = ultimos[0] ?? 'V'
-    let seguidas = 0
-    for (const r of ultimos) {
-      if (r !== marca) break
-      seguidas += 1
-    }
-
-    await db
-      .insert(classificacao)
-      .values({
-        temporada,
-        timeId: time.timeId,
-        conferencia: time.conferencia,
-        vitorias: time.v,
-        derrotas: time.d,
-        posicao,
-        aproveitamento: time.aproveitamento.toFixed(3),
-        sequencia: `${marca}${seguidas}`,
-        capturadoEm: new Date(0),
-      })
-      .onConflictDoUpdate({
-        target: [classificacao.temporada, classificacao.timeId],
-        set: {
-          vitorias: time.v,
-          derrotas: time.d,
-          posicao,
-          aproveitamento: time.aproveitamento.toFixed(3),
-          sequencia: `${marca}${seguidas}`,
-        },
-      })
-  }
-  return ordenados.length
-}
-

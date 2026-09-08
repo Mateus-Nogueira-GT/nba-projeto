@@ -2,27 +2,38 @@ import { getDb } from '@/modules/dominio/db/cliente'
 import { executarCronProtegido } from '@/modules/entrega/cron/guarda'
 import { rulesetAtivo } from '@/modules/entrega/ruleset-ativo'
 import { autossemeaduraHabilitada } from '@/modules/ingestao/demo/autossemeadura'
-import { semearDemo } from '@/modules/ingestao/demo/semear'
+import { simularAte } from '@/modules/ingestao/demo/temporada'
 import { portaLLMDoAmbiente } from '@/modules/ingestao/llm'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 300
 
 /**
- * RE-SEED DIÁRIO DA DEMONSTRAÇÃO.
+ * Folga de 60 s sobre o `maxDuration` para o resumo sair antes de a Vercel
+ * cortar a função: `simularAte` só checa o orçamento ENTRE dias, então o
+ * último dia começado ainda roda inteiro depois de o relógio estourar.
+ */
+const ORCAMENTO_MS = 240_000
+
+/**
+ * A TEMPORADA SIMULADA AVANÇA UM DIA.
  *
- * A demo é ancorada num DIA: `semearDemo` monta a rodada da data de
- * referência de quando roda. Sem este cron, o cliente que abrisse no dia
- * seguinte encontraria "Sem jogos hoje" no Fire Live — foi o que aconteceu em
- * 25/08/2026.
+ * `simularAte` produz os dias que faltam entre o início da janela e hoje —
+ * em regime normal só ontem — e depois monta a rodada de hoje. Se o cron
+ * perdeu dias, produz o que couber no orçamento e continua na execução
+ * seguinte (`diasRestantes` no resumo).
+ *
+ * A CARGA INICIAL DAS 7 SEMANAS NÃO É DAQUI. O bloco de hoje só nasce quando
+ * o passado inteiro está no lugar (média com buraco não é a média que o motor
+ * leria na véspera), então num banco vazio o cron levaria DIAS até abrir a
+ * primeira rodada — um dia de janela por execução diária. A carga roda uma
+ * vez, à mão, por `npm run demo:temporada`, sem orçamento. Ver o runbook de
+ * deploy.
  *
  * Ocupa um dos DOIS crons diários que o plano Hobby permite (ADR-0003, nota de
- * 25/08). Não existe no conjunto completo: conta Pro sincroniza dado real e
- * não semeia demonstração.
- *
- * Só roda com `DEMO_AUTOSSEMEADURA=true`. Sem a variável, responde 200 com
- * `executado: false` — pular não é falha, e um cron que grita todo dia vira
- * ruído que ninguém lê.
+ * 25/08). Só roda com `DEMO_AUTOSSEMEADURA=true`; sem a variável responde 200
+ * com `executado: false` — pular não é falha, e um cron que grita todo dia
+ * vira ruído que ninguém lê.
  */
 export async function GET(requisicao: Request): Promise<Response> {
   return executarCronProtegido(requisicao, {
@@ -32,9 +43,26 @@ export async function GET(requisicao: Request): Promise<Response> {
         return { executado: false, motivo: 'DEMO_AUTOSSEMEADURA_DESLIGADA' as const }
       }
       const ruleset = await rulesetAtivo()
-      const resumo = await semearDemo(getDb(), ruleset, new Date(), portaLLMDoAmbiente())
+      const resumo = await simularAte(getDb(), ruleset, new Date(), {
+        // Só o dia de HOJE recebe a porta, e as duas publicações dele: a
+        // narrativa nasce na transição de hash, e quem grava primeiro sem
+        // porta fixa o hash sem texto.
+        llm: portaLLMDoAmbiente(),
+        orcamentoMs: ORCAMENTO_MS,
+      })
       return { executado: true, resumo }
     },
-    quantidade: (r) => ('resumo' in r && r.resumo ? r.resumo.itensListaSecreta : 0),
+    /*
+     * DIAS PRODUZIDOS, e não itens da lista.
+     *
+     * O resumo mistura duas contagens: `jogosCriados`, `boxScores` e
+     * `publicacoes` são desta execução; `jogosHoje`, `itensListaSecreta`,
+     * `apitosFireLive` e `linhasComOdd` são ESTADO da rodada de hoje e
+     * repetem o mesmo número na segunda execução do dia. Num log de cron,
+     * `quantidade` se lê como trabalho feito — só o que a execução produziu
+     * pode ir aqui. Zero é a resposta certa para "não havia o que fazer".
+     */
+    quantidade: (resultado) =>
+      'resumo' in resultado && resultado.resumo ? resultado.resumo.diasProduzidos : 0,
   })
 }
