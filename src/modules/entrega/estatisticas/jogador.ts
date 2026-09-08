@@ -1,4 +1,5 @@
-import { and, asc, desc, eq, inArray } from 'drizzle-orm'
+import { identidadesDeApresentacao } from '../../dominio/identidade-apresentacao'
+import { and, asc, desc, eq } from 'drizzle-orm'
 
 import {
   apitos,
@@ -26,7 +27,10 @@ import type { ComAtualizacao } from './atualizacao'
 import { notaDaPartida } from './nota'
 import { numero, percentual } from './numeros'
 
+export type PeriodoEstatisticas = '5' | '10' | 'temporada'
+
 export type LinhaHistorico = {
+  estado: 'CONFERIDO' | 'DNP' | 'PENDENTE'
   jogoId: string
   data: Date
   /** null junto com `emCasa` — ver `mandoDoJogador`. */
@@ -115,6 +119,13 @@ export type TelaJogador = ComAtualizacao & {
   }
   /** Médias da temporada — o "perfil" dos números completos. */
   perfilNumeros: Numeros
+  recorte: {
+    periodo: PeriodoEstatisticas
+    disponiveis: number
+    conferidos: number
+    dnp: number
+    pendentes: number
+  } | null
   jogosDisputados: number
   /**
    * `jogosDisputados` conta a JANELA CARREGADA, não a temporada.
@@ -366,24 +377,28 @@ export const LIMITE_DE_PARTIDAS_DO_HISTORICO = 25
 export async function telaDoJogador(
   db: Db,
   jogadorId: string,
-  opcoes: { temporada: string; calendario: ConfigTemporada; limiteHistorico?: number },
+  opcoes: {
+    temporada: string
+    calendario: ConfigTemporada
+    limiteHistorico?: number
+    periodo?: PeriodoEstatisticas
+  },
 ): Promise<TelaJogador | null> {
   const [jogador] = await db.select().from(jogadores).where(eq(jogadores.id, jogadorId)).limit(1)
   if (!jogador) return null
 
+  const identidades = await identidadesDeApresentacao(db, [jogadorId])
   const limite = opcoes.limiteHistorico ?? LIMITE_DE_PARTIDAS_DO_HISTORICO
 
+  const consultaHistorico = db
+    .select({ box: estatisticasJogo, jogo: jogos })
+    .from(estatisticasJogo)
+    .innerJoin(jogos, eq(estatisticasJogo.jogoId, jogos.id))
+    .where(eq(estatisticasJogo.jogadorId, jogadorId))
+    .orderBy(desc(jogos.dataHoraUtc), desc(jogos.id))
+
   const [lidas, listaTimes, medias] = await Promise.all([
-    db
-      .select({ box: estatisticasJogo, jogo: jogos })
-      .from(estatisticasJogo)
-      .innerJoin(jogos, eq(estatisticasJogo.jogoId, jogos.id))
-      .where(eq(estatisticasJogo.jogadorId, jogadorId))
-      .orderBy(desc(jogos.dataHoraUtc))
-      // UMA A MAIS que o limite: é assim que a tela sabe que cortou, o mesmo
-      // truque do histórico de apitos. Sem isso a seção continuava rotulada
-      // "temporada 2025-26" por cima de um recorte das últimas 25 partidas.
-      .limit(limite + 1),
+    opcoes.periodo ? consultaHistorico : consultaHistorico.limit(limite + 1),
     db.select().from(times),
     db
       .select()
@@ -421,8 +436,16 @@ export async function telaDoJogador(
   const daTemporada = lidas.filter(
     ({ jogo }) => temporadaDe(jogo.dataHoraUtc, opcoes.calendario) === opcoes.temporada,
   )
-  const historicoCortado = daTemporada.length > limite
-  const linhasBox = daTemporada.slice(0, limite)
+  // Recortes de consulta usam a temporada completa antes de escolher 5/10.
+  // O limite legado continua disponível para consumidores que não pedem período.
+  const quantidade =
+    opcoes.periodo === 'temporada'
+      ? daTemporada.length
+      : opcoes.periodo
+        ? Number(opcoes.periodo)
+        : limite
+  const historicoCortado = !opcoes.periodo && daTemporada.length > limite
+  const linhasBox = daTemporada.slice(0, quantidade)
 
   // Os dois vínculos, lidos UMA vez para a tela inteira — ver `mandoDoJogador`.
   const timeNaListaDoCj = await timeNaListaDoCjDe(db, jogadorId, timePorId)
@@ -434,6 +457,14 @@ export async function telaDoJogador(
   const historico: LinhaHistorico[] = linhasBox.map(({ box, jogo }) => {
     const { resultado, emCasa, adversarioId } = resultadoDoJogo(timesDoJogador, jogo)
     return {
+      estado:
+        jogo.status !== 'ENCERRADO'
+          ? 'PENDENTE'
+          : entrouEmQuadra({ ...box, rebotes: box.rebotesTotal })
+            ? 'CONFERIDO'
+            : numero(box.minutos) === 0
+              ? 'DNP'
+              : 'PENDENTE',
       nota: notaDoBox(box),
       jogoId: jogo.id,
       data: jogo.dataHoraUtc,
@@ -456,8 +487,11 @@ export async function telaDoJogador(
   // Perfil = média por jogo sobre o histórico carregado, exceto PTS/REB/AST,
   // que vêm de `medias_jogador` — é a mesma média que a estratégia usa, e as
   // duas telas não podem discordar sobre quantos pontos um jogador faz.
-  const media = medias[0]
-  const n = linhasBox.length
+  const media = opcoes.periodo ? undefined : medias[0]
+  const amostra = opcoes.periodo
+    ? linhasBox.filter((_, i) => historico[i]!.estado === 'CONFERIDO')
+    : linhasBox
+  const n = amostra.length
   // A contagem da TEMPORADA, quando ela existe. Sem ela o número é o da janela
   // carregada — e a tela precisa saber disso para não nomear a temporada.
   const jogosDaTemporada = media?.jogos ?? null
@@ -469,7 +503,7 @@ export async function telaDoJogador(
    * O jogador passaria a parecer reserva por causa de um buraco no dado.
    */
   const somar = (f: (b: (typeof linhasBox)[number]['box']) => number | null): number | null => {
-    const valores = linhasBox.map((l) => f(l.box)).filter((v): v is number => v !== null)
+    const valores = amostra.map((l) => f(l.box)).filter((v): v is number => v !== null)
     if (valores.length === 0) return null
     const total = valores.reduce((acc, v) => acc + v, 0)
     return Math.round((total / valores.length) * 10) / 10
@@ -479,22 +513,22 @@ export async function telaDoJogador(
     ataque: {
       pontos: numero(media?.ppg ?? null) ?? somar((b) => b.pontos),
       fgPercentual: percentual(
-        linhasBox.reduce((a, l) => a + l.box.cestasC, 0),
-        linhasBox.reduce((a, l) => a + l.box.cestasT, 0),
+        amostra.reduce((a, l) => a + l.box.cestasC, 0),
+        amostra.reduce((a, l) => a + l.box.cestasT, 0),
       ),
       tresPercentual: percentual(
-        linhasBox.reduce((a, l) => a + l.box.tresC, 0),
-        linhasBox.reduce((a, l) => a + l.box.tresT, 0),
+        amostra.reduce((a, l) => a + l.box.tresC, 0),
+        amostra.reduce((a, l) => a + l.box.tresT, 0),
       ),
       // 2P = FG − 3P: derivação padrão do basquete. Vale para qualquer
       // provedor, inclusive os que não separam a coluna de 2 pontos.
       doisPercentual: percentual(
-        linhasBox.reduce((a, l) => a + (l.box.cestasC - l.box.tresC), 0),
-        linhasBox.reduce((a, l) => a + (l.box.cestasT - l.box.tresT), 0),
+        amostra.reduce((a, l) => a + (l.box.cestasC - l.box.tresC), 0),
+        amostra.reduce((a, l) => a + (l.box.cestasT - l.box.tresT), 0),
       ),
       lancePercentual: percentual(
-        linhasBox.reduce((a, l) => a + l.box.lanceC, 0),
-        linhasBox.reduce((a, l) => a + l.box.lanceT, 0),
+        amostra.reduce((a, l) => a + l.box.lanceC, 0),
+        amostra.reduce((a, l) => a + l.box.lanceT, 0),
       ),
       assistencias: numero(media?.apg ?? null) ?? somar((b) => b.assistencias),
     },
@@ -518,9 +552,10 @@ export async function telaDoJogador(
   // Nota média recente: as últimas 5 partidas COM nota (menos de 5 minutos não
   // tem nota — ver nota.ts). O histórico já vem do mais recente para o mais antigo.
   const notas = historico
+    .filter((l) => !opcoes.periodo || l.estado === 'CONFERIDO')
     .map((l) => l.nota)
     .filter((n): n is number => n !== null)
-    .slice(0, 5)
+    .slice(0, opcoes.periodo ? undefined : 5)
   const notaMediaRecente =
     notas.length === 0
       ? null
@@ -528,11 +563,20 @@ export async function telaDoJogador(
 
   return {
     notaMediaRecente,
+    recorte: opcoes.periodo
+      ? {
+          periodo: opcoes.periodo,
+          disponiveis: historico.length,
+          conferidos: n,
+          dnp: historico.filter((l) => l.estado === 'DNP').length,
+          pendentes: historico.filter((l) => l.estado === 'PENDENTE').length,
+        }
+      : null,
     timeNaListaDoCj,
     historicoCortado,
     perfil: {
       id: jogador.id,
-      nome: jogador.nomeCompleto,
+      nome: identidades.get(jogadorId)?.nome ?? jogador.nomeCompleto,
       fotoUrl: jogador.fotoUrl,
       posicao: jogador.posicao,
       alturaCm: jogador.alturaCm,
@@ -793,6 +837,6 @@ async function blocoAoVivo(
 /** Ids de jogadores citados em cards — usado para montar os links do feed. */
 export async function nomesDeJogadores(db: Db, ids: string[]): Promise<Map<string, string>> {
   if (ids.length === 0) return new Map()
-  const linhas = await db.select().from(jogadores).where(inArray(jogadores.id, ids))
-  return new Map(linhas.map((j) => [j.id, j.nomeCompleto] as const))
+  const identidades = await identidadesDeApresentacao(db, ids)
+  return new Map([...identidades].map(([id, identidade]) => [id, identidade.nome]))
 }

@@ -1,9 +1,12 @@
+import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { z } from 'zod'
 
 import { getDb } from '@/modules/dominio/db/cliente'
 import { calendarioDoRuleset, temporadaDe } from '@/modules/dominio/temporada'
 import { exigirAcessoEstatisticasSeConfigurado } from '@/modules/plataforma/assinatura/guarda'
+import { sessaoAtual } from '@/modules/plataforma/auth/cookies'
+import { estadoExperienciaDoUsuario } from '@/modules/plataforma/experiencia/servico'
 import { apitosDoJogador, telaDoJogador } from '@/modules/entrega/estatisticas/jogador'
 import type {
   ApitoDoJogador,
@@ -11,10 +14,19 @@ import type {
   Numeros,
   TelaJogador,
 } from '@/modules/entrega/estatisticas/jogador'
-import { BASE_ESTATISTICAS, rotaDoTime } from '@/modules/entrega/estatisticas/rotas'
+import {
+  BASE_ESTATISTICAS,
+  contextoEstatisticas,
+  parametrosEstatisticas,
+  rotaDoJogador,
+  rotaDoJogo,
+  rotaDoTime,
+} from '@/modules/entrega/estatisticas/rotas'
+import type { ContextoEstatisticas } from '@/modules/entrega/estatisticas/rotas'
 import { rulesetAtivo } from '@/modules/entrega/ruleset-ativo'
 import { diaMes } from '@/components/formato'
 import { CabecalhoTela, Moldura } from '@/components/navegacao'
+import { BotaoAcompanharJogador } from '@/components/preferencias/BotaoAcompanharJogador'
 import {
   Avatar,
   IconeVeredito,
@@ -28,7 +40,6 @@ import { semantico } from '@/design-system/tokens/semantico'
 import '@/design-system/tokens/tokens.css'
 import {
   LIMITE_DE_APITOS_DO_JOGADOR,
-  recorteDoHistorico,
   resumoDosApitos,
   Secao,
   SemBanco,
@@ -93,22 +104,28 @@ function pct(v: number | null): string {
   return v === null ? '—' : `${v.toFixed(1).replace('.', ',')}%`
 }
 
-function colunas(fuso: string): Coluna<LinhaHistorico>[] {
+function colunas(fuso: string, hrefDoJogo: (id: string) => string): Coluna<LinhaHistorico>[] {
   return [
     {
       chave: 'jogo',
       rotulo: 'Jogo',
       fixa: true,
       celula: (l) => (
-        <span>
+        <Link href={hrefDoJogo(l.jogoId)}>
           {/* MESMA forma curta da linha de apito ("5/9"): duas grafias da
               mesma data, a uma seção de distância, leem-se como dois dados. */}
           <span style={{ color: semantico.texto40, fontSize: 11, letterSpacing: 0.8 }}>
             {diaMes(l.data, fuso)}
           </span>{' '}
           <span style={{ color: semantico.texto70, fontWeight: 600 }}>{confronto(l)}</span>
-        </span>
+        </Link>
       ),
+    },
+    {
+      chave: 'estado',
+      rotulo: 'Dado',
+      celula: (l) =>
+        l.estado === 'DNP' ? 'DNP' : l.estado === 'PENDENTE' ? 'Pendente' : 'Oficial',
     },
     {
       chave: 'min',
@@ -122,21 +139,21 @@ function colunas(fuso: string): Coluna<LinhaHistorico>[] {
       rotulo: 'PTS',
       descricao: 'pontos',
       alinhamento: 'direita',
-      celula: (l) => l.pontos,
+      celula: (l) => (l.estado === 'CONFERIDO' ? l.pontos : '—'),
     },
     {
       chave: 'reb',
       rotulo: 'REB',
       descricao: 'rebotes',
       alinhamento: 'direita',
-      celula: (l) => l.rebotes,
+      celula: (l) => (l.estado === 'CONFERIDO' ? l.rebotes : '—'),
     },
     {
       chave: 'ast',
       rotulo: 'AST',
       descricao: 'assistências',
       alinhamento: 'direita',
-      celula: (l) => l.assistencias,
+      celula: (l) => (l.estado === 'CONFERIDO' ? l.assistencias : '—'),
     },
     {
       chave: 'nota',
@@ -422,7 +439,14 @@ function LinkDeTime({ href, children }: { href: string; children: React.ReactNod
   )
 }
 
-export default async function PaginaJogador({ params }: { params: Promise<{ id: string }> }) {
+export default async function PaginaJogador({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>
+  searchParams?: Promise<Record<string, string | string[] | undefined>>
+}) {
+  const contexto = contextoEstatisticas((await searchParams) ?? {})
   await exigirAcessoEstatisticasSeConfigurado()
   const { id } = await params
   if (!z.uuid().safeParse(id).success) notFound()
@@ -437,8 +461,10 @@ export default async function PaginaJogador({ params }: { params: Promise<{ id: 
   // `jogos` guarda a data, não o rótulo, e sem ele a leitura não teria como
   // recortar a janela — o auxiliar voltaria a afirmar "temporada 2025-26"
   // sobre linhas que podem atravessar duas.
-  const tela = await telaDoJogador(db, id, { temporada, calendario })
+  const tela = await telaDoJogador(db, id, { temporada, calendario, periodo: contexto.periodo })
   if (tela === null) notFound()
+  const sessao = await sessaoAtual()
+  const experiencia = sessao ? await estadoExperienciaDoUsuario(db, sessao.usuarioId) : null
 
   const { perfil, aoVivo, timeNaListaDoCj } = tela
   /** O caso comum: o time do provedor e o da lista do CJ são o mesmo. */
@@ -450,27 +476,13 @@ export default async function PaginaJogador({ params }: { params: Promise<{ id: 
   const apitos = lista.slice(0, LIMITE_DE_APITOS_DO_JOGADOR)
   const truncado = lista.length > LIMITE_DE_APITOS_DO_JOGADOR
 
-  /** O rótulo das seções que leem o histórico — com o corte, quando há corte. */
-  const recorte = (inteiro: string) =>
-    recorteDoHistorico(tela.historico.length, tela.historicoCortado, inteiro)
-
-  // O APOIO DO HERO diz a temporada — e por isso ele responde ao recorte igual
-  // às duas seções de baixo. `jogosDisputados` conta a temporada inteira
-  // (`medias_jogador`), MENOS quando essa linha não existe: aí ele cai no
-  // tamanho da janela já cortada, e "25 jogos · 2025-26" duas linhas acima de
-  // uma tabela que diz "últimas 25 partidas" é a mesma afirmação que o recorte
-  // acabou de tirar dali. Com a linha de médias no lugar, nada muda: o número
-  // continua sendo o da temporada mesmo com a tabela cortada.
-  const identidade = [
-    perfil.posicao,
-    recorteDoHistorico(
-      tela.jogosDisputados,
-      tela.jogosDisputadosDoRecorte,
-      `${tela.jogosDisputados} jogo${tela.jogosDisputados === 1 ? '' : 's'} · ${temporada}`,
-    ),
-  ]
-    .filter(Boolean)
-    .join(' · ')
+  const rotuloPeriodo =
+    contexto.periodo === 'temporada' ? `Temporada ${temporada}` : `Últimos ${contexto.periodo}`
+  const amostra = tela.recorte!
+  const recorte = `${rotuloPeriodo} · ${amostra.disponiveis} partida${amostra.disponiveis === 1 ? '' : 's'} ${amostra.disponiveis === 1 ? 'disponível' : 'disponíveis'}`
+  const identidade = [perfil.posicao, recorte].filter(Boolean).join(' · ')
+  const hrefDoJogo = (jogoId: string) =>
+    `${rotaDoJogo(jogoId)}?jogador=${id}&${parametrosEstatisticas(contexto)}`
 
   return (
     <Moldura aba="stats">
@@ -478,7 +490,14 @@ export default async function PaginaJogador({ params }: { params: Promise<{ id: 
           rosto, como no artboard. Repeti-lo aqui em 30 px seria o mesmo nome
           duas vezes, e deixava o hero com um rosto de 72 px ao lado de duas
           linhas de 12. */}
-      <CabecalhoTela sobrancelha={SOBRANCELHA_STATS} voltarHref={BASE_ESTATISTICAS} />
+      <CabecalhoTela
+        sobrancelha={SOBRANCELHA_STATS}
+        voltarHref={
+          contexto.q
+            ? `${BASE_ESTATISTICAS}?q=${encodeURIComponent(contexto.q)}`
+            : BASE_ESTATISTICAS
+        }
+      />
 
       {/* HERO — rosto, nome, quem é, e as duas visões de time.
           Sem anel de apito: a aba não calcula estratégia (`nivelApito: null` é
@@ -547,6 +566,15 @@ export default async function PaginaJogador({ params }: { params: Promise<{ id: 
         </div>
       </div>
 
+      {experiencia && (
+        <div style={{ marginTop: 12 }}>
+          <BotaoAcompanharJogador
+            jogadorId={id}
+            inicial={experiencia.jogadoresAcompanhados.includes(id)}
+          />
+        </div>
+      )}
+
       {!perfil.ativo && (
         <p
           style={{
@@ -561,6 +589,30 @@ export default async function PaginaJogador({ params }: { params: Promise<{ id: 
           Jogador fora da liga segundo o provedor.
         </p>
       )}
+
+      <nav
+        aria-label="Período das estatísticas"
+        style={{ display: 'flex', gap: 8, marginTop: 18, flexWrap: 'wrap' }}
+      >
+        {(['5', '10', 'temporada'] as const).map((periodo) => (
+          <Link
+            key={periodo}
+            aria-current={contexto.periodo === periodo ? 'page' : undefined}
+            href={rotaDoJogador(id, { ...contexto, periodo })}
+            style={{
+              padding: '10px 12px',
+              borderRadius: 10,
+              border: `1px solid ${contexto.periodo === periodo ? semantico.acento : semantico.divisor}`,
+              color: contexto.periodo === periodo ? semantico.acento : semantico.textoPrimario,
+            }}
+          >
+            {periodo === 'temporada' ? 'Temporada' : `Últimos ${periodo}`}
+          </Link>
+        ))}
+      </nav>
+      <p style={{ color: semantico.textoSecundario, fontSize: 12 }}>
+        {`${amostra.conferidos} com dado oficial · ${amostra.dnp} DNP · ${amostra.pendentes} pendente${amostra.pendentes === 1 ? '' : 's'}. Médias apenas das partidas com participação confirmada.`}
+      </p>
 
       {/* QUATRO NÚMEROS — os três do box e a NOTA, que é o número do jogador. */}
       <div
@@ -582,7 +634,7 @@ export default async function PaginaJogador({ params }: { params: Promise<{ id: 
         </Numero>
         {/* A nota tem paleta PRÓPRIA e não vira número em Anton: ela mede
             desempenho já acontecido, não a força de um sinal. */}
-        <Numero rotulo="NOTA · ÚLT. 5">
+        <Numero rotulo="NOTA · RECORTE">
           <div style={{ marginTop: 4 }}>
             <NotaPartida nota={tela.notaMediaRecente} destaque />
           </div>
@@ -631,6 +683,38 @@ export default async function PaginaJogador({ params }: { params: Promise<{ id: 
         </section>
       )}
 
+      <Secao
+        titulo={`Desempenho · ${ROTULO_ATRIBUTO[contexto.atributo]}`}
+        aux={`${recorte} · jogo inteiro`}
+      >
+        <nav
+          aria-label="Atributo das estatísticas"
+          style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}
+        >
+          {(['PONTOS', 'REBOTES', 'ASSISTENCIAS'] as const).map((atributo) => (
+            <Link
+              key={atributo}
+              aria-current={contexto.atributo === atributo ? 'page' : undefined}
+              href={rotaDoJogador(id, { ...contexto, atributo })}
+              style={{
+                padding: '8px 10px',
+                borderRadius: 8,
+                border: `1px solid ${contexto.atributo === atributo ? semantico.acento : semantico.divisor}`,
+                color: contexto.atributo === atributo ? semantico.acento : semantico.textoPrimario,
+              }}
+            >
+              {ROTULO_ATRIBUTO[atributo]}
+            </Link>
+          ))}
+        </nav>
+        <GraficoDeDesempenho
+          historico={tela.historico}
+          atributo={contexto.atributo}
+          fuso={ruleset.rodada.fuso}
+          hrefDoJogo={hrefDoJogo}
+        />
+      </Secao>
+
       {/* APITOS — o que a ESTRATÉGIA fez com este jogador, conferido. É a
           única parte da aba que fala de apito, e por isso vem rotulada. */}
       {/* O auxiliar mora em `resumoDosApitos` (moldura): ele tem três casos
@@ -656,10 +740,10 @@ export default async function PaginaJogador({ params }: { params: Promise<{ id: 
 
       {/* O auxiliar PRECISA dizer o corte: a tabela para no limite do histórico
           e o hero, duas linhas acima, conta a temporada inteira. */}
-      <Secao titulo="Jogo a jogo" aux={recorte(`temporada ${temporada}`)}>
+      <Secao titulo="Jogo a jogo" aux={recorte}>
         <Tabela
           legenda="Uma linha por partida, da mais recente para a mais antiga"
-          colunas={colunas(ruleset.rodada.fuso)}
+          colunas={colunas(ruleset.rodada.fuso, hrefDoJogo)}
           linhas={tela.historico}
           chaveDaLinha={(l) => l.jogoId}
           vazio="Nenhuma partida registrada para este jogador."
@@ -668,7 +752,7 @@ export default async function PaginaJogador({ params }: { params: Promise<{ id: 
 
       {/* Estas médias (FG%, 2P%, LL%, rebotes, roubos, saldo…) nascem da MESMA
           janela cortada — o recorte vale para elas do mesmo jeito. */}
-      <Secao titulo="Números completos" aux={recorte(`médias de ${temporada}`)}>
+      <Secao titulo="Números completos" aux={`${recorte} · médias de jogo inteiro`}>
         <NumerosCompletos n={tela.perfilNumeros} />
       </Secao>
 
@@ -679,5 +763,77 @@ export default async function PaginaJogador({ params }: { params: Promise<{ id: 
         fuso={ruleset.rodada.fuso}
       />
     </Moldura>
+  )
+}
+
+const ROTULO_ATRIBUTO: Record<ContextoEstatisticas['atributo'], string> = {
+  PONTOS: 'Pontos',
+  REBOTES: 'Rebotes',
+  ASSISTENCIAS: 'Assistências',
+}
+
+function GraficoDeDesempenho({
+  historico,
+  atributo,
+  fuso,
+  hrefDoJogo,
+}: {
+  historico: LinhaHistorico[]
+  atributo: ContextoEstatisticas['atributo']
+  fuso: string
+  hrefDoJogo: (id: string) => string
+}) {
+  const valor = (l: LinhaHistorico) =>
+    atributo === 'PONTOS' ? l.pontos : atributo === 'REBOTES' ? l.rebotes : l.assistencias
+  const maior = Math.max(1, ...historico.filter((l) => l.estado === 'CONFERIDO').map(valor))
+  if (historico.length === 0) return <p>Nenhuma partida disponível neste recorte.</p>
+  return (
+    <div style={{ overflowX: 'auto' }}>
+      <ol
+        aria-label={`${ROTULO_ATRIBUTO[atributo]} por partida, da mais antiga para a mais recente`}
+        style={{
+          listStyle: 'none',
+          padding: 0,
+          margin: 0,
+          display: 'flex',
+          gap: 8,
+          minWidth: historico.length * 42,
+        }}
+      >
+        {[...historico].reverse().map((l) => (
+          <li key={l.jogoId} style={{ flex: 1, textAlign: 'center', minWidth: 34 }}>
+            <Link
+              href={hrefDoJogo(l.jogoId)}
+              style={{ color: semantico.textoPrimario, textDecoration: 'none' }}
+            >
+              <span
+                style={{
+                  height: 115,
+                  display: 'flex',
+                  alignItems: 'flex-end',
+                  justifyContent: 'center',
+                }}
+              >
+                <span
+                  style={{
+                    display: 'block',
+                    width: 20,
+                    height: l.estado === 'CONFERIDO' ? Math.max(2, (valor(l) / maior) * 100) : 2,
+                    background: l.estado === 'CONFERIDO' ? semantico.acento : semantico.divisor,
+                    borderRadius: 3,
+                  }}
+                />
+              </span>
+              <strong style={{ display: 'block', marginTop: 4, fontSize: 12 }}>
+                {l.estado === 'CONFERIDO' ? valor(l) : l.estado === 'DNP' ? 'DNP' : 'Pendente'}
+              </strong>
+              <span style={{ display: 'block', fontSize: 11, marginTop: 4 }}>
+                {diaMes(l.data, fuso)}
+              </span>
+            </Link>
+          </li>
+        ))}
+      </ol>
+    </div>
   )
 }

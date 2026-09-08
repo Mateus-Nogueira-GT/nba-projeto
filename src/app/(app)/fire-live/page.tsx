@@ -28,13 +28,18 @@ import {
 import { semantico } from '@/design-system/tokens/semantico'
 import { sessaoAtual } from '@/modules/plataforma/auth/cookies'
 import { filtrarOcultos, jogadoresOcultosComNome } from '@/modules/plataforma/jogadores-ocultos'
-import { exibir, ocultar } from './acoes'
+import { exibir } from './acoes'
 import { avaliarAcesso } from '@/modules/plataforma/assinatura/direito'
 import '@/design-system/tokens/tokens.css'
 import { decorridoCurto, horaCurta } from '@/components/formato'
 import { AtualizarAoVivo } from '@/components/AtualizarAoVivo'
 import { CabecalhoTela, Chip, Moldura } from '@/components/navegacao'
 import { dataDeReferencia } from '@/modules/dominio/rodada'
+import { selecionarJogoAoVivo } from '@/modules/entrega/fire-live/selecao'
+import { classePainelJogoFixo, SeletorJogosAoVivo } from '@/components/ao-vivo/SeletorJogosAoVivo'
+import { ExperienciaAoVivo } from '@/components/ao-vivo/ExperienciaAoVivo'
+import { estadoExperienciaDoUsuario } from '@/modules/plataforma/experiencia/servico'
+import { BotaoAcompanharJogador } from '@/components/preferencias/BotaoAcompanharJogador'
 
 export const dynamic = 'force-dynamic'
 export const metadata = { title: 'Fire Live · IA da NBA' }
@@ -232,6 +237,14 @@ export default async function PaginaFireLive({
     return consulta ? `/fire-live?${consulta}` : '/fire-live'
   }
 
+  const rotaDoJogo = (jogoId: string): string => {
+    const busca = new URLSearchParams()
+    if (filtro.time) busca.set('time', filtro.time)
+    busca.set('jogo', jogoId)
+    if (recorte) busca.set('estado', recorte.valor)
+    return `/fire-live?${busca.toString()}`
+  }
+
   if (!process.env.DATABASE_URL) {
     return (
       <Moldura aba="fire-live">
@@ -257,12 +270,15 @@ export default async function PaginaFireLive({
   // A tela lê o snapshot MATERIALIZADO por jogo — nunca executa o motor. A
   // Lista de hoje entra como terceira leitura: é dela que sai a contagem de
   // alvos esperando o 1º quarto de cada jogo agendado.
-  const [feed, listaDoDia, nomesOcultos] = await Promise.all([
-    lerFeedFireLive(getDb(), hoje, quartoFireLive, filtro),
+  const [feed, listaDoDia, nomesOcultos, experiencia] = await Promise.all([
+    // `jogo` escolhe o painel, não recorta a leitura. Assim o seletor mantém
+    // a rodada disponível e um link antigo pode cair para um jogo válido.
+    lerFeedFireLive(getDb(), hoje, quartoFireLive, { time: filtro.time }),
     lerFeed(getDb(), hoje),
     // Preferência por CONTA: recorte de LEITURA puro sobre o snapshot — o feed
     // é por evento e não sabe quem está olhando. Uma consulta só (id + nome).
     jogadoresOcultosComNome(getDb(), sessao.usuarioId),
+    estadoExperienciaDoUsuario(getDb(), sessao.usuarioId),
   ])
   // Cabeçalhos e cards vêm do mesmo recorte, incluindo jogos ainda ao vivo
   // que começaram na rodada anterior e atravessaram a meia-noite.
@@ -276,10 +292,7 @@ export default async function PaginaFireLive({
   // mudo de outro jogo contradiria o filtro que a tela acabou de anunciar.
   const jogosRecortados = jogosDoDia.filter(
     (j) =>
-      (filtro.jogo === undefined || j.id === filtro.jogo) &&
-      (filtro.time === undefined ||
-        j.casaSigla === filtro.time ||
-        j.visitanteSigla === filtro.time),
+      filtro.time === undefined || j.casaSigla === filtro.time || j.visitanteSigla === filtro.time,
   )
   const grupos = agruparFireLivePorJogo(
     naTela,
@@ -288,12 +301,18 @@ export default async function PaginaFireLive({
     alvosAguardandoPorJogo(filtrarOcultos(listaDoDia?.conteudo.itens ?? [], ocultos)),
   )
   const visiveis = recorte === null ? grupos : grupos.filter((g) => g.estado === recorte.estado)
+  const selecao = selecionarJogoAoVivo(
+    visiveis,
+    filtro.jogo,
+    new Set(experiencia.jogadoresAcompanhados),
+  )
+  const grupoSelecionado = selecao.grupo
 
   // Dois vazios DIFERENTES (errata 25/08): o recorte da URL zerou a tela
   // (estadoVazio null vem da leitura exatamente para este caso) — ou o próprio
   // usuário ocultou todos os apitados, que precisa da própria explicação.
   const tudoOculto = feed.itens.length > 0 && itensVisiveis.length === 0
-  const temRecorte = recorte !== null || filtro.time !== undefined || filtro.jogo !== undefined
+  const temRecorte = recorte !== null || filtro.time !== undefined
   const recorteVazio = temRecorte && visiveis.length === 0 && !tudoOculto
   // A frase do push é UMA por tela: ela abre a primeira seção que espera o 1º
   // quarto e não se repete nas seguintes (artboard `FireLive.dc.html`).
@@ -337,6 +356,18 @@ export default async function PaginaFireLive({
         </div>
       </CabecalhoTela>
 
+      <SeletorJogosAoVivo
+        grupos={visiveis}
+        jogoAtivo={grupoSelecionado?.jogoId ?? null}
+        rotaDoJogo={rotaDoJogo}
+      />
+
+      {selecao.jogoSolicitadoInvalido && grupoSelecionado !== null && (
+        <p role="status" style={{ margin: '8px 0 0', fontSize: 12, color: semantico.texto70 }}>
+          Este jogo não está mais neste recorte. Exibindo o jogo disponível agora.
+        </p>
+      )}
+
       {/* Só com jogo no 1º quarto a tela se atualiza sozinha (identidade 04):
           o servidor decide, o cliente obedece — fora da janela dos jogos
           nenhum JavaScript de refresh é entregue. O recorte da URL não desliga
@@ -365,66 +396,81 @@ export default async function PaginaFireLive({
         </Aviso>
       )}
 
-      {visiveis.map((grupo) => (
-        <section key={grupo.jogoId}>
-          {/* A ÚNICA fronteira de seção da tela. Quente, com o placar do 1º
-              quarto entre as siglas; MUDO, com o horário, enquanto o jogo não
+      {grupoSelecionado !== null && (
+        <section key={grupoSelecionado.jogoId}>
+          <ExperienciaAoVivo
+            key={grupoSelecionado.jogoId}
+            estado={experiencia}
+            snapshot={{
+              jogoId: grupoSelecionado.jogoId,
+              placarCasa: grupoSelecionado.placarCasa,
+              placarVisitante: grupoSelecionado.placarVisitante,
+              alvos: grupoSelecionado.itens.map((item) => ({
+                chave: item.chave,
+                jogadorId: item.jogadorId,
+                atributo: item.atributo,
+                observado: item.valorNoQuarto,
+                alvo: item.alvo1Q,
+                modoFire: item.modoFire,
+                apitadoEm: item.apitadoEm,
+              })),
+            }}
+          >
+            {/* A ÚNICA fronteira de seção da tela. Quente, com o placar do 1º
+              quarto entre os times e quadra ilustrativa; MUDO, com o horário, enquanto o jogo não
               começou (spec 04, §4.2). */}
-          <CabecalhoJogo
-            casaSigla={grupo.casaSigla}
-            visitanteSigla={grupo.visitanteSigla}
-            horarioUtc={grupo.dataHoraUtc}
-            fuso={fuso}
-            status={grupo.status}
-            quartoAtual={grupo.quartoAtual}
-            placarCasa={grupo.placarCasa}
-            placarVisitante={grupo.placarVisitante}
-            primeiroQuartoEncerrado={grupo.estado === 'FIM_1Q'}
-            temperatura="quente"
-          />
+            <div className={classePainelJogoFixo} data-live-score>
+              <CabecalhoJogo
+                casaSigla={grupoSelecionado.casaSigla}
+                visitanteSigla={grupoSelecionado.visitanteSigla}
+                horarioUtc={grupoSelecionado.dataHoraUtc}
+                fuso={fuso}
+                status={grupoSelecionado.status}
+                quartoAtual={grupoSelecionado.quartoAtual}
+                placarCasa={grupoSelecionado.placarCasa}
+                placarVisitante={grupoSelecionado.placarVisitante}
+                primeiroQuartoEncerrado={grupoSelecionado.estado === 'FIM_1Q'}
+                temperatura="quente"
+                mostrarQuadra
+              />
+            </div>
 
-          {grupo.estado === 'AGUARDANDO' && (
-            <LinhaDeApoio>
-              {`${grupo.alvosAguardando} alvo${grupo.alvosAguardando === 1 ? '' : 's'} aguardando o 1º quarto.`}
-              {grupo.jogoId === primeiraEspera ? ' O push avisa no instante do apito.' : ''}
-            </LinhaDeApoio>
-          )}
-          {grupo.estado !== 'AGUARDANDO' && grupo.itens.length === 0 && (
-            <LinhaDeApoio>
-              {feed.itens.some((i) => i.jogoId === grupo.jogoId)
-                ? 'Apitos deste jogo ocultos. Reative os jogadores abaixo para acompanhá-los.'
-                : filtro.time !== undefined
-                  ? 'Nenhum apito deste time no jogo até agora.'
-                  : 'Ninguém cruzou o alvo neste jogo ainda.'}
-            </LinhaDeApoio>
-          )}
+            {grupoSelecionado.estado === 'AGUARDANDO' && (
+              <LinhaDeApoio>
+                {`${grupoSelecionado.alvosAguardando} alvo${grupoSelecionado.alvosAguardando === 1 ? '' : 's'} aguardando o 1º quarto.`}
+                {grupoSelecionado.jogoId === primeiraEspera
+                  ? ' O push avisa no instante do apito.'
+                  : ''}
+              </LinhaDeApoio>
+            )}
+            {grupoSelecionado.estado !== 'AGUARDANDO' && grupoSelecionado.itens.length === 0 && (
+              <LinhaDeApoio>
+                {feed.itens.some((i) => i.jogoId === grupoSelecionado.jogoId)
+                  ? 'Apitos deste jogo ocultos. Reative os jogadores abaixo para acompanhá-los.'
+                  : filtro.time !== undefined
+                    ? 'Nenhum apito deste time no jogo até agora.'
+                    : 'Ninguém cruzou o alvo neste jogo ainda.'}
+              </LinhaDeApoio>
+            )}
 
-          <div style={{ display: 'grid', gap: 10 }}>
-            {grupo.itens.map((item) => (
-              <div key={item.chave}>
-                <CartaoAoVivo item={item} grupo={grupo} quartoFireLive={quartoFireLive} />
-                <form action={ocultar} style={{ margin: '4px 0 0', textAlign: 'right' }}>
-                  <input type="hidden" name="jogadorId" value={item.jogadorId} />
-                  <button
-                    type="submit"
-                    style={{
-                      background: 'none',
-                      border: 'none',
-                      padding: 0,
-                      cursor: 'pointer',
-                      fontSize: 12,
-                      fontFamily: 'inherit',
-                      color: semantico.textoSecundario,
-                    }}
-                  >
-                    não acompanhar este jogador
-                  </button>
-                </form>
-              </div>
-            ))}
-          </div>
+            <div style={{ display: 'grid', gap: 10 }}>
+              {grupoSelecionado.itens.map((item) => (
+                <div key={item.chave} data-live-key={item.chave}>
+                  <CartaoAoVivo
+                    item={item}
+                    grupo={grupoSelecionado}
+                    quartoFireLive={quartoFireLive}
+                  />
+                  <BotaoAcompanharJogador
+                    jogadorId={item.jogadorId}
+                    inicial={experiencia.jogadoresAcompanhados.includes(item.jogadorId)}
+                  />
+                </div>
+              ))}
+            </div>
+          </ExperienciaAoVivo>
         </section>
-      ))}
+      )}
 
       {nomesOcultos.length > 0 && (
         <section style={{ marginTop: 20 }}>

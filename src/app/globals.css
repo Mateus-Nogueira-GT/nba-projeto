@@ -24,6 +24,120 @@ textarea {
   font: inherit;
 }
 
+/* Identidade dos confrontos: nomes inteiros, inclusive em telas estreitas. */
+.jogo-frio {
+  flex-wrap: wrap;
+}
+.jogo-times-frio {
+  flex: 1 1 280px;
+}
+.jogo-times-frio > span:first-child,
+.jogo-times-frio > span:last-child {
+  flex: 1;
+}
+.jogo-placar-quente {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+}
+.quadra-ao-vivo {
+  width: 100%;
+  max-width: 440px;
+  margin: 16px auto 0;
+}
+.quadra-ao-vivo svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+.card-confronto {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  margin-top: 6px;
+}
+.card-adversario {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+}
+.card-selo-fire {
+  display: inline-flex;
+}
+
+/* O movimento é uma resposta ao hover/foco, exclusivo do estado Modo Fire. */
+.card-modo-fire > article {
+  position: relative;
+  isolation: isolate;
+}
+.card-modo-fire > article::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: inherit;
+  box-shadow: inset 0 0 0 1px var(--apito-modo-fire);
+  opacity: 0;
+}
+.card-modo-fire:focus-within > article::before {
+  opacity: 0.7;
+}
+@media (hover: hover) {
+  .card-modo-fire:hover > article::before {
+    opacity: 0.7;
+  }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .card-modo-fire {
+    transition:
+      transform 220ms ease,
+      filter 220ms ease;
+  }
+  .card-modo-fire > article::before {
+    transition: opacity 220ms ease;
+  }
+  .card-modo-fire:focus-within {
+    transform: translateY(-3px);
+    filter: drop-shadow(0 5px 12px var(--veu-fire));
+  }
+  .card-modo-fire:focus-within .card-selo-fire {
+    animation: fire-aquecer 650ms ease both;
+  }
+  @media (hover: hover) {
+    .card-modo-fire:hover {
+      transform: translateY(-3px);
+      filter: drop-shadow(0 5px 12px var(--veu-fire));
+    }
+    .card-modo-fire:hover .card-selo-fire {
+      animation: fire-aquecer 650ms ease both;
+    }
+  }
+}
+@keyframes fire-aquecer {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  40% {
+    transform: scale(1.08) rotate(-2deg);
+  }
+  70% {
+    transform: scale(1.04) rotate(1deg);
+  }
+}
+@media (max-width: 420px) {
+  .jogo-placar-quente {
+    gap: 8px;
+  }
+  .card-confronto {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
+
 /*
  * Ponto pulsante do "ao vivo" (Fire Live). Guardado por
  * `prefers-reduced-motion`: quem pediu menos movimento vê o ponto fixo, não

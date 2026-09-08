@@ -1,3 +1,4 @@
+import { identidadesDeApresentacao } from '../../dominio/identidade-apresentacao'
 import { and, desc, eq, inArray, lt, or } from 'drizzle-orm'
 
 import {
@@ -161,48 +162,70 @@ export async function telaDoJogo(
   // sequenciais ao banco quando 2 bastam (achado da revisão; esta é a única
   // tela da aba com refresh automático a cada 30s, então cada round-trip a
   // menos conta em dobro).
-  const [listaTimes, boxTimes, boxJogadores, elenco, escalacao, h2hBruto, formaCasaBruta, formaVisitanteBruta, hierarquiaPontos] =
-    await Promise.all([
-      db.select().from(times).where(inArray(times.id, idsTimes)),
-      db.select().from(estatisticasTimeJogo).where(eq(estatisticasTimeJogo.jogoId, jogoId)),
-      db.select().from(estatisticasJogo).where(eq(estatisticasJogo.jogoId, jogoId)),
-      db.select().from(jogadores).where(inArray(jogadores.timeId, idsTimes)),
-      db.select().from(lesoesEscalacao).where(eq(lesoesEscalacao.jogoId, jogoId)),
-      // H2H: só jogos ENTRE estes dois times — o filtro já é o universo
-      // certo, então o LIMIT no banco é exato (não corta confronto relevante).
-      db
-        .select(COLUNAS_JOGO_ANTERIOR)
-        .from(jogos)
-        .where(
-          and(
-            eq(jogos.status, 'ENCERRADO'),
-            lt(jogos.dataHoraUtc, jogo.dataHoraUtc),
-            or(
-              and(eq(jogos.timeCasaId, jogo.timeCasaId), eq(jogos.timeVisitanteId, jogo.timeVisitanteId)),
-              and(eq(jogos.timeCasaId, jogo.timeVisitanteId), eq(jogos.timeVisitanteId, jogo.timeCasaId)),
+  const [
+    listaTimes,
+    boxTimes,
+    boxJogadores,
+    elenco,
+    escalacao,
+    h2hBruto,
+    formaCasaBruta,
+    formaVisitanteBruta,
+    hierarquiaPontos,
+  ] = await Promise.all([
+    db.select().from(times).where(inArray(times.id, idsTimes)),
+    db.select().from(estatisticasTimeJogo).where(eq(estatisticasTimeJogo.jogoId, jogoId)),
+    db.select().from(estatisticasJogo).where(eq(estatisticasJogo.jogoId, jogoId)),
+    db.select().from(jogadores).where(inArray(jogadores.timeId, idsTimes)),
+    db.select().from(lesoesEscalacao).where(eq(lesoesEscalacao.jogoId, jogoId)),
+    // H2H: só jogos ENTRE estes dois times — o filtro já é o universo
+    // certo, então o LIMIT no banco é exato (não corta confronto relevante).
+    db
+      .select(COLUNAS_JOGO_ANTERIOR)
+      .from(jogos)
+      .where(
+        and(
+          eq(jogos.status, 'ENCERRADO'),
+          lt(jogos.dataHoraUtc, jogo.dataHoraUtc),
+          or(
+            and(
+              eq(jogos.timeCasaId, jogo.timeCasaId),
+              eq(jogos.timeVisitanteId, jogo.timeVisitanteId),
+            ),
+            and(
+              eq(jogos.timeCasaId, jogo.timeVisitanteId),
+              eq(jogos.timeVisitanteId, jogo.timeCasaId),
             ),
           ),
-        )
-        .orderBy(desc(jogos.dataHoraUtc))
-        .limit(limiteH2H),
-      formaDoTime(jogo.timeCasaId),
-      formaDoTime(jogo.timeVisitanteId),
-      // A anotação do desfalque mostra a lista ativa de PONTOS, identificada
-      // como tal na tela. A sigla editorial pode divergir do elenco real.
-      db
-        .select({
-          jogadorId: niveis.jogadorId,
-          posicao: niveis.posicaoHierarquia,
-          nivel: niveis.nivel,
-          timeSigla: times.sigla,
-        })
-        .from(niveis)
-        .innerJoin(niveisVersao, and(eq(niveisVersao.id, niveis.niveisVersaoId), eq(niveisVersao.ativa, true)))
-        .innerJoin(jogadores, eq(jogadores.id, niveis.jogadorId))
-        .innerJoin(times, eq(times.id, niveis.timeId))
-        .where(and(eq(niveis.atributo, 'PONTOS'), inArray(jogadores.timeId, idsTimes))),
-    ])
+        ),
+      )
+      .orderBy(desc(jogos.dataHoraUtc))
+      .limit(limiteH2H),
+    formaDoTime(jogo.timeCasaId),
+    formaDoTime(jogo.timeVisitanteId),
+    // A anotação do desfalque mostra a lista ativa de PONTOS, identificada
+    // como tal na tela. A sigla editorial pode divergir do elenco real.
+    db
+      .select({
+        jogadorId: niveis.jogadorId,
+        posicao: niveis.posicaoHierarquia,
+        nivel: niveis.nivel,
+        timeSigla: times.sigla,
+      })
+      .from(niveis)
+      .innerJoin(
+        niveisVersao,
+        and(eq(niveisVersao.id, niveis.niveisVersaoId), eq(niveisVersao.ativa, true)),
+      )
+      .innerJoin(jogadores, eq(jogadores.id, niveis.jogadorId))
+      .innerJoin(times, eq(times.id, niveis.timeId))
+      .where(and(eq(niveis.atributo, 'PONTOS'), inArray(jogadores.timeId, idsTimes))),
+  ])
 
+  const identidades = await identidadesDeApresentacao(
+    db,
+    elenco.map((j) => j.id),
+  )
   const timePorId = new Map(listaTimes.map((t) => [t.id, t] as const))
   const jogadorPorId = new Map(elenco.map((j) => [j.id, j] as const))
   const hierarquiaPorJogador = new Map(hierarquiaPontos.map((linha) => [linha.jogadorId, linha]))
@@ -239,7 +262,7 @@ export async function telaDoJogo(
         const minutos = numero(l.minutos)
         return {
           jogadorId: l.jogadorId,
-          nome: jogador?.nomeCompleto ?? '—',
+          nome: identidades.get(l.jogadorId)?.nome ?? jogador?.nomeCompleto ?? '—',
           fotoUrl: jogador?.fotoUrl ?? null,
           posicao: jogador?.posicao ?? null,
           minutos,
@@ -290,7 +313,8 @@ export async function telaDoJogo(
       .filter((e) => jogadorPorId.get(e.jogadorId)?.timeId === timeId)
       .map((e) => ({
         jogadorId: e.jogadorId,
-        nome: jogadorPorId.get(e.jogadorId)?.nomeCompleto ?? '—',
+        nome:
+          identidades.get(e.jogadorId)?.nome ?? jogadorPorId.get(e.jogadorId)?.nomeCompleto ?? '—',
         status: e.status as 'FORA' | 'DUVIDA',
         motivo: e.motivo,
         confirmado: e.confirmado,

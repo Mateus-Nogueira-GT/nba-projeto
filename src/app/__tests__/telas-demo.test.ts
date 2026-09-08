@@ -330,7 +330,7 @@ describe('tela de Resultados', () => {
     const destino = await ultimaRodadaConferida(banco.db, HOJE)
     expect(destino).not.toBeNull()
     expect(destino).not.toBe(HOJE)
-    await expect(Pagina()).rejects.toMatchObject({
+    await expect(Pagina({ searchParams: Promise.resolve({}) })).rejects.toMatchObject({
       digest: expect.stringContaining(`/resultados/${destino}`),
     })
   }, 60_000)

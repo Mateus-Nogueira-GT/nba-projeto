@@ -164,6 +164,7 @@ export function BarraAlvo({ observado, alvo, unidade, marcos, apitouEm }: BarraA
         }}
       >
         <div
+          className="barra-alvo-preenchimento"
           style={{
             position: 'absolute',
             left: 0,

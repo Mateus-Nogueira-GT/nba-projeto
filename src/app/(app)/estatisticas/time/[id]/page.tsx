@@ -5,6 +5,8 @@ import { getDb } from '@/modules/dominio/db/cliente'
 import { dataDeReferencia } from '@/modules/dominio/rodada'
 import { calendarioDoRuleset, temporadaDe } from '@/modules/dominio/temporada'
 import { exigirAcessoEstatisticasSeConfigurado } from '@/modules/plataforma/assinatura/guarda'
+import { sessaoAtual } from '@/modules/plataforma/auth/cookies'
+import { estadoExperienciaDoUsuario } from '@/modules/plataforma/experiencia/servico'
 import { telaJogosDoDia } from '@/modules/entrega/estatisticas/jogos-do-dia'
 import { hierarquiaDoTime, telaDoTime } from '@/modules/entrega/estatisticas/time'
 import type { BoxScoreDoJogo } from '@/modules/entrega/estatisticas/time'
@@ -17,10 +19,12 @@ import {
 import { rulesetAtivo } from '@/modules/entrega/ruleset-ativo'
 import { diaCurto } from '@/components/formato'
 import { CabecalhoTela, Moldura } from '@/components/navegacao'
+import { BotaoAcompanharTime } from '@/components/preferencias/BotaoAcompanharJogador'
 import { HierarquiaDoTime, Tabela, UltimaAtualizacao } from '@/design-system/componentes'
 import type { Coluna } from '@/design-system/componentes'
 import { componente } from '@/design-system/tokens/componente'
 import { semantico } from '@/design-system/tokens/semantico'
+import { identidadeDoTime } from '@/design-system/times'
 import '@/design-system/tokens/tokens.css'
 import { Secao, SemBanco, SOBRANCELHA_STATS } from '../../moldura'
 
@@ -280,6 +284,8 @@ export default async function PaginaTime({
   const db = getDb()
   const tela = await telaDoTime(db, id, { temporada })
   if (tela === null) notFound()
+  const sessao = await sessaoAtual()
+  const experiencia = sessao ? await estadoExperienciaDoUsuario(db, sessao.usuarioId) : null
 
   /*
    * QUAL JOGO MARCA O DESFALQUE.
@@ -294,6 +300,7 @@ export default async function PaginaTime({
   const hierarquia = await hierarquiaDoTime(db, id, atributo, jogoDeHoje?.id ?? null)
 
   const { time, campanha } = tela
+  const identidade = identidadeDoTime(time.sigla)
   const porExtenso = ATRIBUTOS_DA_HIERARQUIA.find((a) => a.valor === atributo)!.porExtenso
   const temProrrogacao = tela.jogosDoTime.some((j) => (j.nosso?.prorrogacao ?? 0) > 0)
 
@@ -301,9 +308,14 @@ export default async function PaginaTime({
     <Moldura aba={null}>
       <CabecalhoTela
         sobrancelha={SOBRANCELHA_STATS}
-        titulo={`${time.sigla} · ${time.nome}`}
+        titulo={`${identidade.sigla} · ${identidade.nome}`}
         voltarHref={BASE_ESTATISTICAS}
       />
+      {experiencia && (
+        <div style={{ marginBottom: 12 }}>
+          <BotaoAcompanharTime timeId={id} inicial={experiencia.timesAcompanhados.includes(id)} />
+        </div>
+      )}
       {time.conferencia && (
         <p style={{ margin: '0 0 12px', fontSize: 13, color: semantico.texto55 }}>
           {time.conferencia}

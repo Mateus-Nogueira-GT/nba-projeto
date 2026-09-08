@@ -8,6 +8,7 @@ const config = [
       '.next/**',
       'node_modules/**',
       'coverage/**',
+      '.superpowers/**',
       'next-env.d.ts',
       // Rotas de runtime geradas por withWorkflow() a cada build. O próprio
       // gerador as mantém fora do git; lintar código gerado não tem valor.

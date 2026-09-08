@@ -53,6 +53,8 @@ import { lerConfiguracaoPush } from '@/modules/entrega/push/configuracao'
 import { LENTES, preferenciasDoUsuario, type Lente } from '@/modules/plataforma/preferencias'
 import { definirLente, definirOrdem } from './preferencias/acoes'
 import { redirect } from 'next/navigation'
+import { estadoExperienciaDoUsuario } from '@/modules/plataforma/experiencia/servico'
+import { BotaoAcompanharJogador } from '@/components/preferencias/BotaoAcompanharJogador'
 import '@/design-system/tokens/tokens.css'
 
 export const dynamic = 'force-dynamic'
@@ -170,6 +172,7 @@ function CartaoDaLista({
   jogo,
   ciclo,
   hierarquia,
+  acompanhado,
 }: {
   cartao: CartaoDeJogador
   estado: EstadoDaLista
@@ -178,6 +181,7 @@ function CartaoDaLista({
   /** Ponto da noite do card, quando ele já saiu do pré-live (spec 04, §5.1). */
   ciclo: EstadoDoCiclo | null
   hierarquia: PosicaoNaHierarquia | null
+  acompanhado: boolean
 }) {
   const item = cartao.visivel
   const confronto = confrontoDoItem(item, jogo)
@@ -198,44 +202,47 @@ function CartaoDaLista({
       : undefined
 
   return (
-    <CardEntrada
-      nome={item.nome}
-      // Segundo caminho de entrada da aba de estatísticas: o nome do jogador
-      // dentro de qualquer card leva à MESMA tela que a busca do menu — a URL
-      // sai da mesma função nos dois lugares.
-      jogadorHref={rotaDoJogador(item.jogadorId)}
-      detalheHref={`/apito/${item.jogadorId}?atributo=${item.atributo}`}
-      fotoUrl={item.fotoUrl ?? null}
-      timeSigla={item.timeSigla}
-      adversarioSigla={confronto?.adversarioSigla ?? null}
-      emCasa={confronto?.emCasa ?? null}
-      posicao={item.posicao}
-      atributo={item.atributo}
-      nivelJogador={item.nivelJogador}
-      nivelApito={item.nivelApito}
-      linha={item.linha}
-      confianca={item.confianca}
-      // O grau já veio calculado na materialização (uma vez por evento). A
-      // tela lê; não recalcula nem chama o motor.
-      grauConfianca={item.grauConfianca ?? null}
-      turbo={item.turbo}
-      modoFire={item.modoFire}
-      opdOrigemNivel={item.opdOrigemNivel}
-      alvo1Q={item.alvo1Q}
-      // Contexto materializado da identidade 03 — o card mostra barrinhas,
-      // média e odd sem nenhuma consulta da tela.
-      ultimos5={item.ultimos5 ?? []}
-      mediaTemporada={item.mediaTemporada ?? null}
-      oddFaixa={item.oddFaixa ?? null}
-      narrativa={item.narrativa ?? null}
-      atributos={abas}
-      lente={lente}
-      hierarquia={hierarquia}
-      // Sem ciclo, o card não desenha badge — que é o que se quer no pré-live,
-      // onde o "PRÉ" seria idêntico em todos os cards e o selo do cabeçalho já
-      // disse isso. Quando o jogo começa, o card conta onde está.
-      estado={ciclo ?? undefined}
-    />
+    <div>
+      <CardEntrada
+        nome={item.nome}
+        // Segundo caminho de entrada da aba de estatísticas: o nome do jogador
+        // dentro de qualquer card leva à MESMA tela que a busca do menu — a URL
+        // sai da mesma função nos dois lugares.
+        jogadorHref={rotaDoJogador(item.jogadorId)}
+        detalheHref={`/apito/${item.jogadorId}?atributo=${item.atributo}`}
+        fotoUrl={item.fotoUrl ?? null}
+        timeSigla={item.timeSigla}
+        adversarioSigla={confronto?.adversarioSigla ?? null}
+        emCasa={confronto?.emCasa ?? null}
+        posicao={item.posicao}
+        atributo={item.atributo}
+        nivelJogador={item.nivelJogador}
+        nivelApito={item.nivelApito}
+        linha={item.linha}
+        confianca={item.confianca}
+        // O grau já veio calculado na materialização (uma vez por evento). A
+        // tela lê; não recalcula nem chama o motor.
+        grauConfianca={item.grauConfianca ?? null}
+        turbo={item.turbo}
+        modoFire={item.modoFire}
+        opdOrigemNivel={item.opdOrigemNivel}
+        alvo1Q={item.alvo1Q}
+        // Contexto materializado da identidade 03 — o card mostra barrinhas,
+        // média e odd sem nenhuma consulta da tela.
+        ultimos5={item.ultimos5 ?? []}
+        mediaTemporada={item.mediaTemporada ?? null}
+        oddFaixa={item.oddFaixa ?? null}
+        narrativa={item.narrativa ?? null}
+        atributos={abas}
+        lente={lente}
+        hierarquia={hierarquia}
+        // Sem ciclo, o card não desenha badge — que é o que se quer no pré-live,
+        // onde o "PRÉ" seria idêntico em todos os cards e o selo do cabeçalho já
+        // disse isso. Quando o jogo começa, o card conta onde está.
+        estado={ciclo ?? undefined}
+      />
+      <BotaoAcompanharJogador jogadorId={item.jogadorId} inicial={acompanhado} />
+    </div>
   )
 }
 
@@ -279,10 +286,12 @@ export default async function PaginaListaSecreta({
 
   // Duas leituras que não dependem uma da outra: a preferência da conta e os
   // jogos do dia (siglas, horário e status dos cabeçalhos de seção).
-  const [preferencias, jogosDoDia] = await Promise.all([
+  const [preferencias, jogosDoDia, experiencia] = await Promise.all([
     preferenciasDoUsuario(getDb(), sessao.usuarioId),
     jogosDoDiaResumo(getDb(), hoje, fuso),
+    estadoExperienciaDoUsuario(getDb(), sessao.usuarioId),
   ])
+  const acompanhados = new Set(experiencia.jogadoresAcompanhados)
   // A URL manda quando diz alguma coisa; calada, quem manda é a CONTA — e é a
   // preferência que sincroniza a escolha entre os aparelhos.
   const ordem = estado.ordem ?? preferencias.ordemLista
@@ -606,6 +615,7 @@ export default async function PaginaListaSecreta({
                         chaveDaHierarquia(cartao.visivel.jogadorId, cartao.visivel.atributo),
                       ) ?? null
                     }
+                    acompanhado={acompanhados.has(cartao.visivel.jogadorId)}
                   />
                 )
               })}
@@ -627,6 +637,7 @@ export default async function PaginaListaSecreta({
                   chaveDaHierarquia(cartao.visivel.jogadorId, cartao.visivel.atributo),
                 ) ?? null
               }
+              acompanhado={acompanhados.has(cartao.visivel.jogadorId)}
             />
           ))}
         </div>

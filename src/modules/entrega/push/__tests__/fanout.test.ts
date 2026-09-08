@@ -4,12 +4,18 @@ import { eq } from 'drizzle-orm'
 import { bancoDeTeste } from '../../../dominio/__tests__/ajuda-banco'
 import {
   dispositivos,
+  jogadores,
   preferenciasNotificacao,
   pushInscricoes,
   sessoes,
   usuarios,
 } from '../../../dominio/db/schema'
 import { EnvioPushFake } from '../fake'
+import {
+  definirAcompanhamento,
+  definirExclusaoAlerta,
+  gravarPreferenciasExperiencia,
+} from '../../../plataforma/experiencia/servico'
 import {
   configuracaoOperacionalPush,
   enviarLotePush,
@@ -228,9 +234,164 @@ describe('fan-out durável', () => {
     // vercel.ts é a FONTE ÚNICA; vercel.json é artefato gerado no build.
     const { config } = await import('../../../../../vercel')
     const topicos = Object.values(config.functions ?? {})
-      .flatMap((funcao) => (funcao as { experimentalTriggers?: { topic: string }[] }).experimentalTriggers ?? [])
+      .flatMap(
+        (funcao) =>
+          (funcao as { experimentalTriggers?: { topic: string }[] }).experimentalTriggers ?? [],
+      )
       .map((trigger) => trigger.topic)
       .sort()
     expect(topicos).toEqual(['push-entregas', 'push-eventos'])
+  })
+})
+
+describe('filtros explícitos de alerta por conta', () => {
+  async function prepararAlvo() {
+    const conta = await prepararConta()
+    await criarInscricoes(1, conta)
+    const jogadorId = '22222222-2222-4222-8222-222222222222'
+    await banco.db.insert(jogadores).values({ id: jogadorId, nomeCompleto: 'Alvo do push' })
+    return {
+      conta,
+      jogadorId,
+      politica: new PoliticaHomologacaoPush(conta.usuario.email),
+      publicador: new PublicadorFake(),
+    }
+  }
+
+  it.each(['JOGADOR', 'ATRIBUTO', 'APENAS_ACOMPANHADOS'] as const)(
+    'exclusão %s já impede o enfileiramento',
+    async (tipo) => {
+      const { conta, jogadorId, politica, publicador } = await prepararAlvo()
+      if (tipo === 'APENAS_ACOMPANHADOS')
+        await gravarPreferenciasExperiencia(banco.db, conta.usuario.id, {
+          apenasAcompanhados: true,
+        })
+      else if (tipo === 'JOGADOR')
+        await definirExclusaoAlerta(banco.db, conta.usuario.id, {
+          tipo,
+          id: jogadorId,
+          silenciado: true,
+        })
+      else
+        await definirExclusaoAlerta(banco.db, conta.usuario.id, {
+          tipo,
+          id: 'PONTOS',
+          silenciado: true,
+        })
+      await expandirEventoPush(
+        banco.db,
+        publicador,
+        expansaoInicial(EVENTO),
+        politica,
+        CONFIG,
+        AGORA,
+      )
+      expect(publicador.lotes).toHaveLength(0)
+    },
+  )
+
+  it.each(['JOGADOR', 'ATRIBUTO', 'APENAS_ACOMPANHADOS'] as const)(
+    'revalida %s entre enfileirar e enviar',
+    async (tipo) => {
+      const { conta, jogadorId, politica, publicador } = await prepararAlvo()
+      await expandirEventoPush(
+        banco.db,
+        publicador,
+        expansaoInicial(EVENTO),
+        politica,
+        CONFIG,
+        AGORA,
+      )
+      expect(publicador.lotes).toHaveLength(1)
+      if (tipo === 'APENAS_ACOMPANHADOS')
+        await gravarPreferenciasExperiencia(banco.db, conta.usuario.id, {
+          apenasAcompanhados: true,
+        })
+      else if (tipo === 'JOGADOR')
+        await definirExclusaoAlerta(banco.db, conta.usuario.id, {
+          tipo,
+          id: jogadorId,
+          silenciado: true,
+        })
+      else
+        await definirExclusaoAlerta(banco.db, conta.usuario.id, {
+          tipo,
+          id: 'PONTOS',
+          silenciado: true,
+        })
+      const porta = new EnvioPushFake()
+      const resultado = await enviarLotePush(
+        banco.db,
+        porta,
+        publicador.lotes[0]!.mensagem,
+        politica,
+        CONFIG,
+        AGORA,
+      )
+      expect(resultado.elegiveis).toBe(0)
+      expect(porta.envios).toHaveLength(0)
+    },
+  )
+
+  it('mute, volume zero e seguir sozinho preservam o push atual', async () => {
+    const { conta, politica, publicador } = await prepararAlvo()
+    await gravarPreferenciasExperiencia(banco.db, conta.usuario.id, {
+      somHabilitado: false,
+      volume: 0,
+    })
+    const [outro] = await banco.db
+      .insert(jogadores)
+      .values({ nomeCompleto: 'Outro jogador' })
+      .returning()
+    await definirAcompanhamento(banco.db, conta.usuario.id, {
+      tipo: 'JOGADOR',
+      id: outro!.id,
+      acompanhar: true,
+    })
+    await expandirEventoPush(banco.db, publicador, expansaoInicial(EVENTO), politica, CONFIG, AGORA)
+    const porta = new EnvioPushFake()
+    await enviarLotePush(banco.db, porta, publicador.lotes[0]!.mensagem, politica, CONFIG, AGORA)
+    expect(porta.envios).toHaveLength(1)
+  })
+
+  it('apenas acompanhados permite todos os atributos do jogador seguido', async () => {
+    const { conta, jogadorId, politica, publicador } = await prepararAlvo()
+    await gravarPreferenciasExperiencia(banco.db, conta.usuario.id, { apenasAcompanhados: true })
+    await definirAcompanhamento(banco.db, conta.usuario.id, {
+      tipo: 'JOGADOR',
+      id: jogadorId,
+      acompanhar: true,
+    })
+    for (const atributo of ['PONTOS', 'REBOTES', 'ASSISTENCIAS'] as const) {
+      if (EVENTO.canal !== 'FIRE_LIVE_APITO') throw new Error('fixture inválida')
+      await expandirEventoPush(
+        banco.db,
+        publicador,
+        expansaoInicial({ ...EVENTO, dados: { ...EVENTO.dados, atributo } }),
+        politica,
+        CONFIG,
+        AGORA,
+      )
+    }
+    expect(publicador.lotes).toHaveLength(3)
+  })
+
+  it('aviso geral da Lista mantém somente o opt-out do canal', async () => {
+    const { conta, politica, publicador } = await prepararAlvo()
+    await gravarPreferenciasExperiencia(banco.db, conta.usuario.id, { apenasAcompanhados: true })
+    await definirExclusaoAlerta(banco.db, conta.usuario.id, {
+      tipo: 'ATRIBUTO',
+      id: 'PONTOS',
+      silenciado: true,
+    })
+    const lista: MensagemPushV1 = { ...EVENTO, canal: 'LISTA_SECRETA', dados: {} }
+    await expandirEventoPush(banco.db, publicador, expansaoInicial(lista), politica, CONFIG, AGORA)
+    expect(publicador.lotes).toHaveLength(1)
+    await banco.db
+      .insert(preferenciasNotificacao)
+      .values({ usuarioId: conta.usuario.id, canal: 'LISTA_SECRETA', habilitado: false })
+    const porta = new EnvioPushFake()
+    await enviarLotePush(banco.db, porta, publicador.lotes[0]!.mensagem, politica, CONFIG, AGORA)
+    expect(porta.envios).toHaveLength(0)
   })
 })

@@ -8,6 +8,7 @@ import { rulesetAtivo } from '../../modules/entrega/ruleset-ativo'
 import { simularAte } from '../../modules/ingestao/demo/temporada'
 import { LLMFake } from '../../modules/ingestao/llm'
 import type { FeedFireLive } from '../../modules/entrega/fire-live/leitura'
+import { identidadeDoTime } from '../../design-system/times'
 
 /**
  * O FIRE LIVE DA IDENTIDADE 04 — a tela ao vivo, quente.
@@ -162,8 +163,10 @@ describe('Fire Live · 04 — regras de escrita da TELA', () => {
 
   it('o card abre a análise do mesmo atributo e o nome continua levando às estatísticas', async () => {
     const feed = await feedDaTela()
-    const html = semScript(await renderizar())
-    for (const item of feed.itens) {
+    const escolhido = feed.itens[0]
+    expect(escolhido).toBeDefined()
+    const html = semScript(await renderizar({ jogo: escolhido!.jogoId }))
+    for (const item of feed.itens.filter((candidato) => candidato.jogoId === escolhido!.jogoId)) {
       expect(html).toContain(`href="/apito/${item.jogadorId}?atributo=${item.atributo}"`)
       expect(html).toContain(`href="/estatisticas/jogador/${item.jogadorId}"`)
     }
@@ -191,9 +194,11 @@ describe('Fire Live · 04 — regras de escrita da TELA', () => {
     for (const item of feed.itens)
       expect(item.apitadoEm, `${item.chave} sem o instante do push`).toBeTruthy()
 
-    const html = semScript(await renderizar())
-    // um card por item do feed — e nenhum deles é o alvo aguardando do artboard
-    expect(cards(html)).toHaveLength(feed.itens.length)
+    const jogoId = feed.itens[0]!.jogoId
+    const html = semScript(await renderizar({ jogo: jogoId }))
+    // um card por alvo apitado do jogo selecionado — e nenhum deles é o alvo
+    // aguardando do artboard.
+    expect(cards(html)).toHaveLength(feed.itens.filter((item) => item.jogoId === jogoId).length)
     expect(ocorrencias(html, 'ainda sem apito')).toBe(0)
     expect(ocorrencias(html, 'apitou aqui')).toBe(0)
   }, 60_000)
@@ -218,6 +223,22 @@ async function jogosDeHoje() {
 }
 
 describe('Fire Live · 04 — por jogo, com os três estados', () => {
+  it('mantém um único jogo no painel e deixa a rodada navegável no seletor', async () => {
+    const html = semScript(await renderizar())
+    expect(html).toContain('aria-label="Escolher jogo do Fire Live"')
+    expect(ocorrencias(html, 'aria-current="page"')).toBe(2)
+    // Um aria-current pertence ao jogo e o outro à aba fixa Ao Vivo.
+    expect(ocorrencias(html, 'class="jogo-placar-quente"')).toBe(1)
+    expect(ocorrencias(html, 'class="quadra-ao-vivo"')).toBe(1)
+    expect(ocorrencias(html, 'href="/fire-live?jogo=')).toBeGreaterThan(1)
+  }, 60_000)
+
+  it('um link de jogo fora do recorte cai para o destaque sem tela vazia', async () => {
+    const html = semScript(await renderizar({ jogo: 'jogo-inexistente' }))
+    expect(html).toContain('Este jogo não está mais neste recorte')
+    expect(ocorrencias(html, 'class="jogo-placar-quente"')).toBe(1)
+  }, 60_000)
+
   it('um cabeçalho QUENTE por jogo no 1º quarto, com o placar que o banco tem', async () => {
     const ruleset = await rulesetAtivo()
     const emPrimeiroQuarto = (await jogosDeHoje()).filter(
@@ -234,9 +255,14 @@ describe('Fire Live · 04 — por jogo, com os três estados', () => {
     expect(ocorrencias(html, 'º Q · AO VIVO')).toBe(emPrimeiroQuarto.length)
     for (const jogo of emPrimeiroQuarto) {
       expect(html).toContain(`${jogo.placarVisitante} · ${jogo.placarCasa}`)
-      expect(html).toContain(jogo.casaSigla)
-      expect(html).toContain(jogo.visitanteSigla)
+      expect(html).toContain(identidadeDoTime(jogo.casaSigla).nome)
+      expect(html).toContain(identidadeDoTime(jogo.visitanteSigla).nome)
+      expect(html).toContain(`src="/times/${jogo.casaSigla}.svg"`)
+      expect(html).toContain(`src="/times/${jogo.visitanteSigla}.svg"`)
     }
+    expect(ocorrencias(html, 'class="quadra-ao-vivo"')).toBe(
+      ocorrencias(html, 'class="jogo-placar-quente"'),
+    )
   }, 60_000)
 
   it('os três chips são os três estados, e recortam a tela pela URL', async () => {
@@ -262,7 +288,7 @@ describe('Fire Live · 04 — por jogo, com os três estados', () => {
       0,
     )
 
-    const html = semScript(await renderizar())
+    const html = semScript(await renderizar({ estado: 'aguardando' }))
     // O cabeçalho mudo: transparente, apagado, com o horário no lugar do placar.
     expect(html).toContain('AGUARDANDO O 1º Q')
     expect(html).toMatch(/opacity:\.?0?\.7/)
@@ -295,7 +321,7 @@ describe('Fire Live · 04 — por jogo, com os três estados', () => {
         .set({ quartoAtual: ruleset.fire_live.quarto + 1 })
         .where(eq(jogos.id, item!.jogoId))
 
-      const html = semScript(await renderizar())
+      const html = semScript(await renderizar({ jogo: item!.jogoId }))
       expect(html).toContain(item!.nome)
       expect(html).toContain('FIM 1º Q')
       expect(html).not.toContain('1º Q · AO VIVO')

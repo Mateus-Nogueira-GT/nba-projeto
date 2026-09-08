@@ -9,6 +9,7 @@ import {
   times,
 } from '../../dominio/db/schema'
 import type { Db } from '../../dominio/db/tipos'
+import { identidadesDeApresentacao } from '../../dominio/identidade-apresentacao'
 import { janelaNoBanco } from '../../dominio/janela'
 import { somarDias } from '../../dominio/rodada'
 import { calendarioDoRuleset, temporadaDe } from '../../dominio/temporada'
@@ -55,10 +56,7 @@ export type FiltroFireLive = {
 function partidasDoFeed(dataReferencia: string) {
   return or(
     eq(jogos.dataReferencia, dataReferencia),
-    and(
-      eq(jogos.dataReferencia, somarDias(dataReferencia, -1)),
-      eq(jogos.status, 'AO_VIVO'),
-    ),
+    and(eq(jogos.dataReferencia, somarDias(dataReferencia, -1)), eq(jogos.status, 'AO_VIVO')),
   )
 }
 
@@ -142,7 +140,7 @@ export async function lerFeedFireLive(
   // A foto é lida ao vivo de `jogadores`, não do snapshot do ciclo — mesma
   // regra e mesmo motivo de `lerFeed` na Lista Secreta (identidade 04): foto
   // é apresentação, e o snapshot é escrito no instante do apito.
-  const itens = await comFotosAoVivo(db, recortados)
+  const itens = await comIdentidadeAtual(db, recortados)
 
   const jogosDoRecorte = new Set(
     jogosDaRodada
@@ -237,16 +235,23 @@ export async function placaresAoVivo(
   }))
 }
 
-/** Sobrescreve `fotoUrl` com o valor atual de `jogadores`, por jogador. */
-async function comFotosAoVivo(db: Db, itens: ItemFireLive[]): Promise<ItemFireLive[]> {
+/** Projeta identidade atual pelo UUID; não reescreve o sinal histórico. */
+async function comIdentidadeAtual(db: Db, itens: ItemFireLive[]): Promise<ItemFireLive[]> {
   const ids = [...new Set(itens.map((i) => i.jogadorId))]
   if (ids.length === 0) return itens
-  const fotos = await db
-    .select({ id: jogadores.id, fotoUrl: jogadores.fotoUrl })
-    .from(jogadores)
-    .where(inArray(jogadores.id, ids))
+  const [fotos, identidades] = await Promise.all([
+    db
+      .select({ id: jogadores.id, fotoUrl: jogadores.fotoUrl })
+      .from(jogadores)
+      .where(inArray(jogadores.id, ids)),
+    identidadesDeApresentacao(db, ids),
+  ])
   const porId = new Map(fotos.map((f) => [f.id, f.fotoUrl] as const))
-  return itens.map((i) => ({ ...i, fotoUrl: porId.get(i.jogadorId) ?? null }))
+  return itens.map((i) => ({
+    ...i,
+    nome: identidades.get(i.jogadorId)?.nome ?? i.nome,
+    fotoUrl: porId.get(i.jogadorId) ?? null,
+  }))
 }
 
 // ===========================================================================

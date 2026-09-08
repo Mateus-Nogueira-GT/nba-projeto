@@ -3,6 +3,8 @@ import type { CSSProperties } from 'react'
 import type { StatusJogo } from '../../modules/entrega/lista-por-jogo'
 import { componente } from '../tokens/componente'
 import { semantico } from '../tokens/semantico'
+import { IdentidadeTime } from './IdentidadeTime'
+import { QuadraAoVivo } from './QuadraAoVivo'
 
 export type CabecalhoJogoProps = {
   casaSigla: string
@@ -27,12 +29,14 @@ export type CabecalhoJogoProps = {
   quartosCasa?: number[]
   quartosVisitante?: number[]
   /**
-   * Frio (Lista Secreta, Resultados): uma linha, siglas à esquerda e o
+   * Frio (Lista Secreta, Resultados): nomes e logos à esquerda e o
    * horário/status à direita. Quente (Fire Live): bloco no gradiente quente
-   * com o placar entre as siglas — e MUDO, mais apagado, enquanto o jogo não
+   * com o placar entre os times — e MUDO, mais apagado, enquanto o jogo não
    * começou.
    */
   temperatura?: 'frio' | 'quente'
+  /** Visão ilustrativa do confronto; não representa posse ou posições ao vivo. */
+  mostrarQuadra?: boolean
 }
 
 /** 19:30 — sempre no fuso pedido; o servidor da Vercel roda em UTC. */
@@ -47,31 +51,26 @@ const ROTULO: CSSProperties = {
   fontWeight: 700,
 }
 
-/**
- * CABEÇALHO DE JOGO — a ÚNICA fronteira de seção da varredura (spec 04, §4.1).
- *
- * "MIA @ IND": visitante @ mandante, como a transmissão anuncia. Sigla em
- * Anton no lugar do escudo (marca registrada, produto pago — spec §5.3). O
- * status ao vivo é ponto + texto, e o ponto NÃO pulsa: na 04 nada se anima
- * continuamente (§4.2) — só a chegada de apito novo.
- */
+/** Visitante à esquerda e mandante à direita, com identidade e status por escrito. */
 export function CabecalhoJogo(props: CabecalhoJogoProps) {
   const quente = props.temperatura === 'quente'
   const hora = horaCurta(props.horarioUtc, props.fuso)
   const quarto = props.quartoAtual ?? 1
   const temPlacar = props.placarCasa != null && props.placarVisitante != null
 
-  const sigla = (texto: string) => (
-    <span
+  const time = (sigla: string, destaque = false) => (
+    <IdentidadeTime
+      sigla={sigla}
+      tamanhoLogo={destaque ? 44 : 28}
+      disposicao={destaque ? 'coluna' : 'linha'}
+      alinhamento={destaque ? 'centro' : 'inicio'}
       style={{
-        fontFamily: semantico.fonteTitulo,
-        fontSize: 18,
-        letterSpacing: 0.5,
+        fontSize: destaque ? 16 : 14,
         color: semantico.texto100,
+        fontWeight: 600,
+        lineHeight: 1.2,
       }}
-    >
-      {texto}
-    </span>
+    />
   )
 
   /** Um lado do placar final. `color` fecha o estilo: é o canal do vencedor. */
@@ -115,7 +114,7 @@ export function CabecalhoJogo(props: CabecalhoJogoProps) {
   const statusEncerrado = <span style={{ ...ROTULO, color: semantico.texto55 }}>ENCERRADO</span>
 
   if (!quente) {
-    // O jogo encerrado COM placar troca as siglas soltas pelo resultado: o
+    // O jogo encerrado COM placar destaca o resultado entre os times: o
     // vencedor em texto100, o perdedor em texto55 — a hierarquia é a mesma
     // que a transmissão dá, e o número escrito continua sendo a redundância
     // da cor. Sem placar, o cabeçalho é o de sempre (spec 04, §4.4).
@@ -127,6 +126,7 @@ export function CabecalhoJogo(props: CabecalhoJogoProps) {
 
     return (
       <div
+        className="jogo-frio"
         style={{
           display: 'flex',
           // Com a quebra por quarto o lado direito tem DUAS linhas: alinhar
@@ -140,8 +140,11 @@ export function CabecalhoJogo(props: CabecalhoJogoProps) {
           padding: '0 2px',
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
-          {sigla(props.visitanteSigla)}
+        <div
+          className="jogo-times-frio"
+          style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}
+        >
+          {time(props.visitanteSigla)}
           {encerradoComPlacar ? (
             <>
               {pontos(props.placarVisitante!, props.placarVisitante! >= props.placarCasa!)}
@@ -169,7 +172,7 @@ export function CabecalhoJogo(props: CabecalhoJogoProps) {
               @
             </span>
           )}
-          {sigla(props.casaSigla)}
+          {time(props.casaSigla)}
         </div>
         {mostraQuartos ? (
           <div
@@ -219,59 +222,59 @@ export function CabecalhoJogo(props: CabecalhoJogoProps) {
   return (
     <div
       style={{
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        gap: 14,
-        margin: '22px 0 10px',
-        padding: '10px 14px',
+        margin: '22px 0 14px',
+        padding: '16px 14px 12px',
+        overflow: 'hidden',
         borderRadius: 12,
         border: `1px solid ${mudo ? componente.cabecalhoJogo.bordaFria : componente.cabecalhoJogo.bordaQuente}`,
         background: mudo ? 'transparent' : componente.cabecalhoJogo.fundoQuente,
         opacity: mudo ? 0.7 : undefined,
       }}
     >
-      {sigla(props.visitanteSigla)}
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
-        {mudo ? (
-          <>
-            <span
-              style={{
-                fontFamily: semantico.fonteTitulo,
-                fontSize: 16,
-                letterSpacing: 0.5,
-                color: semantico.texto70,
-                fontVariantNumeric: 'tabular-nums',
-              }}
-            >
-              {hora}
-            </span>
-            <span style={{ ...ROTULO, color: semantico.textoSecundario }}>AGUARDANDO O 1º Q</span>
-          </>
-        ) : (
-          <>
-            <span
-              style={{
-                fontFamily: semantico.fonteTitulo,
-                fontSize: 24,
-                letterSpacing: 2,
-                color: semantico.texto100,
-                fontVariantNumeric: 'tabular-nums',
-              }}
-            >
-              {temPlacar ? `${props.placarVisitante} · ${props.placarCasa}` : '—'}
-            </span>
-            {props.primeiroQuartoEncerrado ? (
-              <span style={{ ...ROTULO, color: semantico.texto55 }}>FIM 1º Q</span>
-            ) : props.status === 'AO_VIVO' ? (
-              statusAoVivo
-            ) : (
-              statusEncerrado
-            )}
-          </>
-        )}
+      <div className="jogo-placar-quente">
+        {time(props.visitanteSigla, true)}
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
+          {mudo ? (
+            <>
+              <span
+                style={{
+                  fontFamily: semantico.fonteTitulo,
+                  fontSize: 16,
+                  letterSpacing: 0.5,
+                  color: semantico.texto70,
+                  fontVariantNumeric: 'tabular-nums',
+                }}
+              >
+                {hora}
+              </span>
+              <span style={{ ...ROTULO, color: semantico.textoSecundario }}>AGUARDANDO O 1º Q</span>
+            </>
+          ) : (
+            <>
+              <span
+                style={{
+                  fontFamily: semantico.fonteTitulo,
+                  fontSize: 30,
+                  letterSpacing: 2,
+                  color: semantico.texto100,
+                  fontVariantNumeric: 'tabular-nums',
+                }}
+              >
+                {temPlacar ? `${props.placarVisitante} · ${props.placarCasa}` : '—'}
+              </span>
+              {props.primeiroQuartoEncerrado ? (
+                <span style={{ ...ROTULO, color: semantico.texto55 }}>FIM 1º Q</span>
+              ) : props.status === 'AO_VIVO' ? (
+                statusAoVivo
+              ) : (
+                statusEncerrado
+              )}
+            </>
+          )}
+        </div>
+        {time(props.casaSigla, true)}
       </div>
-      {sigla(props.casaSigla)}
+      {props.mostrarQuadra && <QuadraAoVivo />}
     </div>
   )
 }

@@ -11,6 +11,7 @@ import { rulesetAtivo } from '../../modules/entrega/ruleset-ativo'
 import { simularAte } from '../../modules/ingestao/demo/temporada'
 import { LLMFake } from '../../modules/ingestao/llm'
 import type { ItemFeed } from '../../modules/entrega/lista-secreta'
+import { identidadeDoTime } from '../../design-system/times'
 
 /**
  * A LISTA SECRETA DA IDENTIDADE 04 — varredura por jogo.
@@ -77,10 +78,16 @@ async function renderizar(busca: Busca = {}): Promise<string> {
   return renderToStaticMarkup(await Pagina({ searchParams: Promise.resolve(busca) }))
 }
 
-/** O `@` do CabecalhoJogo — a única fronteira de seção da tela. */
+const texto = (html: string) =>
+  html
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+
+/** Os nomes no cabeçalho de confronto, sem confundir com a identidade nos cards. */
 const cabecalhosDeJogo = (html: string) =>
-  [...html.matchAll(/>([A-Z]{2,4})<\/span><span[^>]*>@<\/span><span[^>]*>([A-Z]{2,4})</g)].map(
-    (m) => `${m[1]}@${m[2]}`,
+  [...html.matchAll(/<div class="jogo-times-frio"[^>]*>([\s\S]*?)<\/div>/g)].map((m) =>
+    texto(m[1]!),
   )
 
 /** Os itens de hoje, um por jogador (o melhor atributo), em ordem de sinal. */
@@ -103,12 +110,15 @@ describe('Lista Secreta · 04 — a varredura por jogo', () => {
     const comApito = new Set(feed!.conteudo.itens.map((i) => i.jogoId))
     const esperados = (await jogosDoDiaResumo(banco.db, HOJE, FUSO))
       .filter((j) => comApito.has(j.id))
-      .map((j) => `${j.visitanteSigla}@${j.casaSigla}`)
+      .map(
+        (j) => `${identidadeDoTime(j.visitanteSigla).nome} @ ${identidadeDoTime(j.casaSigla).nome}`,
+      )
     expect(esperados.length).toBeGreaterThan(1)
 
     const html = await renderizar()
     await gravarConferencia('identidade-04-lista', html)
     expect(cabecalhosDeJogo(html)).toEqual(esperados)
+    expect(html).not.toContain('quadra-ao-vivo')
   }, 60_000)
 
   it('o mesmo jogador com dois atributos é UM card, com as abas no rodapé', async () => {
@@ -217,8 +227,17 @@ describe('Lista Secreta · 04 — a varredura por jogo', () => {
     expect(fora, 'nenhum apitado visitante hoje').toBeDefined()
 
     const html = await renderizar()
-    expect(html).toContain(`· vs ${porId.get(emCasa!.jogoId)!.visitanteSigla}`)
-    expect(html).toContain(`· @ ${porId.get(fora!.jogoId)!.casaSigla}`)
+    const artigos = [...html.matchAll(/<article\b[\s\S]*?<\/article>/g)].map((m) => m[0])
+    for (const [item, mando, adversario] of [
+      [emCasa!, 'vs', porId.get(emCasa!.jogoId)!.visitanteSigla],
+      [fora!, '@', porId.get(fora!.jogoId)!.casaSigla],
+    ] as const) {
+      const card = artigos.find((a) => a.includes(`/estatisticas/jogador/${item.jogadorId}`))
+      expect(card).toBeDefined()
+      expect(texto(card!)).toContain(
+        `${identidadeDoTime(item.timeSigla).nome} ${mando} ${identidadeDoTime(adversario).nome}`,
+      )
+    }
   }, 60_000)
 
   it('a lente HIERARQUIA mostra a posição na lista do CJ — não um travessão em todo card', async () => {

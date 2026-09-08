@@ -2,7 +2,11 @@ import { redirect } from 'next/navigation'
 
 import { getDb } from '@/modules/dominio/db/cliente'
 import { dataDeReferencia } from '@/modules/dominio/rodada'
-import { ultimaRodadaConferida } from '@/modules/entrega/resultados'
+import {
+  filtrosResultadosDaUrl,
+  rotaResultados,
+  ultimaRodadaConferida,
+} from '@/modules/entrega/resultados'
 import { rulesetAtivo } from '@/modules/entrega/ruleset-ativo'
 
 export const dynamic = 'force-dynamic'
@@ -23,9 +27,14 @@ export const dynamic = 'force-dynamic'
  * O dia é o da RODADA, no fuso do ruleset — nunca o UTC do servidor da Vercel,
  * que às 21h de Brasília já virou amanhã.
  */
-export default async function PaginaResultados() {
+export default async function PaginaResultados({
+  searchParams,
+}: {
+  searchParams?: Promise<Record<string, string | string[] | undefined>>
+}) {
+  const filtros = filtrosResultadosDaUrl((await searchParams) ?? {})
   const { fuso } = (await rulesetAtivo()).rodada
   const hoje = dataDeReferencia(new Date(), fuso)
   const ultima = process.env.DATABASE_URL ? await ultimaRodadaConferida(getDb(), hoje) : null
-  redirect(`/resultados/${ultima ?? hoje}`)
+  redirect(rotaResultados(ultima ?? hoje, filtros))
 }

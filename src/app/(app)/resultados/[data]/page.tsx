@@ -5,6 +5,7 @@ import type { CSSProperties, ReactNode } from 'react'
 import { dataHora, diaDaRodada } from '@/components/formato'
 import { CabecalhoTela, Moldura } from '@/components/navegacao'
 import { Avatar, CabecalhoJogo, CardEntrada } from '@/design-system/componentes'
+import { identidadeDoTime } from '@/design-system/times'
 import { componente } from '@/design-system/tokens/componente'
 import { semantico } from '@/design-system/tokens/semantico'
 import { getDb } from '@/modules/dominio/db/cliente'
@@ -13,8 +14,20 @@ import { calendarioDoRuleset, temporadaDe, type ConfigTemporada } from '@/module
 import { rotaDoJogador } from '@/modules/entrega/estatisticas/rotas'
 import { estadoDoCiclo } from '@/modules/entrega/lista-por-jogo'
 import { lerFeed, type ItemFeed } from '@/modules/entrega/lista-secreta'
-import { greensDoDia, recapDaNoite, taxaDaTemporada } from '@/modules/entrega/resultados'
-import type { JogadorConferido, JogoEncerradoResumo } from '@/modules/entrega/resultados'
+import {
+  conferirFireLive,
+  filtrosResultadosDaUrl,
+  filtrarRecapDaNoite,
+  greensDoDia,
+  recapDaNoite,
+  rotaResultados,
+  taxaDaTemporada,
+} from '@/modules/entrega/resultados'
+import type {
+  JogadorConferido,
+  JogoEncerradoResumo,
+  ResultadoFireLive,
+} from '@/modules/entrega/resultados'
 import { rulesetAtivo } from '@/modules/entrega/ruleset-ativo'
 import { avaliarAcesso } from '@/modules/plataforma/assinatura/direito'
 import { sessaoAtual } from '@/modules/plataforma/auth/cookies'
@@ -272,10 +285,13 @@ function Vazio({ children }: { children: ReactNode }) {
  */
 export default async function PaginaResultadosDaRodada({
   params,
+  searchParams,
 }: {
   params: Promise<{ data: string }>
+  searchParams?: Promise<Record<string, string | string[] | undefined>>
 }) {
   const { data } = await params
+  const filtros = filtrosResultadosDaUrl((await searchParams) ?? {})
 
   if (!process.env.DATABASE_URL) {
     return (
@@ -287,7 +303,7 @@ export default async function PaginaResultadosDaRodada({
   }
 
   const sessao = await sessaoAtual()
-  if (!sessao) redirect(`/entrar?destino=/resultados/${data}`)
+  if (!sessao) redirect(`/entrar?destino=${encodeURIComponent(rotaResultados(data, filtros))}`)
   const acesso = await avaliarAcesso(getDb(), sessao.usuarioId)
   if (!acesso.permitido) redirect('/assinar')
 
@@ -295,9 +311,9 @@ export default async function PaginaResultadosDaRodada({
   const { fuso } = ruleset.rodada
   const hoje = dataDeReferencia(new Date(), fuso)
   // Rota inventada não vira erro nem tela vazia: volta para a rodada de hoje.
-  if (!dataValida(data)) redirect(`/resultados/${hoje}`)
+  if (!dataValida(data)) redirect(rotaResultados(hoje, filtros))
 
-  const [recap, temporada, greens, feed] = await Promise.all([
+  const [rodadaInteira, temporada, greensLidos, feed, fireLido] = await Promise.all([
     recapDaNoite(getDb(), data),
     // `ate` é EXCLUSIVO na entrega: +1 dia para a rodada em tela entrar na conta.
     taxaDaTemporada(
@@ -307,7 +323,104 @@ export default async function PaginaResultadosDaRodada({
     ),
     greensDoDia(getDb(), data),
     lerFeed(getDb(), data),
+    conferirFireLive(getDb(), data),
   ])
+  const recap = filtrarRecapDaNoite(rodadaInteira, filtros)
+  const mostrarLista = filtros.estrategia !== 'FIRE_LIVE'
+  const mostrarFire = filtros.estrategia !== 'LISTA_SECRETA'
+  const fire = fireLido.filter(
+    (c) =>
+      (!filtros.atributo || c.atributo === filtros.atributo) &&
+      (!filtros.timeId || c.timeId === filtros.timeId),
+  )
+  const greens = greensLidos.filter(
+    (g) =>
+      mostrarFire &&
+      (!filtros.atributo || g.atributo === filtros.atributo) &&
+      (!filtros.timeId || g.timeId === filtros.timeId),
+  )
+  const timesDaRodada = new Map(
+    [...rodadaInteira.porJogo.flatMap((g) => g.cards), ...fireLido]
+      .filter((c) => c.timeId !== null)
+      .map((c) => [c.timeId!, c.timeSigla]),
+  )
+  const filtrado = Boolean(filtros.atributo || filtros.timeId)
+  const controles = (
+    <form
+      action={`/resultados/${data}`}
+      aria-label="Filtros de resultados"
+      style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'end', marginBottom: 14 }}
+    >
+      {[
+        {
+          nome: 'estrategia',
+          rotulo: 'Estratégia',
+          atual: filtros.estrategia ?? '',
+          opcoes: [
+            ['', 'Todas'],
+            ['LISTA_SECRETA', 'Lista Secreta'],
+            ['FIRE_LIVE', 'Fire Live'],
+          ],
+        },
+        {
+          nome: 'atributo',
+          rotulo: 'Atributo',
+          atual: filtros.atributo ?? '',
+          opcoes: [['', 'Todos'], ...Object.entries(ATRIBUTO_ROTULO)],
+        },
+        {
+          nome: 'time',
+          rotulo: 'Time da lista do CJ',
+          atual: filtros.timeId ?? '',
+          opcoes: [
+            ['', 'Todos'],
+            ...[...timesDaRodada].map(([id, sigla]) => [id, identidadeDoTime(sigla).nome]),
+          ],
+        },
+      ].map((campo) => (
+        <label
+          key={campo.nome}
+          style={{ display: 'grid', gap: 4, fontSize: 12, flex: '1 1 140px', minWidth: 0 }}
+        >
+          {campo.rotulo}
+          <select
+            name={campo.nome}
+            defaultValue={campo.atual}
+            style={{
+              background: semantico.superficieElevada,
+              color: semantico.textoPrimario,
+              padding: 10,
+              borderRadius: 8,
+              border: `1px solid ${semantico.divisor}`,
+              minWidth: 0,
+            }}
+          >
+            {campo.opcoes.map(([valor, rotulo]) => (
+              <option key={valor} value={valor}>
+                {rotulo}
+              </option>
+            ))}
+          </select>
+        </label>
+      ))}
+      <button
+        type="submit"
+        style={{
+          padding: '10px 12px',
+          background: semantico.acento,
+          color: semantico.fundo,
+          border: 0,
+          borderRadius: 8,
+          fontWeight: 700,
+        }}
+      >
+        Aplicar
+      </button>
+      <Link href={`/resultados/${data}`} style={{ padding: 10, color: semantico.acento }}>
+        Limpar
+      </Link>
+    </form>
+  )
 
   // O item do feed é a metade PRÉ-LIVE do card: barrinhas, grau, posição. A
   // chave é (jogo, jogador, atributo) — o mesmo card da conferência — e entre
@@ -319,7 +432,7 @@ export default async function PaginaResultadosDaRodada({
     if (!atual || (item.linha ?? Infinity) < (atual.linha ?? Infinity)) itemPorCard.set(chave, item)
   }
 
-  const proxima = data >= hoje ? null : `/resultados/${somarDias(data, 1)}`
+  const proxima = data >= hoje ? null : rotaResultados(somarDias(data, 1), filtros)
   // A noite ainda não terminou: sem taxa, sem apito da noite (§5.1).
   const emCurso = !recap.noiteEncerrada
   const cabecalho = (
@@ -329,7 +442,7 @@ export default async function PaginaResultadosDaRodada({
       selo={
         <div style={{ display: 'flex', gap: 10, alignSelf: 'flex-end' }}>
           <Seta
-            href={`/resultados/${somarDias(data, -1)}`}
+            href={rotaResultados(somarDias(data, -1), filtros)}
             rotulo="Rodada anterior"
             sentido="anterior"
           />
@@ -341,16 +454,17 @@ export default async function PaginaResultadosDaRodada({
         ativa: 'resultados',
         opcoes: [
           { valor: 'hoje', rotulo: 'HOJE', href: '/' },
-          { valor: 'resultados', rotulo: 'RESULTADOS', href: `/resultados/${data}` },
+          { valor: 'resultados', rotulo: 'RESULTADOS', href: rotaResultados(data, filtros) },
         ],
       }}
     />
   )
 
-  if (recap.porJogo.length === 0) {
+  if (rodadaInteira.porJogo.length === 0 && fireLido.length === 0) {
     return (
       <Moldura aba="lista">
         {cabecalho}
+        {controles}
         <Vazio>
           <p style={{ margin: 0, fontWeight: 700 }}>Sem lista publicada neste dia</p>
           <p style={{ margin: '8px 0 0', fontSize: 14, color: semantico.textoSecundario }}>
@@ -364,196 +478,259 @@ export default async function PaginaResultadosDaRodada({
   return (
     <Moldura aba="lista">
       {cabecalho}
+      {controles}
+      <style>{`@keyframes resultados-entrada { from { opacity: 0.7; } to { opacity: 1; } } .resultados-resumo { animation: resultados-entrada 180ms ease-out; } @media (prefers-reduced-motion: reduce) { .resultados-resumo { animation: none; } }`}</style>
+      {mostrarLista && (
+        <>
+          <p
+            style={{ ...ROTULO, margin: '12px 0 0' }}
+          >{`${filtrado ? 'Resumo dos filtros' : 'Resumo da rodada'} · Lista Secreta · jogo inteiro`}</p>
+          {recap.publicados === 0 && <p>Nenhuma entrada da Lista Secreta nestes filtros.</p>}
 
-      {/* A NOITE em três números. "BATERAM" e "NA NOITE" são taxas de
+          {/* A NOITE em três números. "BATERAM" e "NA NOITE" são taxas de
           conferência — nunca dividem elemento com um % de confiança de apito.
           APITOS é o que está em tela (publicados); a taxa é sobre os
           CONFERIDOS, porque DNP é neutro (§4.4) — e quando a base difere do
           que está em tela, ela vem escrita embaixo. */}
-      <div
-        style={{
-          ...CAIXA,
-          marginTop: 16,
-          padding: 14,
-          display: 'grid',
-          gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
-          gap: 10,
-        }}
-      >
-        <NumeroDaNoite rotulo="APITOS" valor={String(recap.publicados)} />
-        <NumeroDaNoite
-          rotulo="BATERAM"
-          valor={recap.conferidos === 0 ? '—' : String(recap.bateram)}
-          cor={componente.conferido.bateu}
-        />
-        {emCurso ? (
-          <NumeroDaNoite rotulo="NA NOITE" nota="aguardando o fim da noite" />
-        ) : (
-          <NumeroDaNoite
-            rotulo="NA NOITE"
-            valor={recap.taxa === null ? '—' : inteiro(recap.taxa)}
-            base={
-              recap.taxa !== null && recap.conferidos !== recap.publicados
-                ? `${recap.bateram} de ${recap.conferidos}`
-                : undefined
-            }
-          />
-        )}
-      </div>
-
-      {/* A TEMPORADA acumulada — o argumento do produto, e o número que só faz
-          sentido longe do card. */}
-      <div
-        style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'baseline',
-          gap: 10,
-          marginTop: 8,
-          padding: '10px 14px',
-          borderRadius: 12,
-          border: `1px solid ${semantico.divisor}`,
-          background: componente.contextoFrio.faixaFundo,
-        }}
-      >
-        <span style={{ ...ROTULO, fontSize: 11 }}>
-          {`TEMPORADA · ${temporada.rodadas} ${temporada.rodadas === 1 ? 'RODADA' : 'RODADAS'}`}
-        </span>
-        <span
-          style={{
-            fontFamily: semantico.fonteTitulo,
-            fontSize: 20,
-            letterSpacing: 0.5,
-            fontVariantNumeric: 'tabular-nums',
-          }}
-        >
-          {temporada.conferidos === 0
-            ? '—'
-            : `${decimal((temporada.acertos / temporada.conferidos) * 100)}%`}
-          <small
+          <div
+            className="resultados-resumo"
             style={{
-              fontFamily: semantico.fonteRotulo,
-              fontSize: 12,
-              letterSpacing: 0.8,
-              color: semantico.texto55,
-              marginLeft: 6,
+              ...CAIXA,
+              marginTop: 16,
+              padding: 14,
+              display: 'grid',
+              gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
+              gap: 10,
             }}
           >
-            {`${temporada.acertos.toLocaleString('pt-BR')} de ${temporada.conferidos.toLocaleString('pt-BR')}`}
-          </small>
-        </span>
-      </div>
+            <NumeroDaNoite rotulo="APITOS" valor={String(recap.publicados)} />
+            <NumeroDaNoite
+              rotulo="BATERAM"
+              valor={recap.conferidos === 0 ? '—' : String(recap.bateram)}
+              cor={componente.conferido.bateu}
+            />
+            {emCurso ? (
+              <NumeroDaNoite
+                rotulo={filtrado ? 'NOS FILTROS' : 'NA NOITE'}
+                nota="aguardando o fim da noite"
+              />
+            ) : (
+              <NumeroDaNoite
+                rotulo={filtrado ? 'NOS FILTROS' : 'NA NOITE'}
+                valor={recap.taxa === null ? '—' : inteiro(recap.taxa)}
+                base={
+                  recap.taxa !== null && (filtrado || recap.conferidos !== recap.publicados)
+                    ? `${recap.bateram} de ${recap.conferidos}`
+                    : undefined
+                }
+              />
+            )}
+          </div>
 
-      {/* O APITO DA NOITE — o turbo que bateu, ou quem passou mais longe da
+          {/* A TEMPORADA acumulada — o argumento do produto, e o número que só faz
+          sentido longe do card. */}
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'baseline',
+              gap: 10,
+              marginTop: 8,
+              padding: '10px 14px',
+              borderRadius: 12,
+              border: `1px solid ${semantico.divisor}`,
+              background: componente.contextoFrio.faixaFundo,
+            }}
+          >
+            <span style={{ ...ROTULO, fontSize: 11 }}>
+              {`TEMPORADA · ${temporada.rodadas} ${temporada.rodadas === 1 ? 'RODADA' : 'RODADAS'}`}
+            </span>
+            <span
+              style={{
+                fontFamily: semantico.fonteTitulo,
+                fontSize: 20,
+                letterSpacing: 0.5,
+                fontVariantNumeric: 'tabular-nums',
+              }}
+            >
+              {temporada.conferidos === 0
+                ? '—'
+                : `${decimal((temporada.acertos / temporada.conferidos) * 100)}%`}
+              <small
+                style={{
+                  fontFamily: semantico.fonteRotulo,
+                  fontSize: 12,
+                  letterSpacing: 0.8,
+                  color: semantico.texto55,
+                  marginLeft: 6,
+                }}
+              >
+                {`${temporada.acertos.toLocaleString('pt-BR')} de ${temporada.conferidos.toLocaleString('pt-BR')}`}
+              </small>
+            </span>
+          </div>
+
+          <p style={{ ...ROTULO, margin: '5px 0 0' }}>
+            Temporada da Lista Secreta · todos os atributos e times
+          </p>
+
+          {/* O APITO DA NOITE — o turbo que bateu, ou quem passou mais longe da
           linha mais baixa (§4.4). Só com a noite encerrada: é superlativo da
           noite inteira, e mudaria a cada jogo que acabasse. */}
-      {!emCurso && recap.apitoDaNoite && (
-        <ApitoDaNoite
-          card={recap.apitoDaNoite}
-          jogo={
-            recap.porJogo.find((g) => g.jogo.jogoId === recap.apitoDaNoite!.jogoId)?.jogo ?? null
-          }
-        />
-      )}
-
-      {recap.porJogo.map(({ jogo, cards }) => {
-        // O estado vem do JOGO — status, quarto e a chegada do box oficial
-        // saem da mesma leitura que trouxe os cards. Cruzar o recap com uma
-        // consulta recortada por horário local perdia o jogo tardio da costa
-        // oeste, e assumir ENCERRADO para o que faltasse dava "FT · aguardando
-        // dado oficial" a um jogo que nem começou (§5.1).
-        const estado = estadoDoCiclo(jogo, jogo.temBoxOficial, ruleset.fire_live.quarto)
-        const conferido = estado === 'CONFERIDO'
-
-        return (
-          <section key={jogo.jogoId}>
-            <CabecalhoJogo
-              casaSigla={jogo.casaSigla}
-              visitanteSigla={jogo.visitanteSigla}
-              horarioUtc={jogo.dataHoraUtc}
-              fuso={fuso}
-              status={jogo.status}
-              quartoAtual={jogo.quartoAtual}
-              placarCasa={jogo.placarCasa}
-              placarVisitante={jogo.placarVisitante}
-              quartosCasa={jogo.quartosCasa}
-              quartosVisitante={jogo.quartosVisitante}
+          {!emCurso && recap.apitoDaNoite && (
+            <ApitoDaNoite
+              card={recap.apitoDaNoite}
+              jogo={
+                recap.porJogo.find((g) => g.jogo.jogoId === recap.apitoDaNoite!.jogoId)?.jogo ??
+                null
+              }
             />
+          )}
 
-            {/* O jogo acabou e o box ainda não chegou: NUNCA inferir ✓/✗ de
+          {recap.porJogo.map(({ jogo, cards }) => {
+            // O estado vem do JOGO — status, quarto e a chegada do box oficial
+            // saem da mesma leitura que trouxe os cards. Cruzar o recap com uma
+            // consulta recortada por horário local perdia o jogo tardio da costa
+            // oeste, e assumir ENCERRADO para o que faltasse dava "FT · aguardando
+            // dado oficial" a um jogo que nem começou (§5.1).
+            const estado = estadoDoCiclo(jogo, jogo.temBoxOficial, ruleset.fire_live.quarto)
+            const conferido = estado === 'CONFERIDO'
+
+            return (
+              <section key={jogo.jogoId}>
+                <CabecalhoJogo
+                  casaSigla={jogo.casaSigla}
+                  visitanteSigla={jogo.visitanteSigla}
+                  horarioUtc={jogo.dataHoraUtc}
+                  fuso={fuso}
+                  status={jogo.status}
+                  quartoAtual={jogo.quartoAtual}
+                  placarCasa={jogo.placarCasa}
+                  placarVisitante={jogo.placarVisitante}
+                  quartosCasa={jogo.quartosCasa}
+                  quartosVisitante={jogo.quartosVisitante}
+                />
+
+                {/* O jogo acabou e o box ainda não chegou: NUNCA inferir ✓/✗ de
                 dado parcial (§5.1). O que a tela pode afirmar é quando olhou
                 ESTE jogo — o carimbo é o dele, nunca o da rodada: o jogo que
                 espera o box não herda o horário do vizinho que acabou de ser
                 atualizado ("um número velho apresentado como atual é pior do
                 que número nenhum", estatisticas/atualizacao.ts). */}
-            {estado === 'AGUARDANDO_OFICIAL' && (
-              <p style={{ ...ROTULO, margin: '0 0 10px', fontSize: 11, color: semantico.texto55 }}>
-                {`Aguardando dado oficial · última atualização ${dataHora(jogo.atualizadoEm, fuso)}`}
-              </p>
-            )}
+                {estado === 'AGUARDANDO_OFICIAL' && (
+                  <p
+                    style={{
+                      ...ROTULO,
+                      margin: '0 0 10px',
+                      fontSize: 11,
+                      color: semantico.texto55,
+                    }}
+                  >
+                    {`Aguardando dado oficial · última atualização ${dataHora(jogo.atualizadoEm, fuso)}`}
+                  </p>
+                )}
 
-            <div style={{ display: 'grid', gap: 12 }}>
-              {ordenarCards(cards, conferido).map((card) => {
-                const item = itemPorCard.get(`${jogo.jogoId}|${card.jogadorId}|${card.atributo}`)
-                const jogou = card.fez !== null
-                const adversario = adversarioDe(jogo, card.timeId)
-                // A fileira do card conferido ganha o jogo que ACABOU, e é a
-                // TELA que a monta em ordem cronológica — o mais antigo à
-                // esquerda, o desta rodada à direita, contornado (artboard).
-                // A entrega materializa `ultimos5` do mais recente ao mais
-                // antigo; o card não inverte nada (inverter lá mudaria a
-                // Lista, o /como-funciona e a galeria congelada). Quem não
-                // jogou não ganha barrinha nova, e sem jogo novo a fileira
-                // não é a desta rodada. Antes do veredito o card é o da
-                // Lista, na mesma ordem dela.
-                const ultimos5 =
-                  conferido && jogou
-                    ? [
-                        ...[...(item?.ultimos5 ?? []).slice(0, 4)].reverse(),
-                        { valor: card.fez!, bateu: card.bateuLinhaMaisBaixa === true },
-                      ]
-                    : conferido
-                      ? []
-                      : (item?.ultimos5 ?? [])
+                <div style={{ display: 'grid', gap: 12 }}>
+                  {ordenarCards(cards, conferido).map((card) => {
+                    const item = itemPorCard.get(
+                      `${jogo.jogoId}|${card.jogadorId}|${card.atributo}`,
+                    )
+                    const jogou = card.fez !== null
+                    const adversario = adversarioDe(jogo, card.timeId)
+                    // A fileira do card conferido ganha o jogo que ACABOU, e é a
+                    // TELA que a monta em ordem cronológica — o mais antigo à
+                    // esquerda, o desta rodada à direita, contornado (artboard).
+                    // A entrega materializa `ultimos5` do mais recente ao mais
+                    // antigo; o card não inverte nada (inverter lá mudaria a
+                    // Lista, o /como-funciona e a galeria congelada). Quem não
+                    // jogou não ganha barrinha nova, e sem jogo novo a fileira
+                    // não é a desta rodada. Antes do veredito o card é o da
+                    // Lista, na mesma ordem dela.
+                    const ultimos5 =
+                      conferido && jogou
+                        ? [
+                            ...[...(item?.ultimos5 ?? []).slice(0, 4)].reverse(),
+                            { valor: card.fez!, bateu: card.bateuLinhaMaisBaixa === true },
+                          ]
+                        : conferido
+                          ? []
+                          : (item?.ultimos5 ?? [])
 
-                return (
-                  <CardEntrada
-                    key={card.chave}
-                    nome={card.nome}
-                    jogadorHref={rotaDoJogador(card.jogadorId)}
-                    fotoUrl={card.fotoUrl}
-                    timeSigla={card.timeSigla}
-                    adversarioSigla={adversario?.sigla ?? null}
-                    emCasa={adversario?.emCasa}
-                    posicao={item?.posicao ?? null}
-                    atributo={card.atributo}
-                    nivelJogador={card.nivelJogador}
-                    nivelApito={card.nivelApito as NivelApito}
-                    turbo={card.turbo}
-                    // O veredito ocupa o lugar do %: o card conferido fala de
-                    // ACERTO, e nota de confiança ao lado de "fez 27" leria
-                    // como se as duas medissem a mesma coisa (§4.4).
-                    confianca={conferido ? null : (item?.confianca ?? null)}
-                    grauConfianca={item?.grauConfianca ?? null}
-                    // A linha conferida é decisão da ENTREGA (a mais baixa que
-                    // a lista ofereceu); a tela só a escreve.
-                    linha={card.linhaConferida}
-                    // Antes do veredito o rodapé é o da Lista: média e odd em
-                    // faixa. Conferido, o "fez N ✓" toma o lugar (artboard).
-                    mediaTemporada={item?.mediaTemporada ?? null}
-                    oddFaixa={item?.oddFaixa ?? null}
-                    estado={estado}
-                    fez={card.fez}
-                    bateu={card.bateuLinhaMaisBaixa}
-                    ultimos5={ultimos5}
-                    destacarUltima={conferido && jogou}
-                  />
-                )
-              })}
-            </div>
-          </section>
-        )
-      })}
+                    return (
+                      <div key={card.chave}>
+                        <CardEntrada
+                          key={card.chave}
+                          nome={card.nome}
+                          jogadorHref={rotaDoJogador(card.jogadorId)}
+                          fotoUrl={card.fotoUrl}
+                          timeSigla={card.timeSigla}
+                          adversarioSigla={adversario?.sigla ?? null}
+                          emCasa={adversario?.emCasa}
+                          posicao={item?.posicao ?? null}
+                          atributo={card.atributo}
+                          nivelJogador={card.nivelJogador}
+                          nivelApito={card.nivelApito as NivelApito}
+                          turbo={card.turbo}
+                          // O veredito ocupa o lugar do %: o card conferido fala de
+                          // ACERTO, e nota de confiança ao lado de "fez 27" leria
+                          // como se as duas medissem a mesma coisa (§4.4).
+                          confianca={conferido ? null : (item?.confianca ?? null)}
+                          grauConfianca={item?.grauConfianca ?? null}
+                          // A linha conferida é decisão da ENTREGA (a mais baixa que
+                          // a lista ofereceu); a tela só a escreve.
+                          linha={card.linhaConferida}
+                          // Antes do veredito o rodapé é o da Lista: média e odd em
+                          // faixa. Conferido, o "fez N ✓" toma o lugar (artboard).
+                          mediaTemporada={item?.mediaTemporada ?? null}
+                          oddFaixa={item?.oddFaixa ?? null}
+                          estado={estado}
+                          fez={card.fez}
+                          bateu={card.bateuLinhaMaisBaixa}
+                          ultimos5={ultimos5}
+                          destacarUltima={conferido && jogou}
+                        />
+                        <dl
+                          aria-label={`Conferência de ${card.nome} · jogo inteiro`}
+                          style={{
+                            display: 'grid',
+                            gridTemplateColumns: '1fr 1fr',
+                            gap: 8,
+                            margin: '0 8px',
+                            padding: '10px 12px',
+                            border: `1px solid ${semantico.divisor}`,
+                            borderTop: 0,
+                            borderRadius: '0 0 10px 10px',
+                          }}
+                        >
+                          <div>
+                            <dt style={ROTULO}>Linha prevista · jogo inteiro</dt>
+                            <dd style={{ margin: '4px 0 0', fontWeight: 700 }}>
+                              {card.linhaConferida === null
+                                ? 'Sem linha registrada'
+                                : `${card.linhaConferida}+ ${ATRIBUTO_UNIDADE[card.atributo]}`}
+                            </dd>
+                          </div>
+                          <div>
+                            <dt style={ROTULO}>Realizado · jogo inteiro</dt>
+                            <dd style={{ margin: '4px 0 0', fontWeight: 700 }}>
+                              {!conferido
+                                ? 'Aguardando dado oficial'
+                                : card.fez === null
+                                  ? 'DNP · neutro'
+                                  : `${card.fez} ${ATRIBUTO_UNIDADE[card.atributo]}`}
+                            </dd>
+                          </div>
+                        </dl>
+                      </div>
+                    )
+                  })}
+                </div>
+              </section>
+            )
+          })}
+        </>
+      )}
+      {mostrarFire && <ResultadosDoFireLive cards={fire} filtrado={filtrado} />}
 
       {/* Os greens do Fire Live seguem em bloco PRÓPRIO: são marcos do 1º
           quarto, não conferência de linha, e somar os dois inventaria uma taxa
@@ -683,5 +860,86 @@ function ApitoDaNoite({
         <p style={{ ...ROTULO, margin: '2px 0 0' }}>{ATRIBUTO_ROTULO[card.atributo]}</p>
       </div>
     </div>
+  )
+}
+
+function ResultadosDoFireLive({
+  cards,
+  filtrado,
+}: {
+  cards: ResultadoFireLive[]
+  filtrado: boolean
+}) {
+  const conferidos = cards.filter((c) => c.bateu !== null)
+  const bateram = conferidos.filter((c) => c.bateu).length
+  return (
+    <section aria-label="Resultados Fire Live · 1º quarto" style={{ marginTop: 24 }}>
+      <h2 style={{ ...ROTULO, fontSize: 14 }}>Fire Live · 1º quarto</h2>
+      <p className="resultados-resumo" style={{ fontSize: 13, color: semantico.textoSecundario }}>
+        {`${filtrado ? 'Nos filtros' : 'Na rodada'}: ${cards.length} sinais · ${bateram} de ${conferidos.length} alvos conferidos atingidos`}
+      </p>
+      {cards.length === 0 ? (
+        <p>Nenhum sinal do Fire Live nestes filtros.</p>
+      ) : (
+        <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'grid', gap: 10 }}>
+          {cards.map((card) => (
+            <li key={card.id} style={{ ...CAIXA, padding: 12 }}>
+              <Link
+                href={rotaDoJogador(card.jogadorId)}
+                style={{
+                  color: semantico.textoPrimario,
+                  display: 'flex',
+                  gap: 10,
+                  alignItems: 'center',
+                }}
+              >
+                <Avatar
+                  nome={card.nome}
+                  fotoUrl={card.fotoUrl}
+                  timeSigla={card.timeSigla}
+                  nivelApito={null}
+                  tamanho={40}
+                />
+                <strong>{card.nome}</strong>
+              </Link>
+              <p
+                style={{ ...ROTULO, margin: '8px 0' }}
+              >{`${identidadeDoTime(card.timeSigla).nome} · ${ATRIBUTO_ROTULO[card.atributo]}`}</p>
+              <dl style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, margin: 0 }}>
+                <div>
+                  <dt style={ROTULO}>Alvo registrado · 1º quarto</dt>
+                  <dd style={{ margin: '4px 0 0' }}>
+                    {card.alvo === null
+                      ? 'Sem alvo registrado'
+                      : `${card.alvo}+ ${ATRIBUTO_UNIDADE[card.atributo]}`}
+                  </dd>
+                </div>
+                <div>
+                  <dt style={ROTULO}>Realizado · 1º quarto</dt>
+                  <dd style={{ margin: '4px 0 0' }}>
+                    {card.estado === 'DNP'
+                      ? 'DNP · neutro'
+                      : card.estado === 'PENDENTE'
+                        ? 'Aguardando fechamento ou dado oficial'
+                        : `${card.valor} ${ATRIBUTO_UNIDADE[card.atributo]}`}
+                  </dd>
+                </div>
+              </dl>
+              {card.bateu !== null && (
+                <p
+                  style={{
+                    marginBottom: 0,
+                    fontSize: 13,
+                    color: card.bateu ? componente.conferido.bateu : semantico.textoSecundario,
+                  }}
+                >
+                  {card.bateu ? 'Alvo atingido' : 'Alvo não atingido'}
+                </p>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
   )
 }

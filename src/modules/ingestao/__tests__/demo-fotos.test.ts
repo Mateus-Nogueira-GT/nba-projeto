@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs'
 import { isNotNull } from 'drizzle-orm'
 import { bancoDeTeste } from '../../dominio/__tests__/ajuda-banco'
 import { jogadores } from '../../dominio/db/schema'
+import { identidadesDeApresentacao } from '../../dominio/identidade-apresentacao'
 import { carregarRuleset } from '../../motor/ruleset/carregar'
 import { semearDemo } from '../demo/semear'
 import { aplicarFotos, MAPA_FOTOS, urlDaFoto } from '../demo/fotos'
@@ -20,16 +21,13 @@ describe('fotos da demonstração', () => {
   afterAll(async () => banco.fechar())
 
   it('todo nome do mapa resolve para um jogador semeado', async () => {
-    // O guard continua sendo "nenhuma foto cai no vazio por erro de digitação".
-    // O que mudou é a REGRA de casamento: `nomeCompleto` guarda o nome de
-    // exibição ("Stephen Curry") e as chaves vêm do documento do CJ
-    // ("stephen Curry"), então quem resolve é a caixa baixa — a mesma
-    // comparação que `aplicarFotos` faz.
-    const nomes = new Set(
-      (await banco.db.select().from(jogadores)).map((j) => j.nomeCompleto.toLowerCase()),
-    )
-    for (const nome of Object.keys(MAPA_FOTOS))
-      expect(nomes.has(nome.toLowerCase()), nome).toBe(true)
+    // A foto resolve o UUID pela identidade, mesmo após corrigir o nome exibido.
+    const identidades = [...(await identidadesDeApresentacao(banco.db)).values()]
+    for (const [alias, personId] of Object.entries(MAPA_FOTOS)) {
+      const matches = identidades.filter((i) => i.aliases.includes(alias))
+      expect(matches, alias).toHaveLength(1)
+      expect(matches[0]!.personId, alias).toBe(personId)
+    }
   })
 
   it('todo nome da lista do CJ tem entrada no mapa — na grafia exata do documento', () => {
@@ -47,8 +45,12 @@ describe('fotos da demonstração', () => {
   })
 
   it('com o CDN respondendo, pelo menos 90% dos jogadores semeados ganham foto', async () => {
+    const antes = new Map(
+      (await banco.db.select().from(jogadores)).map((jogador) => [jogador.id, jogador]),
+    )
     const r = await aplicarFotos(banco.db, async () => true)
     expect(r.puladas).toEqual([])
+    expect(r.gravadas).toBe(Object.values(MAPA_FOTOS).filter((id) => id !== null).length)
     // O único sem foto é ambiguidade declarada, não falha de curadoria.
     expect(r.semId).toEqual(['Wiggins'])
     const [todos, comFoto] = await Promise.all([
@@ -56,6 +58,11 @@ describe('fotos da demonstração', () => {
       banco.db.select().from(jogadores).where(isNotNull(jogadores.fotoUrl)),
     ])
     expect(comFoto.length / todos.length).toBeGreaterThanOrEqual(0.9)
+    for (const jogador of todos) {
+      const original = antes.get(jogador.id)!
+      // Somente a URL muda: UUID, nome, time e todos os demais dados ficam.
+      expect({ ...jogador, fotoUrl: original.fotoUrl }).toEqual(original)
+    }
   })
 
   it('só grava URL que o verificador aprovou', async () => {
@@ -69,5 +76,21 @@ describe('fotos da demonstração', () => {
     const comFoto = await banco.db.select().from(jogadores).where(isNotNull(jogadores.fotoUrl))
     expect(comFoto).toHaveLength(1)
     expect(comFoto[0]!.fotoUrl).toContain('cdn.nba.com')
+  })
+
+  it('uma falha de rede deixa só aquela foto pendente e permite preencher o restante', async () => {
+    await banco.db.update(jogadores).set({ fotoUrl: null })
+    const indisponivel = urlDaFoto(MAPA_FOTOS['Brunson']!)
+    const resultado = await aplicarFotos(banco.db, async (url) => {
+      if (url === indisponivel) throw new TypeError('fetch failed')
+      return true
+    })
+
+    expect(resultado.puladas).toEqual(['Brunson'])
+    expect(resultado.semId).toEqual(['Wiggins'])
+    const comId = Object.values(MAPA_FOTOS).filter((id) => id !== null).length
+    expect(resultado.gravadas).toBe(comId - 1)
+    const comFoto = await banco.db.select().from(jogadores).where(isNotNull(jogadores.fotoUrl))
+    expect(comFoto).toHaveLength(comId - 1)
   })
 })

@@ -127,6 +127,13 @@
       "when": 1788806492313,
       "tag": "0017_rare_agent_zero",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1788885827495,
+      "tag": "0018_experiencia_por_conta",
+      "breakpoints": true
     }
   ]
 }

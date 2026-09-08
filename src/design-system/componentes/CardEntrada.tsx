@@ -8,6 +8,7 @@ import { componente } from '../tokens/componente'
 import { CONFIANCA_GRAU, MODO_FIRE, NIVEL_JOGADOR, TURBO } from '../tokens/css'
 import { semantico } from '../tokens/semantico'
 import { Avatar } from './Avatar'
+import { IdentidadeTime } from './IdentidadeTime'
 import { BarraAlvo } from './BarraAlvo'
 import { Barrinhas } from './Barrinhas'
 import { IconeVeredito } from './IconeVeredito'
@@ -311,7 +312,10 @@ export function CardEntrada(props: CardEntradaProps) {
   const abas = props.atributos && props.atributos.length > 0 ? props.atributos : null
 
   return (
-    <div style={{ position: props.detalheHref ? 'relative' : undefined }}>
+    <div
+      className={props.modoFire ? 'card-modo-fire' : undefined}
+      style={{ position: props.detalheHref ? 'relative' : undefined }}
+    >
       {/* faixa metálica CURTA = nível do jogador */}
       <div
         aria-hidden
@@ -387,14 +391,26 @@ export function CardEntrada(props: CardEntradaProps) {
               }}
             >
               {nivel.rotulo} · N{props.nivelApito}
-              {props.posicao ? ` · ${props.posicao}` : ''} · {props.timeSigla}
-              {props.adversarioSigla
-                ? ` · ${props.emCasa === false ? '@' : 'vs'} ${props.adversarioSigla}`
-                : ''}
+              {props.posicao ? ` · ${props.posicao}` : ''}
+            </div>
+            <div className="card-confronto">
+              <IdentidadeTime sigla={props.timeSigla} tamanhoLogo={20} />
+              {props.adversarioSigla && (
+                <span className="card-adversario">
+                  <span style={{ color: semantico.texto55 }}>
+                    {props.emCasa === false ? '@' : 'vs'}
+                  </span>
+                  <IdentidadeTime sigla={props.adversarioSigla} tamanhoLogo={20} />
+                </span>
+              )}
             </div>
             <div style={{ display: 'flex', gap: 6, marginTop: 4, flexWrap: 'wrap' }}>
               {props.turbo && <Selo icone="⚡" rotulo="TURBO" cor={TURBO.cor} />}
-              {props.modoFire && <Selo icone="🔥" rotulo="MODO FIRE" cor={MODO_FIRE.cor} />}
+              {props.modoFire && (
+                <span className="card-selo-fire">
+                  <Selo icone="🔥" rotulo="MODO FIRE" cor={MODO_FIRE.cor} />
+                </span>
+              )}
               {props.opdOrigemNivel != null && (
                 <Selo icone="↗" rotulo={`OPD nível ${props.opdOrigemNivel}`} />
               )}

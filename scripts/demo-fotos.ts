@@ -12,8 +12,8 @@ import { aplicarFotos } from '../src/modules/ingestao/demo/fotos'
  */
 async function principal() {
   const resultado = await aplicarFotos(getDb(), async (url) => {
-    const resposta = await fetch(url)
-    resposta.body?.cancel()
+    const resposta = await fetch(url, { signal: AbortSignal.timeout(8_000) })
+    await resposta.body?.cancel()
     return resposta.ok
   })
 
@@ -22,8 +22,11 @@ async function principal() {
     console.log(`Sem foto de propósito (ambíguo na lista do CJ): ${resultado.semId.join(', ')}`)
   }
   if (resultado.puladas.length > 0) {
-    console.log('Puladas (sem jogador correspondente ou URL não respondeu 200):')
+    console.log('Puladas (sem jogador correspondente ou falha ao verificar a URL):')
     for (const nome of resultado.puladas) console.log(`  - ${nome}`)
+    // O lote terminou, mas a operação ainda tem pendências. Reexecutar só
+    // atualiza foto_url; não semeia dados nem altera identidade ou estratégia.
+    process.exitCode = 1
   }
 }
 

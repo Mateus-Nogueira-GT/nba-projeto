@@ -1,0 +1,43 @@
+.grupo {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
+  min-height: 25px;
+  margin-top: 4px;
+}
+
+.botao {
+  border: 1px solid var(--divisor);
+  border-radius: 999px;
+  padding: 4px 10px;
+  background: transparent;
+  color: var(--texto-secundario);
+  cursor: pointer;
+  font-family: var(--fonte-rotulo);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.7px;
+  text-transform: uppercase;
+}
+
+.ativo {
+  border-color: var(--acento);
+  background: var(--acento-veu);
+  color: var(--texto100);
+}
+
+.botao:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+
+.botao:focus-visible {
+  outline: 2px solid var(--acento);
+  outline-offset: 2px;
+}
+
+.erro {
+  color: var(--alerta);
+  font-size: 11px;
+}

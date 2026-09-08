@@ -12,6 +12,7 @@ import {
 import { semantico } from '@/design-system/tokens/semantico'
 import { CONFIANCA_GRAU, NIVEL_JOGADOR, APITO, TURBO, MODO_FIRE } from '@/design-system/tokens/css'
 import { razaoDeContraste } from '@/design-system/tokens/contraste'
+import { SeletorJogosAoVivo } from '@/components/ao-vivo/SeletorJogosAoVivo'
 import '@/design-system/tokens/tokens.css'
 import { negarSeNaoForAdmin } from '../guarda'
 
@@ -566,6 +567,44 @@ export default async function PaginaGaleria() {
           <SeloContexto contexto="preLive" />
           <SeloContexto contexto="aoVivo" />
         </div>
+      </Secao>
+
+      <Secao
+        titulo="Transmissão · seletor de jogos"
+        nota="Um jogo por vez. Nome completo e escudo permanecem no seletor; o jogo ativo é identificado também por aria-current. Os dados abaixo são ilustrativos."
+      >
+        <SeletorJogosAoVivo
+          jogoAtivo="galeria-ao-vivo"
+          rotaDoJogo={(jogoId) => `#${jogoId}`}
+          grupos={[
+            {
+              jogoId: 'galeria-ao-vivo',
+              casaSigla: 'CLE',
+              visitanteSigla: 'SAC',
+              dataHoraUtc: new Date('2026-09-08T23:00:00.000Z'),
+              status: 'AO_VIVO',
+              quartoAtual: 1,
+              placarCasa: 49,
+              placarVisitante: 30,
+              itens: [],
+              estado: 'EM_1Q',
+              alvosAguardando: 0,
+            },
+            {
+              jogoId: 'galeria-aguardando',
+              casaSigla: 'LAL',
+              visitanteSigla: 'BOS',
+              dataHoraUtc: new Date('2026-09-09T01:00:00.000Z'),
+              status: 'AGENDADO',
+              quartoAtual: null,
+              placarCasa: null,
+              placarVisitante: null,
+              itens: [],
+              estado: 'AGUARDANDO',
+              alvosAguardando: 4,
+            },
+          ]}
+        />
       </Secao>
 
       <Secao

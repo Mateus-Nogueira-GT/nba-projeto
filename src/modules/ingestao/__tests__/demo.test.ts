@@ -3,7 +3,15 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { eq } from 'drizzle-orm'
 
 import { bancoDeTeste } from '../../dominio/__tests__/ajuda-banco'
-import { casas, feedSnapshot, jogadores, niveisVersao, oddsAgregada, times, usuarios } from '../../dominio/db/schema'
+import {
+  casas,
+  feedSnapshot,
+  jogadores,
+  niveisVersao,
+  oddsAgregada,
+  times,
+  usuarios,
+} from '../../dominio/db/schema'
 import { carregarRuleset } from '../../motor/ruleset/carregar'
 import { agruparPorJogador, lerFeed } from '../../entrega/lista-secreta'
 import { planoDoDia } from '../../entrega/gestao'
@@ -12,7 +20,13 @@ import { limparDemo, semearDemo } from '../demo/semear'
 
 const ruleset = carregarRuleset(readFileSync('config/ruleset.v1.yaml', 'utf8'))
 
-import { historicoOscilacao, mediaDe, niveisDoJogador, nivelDoAtributo, posicaoDe } from '../demo/dados'
+import {
+  historicoOscilacao,
+  mediaDe,
+  niveisDoJogador,
+  nivelDoAtributo,
+  posicaoDe,
+} from '../demo/dados'
 import type { Nivel } from '../../motor/tipos'
 
 describe('helpers determinísticos da demonstração', () => {
@@ -175,8 +189,8 @@ describe('semearDemo (PGlite, banco vazio)', () => {
     expect(feed).not.toBeNull()
     const porNome = new Map(feed!.conteudo.itens.map((i) => [i.nome, i] as const))
     expect(porNome.get('Austin Reaves')?.opdOrigemNivel).toBe(3)
-    expect(porNome.get('Grimes')?.opdOrigemNivel).toBe(2)
-    expect(porNome.get('Kesller')?.opdOrigemNivel).toBe(1)
+    expect(porNome.get('Quentin Grimes')?.opdOrigemNivel).toBe(2)
+    expect(porNome.get('Walker Kessler')?.opdOrigemNivel).toBe(1)
   })
 
   it('a oscilação apita nos três níveis e o MVP em nível 3 vai ao turbo', async () => {
@@ -184,7 +198,7 @@ describe('semearDemo (PGlite, banco vazio)', () => {
     const itens = feed!.conteudo.itens
 
     // MVP com 1 jogo abaixo → amarelo
-    expect(itens.find((i) => i.nome === 'Brunson')?.nivelApito).toBe(1)
+    expect(itens.find((i) => i.nome === 'Jalen Brunson')?.nivelApito).toBe(1)
     // Suporte com 2 jogos → laranja (o doc proíbe Suporte de apitar no nível 1)
     expect(itens.find((i) => i.nome === 'LeBron James')?.nivelApito).toBe(2)
     // MVP com 3 jogos → verde, e o turbo do documento
@@ -217,7 +231,7 @@ describe('semearDemo (PGlite, banco vazio)', () => {
       .from(feedSnapshot)
       .where(eq(feedSnapshot.estrategia, 'FIRE_LIVE'))
     const conteudo = snapshot!.conteudoJson as { itens: { nome: string; modoFire: boolean }[] }
-    const shai = conteudo.itens.find((i) => i.nome === 'Shai')
+    const shai = conteudo.itens.find((i) => i.nome === 'Shai Gilgeous-Alexander')
     expect(shai?.modoFire).toBe(true)
   })
 
@@ -230,7 +244,9 @@ describe('semearDemo (PGlite, banco vazio)', () => {
 
   it('as linhas de rebotes são linhas de rebotes, não de pontos', async () => {
     const feed = await lerFeed(banco.db, HOJE)
-    const jokic = feed!.conteudo.itens.filter((i) => i.nome === 'Jokic' && i.atributo === 'REBOTES')
+    const jokic = feed!.conteudo.itens.filter(
+      (i) => i.nome === 'Nikola Jokić' && i.atributo === 'REBOTES',
+    )
 
     // Jokic é MVP em rebotes (os 12,9 rpg do documento) com 3 jogos abaixo.
     expect(jokic.map((i) => i.linha).sort((a, b) => a! - b!)).toEqual([8, 10, 12])
@@ -341,7 +357,10 @@ describe('semearDemo (PGlite, banco vazio)', () => {
       .select()
       .from(jogos)
       .where(e(eq(jogos.status, 'ENCERRADO'), isNotNull(jogos.placarCasa)))
-    expect(encerrados.length, 'jogo encerrado sem placar deixa a coluna Resultado vazia').toBeGreaterThan(0)
+    expect(
+      encerrados.length,
+      'jogo encerrado sem placar deixa a coluna Resultado vazia',
+    ).toBeGreaterThan(0)
     // O placar é DERIVADO da soma dos pontos: nunca zero, nunca empate falso.
     for (const j of encerrados.slice(0, 5)) {
       expect(Number(j.placarCasa)).toBeGreaterThan(0)
@@ -368,7 +387,9 @@ describe('semearDemo (PGlite, banco vazio)', () => {
     // E o card leva a odd: o feed é republicado depois das odds existirem.
     const feed = await lerFeed(banco.db, HOJE)
     const comOdd = (feed?.conteudo.itens ?? []).filter((i) => i.oddFaixa !== null)
-    expect(comOdd.length, 'card sem odd no rodapé — feed publicado antes das odds').toBeGreaterThan(0)
+    expect(comOdd.length, 'card sem odd no rodapé — feed publicado antes das odds').toBeGreaterThan(
+      0,
+    )
   })
 
   it('o green acontece nos TRÊS atributos, não só em pontos', async () => {
@@ -381,7 +402,9 @@ describe('semearDemo (PGlite, banco vazio)', () => {
     const atributos = new Set(registrados.map((g) => g.atributo))
 
     expect(atributos).toContain('PONTOS')
-    expect(atributos, 'sem green de rebotes o cliente não vê o canal funcionando').toContain('REBOTES')
+    expect(atributos, 'sem green de rebotes o cliente não vê o canal funcionando').toContain(
+      'REBOTES',
+    )
     expect(atributos).toContain('ASSISTENCIAS')
 
     // E cada green aponta um marco que o RULESET define — nunca um número
@@ -407,7 +430,9 @@ describe('semearDemo (PGlite, banco vazio)', () => {
         )
         .limit(1)
       const marcos = marcosDoNivel(linha!.nivel, g.atributo, ruleset)
-      expect(marcos, `green de ${g.atributo} com marco ${g.marco} fora do ruleset`).toContain(g.marco)
+      expect(marcos, `green de ${g.atributo} com marco ${g.marco} fora do ruleset`).toContain(
+        g.marco,
+      )
     }
   })
 

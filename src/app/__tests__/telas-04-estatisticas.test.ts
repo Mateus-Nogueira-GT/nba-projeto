@@ -171,10 +171,24 @@ afterAll(async () => {
   await banco.fechar()
 })
 
-async function renderizarJogador(id: string): Promise<string> {
+async function renderizarJogador(id: string, busca: Record<string, string> = {}): Promise<string> {
   const { default: Pagina } = await import('../(app)/estatisticas/jogador/[id]/page')
-  return renderToStaticMarkup(await Pagina({ params: Promise.resolve({ id }) }))
+  return renderToStaticMarkup(
+    await Pagina({ params: Promise.resolve({ id }), searchParams: Promise.resolve(busca) }),
+  )
 }
+
+describe('Stats · períodos e contexto', () => {
+  it('abre últimos 10 e mantém atributo/período no caminho para a partida', async () => {
+    const inicial = await renderizarJogador(alvo)
+    expect(inicial).toMatch(/<a[^>]*aria-current="page"[^>]*>Últimos 10<\/a>/)
+    expect(texto(inicial)).toContain('Últimos 10')
+    const html = await renderizarJogador(alvo, { periodo: '5', atributo: 'REBOTES' })
+    expect(texto(html)).toContain('Desempenho · Rebotes')
+    expect(html).toContain(`jogador=${alvo}&amp;periodo=5&amp;atributo=REBOTES`)
+    expect(html).not.toContain('Linha do alvo')
+  })
+})
 
 async function renderizarTime(id: string, busca: Record<string, string> = {}): Promise<string> {
   const { default: Pagina } = await import('../(app)/estatisticas/time/[id]/page')
@@ -238,8 +252,8 @@ describe('o recorte de seção que todas as asserções desta suíte usam', () =
   })
 })
 
-describe('tela do jogador · quatro números e a nota recente', () => {
-  it('mostra PTS, REB, AST e a NOTA · ÚLT. 5 renderizada pelo NotaPartida', async () => {
+describe('tela do jogador · quatro números e a nota do recorte', () => {
+  it('mostra PTS, REB, AST e a NOTA · RECORTE renderizada pelo NotaPartida', async () => {
     const html = await renderizarJogador(alvo)
     await gravarConferencia('estatisticas-jogador', html)
     const visivel = texto(html)
@@ -252,12 +266,12 @@ describe('tela do jogador · quatro números e a nota recente', () => {
       expect(visivel).toContain(`${rotulo} ${valor}`)
     }
 
-    expect(visivel).toContain('NOTA · ÚLT. 5')
+    expect(visivel).toContain('NOTA · RECORTE')
     // A nota é o badge de sempre, com a paleta própria — não um número solto.
     // A afirmação é sobre a CAIXA da nota, não sobre a página: a tabela abaixo
     // renderiza o mesmo componente e faria a asserção passar por coincidência.
     expect(tela.notaMediaRecente).not.toBeNull()
-    const caixaDaNota = trecho(html, 'NOTA · ÚLT. 5', 'Apitos da estratégia')
+    const caixaDaNota = trecho(html, 'NOTA · RECORTE', 'Desempenho · Pontos')
     expect(caixaDaNota).toContain(
       renderToStaticMarkup(
         createElement(NotaPartida, { nota: tela.notaMediaRecente, destaque: true }),
@@ -452,6 +466,7 @@ describe('tela do jogador · os três estados da linha de apito', () => {
         [
           diaMes(linha.data, fuso),
           `${linha.emCasa ? 'vs' : '@'} ${linha.adversarioSigla}`,
+          'Oficial',
           '—',
           linha.pontos,
           linha.rebotes,
@@ -594,7 +609,7 @@ describe('tela do jogador · o hero', () => {
     expect(titulos[0]).toContain('var(--fonte-anton)')
     // Dentro do hero: depois do rosto de 72, antes dos quatro números.
     expect(html.indexOf('<h1')).toBeGreaterThan(html.indexOf('width:72px'))
-    expect(html.indexOf('<h1')).toBeLessThan(html.indexOf('NOTA · ÚLT. 5'))
+    expect(html.indexOf('<h1')).toBeLessThan(html.indexOf('NOTA · RECORTE'))
   }, 60_000)
 })
 
@@ -625,7 +640,7 @@ describe('tela do jogador · as duas visões de time', () => {
       // texto ao redor (WCAG 1.4.1), e mais fracas que os rótulos vizinhos,
       // que não são links. Acento + sublinhado são dois canais — e é só isso
       // que eles fazem.
-      const hero = trecho(html, 'TIME ATUAL', 'NOTA · ÚLT. 5')
+      const hero = trecho(html, 'TIME ATUAL', 'NOTA · RECORTE')
       const ancoras = hero.match(/<a [^>]*estatisticas\/time[^>]*>/g) ?? []
       expect(ancoras.length).toBe(2)
       for (const marcacao of ancoras) {
@@ -655,7 +670,7 @@ describe('tela do jogador · as duas visões de time', () => {
     // dois destinos iguais na lista de links do leitor de tela. O artboard
     // escreve as duas em texto comum; aqui a primeira leva ao time.
     expect(tela.perfil.timeId).toBe(tela.timeNaListaDoCj!.id)
-    const hero = trecho(await renderizarJogador(alvo), 'TIME ATUAL', 'NOTA · ÚLT. 5')
+    const hero = trecho(await renderizarJogador(alvo), 'TIME ATUAL', 'NOTA · RECORTE')
 
     expect((hero.match(/<a [^>]*estatisticas\/time[^>]*>/g) ?? []).length).toBe(1)
     // E as DUAS visões continuam escritas — é o rótulo que separa uma da outra.
@@ -741,22 +756,10 @@ describe('tela do jogador · uma partida, um adversário', () => {
       expect(texto(secaoDeApitos(html))).toContain(certo)
       expect(texto(trecho(html, 'Jogo a jogo', 'Números completos'))).toContain(certo)
 
-      // E o time DO PRÓPRIO jogador não sai como adversário NAQUELA partida —
-      // que é o que o mando invertido faria. O recorte é pela data porque,
-      // fora dela, esse mesmo time pode ser adversário de verdade: com o
-      // vínculo real fora do jogo o mando cai no time da LISTA, e a lista
-      // enfrenta os outros 29 ao longo da temporada.
-      const naquelaPartida = [
-        ...texto(html).matchAll(
-          new RegExp(`(?:^| )${diaMes(daTabela.data, fuso)} ([^]{0,40})`, 'g'),
-        ),
-      ].map((m) => m[1]!)
-      // Duas, no mínimo: a linha do apito e a linha da tabela.
-      expect(naquelaPartida.length).toBeGreaterThanOrEqual(2)
-      for (const pedaco of naquelaPartida) {
-        expect(pedaco).toContain(certo)
-        expect(pedaco).not.toContain(siglaDe.get(real)!)
-      }
+      // O gráfico também repete a data, sem confronto. As duas seções que
+      // afirmam mando já foram verificadas acima e não podem mostrar o time
+      // do próprio jogador como adversário.
+      expect(texto(secaoDeApitos(html))).not.toContain(`@ ${siglaDe.get(real)!}`)
     } finally {
       await banco.db
         .update(jogadores)
@@ -835,9 +838,9 @@ describe('tela do jogador · a tabela diz o recorte', () => {
       const secao = trecho(html, 'Jogo a jogo', 'Números completos')
       const visivel = texto(secao)
 
-      expect(visivel).toContain(`últimas ${LIMITE_DE_PARTIDAS_DO_HISTORICO}`)
+      expect(visivel).toContain('Últimos 10 · 10 partidas disponíveis')
       // Uma linha de corpo por partida do recorte — o <tr> a mais é o cabeçalho.
-      expect((secao.match(/<tr/g) ?? []).length - 1).toBe(LIMITE_DE_PARTIDAS_DO_HISTORICO)
+      expect((secao.match(/<tr/g) ?? []).length - 1).toBe(10)
       expect(visivel).not.toContain(`temporada ${temporada}`)
       // As médias de "Números completos" nascem da MESMA janela cortada: elas
       // também deixam de ser anunciadas como as da temporada.
@@ -845,7 +848,7 @@ describe('tela do jogador · a tabela diz o recorte', () => {
       // (`UltimaAtualizacao`): "Atualizado" não existe na página, e com ele o
       // recorte devolvia da seção até o fim do documento.
       const medias = texto(trecho(html, 'Números completos', 'Última atualização'))
-      expect(medias).toContain(`últimas ${LIMITE_DE_PARTIDAS_DO_HISTORICO}`)
+      expect(medias).toContain('Últimos 10 · 10 partidas disponíveis')
       expect(medias).not.toContain(`médias de ${temporada}`)
     } finally {
       await banco.db.delete(estatisticasJogo).where(
@@ -862,9 +865,15 @@ describe('tela do jogador · a tabela diz o recorte', () => {
 
   it('dentro do limite, a seção continua dizendo a temporada — o rótulo do artboard', async () => {
     expect(tela.historicoCortado).toBe(false)
-    const visivel = texto(trecho(await renderizarJogador(alvo), 'Jogo a jogo', 'Números completos'))
-    expect(visivel).toContain(`temporada ${temporada}`)
-    expect(visivel).not.toContain('últimas')
+    const visivel = texto(
+      trecho(
+        await renderizarJogador(alvo, { periodo: 'temporada' }),
+        'Jogo a jogo',
+        'Números completos',
+      ),
+    )
+    expect(visivel).toContain(`Temporada ${temporada}`)
+    expect(visivel).not.toContain('Últimos 10')
   }, 60_000)
 
   it('sem linha de médias, o HERO também deixa de nomear a temporada sobre o recorte', async () => {
@@ -909,17 +918,15 @@ describe('tela do jogador · a tabela diz o recorte', () => {
         })),
       )
 
-      // Com a linha de médias, o número do hero é o da TEMPORADA mesmo com a
-      // tabela cortada — e ele continua podendo nomeá-la.
+      // O default é uma janela explícita de dez partidas e não muda conforme
+      // a presença da linha materializada de médias da temporada.
       const comMedias = apoioDoHero(await renderizarJogador(alvo))
-      const plural = media!.jogos === 1 ? 'jogo' : 'jogos'
-      expect(comMedias).toContain(`${media!.jogos} ${plural} · ${temporada}`)
+      expect(comMedias).toContain('Últimos 10 · 10 partidas disponíveis')
 
       await banco.db.delete(mediasJogador).where(onde)
       const semMedias = apoioDoHero(await renderizarJogador(alvo))
 
-      expect(semMedias).toContain(`últimas ${LIMITE_DE_PARTIDAS_DO_HISTORICO} partidas`)
-      expect(semMedias).not.toContain(`${LIMITE_DE_PARTIDAS_DO_HISTORICO} jogos`)
+      expect(semMedias).toContain('Últimos 10 · 10 partidas disponíveis')
       expect(semMedias).not.toContain(temporada)
     } finally {
       await banco.db.insert(mediasJogador).values(media!).onConflictDoNothing()
@@ -967,11 +974,15 @@ describe('tela do jogador · a tabela é da temporada que ela nomeia', () => {
         rebotesTotal: 14,
         assistencias: 11,
       })
-      const secao = trecho(await renderizarJogador(alvo), 'Jogo a jogo', 'Números completos')
+      const secao = trecho(
+        await renderizarJogador(alvo, { periodo: 'temporada' }),
+        'Jogo a jogo',
+        'Números completos',
+      )
       const visivel = texto(secao)
 
       // O rótulo do artboard continua ali — e agora é verdade.
-      expect(visivel).toContain(`temporada ${temporada}`)
+      expect(visivel).toContain(`Temporada ${temporada}`)
       expect(visivel).not.toContain(diaMes(instante, fuso))
       // Uma linha de corpo por partida DA TEMPORADA; o <tr> a mais é o cabeçalho.
       expect((secao.match(/<tr/g) ?? []).length - 1).toBe(tela.historico.length)
@@ -1361,7 +1372,13 @@ describe('índice da aba · a classificação como tabela', () => {
     tabela.linhas.forEach((time, indice) => {
       const visivel = texto(linhas[indice]!)
       const esperado =
-        time.posicao === null ? '—' : time.posicao <= 6 ? 'playoff' : time.posicao <= 10 ? 'play-in' : '—'
+        time.posicao === null
+          ? '—'
+          : time.posicao <= 6
+            ? 'playoff'
+            : time.posicao <= 10
+              ? 'play-in'
+              : '—'
       expect(visivel, `posição ${time.posicao}`).toContain(esperado)
     })
 
@@ -1437,7 +1454,11 @@ describe('tela de partida · o rosto no box score', () => {
     const jogo = await umJogo('ENCERRADO')
     const tela = (await telaDoJogo(banco.db, jogo.id, {}))!
     const html = await renderizarJogo(jogo.id)
-    const secao = trecho(html, `Box score · ${tela.casa.nome}`, `Box score · ${tela.visitante.nome}`)
+    const secao = trecho(
+      html,
+      `Box score · ${tela.casa.nome}`,
+      `Box score · ${tela.visitante.nome}`,
+    )
 
     expect(tela.casa.boxScore.length).toBeGreaterThan(0)
     const primeiro = tela.casa.boxScore[0]!
@@ -1497,7 +1518,11 @@ describe('tela de partida · os desfalques com a hierarquia do CJ', () => {
         { jogoId: escolhido!.jogoId, jogadorId: escolhido!.linha.jogadorId, status: 'FORA' },
         { jogoId: escolhido!.jogoId, jogadorId: semClassificacao!.id, status: 'FORA' },
       ])
-      const secao = trecho(await renderizarJogo(escolhido!.jogoId), 'Desfalques', 'Última atualização')
+      const secao = trecho(
+        await renderizarJogo(escolhido!.jogoId),
+        'Desfalques',
+        'Última atualização',
+      )
       const visivel = texto(secao)
 
       expect(visivel).toContain(escolhido!.linha.nome)
@@ -1511,7 +1536,9 @@ describe('tela de partida · os desfalques com a hierarquia do CJ', () => {
       const linhas = itensDaLista(secao)
       const classificado = linhas.find((linha) => texto(linha).includes(escolhido!.linha.nome))!
       expect((texto(classificado).match(/nº \d+/g) ?? []).length).toBe(1)
-      const semClasse = linhas.find((linha) => texto(linha).includes(semClassificacao!.nomeCompleto))!
+      const semClasse = linhas.find((linha) =>
+        texto(linha).includes(semClassificacao!.nomeCompleto),
+      )!
       expect(semClasse).toBeDefined()
       expect(texto(semClasse)).not.toMatch(/nº \d+/)
     } finally {

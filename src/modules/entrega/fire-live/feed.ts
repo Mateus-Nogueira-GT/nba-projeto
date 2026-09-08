@@ -1,8 +1,16 @@
 import { createHash } from 'node:crypto'
 import { and, eq, inArray } from 'drizzle-orm'
 
-import { apitos, estatisticasQuarto, feedSnapshot, jogadores, jogos, times } from '../../dominio/db/schema'
+import {
+  apitos,
+  estatisticasQuarto,
+  feedSnapshot,
+  jogadores,
+  jogos,
+  times,
+} from '../../dominio/db/schema'
 import type { Db } from '../../dominio/db/tipos'
+import { identidadesDeApresentacao } from '../../dominio/identidade-apresentacao'
 import type { Ruleset } from '../../motor/ruleset/schema'
 import type { Atributo, NivelApito } from '../../motor/tipos'
 import { montarChave } from '../../motor/tipos'
@@ -74,19 +82,26 @@ export async function materializarFeedFireLive(
     .where(and(eq(apitos.jogoId, jogoId), eq(apitos.estrategia, 'FIRE_LIVE')))
 
   const idsJogador = [...new Set(linhasApito.map((a) => a.jogadorId))]
-  const [elenco, listaTimes, estatisticas] = await Promise.all([
+  const [elenco, listaTimes, estatisticas, identidades] = await Promise.all([
     idsJogador.length > 0
       ? db.select().from(jogadores).where(inArray(jogadores.id, idsJogador))
       : Promise.resolve([]),
-    db.select().from(times).where(inArray(times.id, [partida.timeCasaId, partida.timeVisitanteId])),
+    db
+      .select()
+      .from(times)
+      .where(inArray(times.id, [partida.timeCasaId, partida.timeVisitanteId])),
     idsJogador.length > 0
       ? db
           .select()
           .from(estatisticasQuarto)
           .where(
-            and(eq(estatisticasQuarto.jogoId, jogoId), eq(estatisticasQuarto.quarto, quartoFireLive)),
+            and(
+              eq(estatisticasQuarto.jogoId, jogoId),
+              eq(estatisticasQuarto.quarto, quartoFireLive),
+            ),
           )
       : Promise.resolve([]),
+    identidadesDeApresentacao(db, idsJogador),
   ])
 
   const jogadorPorId = new Map(elenco.map((j) => [j.id, j] as const))
@@ -94,7 +109,10 @@ export async function materializarFeedFireLive(
   const valorPorJogador = new Map(
     estatisticas.map((e) => [
       e.jogadorId,
-      { PONTOS: e.pontos, REBOTES: e.rebotes, ASSISTENCIAS: e.assistencias } as Record<Atributo, number>,
+      { PONTOS: e.pontos, REBOTES: e.rebotes, ASSISTENCIAS: e.assistencias } as Record<
+        Atributo,
+        number
+      >,
     ]),
   )
 
@@ -107,7 +125,7 @@ export async function materializarFeedFireLive(
       chave: montarChave(a.jogoId, a.jogadorId, a.atributo, 'FIRE_LIVE', null),
       jogoId: a.jogoId,
       jogadorId: a.jogadorId,
-      nome: jogador?.nomeCompleto ?? a.jogadorId,
+      nome: identidades.get(a.jogadorId)?.nome ?? jogador?.nomeCompleto ?? a.jogadorId,
       timeSigla: time?.sigla ?? '—',
       timeNome: time?.nome ?? '—',
       fotoUrl: jogador?.fotoUrl ?? null,
