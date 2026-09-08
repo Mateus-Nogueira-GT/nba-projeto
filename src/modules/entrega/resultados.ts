@@ -134,11 +134,14 @@ function entrouEmQuadra(linha: {
   rebotes: number | null
   assistencias: number | null
 }): boolean {
-  // Minuto REGISTRADO manda, inclusive quando é zero: zero é o provedor dizendo
-  // que o jogador não entrou. Só quando o minuto NÃO veio a produção decide —
-  // aí ela é a única prova de que houve jogo.
-  if (linha.minutos !== null) return Number(linha.minutos) > 0
-  return linha.pontos > 0 || (linha.rebotes ?? 0) > 0 || (linha.assistencias ?? 0) > 0
+  // O provedor pode arredondar poucos segundos em quadra para zero minutos.
+  // Produção prova participação mesmo assim, como no perfil do jogador.
+  return (
+    Number(linha.minutos) > 0 ||
+    linha.pontos > 0 ||
+    (linha.rebotes ?? 0) > 0 ||
+    (linha.assistencias ?? 0) > 0
+  )
 }
 
 /** As linhas de um `db.execute`, seja qual for a forma que o driver devolve. */
@@ -228,11 +231,8 @@ export async function conferirRodadas(db: Db, ate: string, dias: number): Promis
     .from(estatisticasJogo)
     .where(inArray(estatisticasJogo.jogoId, idsJogo))
 
-  // DNP É NEUTRO (§4.4, §5.1) — e a linha zerada do provedor também é DNP. A
-  // regra de participação é a de `sincronizar/medias.ts`: sem minutos
-  // positivos a linha não descreve um jogo jogado, e contá-la daria ✗ a quem
-  // ficou no banco. A demo não gera essa linha (o desfalque não tem box); o
-  // provedor real pode gerar.
+  // DNP é neutro (§4.4, §5.1). Minutos positivos OU produção provam que o
+  // jogador entrou; uma linha inteira zerada não recebe um erro de aposta.
   const porJogoJogador = new Map(
     observados.filter(entrouEmQuadra).map((o) => [`${o.jogoId}|${o.jogadorId}`, o] as const),
   )
@@ -539,10 +539,9 @@ export async function taxaDaTemporada(db: Db, ate: string, dias: number): Promis
              -- positivo OU produção: a coluna de minutos é nullable, e quem
              -- marcou ponto jogou. Mesma regra do perfil do jogador.
              max(case when j.status = 'ENCERRADO'
-                       and (case when e.minutos is not null then e.minutos > 0
-                                 else e.pontos > 0
-                                      or coalesce(e.rebotes_total, 0) > 0
-                                      or coalesce(e.assistencias, 0) > 0 end) then
+                       and (coalesce(e.minutos, 0) > 0 or e.pontos > 0
+                            or coalesce(e.rebotes_total, 0) > 0
+                            or coalesce(e.assistencias, 0) > 0) then
                    case a.atributo
                      when 'PONTOS' then e.pontos
                      when 'REBOTES' then e.rebotes_total
@@ -592,9 +591,8 @@ export async function ultimaRodadaConferida(db: Db, ate: string): Promise<string
       join jogos j on j.id = a.jogo_id
       left join estatisticas_jogo e
         on e.jogo_id = a.jogo_id and e.jogador_id = a.jogador_id
-       and (case when e.minutos is not null then e.minutos > 0
-                 else e.pontos > 0 or coalesce(e.rebotes_total, 0) > 0
-                      or coalesce(e.assistencias, 0) > 0 end)
+       and (coalesce(e.minutos, 0) > 0 or e.pontos > 0
+            or coalesce(e.rebotes_total, 0) > 0 or coalesce(e.assistencias, 0) > 0)
      where a.estrategia = 'LISTA_SECRETA'
        and a.linha is not null
        and j.data_referencia <= ${ate}

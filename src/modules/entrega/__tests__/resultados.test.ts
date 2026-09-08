@@ -398,7 +398,7 @@ describe('a última rodada com conferência', () => {
 })
 
 describe('DNP é neutro — também quando o provedor manda a linha zerada', () => {
-  it('sem minutos positivos o card não é ✓ nem ✗, e sai do denominador da noite e da temporada', async () => {
+  it('sem minutos nem produção o card não é ✓ nem ✗, e sai do denominador da noite e da temporada', async () => {
     const { estatisticasJogo } = await import('../../dominio/db/schema')
     const antes = await recapDaNoite(banco.db, ONTEM)
     const temporadaAntes = await taxaDaTemporada(banco.db, HOJE, 49)
@@ -411,16 +411,23 @@ describe('DNP é neutro — também quando o provedor manda a linha zerada', () 
       eq(estatisticasJogo.jogadorId, alvo.jogadorId),
     )
     const [linha] = await banco.db
-      .select({ minutos: estatisticasJogo.minutos })
+      .select({
+        minutos: estatisticasJogo.minutos,
+        pontos: estatisticasJogo.pontos,
+        rebotesTotal: estatisticasJogo.rebotesTotal,
+        assistencias: estatisticasJogo.assistencias,
+      })
       .from(estatisticasJogo)
       .where(onde)
 
     expect(alvo).toBeDefined()
     expect(Number(linha!.minutos)).toBeGreaterThan(0)
     try {
-      // A mesma regra de participação de `sincronizar/medias.ts`: sem minutos
-      // positivos, a linha não descreve um jogo jogado.
-      await banco.db.update(estatisticasJogo).set({ minutos: '0.00' }).where(onde)
+      // DNP é a linha zerada. Zerar só os minutos preservaria produção real,
+      // caso distinto protegido por coerencia-participacao.test.ts.
+      await banco.db.update(estatisticasJogo).set({
+        minutos: '0.00', pontos: 0, rebotesTotal: 0, assistencias: 0,
+      }).where(onde)
       const [dia] = await conferirRodadas(banco.db, HOJE, 1)
       const depois = await recapDaNoite(banco.db, ONTEM)
       const temporadaDepois = await taxaDaTemporada(banco.db, HOJE, 49)
@@ -437,7 +444,7 @@ describe('DNP é neutro — também quando o provedor manda a linha zerada', () 
       expect(temporadaDepois.conferidos).toBe(temporadaAntes.conferidos - doAlvo.length)
       expect(temporadaDepois.acertos).toBe(temporadaAntes.acertos - bateram)
     } finally {
-      await banco.db.update(estatisticasJogo).set({ minutos: linha!.minutos }).where(onde)
+      await banco.db.update(estatisticasJogo).set(linha!).where(onde)
     }
   })
 })
