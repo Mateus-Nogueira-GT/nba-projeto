@@ -3,6 +3,8 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vite
 
 import type { PlanoDoDia } from '../../modules/entrega/gestao'
 import type { Ruleset } from '../../modules/motor/ruleset/schema'
+import { razaoDeContraste } from '../../design-system/tokens/contraste'
+import { semantico } from '../../design-system/tokens/semantico'
 
 let homologado: Ruleset
 let ruleset: Ruleset
@@ -91,6 +93,18 @@ async function guia() {
 }
 
 describe('escrita da identidade 04 · guia', () => {
+  it('a nota do exemplo permanece legível sobre o card escuro', async () => {
+    const exemplo = secao(await guia(), 'Um exemplo de card')
+    const estilo = exemplo.match(/<span style="([^"]*)">92<\/span>/)?.[1]
+    expect(estilo).toBeDefined()
+    const cor = estilo!.match(/(?:^|;)color:(#[a-f0-9]{6})/i)?.[1]
+    expect(cor).toBeDefined()
+    for (const fundo of [semantico.superficieFria1, semantico.superficieFria2]) {
+      // A nota tem 30px: contraste AA para texto grande.
+      expect(razaoDeContraste(cor!, fundo)).toBeGreaterThanOrEqual(3)
+    }
+  })
+
   it('explica confiança como nota numérica e bônus em pontos da nota', async () => {
     const html = await guia()
     const confianca = texto(secao(html, 'linhas de pontos'))
