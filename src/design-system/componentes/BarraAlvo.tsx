@@ -1,3 +1,4 @@
+import { numeroPtBr } from '../formato'
 import { componente } from '../tokens/componente'
 import { semantico } from '../tokens/semantico'
 
@@ -105,7 +106,11 @@ export function BarraAlvo({ observado, alvo, unidade, marcos, apitouEm }: BarraA
   const todosOsMarcos: MarcoDaBarra[] = temAlvo
     ? [...(marcos ?? []), { valor: alvo, rotulo: 'alvo' }]
     : []
-  const textoDoApito = apitouEm ? `${apitouEm.rotulo} · ${apitouEm.valor}${sufixo}` : undefined
+  // Tudo que a barra escreve passa por `numeroPtBr`: o marco do modo fire é
+  // fração da média por construção (0,75 × 25,7 = 19,275) e sairia "19.275".
+  const textoDoApito = apitouEm
+    ? `${apitouEm.rotulo} · ${numeroPtBr(apitouEm.valor)}${sufixo}`
+    : undefined
   // A coluna do apito na legenda: a frase do ponto, ou a negativa quando quem
   // monta AFIRMA que o push não veio (`null`). Sem notícia nenhuma
   // (`undefined`) a coluna não existe — "ainda sem apito" embaixo de um card
@@ -143,8 +148,7 @@ export function BarraAlvo({ observado, alvo, unidade, marcos, apitouEm }: BarraA
             fontVariantNumeric: 'tabular-nums',
           }}
         >
-          {observado} / {alvo}
-          {sufixo}
+          {`${numeroPtBr(observado)} / ${numeroPtBr(alvo)}${sufixo}`}
         </span>
       </div>
       {/* Sem `overflow: hidden`: os marcos passam do trilho de propósito (13px
@@ -231,7 +235,7 @@ export function BarraAlvo({ observado, alvo, unidade, marcos, apitouEm }: BarraA
           <span>{legendaDoApito}</span>
           {todosOsMarcos.map((marco) => (
             <span key={`${marco.rotulo}-${marco.valor}`} style={{ color: marco.cor }}>
-              {marco.rotulo} · {marco.valor}
+              {marco.rotulo} · {numeroPtBr(marco.valor)}
             </span>
           ))}
         </div>

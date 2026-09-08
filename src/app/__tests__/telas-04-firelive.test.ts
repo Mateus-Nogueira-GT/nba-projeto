@@ -158,27 +158,29 @@ describe('Fire Live · 04 — regras de escrita da TELA', () => {
     expect(html).not.toContain('ALVO 1º Q · 0 ')
   }, 60_000)
 
-  it('"ainda sem apito" só sai no card que ainda NÃO é um apito — hoje, em nenhum', async () => {
-    // O TERCEIRO CARD DO ARTBOARD ESCREVE A FRASE (`FireLive.dc.html`, l. 147):
-    // é o alvo dentro do 1º quarto que ainda não virou push. Ele entra na tela
-    // quando a 2.2 materializar os alvos AGUARDANDO — e então esta asserção
-    // passa a CONTÁ-LOS, sem precisar de edição: o esperado é derivado do
-    // feed, não escrito à mão. Proibir a frase travaria por teste um desenho
-    // já aprovado.
+  it('a barra CALA em todo card: hoje cada item É um apito, e o feed não traz o valor no instante do push', async () => {
+    // O TERCEIRO CARD DO ARTBOARD ESCREVE "ainda sem apito" (`FireLive.dc.html`,
+    // l. 147): é o alvo dentro do 1º quarto que ainda não virou push. Ele NÃO
+    // sai de `lerFeedFireLive`: o feed lista apitos, e `ItemFireLive.apitadoEm`
+    // é obrigatório (feed.ts) — todo item tem o instante do push. Por isso a
+    // página não passa `apitouEm` ao card e a barra cala (ausente ≠ `null`,
+    // barra-alvo.test.ts). Também não escreve "apitou aqui": o feed traz o
+    // INSTANTE do push, não o valor do jogador naquele instante — e número que
+    // a tela não tem, a tela não inventa (nem com `valorNoQuarto` no lugar).
     //
-    // O que vale nas duas épocas: a frase é a NEGATIVA do ponto "apitou aqui"
-    // (os dois no mesmo card seria a barra dizendo que houve e não houve push)
-    // e ela nunca sai embaixo de um item que já É um apito. Hoje
-    // `lerFeedFireLive` só devolve apitos — daí o zero.
+    // Quando a 2.2 materializar os alvos AGUARDANDO e o valor no instante do
+    // push, este teste PRECISA de edição: o esperado passa a ser lido de onde
+    // esses dados nascerem. Melhor um guard que confessa o próprio prazo do
+    // que um zero disfarçado de contagem derivada.
     const feed = await feedDaTela()
-    const semInstanteDePush = feed.itens.filter(
-      (i) => (i as { apitadoEm?: string | null }).apitadoEm == null,
-    )
+    expect(feed.itens.length).toBeGreaterThan(0)
+    for (const item of feed.itens)
+      expect(item.apitadoEm, `${item.chave} sem o instante do push`).toBeTruthy()
 
-    const html = await renderizar()
-    expect(ocorrencias(html, 'ainda sem apito')).toBe(semInstanteDePush.length)
-    expect(cards(html).length).toBeGreaterThan(0)
-    for (const card of cards(html))
-      expect(card.includes('ainda sem apito') && card.includes('apitou aqui')).toBe(false)
+    const html = semScript(await renderizar())
+    // um card por item do feed — e nenhum deles é o alvo aguardando do artboard
+    expect(cards(html)).toHaveLength(feed.itens.length)
+    expect(ocorrencias(html, 'ainda sem apito')).toBe(0)
+    expect(ocorrencias(html, 'apitou aqui')).toBe(0)
   }, 60_000)
 })

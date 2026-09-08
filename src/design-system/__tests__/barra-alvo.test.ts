@@ -7,6 +7,8 @@ import { BarraAlvo, type BarraAlvoProps } from '../componentes/BarraAlvo'
 import { semantico } from '../tokens/semantico'
 
 const render = (props: BarraAlvoProps) => renderToStaticMarkup(createElement(BarraAlvo, props))
+/** O que a tela ESCREVE: só os nós de texto, sem tags nem atributos. */
+const textoVisivel = (html: string) => html.replace(/<[^>]+>/g, ' ')
 
 /**
  * O card quente do artboard (FireLive.dc.html, `.zona2`): alvo de 11 pts, 9
@@ -118,6 +120,34 @@ describe('BarraAlvo — dois marcos e o ponto "apitou aqui" (identidade 04)', ()
       '',
       'alvo · 11',
     ])
+  })
+
+  it('todo número escrito sai em pt-BR — vírgula decimal, nunca o ponto do toString', () => {
+    // O marco do modo fire é fracionário POR CONSTRUÇÃO: a entrega o calcula
+    // como `percentual_media × mediaTemporada` (0,75 × 25,7 = 19,275). A barra
+    // escreve o que recebe, em pt-BR e com no máximo UMA casa — a precisão com
+    // que o card escreve a média. Arredondar para inteiro mentiria: "19" no
+    // marco com o jogador em 19 diria modo fire alcançado quando o motor diz
+    // que não.
+    const html = render({
+      observado: 9.5,
+      alvo: 25,
+      unidade: 'pts',
+      marcos: [{ valor: 0.75 * 25.7, rotulo: '75% da média' }],
+      apitouEm: { valor: 6.5, rotulo: 'apitou aqui' },
+    })
+    expect(html).toContain('9,5 / 25 pts')
+    expect(html).toContain('aria-label="apitou aqui · 6,5 pts"')
+    expect(colunasDaLegenda(html)).toEqual([
+      'apitou aqui · 6,5 pts',
+      '75% da média · 19,3',
+      'alvo · 25',
+    ])
+    // nenhum decimal com ponto no TEXTO da tela — o `left:76.9%` do CSS é
+    // outra coisa, e fica
+    expect(textoVisivel(html)).not.toMatch(/\d\.\d/)
+    // e inteiro continua inteiro: "8", nunca "8,0"
+    expect(render(artboard)).toContain('75% da média · 8')
   })
 
   it('sem alvo NUNCA preenche — e nada é posicionado contra zero', () => {

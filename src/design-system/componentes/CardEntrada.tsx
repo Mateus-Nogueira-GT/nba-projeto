@@ -3,6 +3,7 @@ import Link from 'next/link'
 import type { EstadoDoCiclo } from '../../modules/entrega/lista-por-jogo'
 import type { Atributo, Nivel, NivelApito } from '../../modules/motor/tipos'
 import type { Lente } from '../../modules/plataforma/preferencias'
+import { decimalPtBr } from '../formato'
 import { componente } from '../tokens/componente'
 import { CONFIANCA_GRAU, MODO_FIRE, NIVEL_JOGADOR, TURBO } from '../tokens/css'
 import { semantico } from '../tokens/semantico'
@@ -36,9 +37,6 @@ const ROTULO_ESTADO: Record<EstadoDoCiclo, string> = {
   AGUARDANDO_OFICIAL: 'FT',
   CONFERIDO: 'FT',
 }
-
-const decimalPtBr = (n: number, casas: number) =>
-  n.toLocaleString('pt-BR', { minimumFractionDigits: casas, maximumFractionDigits: casas })
 
 export type CardEntradaProps = {
   nome: string
@@ -201,11 +199,14 @@ export function CardEntrada(props: CardEntradaProps) {
   // continua mostrando barrinhas, média e odd (errata 25/08).
   const quente = props.temperatura === 'quente'
   const contexto = quente ? componente.contextoQuente : componente.contextoFrio
+  // E o brilho quente vem SÓ do modo fire, não da tela: no artboard do Fire
+  // Live o card sem a pílula leva `box-shadow:none`. Brilhar todo card quente
+  // seria um quarto canal de cor — e o brilho deixaria de dizer "modo fire".
   const brilhoDoCard = brilhaConfianca
     ? `0 0 16px 1px ${corGrau}55`
     : props.turbo
       ? componente.turboBrilho
-      : quente || props.modoFire
+      : props.modoFire
         ? componente.contextoQuente.brilho
         : undefined
   const corPercentual = props.turbo ? TURBO.cor : corGrau

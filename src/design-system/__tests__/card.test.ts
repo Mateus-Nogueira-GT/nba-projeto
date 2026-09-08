@@ -21,6 +21,13 @@ const base = {
 
 const render = (props: CardEntradaProps) => renderToStaticMarkup(createElement(CardEntrada, props))
 
+/**
+ * O `style` do `<article>` — a caixa do card. O brilho do universo quente
+ * também veste o preenchimento da BarraAlvo (`.cheio` do artboard), então
+ * procurar o token no documento inteiro não diz nada sobre o CARD.
+ */
+const estiloDoCard = (html: string) => /<article style="([^"]*)"/.exec(html)?.[1] ?? ''
+
 describe('CardEntrada — contratos de conteúdo (desde a identidade 02)', () => {
   it('linha inteira com sufixo +, nunca meio ponto', () => {
     const html = render({ ...base, linha: 20 })
@@ -197,9 +204,10 @@ describe('CardEntrada — identidade 03 (3 zonas)', () => {
     expect(aindaFrio).toContain('MODO FIRE') // o selo continua — é estado, não pele
   })
 
-  it('temperatura quente explícita veste o universo quente mesmo sem modo fire', () => {
+  it('temperatura quente explícita veste a PELE quente mesmo sem modo fire — o brilho, não', () => {
     // O Fire Live inteiro é quente — quem cruza alvo sem estar em modo fire
-    // também está na tela ao vivo.
+    // também está na tela ao vivo. A pele é da TELA; o brilho é do modo fire
+    // (terceiro card do artboard: sem a pílula, `box-shadow:none`).
     const html = render({
       ...base,
       temperatura: 'quente',
@@ -208,6 +216,7 @@ describe('CardEntrada — identidade 03 (3 zonas)', () => {
     })
     expect(html).toContain(componente.contextoQuente.cardGradiente)
     expect(html).toContain('4 / 10')
+    expect(estiloDoCard(html)).not.toContain('box-shadow')
   })
 })
 
@@ -485,6 +494,20 @@ describe('CardEntrada — identidade 04: o card QUENTE do Fire Live', () => {
 
     const fonte = readFileSync('src/design-system/componentes/CardEntrada.tsx', 'utf8')
     expect(fonte.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '')).not.toContain('75%')
+  })
+
+  it('o brilho quente tem dono: só o card em MODO FIRE brilha, não todo card da tela', () => {
+    // "Três brilhos, três donos" (docs/04 e o cabeçalho do próprio CardEntrada):
+    // grau 5 → cor do grau; turbo → turboBrilho; MODO FIRE → brilho quente. No
+    // artboard os dois cards com a pílula "Modo fire" brilham e o terceiro —
+    // sem ela — leva `box-shadow:none`. Brilho em todo card quente seria um
+    // quarto canal de cor, e deixaria de sinalizar modo fire.
+    const emModoFire = render({ ...quente, modoFire: true })
+    expect(estiloDoCard(emModoFire)).toContain(`box-shadow:${componente.contextoQuente.brilho}`)
+
+    const semModoFire = render(quente)
+    expect(semModoFire).toContain(componente.contextoQuente.cardGradiente) // a pele segue quente
+    expect(estiloDoCard(semModoFire)).not.toContain('box-shadow')
   })
 
   it('"apitou aqui" nasce do valor no instante do push, com a unidade do atributo', () => {
