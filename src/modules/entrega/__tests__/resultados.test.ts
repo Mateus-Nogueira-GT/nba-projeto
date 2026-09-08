@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs'
+import { eq } from 'drizzle-orm'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
 import { bancoDeTeste } from '../../dominio/__tests__/ajuda-banco'
@@ -56,26 +57,36 @@ describe('recapDaNoite', () => {
       expect(g.jogo.quartosCasa).toHaveLength(4)
       expect(g.jogo.quartosVisitante).toHaveLength(4)
       // todo card do grupo é de um dos dois times do jogo
-      for (const c of g.cards) expect([g.jogo.casaSigla, g.jogo.visitanteSigla]).toContain(c.timeSigla)
+      for (const c of g.cards)
+        expect([g.jogo.casaSigla, g.jogo.visitanteSigla]).toContain(c.timeSigla)
     }
   })
 
   it('o apito da noite bateu, e é o que mais passou da linha mais baixa', async () => {
     const recap = await recapDaNoite(banco.db, ONTEM)
-    const candidatos = recap.porJogo.flatMap((g) => g.cards).filter((c) => c.bateuLinhaMaisBaixa === true)
+    const candidatos = recap.porJogo
+      .flatMap((g) => g.cards)
+      .filter((c) => c.bateuLinhaMaisBaixa === true)
     if (candidatos.length === 0) {
       expect(recap.apitoDaNoite).toBeNull()
       return
     }
     expect(recap.apitoDaNoite).not.toBeNull()
-    const folga = (c: (typeof candidatos)[number]) => c.fez! - Math.min(...c.linhas.map((l) => l.linha))
+    const folga = (c: (typeof candidatos)[number]) =>
+      c.fez! - Math.min(...c.linhas.map((l) => l.linha))
     const maior = Math.max(...candidatos.map(folga))
     expect(folga(recap.apitoDaNoite!)).toBe(maior)
   })
 
   it('dia sem lista publicada devolve um recap vazio, não erro', async () => {
     const recap = await recapDaNoite(banco.db, '2020-01-01')
-    expect(recap).toMatchObject({ apitos: 0, bateram: 0, taxa: null, apitoDaNoite: null, porJogo: [] })
+    expect(recap).toMatchObject({
+      apitos: 0,
+      bateram: 0,
+      taxa: null,
+      apitoDaNoite: null,
+      porJogo: [],
+    })
   })
 })
 
@@ -98,5 +109,69 @@ describe('taxaDaTemporada', () => {
     const comAmanha = await taxaDaTemporada(banco.db, somarDias(HOJE, 1), 50)
     // Hoje ainda não tem box: incluir o dia de hoje na janela não muda nada.
     expect(comAmanha.conferidos).toBe(semHoje.conferidos)
+  })
+})
+
+/**
+ * O QUE A TELA NÃO PODE REIMPLEMENTAR (revisão adversarial da 04, rodada 1).
+ *
+ * Três coisas que a tela de Resultados estava deduzindo sozinha e que são
+ * decisão da entrega: qual linha o card confere, em que ponto da noite o jogo
+ * está, e se o box OFICIAL do jogo já chegou.
+ */
+describe('o recap entrega o que a tela precisa, sem a tela deduzir', () => {
+  it('cada card traz a LINHA CONFERIDA — a mais baixa, a mesma de bateuLinhaMaisBaixa', async () => {
+    const [dia] = await conferirRodadas(banco.db, HOJE, 1)
+    expect(dia!.jogadores.length).toBeGreaterThan(0)
+    for (const j of dia!.jogadores) {
+      expect(j.linhaConferida).toBe(Math.min(...j.linhas.map((l) => l.linha)))
+      if (j.valor !== null) expect(j.bateuLinhaMaisBaixa).toBe(j.valor >= j.linhaConferida!)
+    }
+  })
+
+  it('o jogo do recap carrega o PRÓPRIO status, horário e a chegada do box oficial', async () => {
+    const { jogos, estatisticasJogo } = await import('../../dominio/db/schema')
+    const recap = await recapDaNoite(banco.db, ONTEM)
+    const linhas = await banco.db.select().from(jogos)
+    const porId = new Map(linhas.map((j) => [j.id, j] as const))
+
+    expect(recap.porJogo.length).toBeGreaterThan(0)
+    for (const { jogo } of recap.porJogo) {
+      const real = porId.get(jogo.jogoId)!
+      expect(jogo.status).toBe(real.status)
+      expect(jogo.quartoAtual).toBe(real.quartoAtual)
+      expect(jogo.dataHoraUtc.getTime()).toBe(real.dataHoraUtc.getTime())
+      const box = await banco.db
+        .select({ jogadorId: estatisticasJogo.jogadorId })
+        .from(estatisticasJogo)
+        .where(eq(estatisticasJogo.jogoId, jogo.jogoId))
+      // "existe box DO JOGO", não "existe box dos apitados": um jogo em que
+      // todos os apitados foram desfalque tem box e não está aguardando nada.
+      expect(jogo.temBoxOficial).toBe(box.length > 0)
+    }
+  })
+
+  it('a marca de atualização é a dos jogos da RODADA, nunca a época zero', async () => {
+    const recap = await recapDaNoite(banco.db, ONTEM)
+    expect(recap.atualizacao.em.getTime()).toBeGreaterThan(0)
+    expect(recap.atualizacao.fonte).not.toBe('sem dado')
+  })
+
+  it('a noite só conta jogo ENCERRADO — box parcial do 1º quarto não vira taxa', async () => {
+    const recap = await recapDaNoite(banco.db, HOJE)
+    expect(recap.porJogo.length).toBeGreaterThan(0)
+    // A rodada de hoje ainda está acontecendo: é o caso que a guarda existe
+    // para cobrir, e o mesmo que `taxaDaTemporada` já resolve no SQL.
+    expect(recap.porJogo.some((g) => g.jogo.status !== 'ENCERRADO')).toBe(true)
+
+    const conferiveis = recap.porJogo
+      .filter((g) => g.jogo.status === 'ENCERRADO')
+      .flatMap((g) => g.cards)
+    expect(recap.apitos).toBe(conferiveis.filter((c) => c.fez !== null).length)
+    expect(recap.bateram).toBe(conferiveis.filter((c) => c.bateuLinhaMaisBaixa === true).length)
+    if (recap.apitos === 0) {
+      expect(recap.taxa).toBeNull()
+      expect(recap.apitoDaNoite).toBeNull()
+    }
   })
 })

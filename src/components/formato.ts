@@ -54,3 +54,20 @@ export function diaLongo(dataReferencia: string): string {
     month: 'short',
   })
 }
+
+/**
+ * "Quarta-feira, 14/1" — o rótulo da RODADA, para o título da tela.
+ *
+ * Mesma leitura de `diaLongo`: a data de referência é um rótulo de calendário,
+ * lido e formatado em UTC, porque interpretá-la no fuso local recuaria um dia
+ * no Brasil inteiro. O dia e o mês saem sem zero à esquerda — é um título em
+ * Anton, não uma coluna de tabela.
+ */
+export function diaDaRodada(dataReferencia: string): string {
+  const [ano, mes, dia] = dataReferencia.split('-').map(Number)
+  const semana = new Date(Date.UTC(ano!, mes! - 1, dia!)).toLocaleDateString('pt-BR', {
+    timeZone: 'UTC',
+    weekday: 'long',
+  })
+  return `${semana.charAt(0).toUpperCase()}${semana.slice(1)}, ${dia}/${mes}`
+}

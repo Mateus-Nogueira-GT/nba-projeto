@@ -1,10 +1,23 @@
 import { semantico } from '../tokens/semantico'
 
 export type BarrinhasProps = {
-  /** Mais recente primeiro. `valor` é o número do jogo; `bateu`, contra a linha. */
+  /**
+   * Na ordem em que a fileira é LIDA, da esquerda para a direita — quem chama
+   * decide (o card entrega em ordem cronológica). `valor` é o número do jogo;
+   * `bateu`, contra a linha.
+   */
   jogos: { valor: number; bateu: boolean }[]
   /** Rótulo opcional antes dos quadrados (o card usa "ÚLT. 5 NA LINHA"). */
   rotulo?: string
+  /**
+   * Contorna a ÚLTIMA barrinha — identidade 04, tela de Resultados.
+   *
+   * O card conferido acrescenta ao fim da fileira o jogo que ACABOU de
+   * acontecer. Sem marcá-lo, a fileira parece a mesma de ontem e o assinante
+   * não descobre qual quadrado é o resultado da rodada que ele veio conferir.
+   * Quem monta a fileira decide a ordem; aqui só se sabe que a nova é a última.
+   */
+  destacarUltima?: boolean
 }
 
 /**
@@ -16,14 +29,20 @@ export type BarrinhasProps = {
  * As cores são o par PRÓPRIO das barrinhas (`barrinhaBateu`/`barrinhaFalhou`),
  * nunca as categóricas do apito — ver o teste de colisão de canais.
  */
-export function Barrinhas({ jogos, rotulo }: BarrinhasProps) {
+export function Barrinhas({ jogos, rotulo, destacarUltima = false }: BarrinhasProps) {
   const acertos = jogos.filter((j) => j.bateu).length
+  const nova = destacarUltima ? jogos.length - 1 : -1
 
   return (
     <div
       style={{ display: 'flex', alignItems: 'center', gap: 5 }}
       role="img"
-      aria-label={`Últimas ${jogos.length} partidas: bateu a linha em ${acertos}`}
+      // O contorno da nova não é o único sinal: quem ouve a tela também
+      // recebe qual quadrado acabou de entrar.
+      aria-label={
+        `Últimas ${jogos.length} partidas: bateu a linha em ${acertos}` +
+        (nova >= 0 ? '; a última é a desta rodada' : '')
+      }
     >
       {rotulo && (
         <span
@@ -54,6 +73,8 @@ export function Barrinhas({ jogos, rotulo }: BarrinhasProps) {
             fontSize: 10,
             fontWeight: 800,
             fontVariantNumeric: 'tabular-nums',
+            outline: i === nova ? `2px solid ${semantico.texto100}` : undefined,
+            outlineOffset: i === nova ? 1 : undefined,
           }}
         >
           {j.valor}

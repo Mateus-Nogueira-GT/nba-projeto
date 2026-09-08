@@ -11,6 +11,8 @@ import {
 } from '../dominio/db/schema'
 import { somarDias } from '../dominio/rodada'
 import type { Db } from '../dominio/db/tipos'
+import { daColuna, maisAntiga, type Atualizacao } from './estatisticas/atualizacao'
+import type { StatusJogo } from './lista-por-jogo'
 import type { Atributo, Nivel } from '../motor/tipos'
 
 /**
@@ -46,6 +48,12 @@ export type JogadorConferido = {
   nivelApito: number
   /** Ordenadas da mais baixa para a mais alta — a ordem da tela. */
   linhas: LinhaConferida[]
+  /**
+   * A linha que ESTE card confere: a mais baixa que a lista ofereceu. É a
+   * mesma que `bateuLinhaMaisBaixa` usa e que o SQL de `taxaDaTemporada`
+   * agrega. Quem exibe não recalcula: se o CJ trocar a regra, muda aqui.
+   */
+  linhaConferida: number | null
   /** null = DNP. */
   valor: number | null
   /** A linha mais alta que ele superou. null quando não superou nenhuma. */
@@ -98,11 +106,7 @@ function valorDoAtributo(
  * `ate` é EXCLUSIVO: a rodada de hoje ainda está acontecendo, e conferir um
  * jogo em andamento mostraria "não bateu" para quem ainda nem entrou em quadra.
  */
-export async function conferirRodadas(
-  db: Db,
-  ate: string,
-  dias: number,
-): Promise<DiaConferido[]> {
+export async function conferirRodadas(db: Db, ate: string, dias: number): Promise<DiaConferido[]> {
   // Aritmética de RÓTULO de calendário, não de instante: `somarDias` anda no
   // string YYYY-MM-DD e por isso não escorrega em borda de fuso.
   const deRef = somarDias(ate, -dias)
@@ -177,6 +181,7 @@ export async function conferirRodadas(
         nivelJogador: l.nivelJogador,
         nivelApito: l.nivelApito,
         linhas: [],
+        linhaConferida: null,
         valor,
         maiorLinhaBatida: null,
         fez: valor,
@@ -206,6 +211,7 @@ export async function conferirRodadas(
         return {
           ...j,
           linhas,
+          linhaConferida: maisBaixa ?? null,
           bateuLinhaMaisBaixa:
             j.valor === null || maisBaixa === undefined ? null : j.valor >= maisBaixa,
         }
@@ -227,11 +233,30 @@ export type JogoEncerradoResumo = {
   jogoId: string
   casaSigla: string
   visitanteSigla: string
+  /**
+   * O ponto da noite em que o JOGO está, lido da própria linha de `jogos`.
+   *
+   * Vai junto porque a tela não tem como deduzi-lo: casar o recap (que filtra
+   * por `data_referencia`, a data americana do provedor) com uma leitura que
+   * recorta por horário local deixa de fora o jogo tardio da costa oeste — e
+   * assumir ENCERRADO para o que faltou faz um jogo AGENDADO nascer com "FT ·
+   * aguardando dado oficial" na tela.
+   */
+  status: StatusJogo
+  quartoAtual: number | null
+  dataHoraUtc: Date
   placarCasa: number | null
   placarVisitante: number | null
   /** Pontos por quarto (Q1..Q4) de cada lado; vazio quando o box do time não existe. */
   quartosCasa: number[]
   quartosVisitante: number[]
+  /**
+   * O box score OFICIAL do jogo chegou — de QUALQUER jogador, não só dos
+   * apitados. Um jogo em que todos os apitados foram desfalque tem box e
+   * fecha o ciclo em DNP; olhar só os apitados o deixaria "aguardando dado
+   * oficial" para sempre (§5.1).
+   */
+  temBoxOficial: boolean
 }
 
 export type RecapDaNoite = {
@@ -245,26 +270,49 @@ export type RecapDaNoite = {
   /** Entre os que bateram, o que mais passou da linha mais baixa. */
   apitoDaNoite: JogadorConferido | null
   porJogo: { jogo: JogoEncerradoResumo; cards: JogadorConferido[] }[]
+  /** Quando os jogos DESTA rodada foram vistos pela última vez. */
+  atualizacao: Atualizacao
 }
 
 /**
  * A noite como unidade: o mesmo `conferirRodadas` agrupado por jogo, com o
  * placar por quarto no cabeçalho e o apito da noite em destaque. Leitura
  * derivada — nenhum número novo nasce aqui além de somas.
+ *
+ * Os TRÊS NÚMEROS da noite contam só jogo ENCERRADO — a mesma guarda que o SQL
+ * de `taxaDaTemporada` já tinha. O box de `estatisticas_jogo` do jogo em
+ * andamento é o PARCIAL do 1º quarto, e somá-lo publicaria uma taxa da noite
+ * calculada sobre dois ou três jogadores em quadra, colada à taxa da temporada
+ * que só conta encerrado (§5.1, "nunca inferir de parcial"). Os cards seguem
+ * todos em `porJogo`: quem exibe usa o estado do ciclo para saber o que dizer
+ * de cada um.
  */
 export async function recapDaNoite(db: Db, dataReferencia: string): Promise<RecapDaNoite> {
   const [dia] = await conferirRodadas(db, somarDias(dataReferencia, 1), 1)
   const cards = dia?.jogadores ?? []
-  const vazio: RecapDaNoite = { dataReferencia, apitos: 0, bateram: 0, taxa: null, apitoDaNoite: null, porJogo: [] }
+  const vazio: RecapDaNoite = {
+    dataReferencia,
+    apitos: 0,
+    bateram: 0,
+    taxa: null,
+    apitoDaNoite: null,
+    porJogo: [],
+    atualizacao: maisAntiga([]),
+  }
   if (cards.length === 0) return vazio
 
   const idsJogo = [...new Set(cards.map((c) => c.jogoId))]
-  const [partidas, listaTimes, boxes] = await Promise.all([
+  const [partidas, listaTimes, boxes, comBox] = await Promise.all([
     db.select().from(jogos).where(inArray(jogos.id, idsJogo)),
     db.select({ id: times.id, sigla: times.sigla }).from(times),
     db.select().from(estatisticasTimeJogo).where(inArray(estatisticasTimeJogo.jogoId, idsJogo)),
+    db
+      .selectDistinct({ jogoId: estatisticasJogo.jogoId })
+      .from(estatisticasJogo)
+      .where(inArray(estatisticasJogo.jogoId, idsJogo)),
   ])
   const siglaPorId = new Map(listaTimes.map((t) => [t.id, t.sigla] as const))
+  const jogosComBox = new Set(comBox.map((b) => b.jogoId))
   const quartos = (jogoId: string, timeId: string): number[] => {
     const b = boxes.find((x) => x.jogoId === jogoId && x.timeId === timeId)
     return b ? [b.pontosQ1, b.pontosQ2, b.pontosQ3, b.pontosQ4] : []
@@ -277,20 +325,26 @@ export async function recapDaNoite(db: Db, dataReferencia: string): Promise<Reca
         jogoId: j.id,
         casaSigla: siglaPorId.get(j.timeCasaId) ?? '—',
         visitanteSigla: siglaPorId.get(j.timeVisitanteId) ?? '—',
+        status: j.status,
+        quartoAtual: j.quartoAtual,
+        dataHoraUtc: j.dataHoraUtc,
         placarCasa: j.placarCasa,
         placarVisitante: j.placarVisitante,
         quartosCasa: quartos(j.id, j.timeCasaId),
         quartosVisitante: quartos(j.id, j.timeVisitanteId),
+        temBoxOficial: jogosComBox.has(j.id),
       },
       cards: cards.filter((c) => c.jogoId === j.id),
     }))
     .filter((g) => g.cards.length > 0)
 
-  const apitos = dia!.conferidos
-  const bateram = dia!.acertos
-  const folga = (c: JogadorConferido) => (c.fez ?? 0) - Math.min(...c.linhas.map((l) => l.linha))
+  const encerrados = new Set(partidas.filter((j) => j.status === 'ENCERRADO').map((j) => j.id))
+  const conferiveis = cards.filter((c) => encerrados.has(c.jogoId))
+  const apitos = conferiveis.filter((c) => c.fez !== null).length
+  const bateram = conferiveis.filter((c) => c.bateuLinhaMaisBaixa === true).length
+  const folga = (c: JogadorConferido) => (c.fez ?? 0) - (c.linhaConferida ?? 0)
   const apitoDaNoite =
-    cards
+    conferiveis
       .filter((c) => c.bateuLinhaMaisBaixa === true)
       .sort((a, b) => folga(b) - folga(a) || b.nivelApito - a.nivelApito)[0] ?? null
 
@@ -301,6 +355,9 @@ export async function recapDaNoite(db: Db, dataReferencia: string): Promise<Reca
     taxa: apitos === 0 ? null : bateram / apitos,
     apitoDaNoite,
     porJogo,
+    // Os jogos DESTA rodada, não os da janela local do dia: a rodada tardia
+    // cai fora daquela janela e o carimbo degradava para 31/12/1969.
+    atualizacao: daColuna(partidas, 'jogos da rodada') ?? maisAntiga([]),
   }
 }
 

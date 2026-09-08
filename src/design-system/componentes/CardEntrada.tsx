@@ -58,6 +58,13 @@ export type CardEntradaProps = {
    * não fala em confronto — melhor que um "vs —" que não informa nada.
    */
   adversarioSigla?: string | null
+  /**
+   * De que lado o jogo foi para ESTE jogador. O apoio escreve `vs ADV` para o
+   * mandante e `@ ADV` para o visitante — a gramática dos quatro artboards e a
+   * mesma do resto do app. Sem a informação (a Lista Secreta agrupa por
+   * jogador e não carrega o confronto), o padrão é o de antes.
+   */
+  emCasa?: boolean
   posicao: string | null
   atributo: Atributo
   nivelJogador: Nivel
@@ -111,6 +118,15 @@ export type CardEntradaProps = {
   fez?: number | null
   /** Bateu a linha? `null` = não jogou → neutro, nem ✓ nem ✗. */
   bateu?: boolean | null
+  /**
+   * Contorna o quadrado do jogo MAIS RECENTE da fileira — o desta rodada.
+   *
+   * É EXPLÍCITA de propósito. Derivar de `estado === 'CONFERIDO'` marcaria a
+   * fileira de todo chamador conferido, inclusive os que não acrescentaram o
+   * jogo da rodada (a galeria), e o contorno cairia num jogo antigo afirmando
+   * ser o de agora. Quem monta a fileira é quem sabe.
+   */
+  destacarMaisRecente?: boolean
   /**
    * Abas PTS · REB · AST no rodapé: o mesmo jogador com dois ou três
    * atributos é UM card, e as abas trocam o mercado — no lugar do rótulo
@@ -241,6 +257,9 @@ export function CardEntrada(props: CardEntradaProps) {
           borderRadius: 2,
           background: nivel.cor,
           marginBottom: 4,
+          // O recuo dos artboards: a faixa começa onde o conteúdo do card
+          // começa, não na borda da tela.
+          marginLeft: 14,
         }}
       />
       <article
@@ -297,7 +316,9 @@ export function CardEntrada(props: CardEntradaProps) {
             >
               {nivel.rotulo} · N{props.nivelApito}
               {props.posicao ? ` · ${props.posicao}` : ''} · {props.timeSigla}
-              {props.adversarioSigla ? ` · vs ${props.adversarioSigla}` : ''}
+              {props.adversarioSigla
+                ? ` · ${props.emCasa === false ? '@' : 'vs'} ${props.adversarioSigla}`
+                : ''}
             </div>
             <div style={{ display: 'flex', gap: 6, marginTop: 4, flexWrap: 'wrap' }}>
               {props.turbo && <Selo icone="⚡" rotulo="TURBO" cor={TURBO.cor} />}
@@ -370,7 +391,16 @@ export function CardEntrada(props: CardEntradaProps) {
         )}
         {barrinhas && (
           <div style={{ padding: '0 14px 10px' }}>
-            <Barrinhas jogos={props.ultimos5!} rotulo="ÚLT. 5 NA LINHA" />
+            {/* A fileira chega na ordem canônica do app — do jogo MAIS
+                RECENTE ao mais antigo, como a entrega materializa — e é lida
+                em ordem CRONOLÓGICA, o mais novo à direita (artboards da 04).
+                A inversão mora aqui, em UM lugar: a Lista Secreta e os
+                Resultados mostram a mesma fileira na mesma direção. */}
+            <Barrinhas
+              jogos={[...props.ultimos5!].reverse()}
+              rotulo="ÚLT. 5 NA LINHA"
+              destacarUltima={props.destacarMaisRecente ?? false}
+            />
           </div>
         )}
         {textoDaLente && (

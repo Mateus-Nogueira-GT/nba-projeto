@@ -324,23 +324,14 @@ describe('Fire Live', () => {
 })
 
 describe('tela de Resultados', () => {
-  it('renderiza a conferência das rodadas encerradas', async () => {
+  // A tela mora em `/resultados/[data]` desde a identidade 04 (§4.4) e é
+  // testada em `telas-04-resultados.test.ts`. Aqui fica só o atalho: quem
+  // chega em `/resultados` vai para a rodada de hoje, no fuso da rodada.
+  it('o atalho leva à rodada de hoje', async () => {
     const { default: Pagina } = await import('../(app)/resultados/page')
-    const html = renderToStaticMarkup(await Pagina())
-
-    expect(html).toContain('RESULTADOS')
-    expect(html).toContain('bateram a linha')
-    // Se a conferência viesse vazia, a tela cairia no estado vazio — e a demo
-    // abriria numa tela em branco.
-    expect(html).not.toContain('Nenhuma rodada encerrada ainda')
-    expect(html).toMatch(/bateu \d+/)
-  }, 60_000)
-
-  it('divide o cabeçalho com Entradas', async () => {
-    const { default: Pagina } = await import('../(app)/resultados/page')
-    const html = renderToStaticMarkup(await Pagina())
-    expect(html).toContain('LISTA SECRETA')
-    expect(html).toContain('HOJE') // o seletor aparece nos dois lados
+    await expect(Pagina()).rejects.toMatchObject({
+      digest: expect.stringContaining(`/resultados/${HOJE}`),
+    })
   }, 60_000)
 })
 
@@ -604,13 +595,13 @@ describe('a aba teórica', () => {
 
 describe('telas restantes — identidade 03 (conferência em lote)', () => {
   it('resultados, gestão, como-funciona e entrar vestem o gradiente — e nada de universo quente', async () => {
-    const { default: Resultados } = await import('../(app)/resultados/page')
+    const { default: Resultados } = await import('../(app)/resultados/[data]/page')
     const { default: Gestao } = await import('../(app)/gestao/page')
     const { default: ComoFunciona } = await import('../(app)/como-funciona/page')
     const { default: Entrar } = await import('../(app)/entrar/page')
 
     const htmls = [
-      renderToStaticMarkup(await Resultados()),
+      renderToStaticMarkup(await Resultados({ params: Promise.resolve({ data: HOJE }) })),
       renderToStaticMarkup(await Gestao({ searchParams: Promise.resolve({}) })),
       renderToStaticMarkup(await ComoFunciona()),
       renderToStaticMarkup(await Entrar({ searchParams: Promise.resolve({}) })),
@@ -636,9 +627,11 @@ describe('regras transversais da identidade', () => {
       expect(html).not.toContain('3 PONTOS')
     }
 
-    // /resultados não recebe searchParams.
-    const { default: Resultados } = await import('../(app)/resultados/page')
-    const htmlResultados = renderToStaticMarkup(await Resultados())
+    // A rodada de /resultados vem da ROTA, não de searchParams.
+    const { default: Resultados } = await import('../(app)/resultados/[data]/page')
+    const htmlResultados = renderToStaticMarkup(
+      await Resultados({ params: Promise.resolve({ data: HOJE }) }),
+    )
     expect(htmlResultados).not.toMatch(/(PONTOS|REBOTES|ASSISTÊNCIAS)\s+\d+,\d/)
     expect(htmlResultados).not.toContain('ALTÍSSIMO VALOR')
     expect(htmlResultados).not.toContain('3 PONTOS')
