@@ -130,7 +130,8 @@ export const componente = {
   // e o neutro do DNP em texto40. Quem não jogou não ganha ✓ nem ✗.
   conferido: {
     bateu: s.barrinhaBateu,
-    falhou: s.barrinhaFalhou,
+    // Texto sobre fundo escuro exige o vermelho claro; barrinhaFalhou é FUNDO.
+    falhou: s.alerta,
     neutro: s.texto40,
   },
 } as const

@@ -65,15 +65,15 @@ export function FormaNoAtributo({ jogos, linha }: FormaNoAtributoProps) {
   const teto = Math.max(linha ?? 0, 1, ...visiveis.map((j) => j.valor))
   const escalar = (valor: number) => Math.round((Math.max(valor, 0) / teto) * ALTURA_BARRA)
   const alturaDaBarra = (valor: number) => Math.max(ALTURA_MINIMA, escalar(valor))
+  const resumo = linha === null
+    ? `${visiveis.length} jogos no atributo, sem linha para conferir`
+    : `bateu ${acertos} de ${visiveis.length}`
+  const sequencia = visiveis.map((j) => `${j.adversarioSigla}: ${j.valor}`).join('; ')
 
   return (
     <div
       role="img"
-      aria-label={
-        linha === null
-          ? `${visiveis.length} jogos no atributo, sem linha para conferir`
-          : `bateu ${acertos} de ${visiveis.length}`
-      }
+      aria-label={`${resumo}${sequencia ? `. Do mais antigo ao mais recente: ${sequencia}` : ''}`}
       style={{
         position: 'relative',
         height: ALTURA_BARRA + 40,

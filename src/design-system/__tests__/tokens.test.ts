@@ -296,7 +296,7 @@ describe('identidade 04 — acabamento', () => {
     for (const [nome, esperado] of [
       ['texto70', '.7'],
       ['texto55', '.55'],
-      ['texto40', '.4'],
+      ['texto40', '.55'], // piso de contraste AA para o nome legado
     ] as const) {
       const valor = semantico[nome]
       expect(valor, nome).toMatch(/^rgba\(245,248,252,\.\d+\)$/)
@@ -356,4 +356,3 @@ describe('identidade 04 — acabamento', () => {
     }
   })
 })
-

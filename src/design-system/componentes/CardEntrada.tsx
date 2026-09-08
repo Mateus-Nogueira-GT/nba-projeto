@@ -336,8 +336,7 @@ export function CardEntrada(props: CardEntradaProps) {
           borderLeft: `${componente.cardBordaLateral} solid ${corGrau}`,
           boxShadow: brilhoDoCard,
           overflow: 'hidden',
-          // Quem não jogou não conta — o card recua um pouco, sem sumir.
-          opacity: naoJogou ? 0.75 : undefined,
+          // DNP usa o veredito neutro. Opacidade no card apagaria também o texto.
         }}
       >
         {/* zona 1 · cabeçalho */}

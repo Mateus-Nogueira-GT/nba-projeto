@@ -85,8 +85,8 @@ export default async function PaginaComoFunciona() {
       <CabecalhoTela sobrancelha="METODOLOGIA DO CJ" titulo="COMO FUNCIONA" voltarHref="/" />
       <div>
         <p style={{ margin: '0 0 24px', color: semantico.textoSecundario, fontSize: 14 }}>
-          As duas estratégias do Mestre da NBA, o que cada cor significa e como ler os
-          percentuais. Leia uma vez: depois os cards se explicam sozinhos.
+          As duas estratégias do Mestre da NBA, o que cada cor significa e como ler as notas de
+          confiança. Leia uma vez: depois os cards se explicam sozinhos.
         </p>
 
         <Caixa destaque>
@@ -222,15 +222,15 @@ export default async function PaginaComoFunciona() {
           </p>
         </Secao>
 
-        <Secao titulo="O percentual e as linhas de pontos">
+        <Secao titulo="A nota de confiança e as linhas de pontos">
           <p style={{ margin: '0 0 8px' }}>
             Cada jogador apitado tem várias <strong>linhas</strong> de pontos, e cada linha tem sua
-            própria nota. Toque em “linhas e confiança” no card para ver todas.
+            própria nota. Toque no card para ver todas; o nome abre as estatísticas do jogador.
           </p>
           <Caixa destaque>
             <p style={{ margin: 0, fontSize: 13 }}>
-              O percentual é a <strong>nota de confiança da análise do CJ</strong>. Não é
-              probabilidade de acerto, nem promessa de resultado.
+              O número é a <strong>nota de confiança da análise do CJ</strong>, sem sinal de
+              porcentagem. Ele expressa a força da análise, sem promessa de resultado.
             </p>
           </Caixa>
 
@@ -267,7 +267,7 @@ export default async function PaginaComoFunciona() {
                   {faixa.rotulo}
                 </p>
                 <p style={{ margin: '4px 0 0', fontSize: 13, color: semantico.textoSecundario }}>
-                  {faixa.de}%+
+                  {faixa.de} ou mais
                 </p>
               </div>
             ))}
@@ -281,17 +281,17 @@ export default async function PaginaComoFunciona() {
 
           <p style={{ margin: '10px 0 6px', fontSize: 13 }}>
             Um apito mais forte melhora a nota: {NIVEL_JOGADOR.MVP.rotulo} ganha{' '}
-            {n(t.confianca.bonus.MVP?.['3'] ?? 0)}% no nível 3, {NIVEL_JOGADOR.ALL_STAR.rotulo}{' '}
-            {n(t.confianca.bonus.ALL_STAR?.['3'] ?? 0)}%. Randola nunca ganha bônus: usa sempre a
-            tabela base.
+            {n(t.confianca.bonus.MVP?.['3'] ?? 0)} pontos na nota no nível 3;{' '}
+            {NIVEL_JOGADOR.ALL_STAR.rotulo}, {n(t.confianca.bonus.ALL_STAR?.['3'] ?? 0)} pontos na
+            nota no nível 3. Randola nunca ganha bônus: usa sempre a tabela base.
           </p>
         </Secao>
 
         <Secao titulo="Pontos, rebotes e assistências">
           <p style={{ margin: '0 0 8px' }}>
-            As estratégias funcionam igual nos três atributos — o que muda é a escala. Uma linha de
-            25 faz sentido em pontos e nenhum sentido em assistências, então cada atributo tem sua
-            própria tabela de linhas.
+            Cada atributo tem classificação, hierarquia e parâmetros próprios. Uma linha de
+            25+ faz sentido em pontos e nenhum sentido em assistências, então cada atributo tem sua
+            própria tabela de linhas. Os blocos ainda demonstrativos estão identificados abaixo.
           </p>
           <div style={{ display: 'grid', gap: 8 }}>
             {t.atributos.map((a) => (
@@ -311,7 +311,10 @@ export default async function PaginaComoFunciona() {
                 ) : (
                   <p style={{ margin: '4px 0 0', fontSize: 12, color: semantico.textoSecundario }}>
                     {Object.entries(a.linhas)
-                      .map(([nivel, linhas]) => `${NIVEL_JOGADOR[nivel as Nivel].rotulo}: ${(linhas ?? []).join(' · ')}`)
+                      .map(
+                        ([nivel, linhas]) =>
+                          `${NIVEL_JOGADOR[nivel as Nivel].rotulo}: ${(linhas ?? []).map((linha) => `${linha}+`).join(' · ')}`,
+                      )
                       .join('   |   ')}
                   </p>
                 )}
@@ -328,18 +331,26 @@ export default async function PaginaComoFunciona() {
 
         <Secao titulo="As odds">
           <p style={{ margin: 0 }}>
-            A plataforma <strong>não tem acesso direto</strong> à odd da sua casa de apostas — elas
-            mudam todos os dias e variam entre casas. O que aparece é uma faixa de referência,
-            próxima da média do mercado. Quando houver cobertura de casas, a faixa passa a ser
-            calculada pela {t.odds.agregacao} de no mínimo {t.odds.casasMinimas} casas.
+            As odds variam entre casas e ao longo do dia. Com cobertura de no mínimo{' '}
+            {t.odds.casasMinimas} casas, o card mostra{' '}
+            {ruleset.odds.exibicao === 'media'
+              ? 'a média das odds'
+              : 'a faixa entre a menor e a maior odd'}{' '}
+            da última coleta. O detalhe reúne as cotações por casa disponíveis.
+          </p>
+          <p style={{ margin: '8px 0 0' }}>
+            Sem coleta suficiente, o detalhe pode mostrar a tabela de referência do CJ, identificada
+            como referência. Ela não é uma cotação atual da sua casa. A plataforma é somente
+            leitura: não envia apostas nem vincula contas de casas.
           </p>
         </Secao>
 
         <Secao titulo="Fire Live — o ao vivo do 1º quarto">
           <p style={{ margin: '0 0 8px' }}>
             Durante o {t.fireLive.quarto}º quarto, o app calcula um <strong>alvo</strong> para cada
-            jogador. Quem cruza o alvo apita na hora — e a notificação chega no seu celular no exato
-            momento.
+            jogador. Quando os dados recebidos confirmam o alvo, o app registra o apito e envia a
+            notificação. Confira a última atualização da tela; o push avisa e a tela mostra o
+            detalhe.
           </p>
           <ul style={{ margin: '0 0 10px', paddingLeft: 20, fontSize: 13 }}>
             <li>
@@ -427,11 +438,17 @@ export default async function PaginaComoFunciona() {
               { valor: 18, bateu: true },
             ]}
             mediaTemporada={19.4}
-            oddFaixa={{ min: 1.47, max: 1.62, qtdCasas: 3, media: 1.55 }}
+            oddFaixa={{
+              min: 1.47,
+              max: 1.62,
+              qtdCasas: 3,
+              ...(ruleset.odds.exibicao === 'media' ? { media: 1.55 } : {}),
+            }}
           />
           <p style={{ margin: '8px 0 0', fontSize: 13, color: semantico.textoSecundario }}>
-            Nível do jogador na faixa metálica, força do apito na borda do avatar, e o cruzamento
-            com a OPD sinalizado quando existe. O nome leva às estatísticas do jogador.
+            Números ilustrativos. Nível do jogador na faixa metálica, força do apito na borda do
+            avatar, e o cruzamento com a OPD sinalizado quando existe. O nome leva às estatísticas
+            do jogador.
           </p>
         </Secao>
 

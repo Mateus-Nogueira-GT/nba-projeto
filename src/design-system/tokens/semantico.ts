@@ -118,7 +118,8 @@ export const semantico = {
   texto100: p.tinta50,
   texto70: p.tinta50Veu70,
   texto55: p.tinta50Veu55,
-  texto40: p.tinta50Veu40,
+  // Nome legado da identidade 04. O piso de 55% preserva AA em texto pequeno.
+  texto40: p.tinta50Veu55,
   // Régua fina entre linhas de tabela — o `divisor` a meia força. Alias de um
   // primitivo, como o teste de paridade exige.
   divisorSuave: p.tinta500Veu50,

@@ -447,7 +447,7 @@ export default async function PaginaApito({
         {principal.confianca !== null && (
           <div style={{ textAlign: 'center', flexShrink: 0, maxWidth: 96 }}>
             <Pilula
-              texto={`${Math.round(principal.confianca)}%`}
+              texto={String(Math.round(principal.confianca))}
               cor={corFaixa}
               brilho={brilha}
               tamanho="hero"
@@ -597,7 +597,7 @@ export default async function PaginaApito({
                   fontVariantNumeric: 'tabular-nums',
                 }}
               >
-                {item.confianca === null ? '—' : `${Math.round(item.confianca)}%`}
+                {item.confianca === null ? '—' : Math.round(item.confianca)}
               </span>
               <span
                 style={{
@@ -750,7 +750,7 @@ export default async function PaginaApito({
       <footer
         style={{ margin: '16px 0 0', fontSize: 12, lineHeight: 1.5, color: semantico.texto40 }}
       >
-        O percentual é a <strong>nota de confiança</strong> da análise do CJ, não uma probabilidade.
+        O número é a <strong>nota de confiança</strong> da análise do CJ, não uma probabilidade.
         {geradoEmFinal
           ? ` Última atualização: ${dataHora(geradoEmFinal, ruleset.rodada.fuso)}.`
           : ''}

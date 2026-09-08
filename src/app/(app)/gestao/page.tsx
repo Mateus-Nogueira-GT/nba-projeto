@@ -269,8 +269,8 @@ export default async function PaginaGestao({
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: 15, fontWeight: 700 }}>{item.nome}</div>
                   <div style={{ fontSize: 12, color: semantico.textoSecundario }}>
-                    {item.timeSigla} · {ATRIBUTO_ROTULO[item.atributo]} {item.linha} · nível{' '}
-                    {item.nivelApito}
+                    {item.timeSigla} · {ATRIBUTO_ROTULO[item.atributo]}
+                    {item.linha === null ? '' : ` ${item.linha}+`} · nível {item.nivelApito}
                     {item.turbo ? ' · turbo' : ''}
                   </div>
                 </div>

@@ -194,7 +194,7 @@ function regrasDeEscrita(html: string): void {
   expect(texto).not.toContain('ALTÍSSIMO VALOR')
   expect(texto).not.toContain('...')
   expect(texto).not.toContain('…')
-  // O percentual é NOTA DE CONFIANÇA — a palavra proibida só existe negada.
+  // A confiança é uma NOTA — a palavra proibida só existe negada.
   expect([...texto.matchAll(/probabilidade/gi)]).toHaveLength(1)
   expect(texto).toContain('não uma probabilidade')
 }
@@ -224,7 +224,7 @@ describe('Detalhe do apito — o esqueleto fixo da análise (identidade 04)', ()
     const html = await renderizar(item)
 
     expect(html).toContain(`LINHA ${item.linha}`)
-    expect(html).toContain(`aria-label="bateu ${detalhe.bateu.acertos} de ${detalhe.bateu.total}"`)
+    expect(html).toContain(`aria-label="bateu ${detalhe.bateu.acertos} de ${detalhe.bateu.total}. Do mais antigo ao mais recente:`)
     expect(html).toContain(`bateu ${detalhe.bateu.acertos} de ${detalhe.bateu.total}`)
   }, 60_000)
 
@@ -289,11 +289,12 @@ describe('Detalhe do apito — o esqueleto fixo da análise (identidade 04)', ()
     }
   }, 60_000)
 
-  it('o rodapé chama o percentual de nota de confiança — a única vez que a palavra proibida aparece é negada', async () => {
+  it('o rodapé explica a nota sem percentual — a única vez que a palavra proibida aparece é negada', async () => {
     const html = await renderizar(await sujeito())
     const texto = textoDaTela(html)
 
     expect(texto).toContain('nota de confiança')
+    expect(texto).not.toContain('O percentual')
     expect(texto).toContain('Última atualização:')
 
     // A palavra só pode existir NEGADA, nesta frase e em nenhuma outra.
@@ -511,7 +512,7 @@ describe('Detalhe do apito — o esqueleto fixo da análise (identidade 04)', ()
     expect(html).not.toContain('←')
   }, 60_000)
 
-  it('o hero linka o nome, escreve o mercado com "+" e imprime a nota em %', async () => {
+  it('o hero linka o nome, escreve o mercado com "+" e imprime a nota sem %', async () => {
     const item = await sujeito()
     const html = await renderizar(item)
     const hero = html.slice(0, html.indexOf('FORMA NO ATRIBUTO'))
@@ -521,12 +522,26 @@ describe('Detalhe do apito — o esqueleto fixo da análise (identidade 04)', ()
     expect(hero).toContain(item.nome)
     // O mercado, com a linha sempre inteira e com "+".
     expect(hero).toContain(`>${ATRIBUTO_ROTULO[item.atributo]} ${item.linha}+<`)
-    // A pílula do grau, em Anton 34, com o % que a spec §4.3 pede.
+    // A pílula do grau, em Anton 34, segue a decisão da identidade 04: nota pura.
     expect(item.confianca).not.toBeNull()
     expect(hero).toMatch(/font-size:34px/)
-    expect(hero).toContain(`${Math.round(item.confianca!)}%`)
+    expect(hero).toContain(`>${Math.round(item.confianca!)}<`)
+    expect(hero).not.toContain(`${Math.round(item.confianca!)}%`)
     // E nada do hero vive só no `title`: em toque não há como revelá-lo.
     expect(hero).not.toContain('title=')
+  }, 60_000)
+
+  it('a tabela de linhas também imprime a confiança sem %', async () => {
+    const item = await sujeito()
+    const html = await renderizar(item)
+    const linhas = trecho(html, `LINHAS DE ${ATRIBUTO_ROTULO[item.atributo]}`, 'O JOGO')
+    const { itens } = await linhasDoJogador(banco.db, HOJE, item.jogadorId, item.atributo)
+    expect(itens.some((linha) => linha.confianca !== null)).toBe(true)
+    for (const linha of itens) {
+      if (linha.confianca === null) continue
+      expect(linhas).toContain(`>${Math.round(linha.confianca)}<`)
+    }
+    expect(textoDaTela(linhas)).not.toContain('%')
   }, 60_000)
 
   it('a comparação traz MÉDIA, a LINHA e MIN · MÉDIA com os números da entrega', async () => {

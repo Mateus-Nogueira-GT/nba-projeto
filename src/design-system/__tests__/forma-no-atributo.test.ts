@@ -57,8 +57,8 @@ describe('FormaNoAtributo — os últimos 10 contra a linha', () => {
   it('anuncia o resumo para leitor de tela: bateu X de Y', () => {
     const html = render({ jogos: DEZ, linha: 4 })
     expect(html).toContain('role="img"')
-    expect(html).toContain('aria-label="bateu 6 de 10"')
-    expect(render({ jogos: DEZ.slice(0, 3), linha: 4 })).toContain('aria-label="bateu 3 de 3"')
+    expect(html).toContain('aria-label="bateu 6 de 10. Do mais antigo ao mais recente:')
+    expect(render({ jogos: DEZ.slice(0, 3), linha: 4 })).toContain('aria-label="bateu 3 de 3. Do mais antigo ao mais recente:')
   })
 
   it('valor 0 vira 3 px — um jogo zerado é um jogo, não um buraco na leitura', () => {
@@ -101,7 +101,7 @@ describe('FormaNoAtributo — os últimos 10 contra a linha', () => {
     expect(html).not.toContain('LINHA')
     expect(html).not.toContain('dashed')
     expect(html).not.toContain('aria-label="bateu')
-    expect(html).toContain('aria-label="10 jogos no atributo, sem linha para conferir"')
+    expect(html).toContain('aria-label="10 jogos no atributo, sem linha para conferir. Do mais antigo ao mais recente:')
     // Nem verde nem vermelho: nenhum destes jogos foi conferido contra nada.
     expect(html).not.toContain(`background:${semantico.barrinhaBateu}`)
     expect(html).not.toContain(`background:${semantico.barrinhaFalhou}`)
