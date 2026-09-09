@@ -559,18 +559,12 @@ export async function registrarSaidaParaCasa(
 ) {
   const configuracao = await configuracaoDoLink(db, entrada.codigo)
   const visitanteHash = hashVisitante(entrada.visitanteToken)
-  const [atribuicao] = await db
-    .select()
-    .from(atribuicoesAfiliados)
-    .where(
-      and(
-        eq(atribuicoesAfiliados.visitanteHash, visitanteHash),
-        eq(atribuicoesAfiliados.estado, 'ATIVA'),
-        gt(atribuicoesAfiliados.expiraEm, entrada.agora),
-      ),
-    )
-    .orderBy(desc(atribuicoesAfiliados.inicio))
-    .limit(1)
+  const atribuicao = await atribuicaoAtivaParaEvento(
+    db,
+    visitanteHash,
+    entrada.usuarioId,
+    entrada.agora,
+  )
   await db.insert(eventosAfiliados).values({
     visitanteHash,
     usuarioId: entrada.usuarioId ?? null,
@@ -582,6 +576,43 @@ export async function registrarSaidaParaCasa(
   return destinoDaCasa(configuracao.link, configuracao.oferta)
 }
 
+async function atribuicaoAtivaParaEvento(
+  db: Db,
+  visitanteHash: string,
+  usuarioId: string | null | undefined,
+  agora: Date,
+) {
+  if (usuarioId) {
+    const [canonica] = await db
+      .select()
+      .from(atribuicoesAfiliados)
+      .where(
+        and(
+          eq(atribuicoesAfiliados.usuarioId, usuarioId),
+          eq(atribuicoesAfiliados.estado, 'ATIVA'),
+          gt(atribuicoesAfiliados.expiraEm, agora),
+        ),
+      )
+      .orderBy(asc(atribuicoesAfiliados.inicio))
+      .limit(1)
+    if (canonica) return canonica
+  }
+  const [doVisitante] = await db
+    .select()
+    .from(atribuicoesAfiliados)
+    .where(
+      and(
+        eq(atribuicoesAfiliados.visitanteHash, visitanteHash),
+        eq(atribuicoesAfiliados.estado, 'ATIVA'),
+        gt(atribuicoesAfiliados.expiraEm, agora),
+      ),
+    )
+    .orderBy(desc(atribuicoesAfiliados.inicio))
+    .limit(1)
+  if (usuarioId && doVisitante?.usuarioId && doVisitante.usuarioId !== usuarioId) return undefined
+  return doVisitante
+}
+
 export async function registrarVisitaNip(
   db: Db,
   entrada: { codigo: string; visitanteToken: string; agora: Date; usuarioId?: string | null },
@@ -589,18 +620,12 @@ export async function registrarVisitaNip(
   const configuracao = await configuracaoDoLink(db, entrada.codigo)
   if (configuracao.link.tipoDestino !== 'NIP') throw new Error('Link não aponta para a NIP')
   const visitanteHash = hashVisitante(entrada.visitanteToken)
-  const [atribuicao] = await db
-    .select()
-    .from(atribuicoesAfiliados)
-    .where(
-      and(
-        eq(atribuicoesAfiliados.visitanteHash, visitanteHash),
-        eq(atribuicoesAfiliados.estado, 'ATIVA'),
-        gt(atribuicoesAfiliados.expiraEm, entrada.agora),
-      ),
-    )
-    .orderBy(desc(atribuicoesAfiliados.inicio))
-    .limit(1)
+  const atribuicao = await atribuicaoAtivaParaEvento(
+    db,
+    visitanteHash,
+    entrada.usuarioId,
+    entrada.agora,
+  )
   await db.insert(eventosAfiliados).values({
     visitanteHash,
     usuarioId: entrada.usuarioId ?? null,
@@ -935,6 +960,9 @@ export async function registrarAjusteComissao(
   const motivo = entrada.motivo.trim()
   if (motivo.length < 3) throw new Error('Motivo do ajuste obrigatório')
   return db.transaction(async (tx) => {
+    await tx.execute(
+      sql`select id from ${comissoesAfiliados} where id = ${entrada.comissaoOriginalId} for update`,
+    )
     const [original] = await tx
       .select()
       .from(comissoesAfiliados)
@@ -1102,6 +1130,7 @@ export async function liberarComissao(
       .where(eq(comissoesAfiliados.id, entrada.comissaoId))
       .limit(1)
     if (!comissao) throw new Error('Comissão não encontrada')
+    if (comissao.ajusteDeId) throw new Error('Liberação deve referenciar a comissão original')
     const anteriores = await tx
       .select()
       .from(liberacoesRepasses)
@@ -1111,9 +1140,16 @@ export async function liberarComissao(
           ne(liberacoesRepasses.estado, 'CANCELADA'),
         ),
       )
+    const ajustes = await tx
+      .select({ parcelaParceiroCentavos: comissoesAfiliados.parcelaParceiroCentavos })
+      .from(comissoesAfiliados)
+      .where(eq(comissoesAfiliados.ajusteDeId, comissao.id))
+    const tetoAjustado = ajustes.reduce(
+      (total, ajuste) => total + ajuste.parcelaParceiroCentavos,
+      comissao.parcelaParceiroCentavos,
+    )
     const total = anteriores.reduce((soma, atual) => soma + atual.valorCentavos, 0)
-    if (total + entrada.valorCentavos > comissao.parcelaParceiroCentavos)
-      throw new Error('Liberação supera a comissão')
+    if (total + entrada.valorCentavos > tetoAjustado) throw new Error('Liberação supera a comissão')
     const [liberacao] = await tx
       .insert(liberacoesRepasses)
       .values({ ...entrada, liberadoPorId: ator.usuarioId, criadoEm: agora })
@@ -1168,6 +1204,8 @@ export async function registrarRepasse(
     .map(([liberacaoId, valorCentavos]) => ({ liberacaoId, valorCentavos }))
     .sort((a, b) => a.liberacaoId.localeCompare(b.liberacaoId))
   return db.transaction(async (tx) => {
+    const comissoesPorId = new Map<string, typeof comissoesAfiliados.$inferSelect>()
+    const valorNovoPorComissao = new Map<string, number>()
     for (const alocacao of alocacoesConsolidadas) {
       await tx.execute(
         sql`select id from ${liberacoesRepasses} where id = ${alocacao.liberacaoId} for update`,
@@ -1178,6 +1216,9 @@ export async function registrarRepasse(
         .where(eq(liberacoesRepasses.id, alocacao.liberacaoId))
         .limit(1)
       if (!liberacao || liberacao.estado === 'CANCELADA') throw new Error('Liberação indisponível')
+      await tx.execute(
+        sql`select id from ${comissoesAfiliados} where id = ${liberacao.comissaoId} for update`,
+      )
       const [comissao] = await tx
         .select()
         .from(comissoesAfiliados)
@@ -1189,6 +1230,11 @@ export async function registrarRepasse(
         comissao.moeda !== entrada.moeda
       )
         throw new Error('Liberação incompatível com o repasse')
+      comissoesPorId.set(comissao.id, comissao)
+      valorNovoPorComissao.set(
+        comissao.id,
+        (valorNovoPorComissao.get(comissao.id) ?? 0) + alocacao.valorCentavos,
+      )
       const anteriores = await tx
         .select()
         .from(alocacoesRepasses)
@@ -1196,6 +1242,40 @@ export async function registrarRepasse(
       const jaAlocado = anteriores.reduce((soma, atual) => soma + atual.valorCentavos, 0)
       if (jaAlocado + alocacao.valorCentavos > liberacao.valorCentavos)
         throw new Error('Repasse supera o saldo liberado')
+    }
+    for (const [comissaoId, comissao] of comissoesPorId) {
+      const [ajustes, liberacoesDaComissao] = await Promise.all([
+        tx
+          .select({ parcelaParceiroCentavos: comissoesAfiliados.parcelaParceiroCentavos })
+          .from(comissoesAfiliados)
+          .where(eq(comissoesAfiliados.ajusteDeId, comissaoId)),
+        tx
+          .select({ id: liberacoesRepasses.id })
+          .from(liberacoesRepasses)
+          .where(eq(liberacoesRepasses.comissaoId, comissaoId)),
+      ])
+      const alocacoesExistentes = liberacoesDaComissao.length
+        ? await tx
+            .select({ valorCentavos: alocacoesRepasses.valorCentavos })
+            .from(alocacoesRepasses)
+            .where(
+              inArray(
+                alocacoesRepasses.liberacaoId,
+                liberacoesDaComissao.map((liberacao) => liberacao.id),
+              ),
+            )
+        : []
+      const tetoAjustado = ajustes.reduce(
+        (total, ajuste) => total + ajuste.parcelaParceiroCentavos,
+        comissao.parcelaParceiroCentavos,
+      )
+      const totalPago = alocacoesExistentes.reduce(
+        (total, alocacao) => total + alocacao.valorCentavos,
+        0,
+      )
+      if (totalPago + (valorNovoPorComissao.get(comissaoId) ?? 0) > tetoAjustado) {
+        throw new Error('Repasse supera o saldo líquido ajustado da comissão')
+      }
     }
     const [repasse] = await tx
       .insert(repassesAfiliados)

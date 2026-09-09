@@ -516,7 +516,7 @@ export default async function PaginaAdminAfiliados({
 
         <section className={estilos.painel}>
           <h2>Liberar comissão</h2>
-          <p>A liberação depende de decisão manual identificada.</p>
+          <p>A liberação depende de decisão manual e usa o saldo líquido dos ajustes.</p>
           <form action={acaoLiberar} className={estilos.formulario}>
             <label>
               Comissão

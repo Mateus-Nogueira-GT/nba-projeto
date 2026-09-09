@@ -53,6 +53,8 @@ A versão do acordo é explícita, sem inferir um marco de vigência ainda não 
 4. Pagamentos parciais são aceitos; valor acima do saldo liberado é recusado.
 5. Correções da casa geram ajuste vinculado à comissão original. Ajustes negativos
    após pagamento ficam visíveis como divergência e não descontam outro repasse.
+6. Toda liberação referencia a comissão original e respeita o saldo líquido dos ajustes
+   positivos e negativos já registrados.
 
 ## Antes de produção
 

@@ -410,6 +410,63 @@ describe('operação de afiliados', () => {
       new Date('2026-09-16T10:00:00.000Z'),
     )
     expect(ajuste).toMatchObject({ baseNipCentavos: -1_000, parcelaParceiroCentavos: -400 })
+    await expect(
+      liberarComissao(
+        banco.db,
+        c.admin,
+        { comissaoId: confirmada.comissaoIds[0]!, valorCentavos: 3_601, motivo: 'acima do saldo' },
+        agora,
+      ),
+    ).rejects.toThrow('supera a comissão')
+    const ajustePositivo = await registrarAjusteComissao(
+      banco.db,
+      c.admin,
+      {
+        comissaoOriginalId: confirmada.comissaoIds[0]!,
+        baseNipCentavos: 1_000,
+        motivo: 'Complemento recebido da casa',
+      },
+      new Date('2026-09-16T11:00:00.000Z'),
+    )
+    await expect(
+      liberarComissao(
+        banco.db,
+        c.admin,
+        { comissaoId: ajustePositivo.id, valorCentavos: 1, motivo: 'ajuste isolado' },
+        agora,
+      ),
+    ).rejects.toThrow('comissão original')
+    const liberacaoAjustada = await liberarComissao(
+      banco.db,
+      c.admin,
+      { comissaoId: confirmada.comissaoIds[0]!, valorCentavos: 4_000, motivo: 'saldo ajustado' },
+      agora,
+    )
+    await registrarAjusteComissao(
+      banco.db,
+      c.admin,
+      {
+        comissaoOriginalId: confirmada.comissaoIds[0]!,
+        baseNipCentavos: -1_000,
+        motivo: 'Redução posterior à liberação',
+      },
+      new Date('2026-09-16T12:00:00.000Z'),
+    )
+    await expect(
+      registrarRepasse(
+        banco.db,
+        c.admin,
+        {
+          parceiroId: c.parceiroA.id,
+          moeda: 'BRL',
+          valorCentavos: 4_000,
+          referenciaExterna: `pix-acima-saldo-liquido-${c.linkA.codigo}`,
+          pagoEm: new Date('2026-09-17T10:00:00.000Z'),
+          alocacoes: [{ liberacaoId: liberacaoAjustada.id, valorCentavos: 4_000 }],
+        },
+        new Date('2026-09-17T10:00:00.000Z'),
+      ),
+    ).rejects.toThrow('saldo líquido ajustado')
 
     await definirStatusLink(banco.db, c.admin, c.linkA.id, false, agora)
     await expect(
@@ -493,6 +550,41 @@ describe('operação de afiliados', () => {
       automatizado: false,
     })
     expect(cliqueAutenticado.parceiroTitularId).toBe(c.parceiroA.id)
+    await registrarVisitaNip(banco.db, {
+      codigo: c.linkB.codigo,
+      visitanteToken: 'visitante-autenticado-segundo-dispositivo',
+      usuarioId: usuarioLogin!.id,
+      agora: new Date('2026-09-05T09:01:00.000Z'),
+    })
+    await registrarSaidaParaCasa(banco.db, {
+      codigo: c.linkB.codigo,
+      visitanteToken: 'visitante-autenticado-segundo-dispositivo',
+      usuarioId: usuarioLogin!.id,
+      agora: new Date('2026-09-05T09:02:00.000Z'),
+    })
+    const trilhaAutenticada = await banco.db
+      .select()
+      .from(eventosAfiliados)
+      .where(eq(eventosAfiliados.usuarioId, usuarioLogin!.id))
+    const eventosDaTrilha = trilhaAutenticada.filter((evento) =>
+      ['CLIQUE', 'VISITA_NIP', 'SAIDA_CASA'].includes(evento.tipo),
+    )
+    expect(eventosDaTrilha).toHaveLength(3)
+    expect(
+      eventosDaTrilha.every((evento) => evento.atribuicaoId === cliqueAutenticado.atribuicaoId),
+    ).toBe(true)
+    await registrarSaidaParaCasa(banco.db, {
+      codigo: c.linkB.codigo,
+      visitanteToken,
+      usuarioId: usuarioCadastro!.id,
+      agora: new Date('2026-09-05T09:03:00.000Z'),
+    })
+    const eventosCruzados = await banco.db
+      .select()
+      .from(eventosAfiliados)
+      .where(eq(eventosAfiliados.usuarioId, usuarioCadastro!.id))
+    expect(eventosCruzados).toHaveLength(1)
+    expect(eventosCruzados[0]!.atribuicaoId).toBeNull()
     const atribuicoesAtivasDaConta = await banco.db
       .select()
       .from(atribuicoesAfiliados)
