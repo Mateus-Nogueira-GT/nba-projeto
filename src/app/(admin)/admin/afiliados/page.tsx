@@ -130,10 +130,6 @@ export default async function PaginaAdminAfiliados({
                 Código
                 <input name="codigo" required pattern="[a-z0-9][a-z0-9-]{2,63}" />
               </label>
-              <label>
-                ID do usuário (opcional)
-                <input name="usuarioId" />
-              </label>
               <button className={estilos.botao}>Cadastrar parceiro</button>
             </form>
             <FormularioConvite />
@@ -299,17 +295,33 @@ export default async function PaginaAdminAfiliados({
                   </td>
                   <td>{oferta.status}</td>
                   <td>
-                    <form action={acaoStatusOferta}>
-                      <input type="hidden" name="id" value={oferta.id} />
-                      <input
-                        type="hidden"
-                        name="status"
-                        value={oferta.status === 'ATIVA' ? 'PAUSADA' : 'ATIVA'}
-                      />
-                      <button className={estilos.botaoSecundario}>
-                        {oferta.status === 'ATIVA' ? 'Pausar' : 'Ativar'}
-                      </button>
-                    </form>
+                    {oferta.status === 'ATIVA' ? (
+                      <form action={acaoStatusOferta}>
+                        <input type="hidden" name="id" value={oferta.id} />
+                        <input type="hidden" name="status" value="PAUSADA" />
+                        <button className={estilos.botaoSecundario}>Pausar</button>
+                      </form>
+                    ) : (
+                      <form action={acaoStatusOferta} className={estilos.formularioCompacto}>
+                        <input type="hidden" name="id" value={oferta.id} />
+                        <input type="hidden" name="status" value="ATIVA" />
+                        <label>
+                          Registro da homologação
+                          <input
+                            name="motivoHomologacao"
+                            minLength={10}
+                            maxLength={500}
+                            placeholder="URL, contrato e teste conferidos em…"
+                            required
+                          />
+                        </label>
+                        <label>
+                          <input type="checkbox" name="homologado" value="sim" required />
+                          Confirmo URL, contrato e teste de destino
+                        </label>
+                        <button className={estilos.botaoSecundario}>Ativar</button>
+                      </form>
+                    )}
                   </td>
                 </tr>
               ))}
@@ -438,6 +450,13 @@ export default async function PaginaAdminAfiliados({
                   {lote.resumoPrevia.erros.map((erro) => (
                     <small key={erro} className={estilos.alertaInline}>
                       {erro}
+                    </small>
+                  ))}
+                  {(lote.resumoPrevia.totaisPorMoeda ?? []).map((total) => (
+                    <small key={total.moeda}>
+                      {total.moeda}: base {dinheiro(total.baseCentavos, total.moeda)} · componentes{' '}
+                      {dinheiro(total.componentesCentavos, total.moeda)} · diferença{' '}
+                      {dinheiro(total.diferencaCentavos, total.moeda)}
                     </small>
                   ))}
                   {painel.itens

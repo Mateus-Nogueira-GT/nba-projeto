@@ -66,7 +66,7 @@ export async function cadastrar(
   const visitante = (await cookies()).get(COOKIE_VISITANTE_AFILIADO)?.value
   if (visitante && login.usuarioId) {
     try {
-      await associarVisitanteAoUsuario(getDb(), visitante, login.usuarioId, agora)
+      await associarVisitanteAoUsuario(getDb(), visitante, login.usuarioId, agora, 'CADASTRO')
     } catch (erro) {
       console.error('Falha ao associar atribuição de afiliado após cadastro', erro)
     }

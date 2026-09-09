@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { decidirAtribuicao, JANELA_ATRIBUICAO_MS } from '../atribuicao'
 import { calcularParcelaDoParceiro } from '../financeiro'
-import { prepararImportacaoCsv } from '../importacao-csv'
+import { mascararIdentificador, prepararImportacaoCsv } from '../importacao-csv'
 import { validarDestinoComercial } from '../links'
 
 describe('atribuição interna de afiliados', () => {
@@ -69,6 +69,11 @@ describe('destino comercial', () => {
 })
 
 describe('importação comercial', () => {
+  it('remascara identificadores mesmo quando a entrada já contém asterisco', () => {
+    expect(mascararIdentificador('nome.sobrenome*foo@empresa.com')).toBe('no***@empresa.com')
+    expect(mascararIdentificador('an***@email.test')).toBe('an***@email.test')
+  })
+
   it('distingue ausente de zero e não soma total híbrido aos componentes', () => {
     const previa = prepararImportacaoCsv(
       [

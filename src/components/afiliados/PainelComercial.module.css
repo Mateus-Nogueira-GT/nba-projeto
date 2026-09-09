@@ -258,6 +258,31 @@
   color: #65738b;
   font-size: 12px;
 }
+.formularioCompacto {
+  display: grid;
+  min-width: 240px;
+  gap: 8px;
+}
+.formularioCompacto label {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: #65738b;
+  font-size: 12px;
+}
+.formularioCompacto label:first-of-type {
+  display: grid;
+  align-items: initial;
+  gap: 4px;
+}
+.formularioCompacto input[type='text'],
+.formularioCompacto input:not([type]) {
+  width: 100%;
+  min-height: 36px;
+  padding: 7px 9px;
+  border: 1px solid #d6ddea;
+  border-radius: 8px;
+}
 .mensagem {
   padding: 12px 15px;
   border: 1px solid #b8dfca;

@@ -51,7 +51,7 @@ export async function entrar(_estado: string | null, formulario: FormData): Prom
   const visitante = r.usuarioId ? (await cookies()).get(COOKIE_VISITANTE_AFILIADO)?.value : null
   if (visitante && r.usuarioId) {
     try {
-      await associarVisitanteAoUsuario(getDb(), visitante, r.usuarioId, agora)
+      await associarVisitanteAoUsuario(getDb(), visitante, r.usuarioId, agora, 'LOGIN')
     } catch (erro) {
       console.error('Falha ao associar atribuição de afiliado após login', erro)
     }

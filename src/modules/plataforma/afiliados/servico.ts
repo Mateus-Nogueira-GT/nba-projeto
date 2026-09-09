@@ -1,6 +1,6 @@
 import { createHash, randomBytes } from 'node:crypto'
 
-import { and, desc, eq, gt, gte, inArray, lt, ne, sql } from 'drizzle-orm'
+import { and, asc, desc, eq, gt, gte, inArray, lt, ne, sql } from 'drizzle-orm'
 
 import {
   acordosAfiliados,
@@ -26,7 +26,7 @@ import type { Db } from '@/modules/dominio/db/tipos'
 
 import { decidirAtribuicao } from './atribuicao'
 import { calcularParcelaDoParceiro } from './financeiro'
-import { prepararImportacaoCsv } from './importacao-csv'
+import { mascararIdentificador, prepararImportacaoCsv } from './importacao-csv'
 import { acrescentarParametrosComerciais, validarDestinoComercial } from './links'
 
 export type AtorAfiliados = { usuarioId: string; papel: 'USUARIO' | 'ADMIN' }
@@ -57,7 +57,7 @@ async function auditar(
 export async function criarParceiro(
   db: Db,
   ator: AtorAfiliados,
-  entrada: { usuarioId?: string | null; codigo: string; nomePublico: string },
+  entrada: { codigo: string; nomePublico: string },
   agora: Date,
 ) {
   exigirAdmin(ator)
@@ -66,18 +66,10 @@ export async function criarParceiro(
   const nomePublico = entrada.nomePublico.trim()
   if (nomePublico.length < 2 || nomePublico.length > 120)
     throw new Error('Nome de parceiro inválido')
-  if (entrada.usuarioId) {
-    const [usuario] = await db
-      .select({ id: usuarios.id })
-      .from(usuarios)
-      .where(eq(usuarios.id, entrada.usuarioId))
-      .limit(1)
-    if (!usuario) throw new Error('Usuário não encontrado')
-  }
   const [parceiro] = await db
     .insert(parceirosAfiliados)
     .values({
-      usuarioId: entrada.usuarioId ?? null,
+      usuarioId: null,
       codigo,
       nomePublico,
       criadoEm: agora,
@@ -175,7 +167,7 @@ export async function criarOferta(
     moeda: string
     urlDestino: string
     hostDestino: string
-    status?: 'RASCUNHO' | 'ATIVA' | 'PAUSADA' | 'ENCERRADA'
+    status?: 'RASCUNHO'
   },
   agora: Date,
 ) {
@@ -187,6 +179,7 @@ export async function criarOferta(
     .insert(ofertasAfiliados)
     .values({
       ...entrada,
+      status: 'RASCUNHO',
       nome: entrada.nome.trim(),
       hostDestino,
       urlDestino,
@@ -297,10 +290,12 @@ export async function associarVisitanteAoUsuario(
   visitanteToken: string,
   usuarioId: string,
   agora: Date,
+  origem: 'LOGIN' | 'CADASTRO',
 ) {
   const visitanteHash = hashVisitante(visitanteToken)
   return db.transaction(async (tx) => {
     await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${visitanteHash}))`)
+    await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${usuarioId}))`)
     const [atribuicao] = await tx
       .select()
       .from(atribuicoesAfiliados)
@@ -322,19 +317,43 @@ export async function associarVisitanteAoUsuario(
       await auditar(tx, usuarioId, 'ATRIBUICAO_CONFLITO', 'ATRIBUICAO', atribuicao.id, agora)
       return { associada: false, conflito: true }
     }
+    const [atribuicaoCanonica] = await tx
+      .select()
+      .from(atribuicoesAfiliados)
+      .where(
+        and(
+          eq(atribuicoesAfiliados.usuarioId, usuarioId),
+          eq(atribuicoesAfiliados.estado, 'ATIVA'),
+          gt(atribuicoesAfiliados.expiraEm, agora),
+        ),
+      )
+      .orderBy(asc(atribuicoesAfiliados.inicio))
+      .limit(1)
+    if (atribuicaoCanonica && atribuicaoCanonica.id !== atribuicao.id) {
+      await tx
+        .update(atribuicoesAfiliados)
+        .set({ estado: 'CONFLITO' })
+        .where(eq(atribuicoesAfiliados.id, atribuicao.id))
+      await auditar(tx, usuarioId, 'ATRIBUICAO_CONFLITO', 'ATRIBUICAO', atribuicao.id, agora, {
+        atribuicaoCanonicaId: atribuicaoCanonica.id,
+      })
+      return { associada: false, conflito: true }
+    }
     if (!atribuicao.usuarioId) {
       await tx
         .update(atribuicoesAfiliados)
         .set({ usuarioId })
         .where(eq(atribuicoesAfiliados.id, atribuicao.id))
-      await tx.insert(eventosAfiliados).values({
-        visitanteHash,
-        usuarioId,
-        linkId: atribuicao.linkOrigemId,
-        atribuicaoId: atribuicao.id,
-        tipo: 'CADASTRO_NIP',
-        ocorridoEm: agora,
-      })
+      if (origem === 'CADASTRO') {
+        await tx.insert(eventosAfiliados).values({
+          visitanteHash,
+          usuarioId,
+          linkId: atribuicao.linkOrigemId,
+          atribuicaoId: atribuicao.id,
+          tipo: 'CADASTRO_NIP',
+          ocorridoEm: agora,
+        })
+      }
     }
     return { associada: true, conflito: false }
   })
@@ -403,7 +422,10 @@ export async function registrarClique(
   const visitanteHash = hashVisitante(entrada.visitanteToken)
   return db.transaction(async (tx) => {
     await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${visitanteHash}))`)
-    const [atual] = await tx
+    if (entrada.usuarioId) {
+      await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${entrada.usuarioId}))`)
+    }
+    let [atual] = await tx
       .select()
       .from(atribuicoesAfiliados)
       .where(
@@ -415,6 +437,59 @@ export async function registrarClique(
       )
       .orderBy(desc(atribuicoesAfiliados.inicio))
       .limit(1)
+    if (entrada.usuarioId) {
+      const [canonicaDoUsuario] = await tx
+        .select()
+        .from(atribuicoesAfiliados)
+        .where(
+          and(
+            eq(atribuicoesAfiliados.usuarioId, entrada.usuarioId),
+            eq(atribuicoesAfiliados.estado, 'ATIVA'),
+            gt(atribuicoesAfiliados.expiraEm, entrada.agora),
+          ),
+        )
+        .orderBy(asc(atribuicoesAfiliados.inicio))
+        .limit(1)
+      if (canonicaDoUsuario) {
+        if (atual && atual.id !== canonicaDoUsuario.id) {
+          await tx
+            .update(atribuicoesAfiliados)
+            .set({ estado: 'CONFLITO' })
+            .where(eq(atribuicoesAfiliados.id, atual.id))
+          await auditar(
+            tx,
+            entrada.usuarioId,
+            'ATRIBUICAO_CONFLITO',
+            'ATRIBUICAO',
+            atual.id,
+            entrada.agora,
+            { atribuicaoCanonicaId: canonicaDoUsuario.id },
+          )
+        }
+        atual = canonicaDoUsuario
+      } else if (atual?.usuarioId && atual.usuarioId !== entrada.usuarioId) {
+        await tx
+          .update(atribuicoesAfiliados)
+          .set({ estado: 'CONFLITO' })
+          .where(eq(atribuicoesAfiliados.id, atual.id))
+        await auditar(
+          tx,
+          entrada.usuarioId,
+          'ATRIBUICAO_CONFLITO',
+          'ATRIBUICAO',
+          atual.id,
+          entrada.agora,
+        )
+        atual = undefined
+      } else if (atual && !atual.usuarioId) {
+        const [associada] = await tx
+          .update(atribuicoesAfiliados)
+          .set({ usuarioId: entrada.usuarioId })
+          .where(eq(atribuicoesAfiliados.id, atual.id))
+          .returning()
+        atual = associada
+      }
+    }
     const decisao = decidirAtribuicao(
       atual
         ? {
@@ -571,7 +646,13 @@ export async function criarPreviaImportacao(
         ofertaId: oferta.id,
         arquivoNome: entrada.arquivoNome.slice(0, 180),
         checksum,
-        resumoPrevia: { erros: previa.erros, validas: 0, pendentes: 0, duplicadas: 0 },
+        resumoPrevia: {
+          erros: previa.erros,
+          validas: 0,
+          pendentes: 0,
+          duplicadas: 0,
+          totaisPorMoeda: [],
+        },
         importadoPorId: ator.usuarioId,
         criadoEm: agora,
       })
@@ -628,6 +709,15 @@ export async function criarPreviaImportacao(
     let validas = 0
     let pendentes = 0
     let duplicadas = 0
+    const totaisPorMoeda = new Map<
+      string,
+      {
+        moeda: string
+        baseCentavos: number
+        componentesCentavos: number
+        diferencaCentavos: number
+      }
+    >()
     const itens: (typeof itensImportacaoAfiliados.$inferInsert)[] = []
     for (const linha of previa.linhas) {
       if (idsExistentes.has(linha.idExterno)) {
@@ -642,6 +732,7 @@ export async function criarPreviaImportacao(
       if (!link || !campanha || campanha.ofertaId !== oferta.id)
         motivos.push('link ausente ou incompatível com a oferta')
       if (!atribuicao) motivos.push('atribuição explícita ausente ou inválida')
+      if (atribuicao?.estado === 'CONFLITO') motivos.push('atribuição em conflito')
       if (
         atribuicao &&
         link &&
@@ -663,8 +754,21 @@ export async function criarPreviaImportacao(
       )
         motivos.push('acordo incompatível com parceiro, oferta ou moeda')
       const conciliado = motivos.length === 0
-      if (conciliado) validas += 1
-      else pendentes += 1
+      if (conciliado) {
+        validas += 1
+        const total = totaisPorMoeda.get(linha.moeda) ?? {
+          moeda: linha.moeda,
+          baseCentavos: 0,
+          componentesCentavos: 0,
+          diferencaCentavos: 0,
+        }
+        const componentesCentavos = (linha.cpaCentavos ?? 0) + (linha.revshareCentavos ?? 0)
+        total.baseCentavos += linha.baseConfirmadaCentavos
+        total.componentesCentavos += componentesCentavos
+        total.diferencaCentavos +=
+          linha.totalCentavos === null ? 0 : linha.totalCentavos - componentesCentavos
+        totaisPorMoeda.set(linha.moeda, total)
+      } else pendentes += 1
       itens.push({
         loteId: lote!.id,
         casaId: oferta.casaId,
@@ -690,7 +794,13 @@ export async function criarPreviaImportacao(
     for (let inicio = 0; inicio < itens.length; inicio += 500) {
       await tx.insert(itensImportacaoAfiliados).values(itens.slice(inicio, inicio + 500))
     }
-    const resumoPrevia = { erros: previa.erros, validas, pendentes, duplicadas }
+    const resumoPrevia = {
+      erros: previa.erros,
+      validas,
+      pendentes,
+      duplicadas,
+      totaisPorMoeda: [...totaisPorMoeda.values()].sort((a, b) => a.moeda.localeCompare(b.moeda)),
+    }
     await tx
       .update(lotesImportacaoAfiliados)
       .set({ resumoPrevia })
@@ -746,8 +856,27 @@ export async function definirStatusOferta(
   ofertaId: string,
   status: 'RASCUNHO' | 'ATIVA' | 'PAUSADA' | 'ENCERRADA',
   agora: Date,
+  motivoHomologacao?: string,
 ) {
   exigirAdmin(ator)
+  const [atual] = await db
+    .select()
+    .from(ofertasAfiliados)
+    .where(eq(ofertasAfiliados.id, ofertaId))
+    .limit(1)
+  if (!atual) throw new Error('Oferta não encontrada')
+  const homologacao = motivoHomologacao?.trim()
+  if (status === 'ATIVA') {
+    if (!homologacao || homologacao.length < 10)
+      throw new Error('Registro da homologação é obrigatório para ativar')
+    validarDestinoComercial(atual.urlDestino, [atual.hostDestino])
+    const [acordo] = await db
+      .select({ id: acordosAfiliados.id })
+      .from(acordosAfiliados)
+      .where(and(eq(acordosAfiliados.ofertaId, ofertaId), eq(acordosAfiliados.moeda, atual.moeda)))
+      .limit(1)
+    if (!acordo) throw new Error('Oferta exige acordo compatível antes da ativação')
+  }
   const [oferta] = await db
     .update(ofertasAfiliados)
     .set({ status, atualizadoEm: agora })
@@ -756,6 +885,7 @@ export async function definirStatusOferta(
   if (!oferta) throw new Error('Oferta não encontrada')
   await auditar(db, ator.usuarioId, 'OFERTA_STATUS_ALTERADO', 'OFERTA', ofertaId, agora, {
     status,
+    motivoHomologacao: status === 'ATIVA' ? homologacao : undefined,
   })
   return oferta
 }
@@ -872,15 +1002,39 @@ export async function confirmarImportacao(
       )
     if (itens.length === 0) throw new Error('A prévia não possui linhas válidas')
     const acordosIds = [...new Set(itens.map((item) => item.acordoId).filter(Boolean))] as string[]
-    const acordos = acordosIds.length
-      ? await tx.select().from(acordosAfiliados).where(inArray(acordosAfiliados.id, acordosIds))
-      : []
+    const atribuicoesIds = [
+      ...new Set(itens.map((item) => item.atribuicaoId).filter(Boolean)),
+    ] as string[]
+    const [acordos, atribuicoes] = await Promise.all([
+      acordosIds.length
+        ? tx.select().from(acordosAfiliados).where(inArray(acordosAfiliados.id, acordosIds))
+        : Promise.resolve([]),
+      atribuicoesIds.length
+        ? tx
+            .select()
+            .from(atribuicoesAfiliados)
+            .where(inArray(atribuicoesAfiliados.id, atribuicoesIds))
+            .for('update')
+        : Promise.resolve([]),
+    ])
     const acordosPorId = new Map(acordos.map((acordo) => [acordo.id, acordo]))
+    const atribuicoesPorId = new Map(atribuicoes.map((atribuicao) => [atribuicao.id, atribuicao]))
     let baseNipCentavos = 0
     let parcelaParceirosCentavos = 0
     const comissaoIds: string[] = []
     for (const item of itens) {
-      if (!item.parceiroId || !item.acordoId) throw new Error('Linha sem conciliação explícita')
+      if (!item.parceiroId || !item.acordoId || !item.atribuicaoId || !item.linkId)
+        throw new Error('Linha sem conciliação explícita')
+      const atribuicao = atribuicoesPorId.get(item.atribuicaoId)
+      if (
+        !atribuicao ||
+        atribuicao.estado === 'CONFLITO' ||
+        atribuicao.parceiroId !== item.parceiroId ||
+        atribuicao.linkOrigemId !== item.linkId ||
+        item.ocorridoEm < atribuicao.inicio ||
+        item.ocorridoEm >= atribuicao.expiraEm
+      )
+        throw new Error('Atribuição ficou inválida ou conflitante após a prévia')
       const acordo = acordosPorId.get(item.acordoId)
       if (
         !acordo ||
@@ -1003,8 +1157,18 @@ export async function registrarRepasse(
   ) {
     throw new Error('Valor do repasse não fecha com as alocações')
   }
+  const valoresPorLiberacao = new Map<string, number>()
+  for (const alocacao of entrada.alocacoes) {
+    valoresPorLiberacao.set(
+      alocacao.liberacaoId,
+      (valoresPorLiberacao.get(alocacao.liberacaoId) ?? 0) + alocacao.valorCentavos,
+    )
+  }
+  const alocacoesConsolidadas = [...valoresPorLiberacao.entries()]
+    .map(([liberacaoId, valorCentavos]) => ({ liberacaoId, valorCentavos }))
+    .sort((a, b) => a.liberacaoId.localeCompare(b.liberacaoId))
   return db.transaction(async (tx) => {
-    for (const alocacao of entrada.alocacoes) {
+    for (const alocacao of alocacoesConsolidadas) {
       await tx.execute(
         sql`select id from ${liberacoesRepasses} where id = ${alocacao.liberacaoId} for update`,
       )
@@ -1046,7 +1210,7 @@ export async function registrarRepasse(
         criadoEm: agora,
       })
       .returning()
-    for (const alocacao of entrada.alocacoes) {
+    for (const alocacao of alocacoesConsolidadas) {
       await tx
         .insert(alocacoesRepasses)
         .values({ repasseId: repasse!.id, ...alocacao, criadoEm: agora })
@@ -1102,9 +1266,18 @@ export async function painelDoAfiliado(
           ),
         )
     : []
-  const eventos = links.length
+  const [totaisEventos] = links.length
     ? await db
-        .select()
+        .select({
+          cliquesObservados:
+            sql<number>`coalesce(sum(case when ${eventosAfiliados.tipo} = 'CLIQUE' and not ${eventosAfiliados.automatizado} then 1 else 0 end), 0)`.mapWith(
+              Number,
+            ),
+          saidasParaCasa:
+            sql<number>`coalesce(sum(case when ${eventosAfiliados.tipo} = 'SAIDA_CASA' then 1 else 0 end), 0)`.mapWith(
+              Number,
+            ),
+        })
         .from(eventosAfiliados)
         .where(
           and(
@@ -1116,7 +1289,7 @@ export async function painelDoAfiliado(
             filtro.fim ? lt(eventosAfiliados.ocorridoEm, filtro.fim) : undefined,
           ),
         )
-    : []
+    : [{ cliquesObservados: 0, saidasParaCasa: 0 }]
   const comissoes = await db
     .select()
     .from(comissoesAfiliados)
@@ -1127,6 +1300,8 @@ export async function painelDoAfiliado(
         filtro.fim ? lt(comissoesAfiliados.criadoEm, filtro.fim) : undefined,
       ),
     )
+    .orderBy(desc(comissoesAfiliados.criadoEm))
+    .limit(500)
   const repasses = await db
     .select()
     .from(repassesAfiliados)
@@ -1137,7 +1312,43 @@ export async function painelDoAfiliado(
         filtro.fim ? lt(repassesAfiliados.pagoEm, filtro.fim) : undefined,
       ),
     )
-  const indicados = await db
+    .orderBy(desc(repassesAfiliados.pagoEm))
+    .limit(500)
+  const [totaisComissoes, totaisRepasses] = await Promise.all([
+    db
+      .select({
+        moeda: comissoesAfiliados.moeda,
+        comissaoConfirmadaCentavos:
+          sql<number>`coalesce(sum(case when ${comissoesAfiliados.estado} = 'CONFIRMADA' then ${comissoesAfiliados.parcelaParceiroCentavos} else 0 end), 0)`.mapWith(
+            Number,
+          ),
+      })
+      .from(comissoesAfiliados)
+      .where(
+        and(
+          eq(comissoesAfiliados.parceiroId, parceiro.id),
+          filtro.inicio ? gte(comissoesAfiliados.criadoEm, filtro.inicio) : undefined,
+          filtro.fim ? lt(comissoesAfiliados.criadoEm, filtro.fim) : undefined,
+        ),
+      )
+      .groupBy(comissoesAfiliados.moeda),
+    db
+      .select({
+        moeda: repassesAfiliados.moeda,
+        repassadoCentavos:
+          sql<number>`coalesce(sum(${repassesAfiliados.valorCentavos}), 0)`.mapWith(Number),
+      })
+      .from(repassesAfiliados)
+      .where(
+        and(
+          eq(repassesAfiliados.parceiroId, parceiro.id),
+          filtro.inicio ? gte(repassesAfiliados.pagoEm, filtro.inicio) : undefined,
+          filtro.fim ? lt(repassesAfiliados.pagoEm, filtro.fim) : undefined,
+        ),
+      )
+      .groupBy(repassesAfiliados.moeda),
+  ])
+  const indicadosBrutos = await db
     .select({
       identificador: itensImportacaoAfiliados.indicadoMascarado,
       ocorridoEm: itensImportacaoAfiliados.ocorridoEm,
@@ -1155,8 +1366,12 @@ export async function painelDoAfiliado(
     )
     .orderBy(desc(itensImportacaoAfiliados.ocorridoEm))
     .limit(100)
+  const indicados = indicadosBrutos.map((item) => ({
+    ...item,
+    identificador: mascararIdentificador(item.identificador),
+  }))
   const moedas = [
-    ...new Set([...comissoes.map((item) => item.moeda), ...repasses.map((item) => item.moeda)]),
+    ...new Set([...totaisComissoes, ...totaisRepasses].map((item) => item.moeda)),
   ].sort()
   return {
     parceiro,
@@ -1168,19 +1383,15 @@ export async function painelDoAfiliado(
     comissoes,
     repasses,
     totais: {
-      cliquesObservados: eventos.filter(
-        (evento) => evento.tipo === 'CLIQUE' && !evento.automatizado,
-      ).length,
-      saidasParaCasa: eventos.filter((evento) => evento.tipo === 'SAIDA_CASA').length,
+      cliquesObservados: totaisEventos?.cliquesObservados ?? 0,
+      saidasParaCasa: totaisEventos?.saidasParaCasa ?? 0,
     },
     totaisPorMoeda: moedas.map((moeda) => ({
       moeda,
-      comissaoConfirmadaCentavos: comissoes
-        .filter((item) => item.estado === 'CONFIRMADA' && item.moeda === moeda)
-        .reduce((soma, item) => soma + item.parcelaParceiroCentavos, 0),
-      repassadoCentavos: repasses
-        .filter((item) => item.moeda === moeda)
-        .reduce((soma, item) => soma + item.valorCentavos, 0),
+      comissaoConfirmadaCentavos:
+        totaisComissoes.find((item) => item.moeda === moeda)?.comissaoConfirmadaCentavos ?? 0,
+      repassadoCentavos:
+        totaisRepasses.find((item) => item.moeda === moeda)?.repassadoCentavos ?? 0,
     })),
   }
 }
@@ -1194,11 +1405,10 @@ export async function painelAdministrativo(db: Db, filtro: FiltroPeriodoAfiliado
     campanhas,
     links,
     atribuicoes,
-    eventos,
+    totaisEventos,
     comissoes,
     liberacoes,
     repasses,
-    recebimentos,
     lotes,
     itens,
   ] = await Promise.all([
@@ -1210,14 +1420,24 @@ export async function painelAdministrativo(db: Db, filtro: FiltroPeriodoAfiliado
     db.select().from(linksAfiliados).orderBy(desc(linksAfiliados.criadoEm)),
     db.select().from(atribuicoesAfiliados).orderBy(desc(atribuicoesAfiliados.inicio)).limit(200),
     db
-      .select()
+      .select({
+        cliquesObservados:
+          sql<number>`coalesce(sum(case when ${eventosAfiliados.tipo} = 'CLIQUE' and not ${eventosAfiliados.automatizado} then 1 else 0 end), 0)`.mapWith(
+            Number,
+          ),
+        saidasParaCasa:
+          sql<number>`coalesce(sum(case when ${eventosAfiliados.tipo} = 'SAIDA_CASA' then 1 else 0 end), 0)`.mapWith(
+            Number,
+          ),
+      })
       .from(eventosAfiliados)
       .where(
         and(
           filtro.inicio ? gte(eventosAfiliados.ocorridoEm, filtro.inicio) : undefined,
           filtro.fim ? lt(eventosAfiliados.ocorridoEm, filtro.fim) : undefined,
         ),
-      ),
+      )
+      .then((linhas) => linhas[0] ?? { cliquesObservados: 0, saidasParaCasa: 0 }),
     db
       .select()
       .from(comissoesAfiliados)
@@ -1226,8 +1446,10 @@ export async function painelAdministrativo(db: Db, filtro: FiltroPeriodoAfiliado
           filtro.inicio ? gte(comissoesAfiliados.criadoEm, filtro.inicio) : undefined,
           filtro.fim ? lt(comissoesAfiliados.criadoEm, filtro.fim) : undefined,
         ),
-      ),
-    db.select().from(liberacoesRepasses).orderBy(desc(liberacoesRepasses.criadoEm)),
+      )
+      .orderBy(desc(comissoesAfiliados.criadoEm))
+      .limit(500),
+    db.select().from(liberacoesRepasses).orderBy(desc(liberacoesRepasses.criadoEm)).limit(500),
     db
       .select()
       .from(repassesAfiliados)
@@ -1236,22 +1458,70 @@ export async function painelAdministrativo(db: Db, filtro: FiltroPeriodoAfiliado
           filtro.inicio ? gte(repassesAfiliados.pagoEm, filtro.inicio) : undefined,
           filtro.fim ? lt(repassesAfiliados.pagoEm, filtro.fim) : undefined,
         ),
-      ),
+      )
+      .orderBy(desc(repassesAfiliados.pagoEm))
+      .limit(500),
     db
       .select()
+      .from(lotesImportacaoAfiliados)
+      .orderBy(desc(lotesImportacaoAfiliados.criadoEm))
+      .limit(100),
+    db
+      .select()
+      .from(itensImportacaoAfiliados)
+      .orderBy(desc(itensImportacaoAfiliados.criadoEm))
+      .limit(200),
+  ])
+  const [totaisComissoes, totaisRepasses, totaisRecebimentos] = await Promise.all([
+    db
+      .select({
+        moeda: comissoesAfiliados.moeda,
+        receitaNipCentavos:
+          sql<number>`coalesce(sum(case when ${comissoesAfiliados.estado} = 'CONFIRMADA' then ${comissoesAfiliados.baseNipCentavos} else 0 end), 0)`.mapWith(
+            Number,
+          ),
+        parcelaParceirosCentavos:
+          sql<number>`coalesce(sum(case when ${comissoesAfiliados.estado} = 'CONFIRMADA' then ${comissoesAfiliados.parcelaParceiroCentavos} else 0 end), 0)`.mapWith(
+            Number,
+          ),
+      })
+      .from(comissoesAfiliados)
+      .where(
+        and(
+          filtro.inicio ? gte(comissoesAfiliados.criadoEm, filtro.inicio) : undefined,
+          filtro.fim ? lt(comissoesAfiliados.criadoEm, filtro.fim) : undefined,
+        ),
+      )
+      .groupBy(comissoesAfiliados.moeda),
+    db
+      .select({
+        moeda: repassesAfiliados.moeda,
+        repassadoCentavos:
+          sql<number>`coalesce(sum(${repassesAfiliados.valorCentavos}), 0)`.mapWith(Number),
+      })
+      .from(repassesAfiliados)
+      .where(
+        and(
+          filtro.inicio ? gte(repassesAfiliados.pagoEm, filtro.inicio) : undefined,
+          filtro.fim ? lt(repassesAfiliados.pagoEm, filtro.fim) : undefined,
+        ),
+      )
+      .groupBy(repassesAfiliados.moeda),
+    db
+      .select({
+        moeda: recebimentosCasas.moeda,
+        recebidoCentavos: sql<number>`coalesce(sum(${recebimentosCasas.valorCentavos}), 0)`.mapWith(
+          Number,
+        ),
+      })
       .from(recebimentosCasas)
       .where(
         and(
           filtro.inicio ? gte(recebimentosCasas.recebidoEm, filtro.inicio) : undefined,
           filtro.fim ? lt(recebimentosCasas.recebidoEm, filtro.fim) : undefined,
         ),
-      ),
-    db.select().from(lotesImportacaoAfiliados).orderBy(desc(lotesImportacaoAfiliados.criadoEm)),
-    db
-      .select()
-      .from(itensImportacaoAfiliados)
-      .orderBy(desc(itensImportacaoAfiliados.criadoEm))
-      .limit(200),
+      )
+      .groupBy(recebimentosCasas.moeda),
   ])
   return {
     parceiros,
@@ -1267,33 +1537,27 @@ export async function painelAdministrativo(db: Db, filtro: FiltroPeriodoAfiliado
     lotes,
     itens,
     totais: {
-      cliquesObservados: eventos.filter(
-        (evento) => evento.tipo === 'CLIQUE' && !evento.automatizado,
-      ).length,
-      saidasParaCasa: eventos.filter((evento) => evento.tipo === 'SAIDA_CASA').length,
+      cliquesObservados: totaisEventos.cliquesObservados,
+      saidasParaCasa: totaisEventos.saidasParaCasa,
     },
     totaisPorMoeda: [
       ...new Set([
-        ...comissoes.map((item) => item.moeda),
-        ...repasses.map((item) => item.moeda),
-        ...recebimentos.map((item) => item.moeda),
+        ...totaisComissoes.map((item) => item.moeda),
+        ...totaisRepasses.map((item) => item.moeda),
+        ...totaisRecebimentos.map((item) => item.moeda),
       ]),
     ]
       .sort()
       .map((moeda) => ({
         moeda,
-        receitaNipCentavos: comissoes
-          .filter((item) => item.estado === 'CONFIRMADA' && item.moeda === moeda)
-          .reduce((soma, item) => soma + item.baseNipCentavos, 0),
-        parcelaParceirosCentavos: comissoes
-          .filter((item) => item.estado === 'CONFIRMADA' && item.moeda === moeda)
-          .reduce((soma, item) => soma + item.parcelaParceiroCentavos, 0),
-        recebidoCentavos: recebimentos
-          .filter((item) => item.moeda === moeda)
-          .reduce((soma, item) => soma + item.valorCentavos, 0),
-        repassadoCentavos: repasses
-          .filter((item) => item.moeda === moeda)
-          .reduce((soma, item) => soma + item.valorCentavos, 0),
+        receitaNipCentavos:
+          totaisComissoes.find((item) => item.moeda === moeda)?.receitaNipCentavos ?? 0,
+        parcelaParceirosCentavos:
+          totaisComissoes.find((item) => item.moeda === moeda)?.parcelaParceirosCentavos ?? 0,
+        recebidoCentavos:
+          totaisRecebimentos.find((item) => item.moeda === moeda)?.recebidoCentavos ?? 0,
+        repassadoCentavos:
+          totaisRepasses.find((item) => item.moeda === moeda)?.repassadoCentavos ?? 0,
       })),
   }
 }

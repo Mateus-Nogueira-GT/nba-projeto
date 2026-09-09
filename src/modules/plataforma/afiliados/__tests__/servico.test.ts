@@ -1,7 +1,14 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { and, eq } from 'drizzle-orm'
 
 import { bancoDeTeste } from '@/modules/dominio/__tests__/ajuda-banco'
-import { casas, usuarios } from '@/modules/dominio/db/schema'
+import {
+  atribuicoesAfiliados,
+  casas,
+  eventosAfiliados,
+  parceirosAfiliados,
+  usuarios,
+} from '@/modules/dominio/db/schema'
 import {
   aceitarConvite,
   associarVisitanteAoUsuario,
@@ -54,13 +61,13 @@ async function contexto() {
   const parceiroA = await criarParceiro(
     banco.db,
     atorAdmin,
-    { usuarioId: usuarioA!.id, codigo: `a-${sufixo}`, nomePublico: 'Parceiro A' },
+    { codigo: `a-${sufixo}`, nomePublico: 'Parceiro A' },
     new Date('2026-09-01T00:00:00.000Z'),
   )
   const parceiroB = await criarParceiro(
     banco.db,
     atorAdmin,
-    { usuarioId: usuarioB!.id, codigo: `b-${sufixo}`, nomePublico: 'Parceiro B' },
+    { codigo: `b-${sufixo}`, nomePublico: 'Parceiro B' },
     new Date('2026-09-01T00:00:00.000Z'),
   )
   const oferta = await criarOferta(
@@ -73,7 +80,7 @@ async function contexto() {
       moeda: 'BRL',
       urlDestino: 'https://ofertas.casa.test/nba',
       hostDestino: 'ofertas.casa.test',
-      status: 'ATIVA',
+      status: 'RASCUNHO',
     },
     new Date('2026-09-01T00:00:00.000Z'),
   )
@@ -88,6 +95,22 @@ async function contexto() {
       inicio: new Date('2026-09-01T00:00:00.000Z'),
     },
     new Date('2026-09-01T00:00:00.000Z'),
+  )
+  await banco.db
+    .update(parceirosAfiliados)
+    .set({ usuarioId: usuarioA!.id })
+    .where(eq(parceirosAfiliados.id, parceiroA.id))
+  await banco.db
+    .update(parceirosAfiliados)
+    .set({ usuarioId: usuarioB!.id })
+    .where(eq(parceirosAfiliados.id, parceiroB.id))
+  await definirStatusOferta(
+    banco.db,
+    atorAdmin,
+    oferta.id,
+    'ATIVA',
+    new Date('2026-09-01T00:00:00.000Z'),
+    'Contrato, URL e teste de destino homologados',
   )
   const linkA = await criarCampanhaComLink(
     banco.db,
@@ -137,7 +160,7 @@ describe('operação de afiliados', () => {
       criarParceiro(
         banco.db,
         { usuarioId: c.usuarioA.id, papel: 'USUARIO' },
-        { usuarioId: c.usuarioA.id, codigo: 'indevido', nomePublico: 'Indevido' },
+        { codigo: 'indevido', nomePublico: 'Indevido' },
         new Date(),
       ),
     ).rejects.toThrow('Acesso administrativo exigido')
@@ -233,6 +256,14 @@ describe('operação de afiliados', () => {
       { ofertaId: c.oferta.id, arquivoNome: 'relatorio-copia.csv', conteudo: csv },
       importadoEm,
     )
+    expect(previa.totaisPorMoeda).toEqual([
+      {
+        moeda: 'BRL',
+        baseCentavos: 12_500,
+        componentesCentavos: 12_500,
+        diferencaCentavos: 0,
+      },
+    ])
     expect(repetida).toMatchObject({ loteId: previa.loteId, reutilizada: true })
 
     const confirmada = await confirmarImportacao(
@@ -277,20 +308,42 @@ describe('operação de afiliados', () => {
     const liberacao = tentativasLiberacao.find((resultado) => resultado.status === 'fulfilled')
     if (!liberacao || liberacao.status !== 'fulfilled')
       throw new Error('Liberação esperada ausente')
-    const repasse = await registrarRepasse(
-      banco.db,
-      c.admin,
-      {
-        parceiroId: c.parceiroA.id,
-        moeda: 'BRL',
-        valorCentavos: 2_000,
-        referenciaExterna: `pix-${c.linkA.codigo}`,
-        pagoEm: new Date('2026-09-10T00:00:00.000Z'),
-        alocacoes: [{ liberacaoId: liberacao.value.id, valorCentavos: 2_000 }],
-      },
-      new Date('2026-09-10T00:00:00.000Z'),
+    const tentativasRepasse = await Promise.allSettled(
+      ['a', 'b'].map((sufixo) =>
+        registrarRepasse(
+          banco.db,
+          c.admin,
+          {
+            parceiroId: c.parceiroA.id,
+            moeda: 'BRL',
+            valorCentavos: 2_000,
+            referenciaExterna: `pix-${sufixo}-${c.linkA.codigo}`,
+            pagoEm: new Date('2026-09-10T00:00:00.000Z'),
+            alocacoes: [{ liberacaoId: liberacao.value.id, valorCentavos: 2_000 }],
+          },
+          new Date('2026-09-10T00:00:00.000Z'),
+        ),
+      ),
     )
-    expect(repasse.valorCentavos).toBe(2_000)
+    expect(tentativasRepasse.filter((resultado) => resultado.status === 'fulfilled')).toHaveLength(
+      1,
+    )
+    expect(tentativasRepasse.filter((resultado) => resultado.status === 'rejected')).toHaveLength(1)
+    await expect(
+      registrarRepasse(
+        banco.db,
+        c.admin,
+        {
+          parceiroId: c.parceiroB.id,
+          moeda: 'BRL',
+          valorCentavos: 500,
+          referenciaExterna: `pix-parceiro-incorreto-${c.linkA.codigo}`,
+          pagoEm: new Date('2026-09-10T00:01:00.000Z'),
+          alocacoes: [{ liberacaoId: liberacao.value.id, valorCentavos: 500 }],
+        },
+        new Date('2026-09-10T00:01:00.000Z'),
+      ),
+    ).rejects.toThrow('incompatível')
     await expect(
       registrarRepasse(
         banco.db,
@@ -298,12 +351,15 @@ describe('operação de afiliados', () => {
         {
           parceiroId: c.parceiroA.id,
           moeda: 'BRL',
-          valorCentavos: 2_000,
-          referenciaExterna: `pix-excesso-${c.linkA.codigo}`,
-          pagoEm: new Date('2026-09-10T00:01:00.000Z'),
-          alocacoes: [{ liberacaoId: liberacao.value.id, valorCentavos: 2_000 }],
+          valorCentavos: 1_200,
+          referenciaExterna: `pix-alocacao-duplicada-${c.linkA.codigo}`,
+          pagoEm: new Date('2026-09-10T00:02:00.000Z'),
+          alocacoes: [
+            { liberacaoId: liberacao.value.id, valorCentavos: 600 },
+            { liberacaoId: liberacao.value.id, valorCentavos: 600 },
+          ],
         },
-        new Date('2026-09-10T00:01:00.000Z'),
+        new Date('2026-09-10T00:02:00.000Z'),
       ),
     ).rejects.toThrow('supera o saldo liberado')
   })
@@ -375,17 +431,34 @@ describe('operação de afiliados', () => {
         automatizado: false,
       }),
     ).rejects.toThrow('Oferta indisponível')
-    await definirStatusOferta(banco.db, c.admin, c.oferta.id, 'ATIVA', agora)
+    await expect(
+      definirStatusOferta(banco.db, c.admin, c.oferta.id, 'ATIVA', agora),
+    ).rejects.toThrow('homologação')
+    await definirStatusOferta(
+      banco.db,
+      c.admin,
+      c.oferta.id,
+      'ATIVA',
+      agora,
+      'Contrato, URL e teste de destino homologados',
+    )
     await definirStatusParceiro(banco.db, c.admin, c.parceiroA.id, 'SUSPENSO', agora)
     await expect(painelDoAfiliado(banco.db, c.usuarioA.id)).rejects.toThrow(
       'Acesso de afiliado exigido',
     )
   })
 
-  it('protege convite por e-mail e associa a atribuição à conta sem renovar a janela', async () => {
+  it('protege convite, distingue cadastro de login e preserva primeiro toque entre dispositivos', async () => {
     const c = await contexto()
     const agora = new Date('2026-09-03T10:00:00.000Z')
     const visitanteToken = 'visitante-associacao-login'
+    const [usuarioLogin, usuarioCadastro] = await banco.db
+      .insert(usuarios)
+      .values([
+        { email: `login-${c.linkA.codigo}@teste.com`, senhaHash: 'x' },
+        { email: `cadastro-${c.linkA.codigo}@teste.com`, senhaHash: 'x' },
+      ])
+      .returning()
     const clique = await registrarClique(banco.db, {
       codigo: c.linkA.codigo,
       visitanteToken,
@@ -395,11 +468,120 @@ describe('operação de afiliados', () => {
     const associacao = await associarVisitanteAoUsuario(
       banco.db,
       visitanteToken,
-      c.usuarioB.id,
+      usuarioLogin!.id,
       new Date('2026-09-04T10:00:00.000Z'),
+      'LOGIN',
     )
     expect(associacao).toEqual({ associada: true, conflito: false })
     expect(clique.atribuicaoExpiraEm).toEqual(new Date('2026-10-03T10:00:00.000Z'))
+    const eventosLogin = await banco.db
+      .select()
+      .from(eventosAfiliados)
+      .where(
+        and(
+          eq(eventosAfiliados.usuarioId, usuarioLogin!.id),
+          eq(eventosAfiliados.tipo, 'CADASTRO_NIP'),
+        ),
+      )
+    expect(eventosLogin).toHaveLength(0)
+
+    const cliqueAutenticado = await registrarClique(banco.db, {
+      codigo: c.linkB.codigo,
+      visitanteToken: 'visitante-autenticado-segundo-dispositivo',
+      usuarioId: usuarioLogin!.id,
+      agora: new Date('2026-09-05T09:00:00.000Z'),
+      automatizado: false,
+    })
+    expect(cliqueAutenticado.parceiroTitularId).toBe(c.parceiroA.id)
+    const atribuicoesAtivasDaConta = await banco.db
+      .select()
+      .from(atribuicoesAfiliados)
+      .where(
+        and(
+          eq(atribuicoesAfiliados.usuarioId, usuarioLogin!.id),
+          eq(atribuicoesAfiliados.estado, 'ATIVA'),
+        ),
+      )
+    expect(atribuicoesAtivasDaConta).toHaveLength(1)
+
+    const segundoDispositivo = await registrarClique(banco.db, {
+      codigo: c.linkB.codigo,
+      visitanteToken: 'visitante-segundo-dispositivo',
+      agora: new Date('2026-09-05T10:00:00.000Z'),
+      automatizado: false,
+    })
+    const acordoB = await criarAcordo(
+      banco.db,
+      c.admin,
+      {
+        parceiroId: c.parceiroB.id,
+        ofertaId: c.oferta.id,
+        moeda: 'BRL',
+        percentualPontosBase: 4_000,
+        inicio: new Date('2026-09-01T00:00:00.000Z'),
+      },
+      new Date('2026-09-01T00:00:00.000Z'),
+    )
+    const previaConflitante = await criarPreviaImportacao(
+      banco.db,
+      c.admin,
+      {
+        ofertaId: c.oferta.id,
+        arquivoNome: 'atribuicao-conflitante.csv',
+        conteudo: [
+          'id_externo;indicado;data_evento;tipo;moeda;cpa_centavos;revshare_centavos;total_centavos;codigo_link;atribuicao_id;acordo_id',
+          `conflito-${c.linkB.codigo};pessoa@teste.com;2026-09-05T10:02:00.000Z;CPA;BRL;1000;;;${c.linkB.codigo};${segundoDispositivo.atribuicaoId};${acordoB.id}`,
+        ].join('\n'),
+      },
+      new Date('2026-09-05T10:03:00.000Z'),
+    )
+    expect(previaConflitante).toMatchObject({ validas: 1, pendentes: 0 })
+    await expect(
+      associarVisitanteAoUsuario(
+        banco.db,
+        'visitante-segundo-dispositivo',
+        usuarioLogin!.id,
+        new Date('2026-09-05T10:01:00.000Z'),
+        'LOGIN',
+      ),
+    ).resolves.toEqual({ associada: false, conflito: true })
+    const [atribuicaoConflitante] = await banco.db
+      .select()
+      .from(atribuicoesAfiliados)
+      .where(eq(atribuicoesAfiliados.id, segundoDispositivo.atribuicaoId))
+    expect(atribuicaoConflitante!.estado).toBe('CONFLITO')
+    await expect(
+      confirmarImportacao(
+        banco.db,
+        c.admin,
+        previaConflitante.loteId,
+        new Date('2026-09-05T11:00:00.000Z'),
+      ),
+    ).rejects.toThrow('inválida ou conflitante')
+
+    await registrarClique(banco.db, {
+      codigo: c.linkA.codigo,
+      visitanteToken: 'visitante-associacao-cadastro',
+      agora,
+      automatizado: false,
+    })
+    await associarVisitanteAoUsuario(
+      banco.db,
+      'visitante-associacao-cadastro',
+      usuarioCadastro!.id,
+      new Date('2026-09-04T10:00:00.000Z'),
+      'CADASTRO',
+    )
+    const eventosCadastro = await banco.db
+      .select()
+      .from(eventosAfiliados)
+      .where(
+        and(
+          eq(eventosAfiliados.usuarioId, usuarioCadastro!.id),
+          eq(eventosAfiliados.tipo, 'CADASTRO_NIP'),
+        ),
+      )
+    expect(eventosCadastro).toHaveLength(1)
 
     const [usuarioConvidado] = await banco.db
       .insert(usuarios)

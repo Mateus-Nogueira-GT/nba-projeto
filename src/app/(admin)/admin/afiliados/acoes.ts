@@ -52,12 +52,10 @@ export async function acaoCriarParceiro(formulario: FormData): Promise<void> {
     .object({
       nomePublico: z.string().min(2).max(120),
       codigo: z.string().regex(/^[a-z0-9][a-z0-9-]{2,63}$/),
-      usuarioId: z.string().uuid().optional(),
     })
     .parse({
       nomePublico: texto(formulario, 'nomePublico'),
       codigo: texto(formulario, 'codigo').toLowerCase(),
-      usuarioId: texto(formulario, 'usuarioId') || undefined,
     })
   await criarParceiro(getDb(), ator, entrada, new Date())
   atualizar()
@@ -101,7 +99,7 @@ export async function acaoCriarOferta(formulario: FormData): Promise<void> {
       moeda: z.string().regex(/^[A-Z]{3}$/),
       urlDestino: z.url({ protocol: /^https$/ }),
       hostDestino: z.string().min(3),
-      status: z.enum(['RASCUNHO', 'ATIVA', 'PAUSADA', 'ENCERRADA']),
+      status: z.literal('RASCUNHO'),
     })
     .parse({
       casaId: texto(formulario, 'casaId'),
@@ -324,6 +322,11 @@ export async function acaoStatusOferta(formulario: FormData): Promise<void> {
   const status = z
     .enum(['RASCUNHO', 'ATIVA', 'PAUSADA', 'ENCERRADA'])
     .parse(texto(formulario, 'status'))
-  await definirStatusOferta(getDb(), ator, id, status, new Date())
+  const motivoHomologacao = texto(formulario, 'motivoHomologacao')
+  if (status === 'ATIVA') {
+    z.literal('sim').parse(texto(formulario, 'homologado'))
+    z.string().min(10).max(500).parse(motivoHomologacao)
+  }
+  await definirStatusOferta(getDb(), ator, id, status, new Date(), motivoHomologacao)
   atualizar()
 }

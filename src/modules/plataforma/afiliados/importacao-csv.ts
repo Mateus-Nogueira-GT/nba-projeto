@@ -31,15 +31,20 @@ const COLUNAS = [
   'acordo_id',
 ] as const
 
-function identificadorMascarado(valor: string): string | null {
+export function mascararIdentificador(valor: string | null | undefined): string | null {
+  if (!valor) return null
   const limpo = valor.trim().slice(0, 160)
   if (!limpo) return null
-  if (limpo.includes('*')) return limpo
   const email = /^([^@]+)@([^@]+)$/.exec(limpo)
-  if (email) return `${email[1]!.slice(0, 2)}***@${email[2]}`
+  if (email) {
+    const local = email[1]!.replace(/\*/g, '')
+    const dominio = email[2]!.replace(/\*/g, '')
+    return `${local.slice(0, 2) || 'id'}***@${dominio}`
+  }
   const digitos = limpo.replace(/\D/g, '')
   if (digitos.length >= 8) return `***${digitos.slice(-4)}`
-  return limpo.length < 3 ? '***' : `${limpo[0]}***${limpo.at(-1)}`
+  const semMascara = limpo.replace(/\*/g, '')
+  return semMascara.length < 3 ? '***' : `${semMascara[0]}***${semMascara.at(-1)}`
 }
 
 function uuidOpcional(valor: string, campo: string): string | null {
@@ -161,7 +166,7 @@ export function prepararImportacaoCsv(conteudo: string): PreviaImportacao {
       const baseConfirmadaCentavos = totalCentavos ?? (cpaCentavos ?? 0) + (revshareCentavos ?? 0)
       linhas.push({
         idExterno,
-        indicadoMascarado: identificadorMascarado(indicado),
+        indicadoMascarado: mascararIdentificador(indicado),
         ocorridoEm: dataIso(dataEvento),
         tipo: tipoBruto as TipoComissaoImportada,
         moeda,

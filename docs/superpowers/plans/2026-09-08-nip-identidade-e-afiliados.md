@@ -26,6 +26,20 @@ de criar. O plano não autoriza integração, migração externa ou deploy por s
 | P8 | P4–P7 | Painéis consolidados e individuais completos |
 | P9 | P1–P8 | QA, documentação e entrega pronta para homologação |
 
+## Resultado da execução
+
+P1–P7 foram implementadas no MVP, incluindo marca NIP, convites, ofertas ativáveis,
+links, primeiro toque, visita/saída, prévia de CSV, conciliação explícita, comissões,
+ajustes, recebimentos e repasses manuais. P8 inclui painéis responsivos, isolamento do
+parceiro, período, estados vazios e totais separados por moeda. P9 foi validada com
+typecheck, lint, boundaries, testes, build Webpack e comparação visual documentada em
+`design-qa.md`.
+
+Continuam como gates de homologação: fornecedor/retenção do armazenamento privado,
+IDs e arquivos reais das casas, filtros operacionais adicionais, paginação completa,
+baseline de latência sob carga e fluxo autenticado em banco externo. Esses pontos não
+autorizam migration, seed, integração ou publicação em produção.
+
 Marca pode ser entregue antes de contratos comerciais. P2–P9 podem ser validadas com
 fixtures; ativação de casas reais depende das condições do §12 da spec.
 

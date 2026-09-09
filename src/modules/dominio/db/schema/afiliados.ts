@@ -230,7 +230,18 @@ export const lotesImportacaoAfiliados = pgTable(
     arquivoNome: text('arquivo_nome').notNull(),
     checksum: text('checksum').notNull(),
     resumoPrevia: jsonb('resumo_previa')
-      .$type<{ erros: string[]; validas: number; pendentes: number; duplicadas: number }>()
+      .$type<{
+        erros: string[]
+        validas: number
+        pendentes: number
+        duplicadas: number
+        totaisPorMoeda?: {
+          moeda: string
+          baseCentavos: number
+          componentesCentavos: number
+          diferencaCentavos: number
+        }[]
+      }>()
       .notNull(),
     estado: text('estado').notNull().default('PREVIA'),
     importadoPorId: uuid('importado_por_id').references(() => usuarios.id, {

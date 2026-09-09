@@ -11,12 +11,13 @@ cadastro próprio, URL HTTPS e host exato homologado.
 1. Criar a casa em `/admin/afiliados`.
 2. Criar ou convidar o parceiro. O convite dura sete dias, é de uso único e exige o
    mesmo e-mail da conta autenticada.
-3. Criar uma oferta em rascunho. Ativá-la apenas quando URL, host, moeda e modalidade
-   estiverem confirmados.
+3. Criar uma oferta em rascunho.
 4. Criar o acordo com percentual do parceiro e início de vigência.
-5. Criar campanha e link. O destino pode ser a página NIP ou a casa.
-6. Testar `/r/{codigo}` com destino de homologação. `HEAD` e robôs conhecidos não
-   devem criar atribuição.
+5. Ativar a oferta somente depois de validar URL, host, moeda, modalidade, contrato e
+   teste de destino. A ativação exige um registro textual da homologação e um acordo
+   na mesma moeda.
+6. Criar campanha e link. O destino pode ser a página NIP ou a casa.
+7. Testar `/r/{codigo}`. `HEAD` e robôs conhecidos não devem criar atribuição.
 
 ## CSV inicial
 
@@ -40,8 +41,9 @@ evento-001;ma***@exemplo.com;2026-09-08T10:00:00.000Z;HIBRIDO;BRL;10000;2500;125
 - `indicado` é mascarado novamente no servidor; não usar o arquivo para expor PII.
 
 Upload cria uma prévia. Linhas sem link compatível ficam pendentes; confirmar o lote
-é bloqueado enquanto houver erro ou pendência. A tela mostra o resultado de cada linha
-e a versão do acordo é explícita, sem inferir um marco de vigência ainda não homologado.
+é bloqueado enquanto houver erro ou pendência. A tela mostra o resultado de cada linha,
+totais separados por moeda e a diferença entre o total declarado e seus componentes.
+A versão do acordo é explícita, sem inferir um marco de vigência ainda não homologado.
 
 ## Liquidação manual
 
@@ -54,7 +56,7 @@ e a versão do acordo é explícita, sem inferir um marco de vigência ainda nã
 
 ## Antes de produção
 
-- Aplicar migrations 0019 e 0020 antes do código da aplicação.
+- Aplicar migrations 0019, 0020 e 0021 antes do código da aplicação.
 - Confirmar URL/host e parâmetros documentados de cada casa.
 - Validar uma amostra real de relatório e sua granularidade.
 - Definir armazenamento privado, retenção e autorização de comprovantes.
