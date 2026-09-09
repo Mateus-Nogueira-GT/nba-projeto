@@ -73,7 +73,7 @@ export default async function PaginaGaleria() {
       }}
     >
       <header style={{ marginBottom: 32, maxWidth: 720 }}>
-        <h1 style={{ margin: 0 }}>Design System · IA da NBA</h1>
+        <h1 style={{ margin: 0 }}>Design System · NIP</h1>
         <p style={{ opacity: 0.75, lineHeight: 1.6 }}>
           Quatro sinais, quatro formas distintas: a <strong>faixa metálica</strong> no topo é o
           nível do jogador, o <strong>anel do avatar</strong> é o nível do apito, a{' '}
@@ -660,7 +660,7 @@ export default async function PaginaGaleria() {
 
       <Secao
         titulo="Identidade 04 · hierarquia e prefixo desfalcado"
-        nota="As ausências consecutivas desde o nº 1 recebem destaque. A ausência isolada no nº 4 continua escrita, com a posição e o nível do jogador. Exemplos ilustrativos da lista do CJ."
+        nota="As ausências consecutivas desde o nº 1 recebem destaque. A ausência isolada no nº 4 continua escrita, com a posição e o nível do jogador. Exemplos ilustrativos da curadoria NIP."
       >
         <HierarquiaDoTime
           linhas={[

@@ -58,7 +58,7 @@ import { BotaoAcompanharJogador } from '@/components/preferencias/BotaoAcompanha
 import '@/design-system/tokens/tokens.css'
 
 export const dynamic = 'force-dynamic'
-export const metadata = { title: 'Lista Secreta · IA da NBA' }
+export const metadata = { title: 'Lista Secreta' }
 
 const ROTULO_METODO: Record<(typeof METODOS)[number], string> = {
   OSCILACAO: 'Oscilação',

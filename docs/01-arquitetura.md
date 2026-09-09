@@ -1,4 +1,4 @@
-# Arquitetura — IA da NBA v0
+# Arquitetura — NIP
 
 ## O princípio que organiza tudo
 
@@ -21,8 +21,8 @@ Tudo abaixo é consequência disso.
 ## Camadas
 
 ```
-┌──── L4 · PLATAFORMA ───────────────────────────────────────────┐
-│  auth · limite de dispositivos · assinatura MP · admin · obs.  │
+┌──── L4 · PLATAFORMA ─────────────────────────────────────────────────┐
+│ auth · dispositivos · assinatura MP · afiliados · admin · observab. │
 └────────────────────────────────────────────────────────────────┘
 
 ┌─ L0 INGESTÃO ──┐   ┌─ L1 DOMÍNIO ───┐   ┌─ L2 MOTOR ──┐   ┌─ L3 ENTREGA ─┐
@@ -71,6 +71,11 @@ Materializa o feed, dispara push, serve a API.
 
 Transversal e **não depende de nada acima**. Auth, dispositivos, assinatura e admin não
 sabem o que é um apito.
+
+O domínio comercial de afiliados também vive em L4. Ele reaproveita a identidade das
+casas, mas não depende do motor nem altera seus sinais. Links rastreados, atribuições,
+relatórios, comissões, recebimentos e repasses têm livro e permissões próprios; assinatura
+e parceria são direitos independentes. Ver [ADR-0010](adr/0010-afiliados-rastreamento-e-controle.md).
 
 ---
 
@@ -200,3 +205,6 @@ está desenhada — quando um dia precisar separar de verdade, ela rompe no luga
 | [0005](adr/0005-fusao-badge-confianca.md) | Fusão da badge de confiança com o anel de apito                            |
 | [0006](adr/0006-bloco-de-topo.md)         | Bloco de topo unifica a restrição de presença; dispensa rastreio em quadra |
 | [0007](adr/0007-outbox-de-push.md)        | Outbox de push: a UNIQUE impede duplicata, o outbox impede perda silenciosa |
+| [0008](adr/0008-funcao-e-banco-em-regioes-diferentes.md) | Banco e funções em regiões diferentes explicam latência observada |
+| [0009](adr/0009-llm-narra-nunca-decide.md) | LLM narra fatos; nunca decide estratégia |
+| [0010](adr/0010-afiliados-rastreamento-e-controle.md) | Primeiro toque, relatórios e liquidação manual de afiliados |

@@ -22,7 +22,14 @@ export type DadosAcesso = {
 
 export type ResultadoLogin =
   | { ok: false; motivo: 'credenciais' | 'bloqueado' | 'excesso-de-tentativas' }
-  | { ok: true; token: string; sessaoId: string; dispositivoId: string; encerrouSessoes: number }
+  | {
+      ok: true
+      token: string
+      usuarioId: string
+      sessaoId: string
+      dispositivoId: string
+      encerrouSessoes: number
+    }
 
 function hashDoToken(token: string): string {
   return createHash('sha256').update(token).digest('hex')
@@ -147,6 +154,7 @@ export async function autenticar(
   return {
     ok: true,
     token,
+    usuarioId: usuario.id,
     sessaoId: criada.sessaoId,
     dispositivoId: criada.dispositivoId,
     encerrouSessoes: criada.encerrouSessoes,

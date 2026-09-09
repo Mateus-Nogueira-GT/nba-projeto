@@ -5,7 +5,7 @@ import { configuracaoProdutoPago } from '@/modules/plataforma/assinatura/configu
 import { FormularioCadastro } from './formulario'
 
 export const dynamic = 'force-dynamic'
-export const metadata = { title: 'Criar conta · IA da NBA' }
+export const metadata = { title: 'Criar conta' }
 
 export default function PaginaCadastro() {
   const config = configuracaoProdutoPago()

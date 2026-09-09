@@ -447,7 +447,7 @@ function montarFatores(item: ItemFeed, fatos: FatosDoPorque): Fator[] {
     {
       chave: 'NIVEL',
       titulo: 'Nível',
-      texto: `${ROTULO_NIVEL[item.nivelJogador]} em ${unidade} na lista do CJ.`,
+      texto: `${ROTULO_NIVEL[item.nivelJogador]} em ${unidade} na curadoria NIP.`,
       destaque: ROTULO_NIVEL[item.nivelJogador],
     },
   ]

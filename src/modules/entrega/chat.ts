@@ -170,7 +170,7 @@ export type RespostaChat =
  * retentativa PAGA do assinante (ver o comentário lá).
  */
 const SISTEMA = [
-  'Você é o assistente da IA da NBA, falando com um assinante brasileiro.',
+  'Você é o assistente da NIP, falando com um assinante brasileiro.',
   'Responda em no máximo três parágrafos curtos.',
   ...regrasDoTexto(LIMITE_RESPOSTA),
   'Use SOMENTE os fatos da lista do dia fornecidos abaixo e a metodologia a seguir.',
@@ -189,9 +189,7 @@ async function apagarReserva(db: Db, id: string): Promise<void> {
 }
 
 type Reserva =
-  | { tipo: 'reservada'; id: string }
-  | { tipo: 'cota-esgotada' }
-  | { tipo: 'limite-por-minuto' }
+  { tipo: 'reservada'; id: string } | { tipo: 'cota-esgotada' } | { tipo: 'limite-por-minuto' }
 
 export async function responder(
   db: Db,

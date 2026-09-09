@@ -15,7 +15,7 @@ import type { Atributo } from '@/modules/motor/tipos'
 import '@/design-system/tokens/tokens.css'
 
 export const dynamic = 'force-dynamic'
-export const metadata = { title: 'Gestão de banca · IA da NBA' }
+export const metadata = { title: 'Gestão de banca' }
 
 /** Bancas de atalho — evita digitar num teclado de celular durante a rodada. */
 const ATALHOS = [200, 500, 1000, 5000] as const
@@ -100,7 +100,7 @@ export default async function PaginaGestao({
         >
           <p style={{ margin: 0, fontWeight: 700 }}>Modelo de gestão ainda não definido</p>
           <p style={{ margin: '8px 0 0', fontSize: 14, color: semantico.textoSecundario }}>
-            Esta aba passa a sugerir tamanho de entrada assim que o modelo do Mestre da NBA for
+            Esta aba passa a sugerir tamanho de entrada assim que o modelo de gestão NIP for
             carregado.
           </p>
         </div>
@@ -128,8 +128,8 @@ export default async function PaginaGestao({
           }}
         >
           <strong>Modelo de demonstração.</strong> Os percentuais desta tela são um exemplo de
-          proporcionalidade, não o modelo do Mestre da NBA — ele ainda não foi carregado. Não use
-          como orientação financeira.
+          proporcionalidade, não o modelo de gestão NIP — ele ainda não foi carregado. Não use como
+          orientação financeira.
         </div>
       )}
 
@@ -222,10 +222,9 @@ export default async function PaginaGestao({
 
       <h2 style={{ fontSize: 15, margin: '0 0 4px' }}>Entradas sugeridas para hoje</h2>
       <p style={{ margin: '0 0 12px', fontSize: 12, color: semantico.textoSecundario }}>
-        {plano.entradas.length} apito{plano.entradas.length === 1 ? '' : 's'} na lista ·
-        exposição total de {dinheiro(plano.totalExposto)} (
-        {plano.banca === 0 ? '0' : ((plano.totalExposto / plano.banca) * 100).toFixed(1)}% da
-        banca)
+        {plano.entradas.length} apito{plano.entradas.length === 1 ? '' : 's'} na lista · exposição
+        total de {dinheiro(plano.totalExposto)} (
+        {plano.banca === 0 ? '0' : ((plano.totalExposto / plano.banca) * 100).toFixed(1)}% da banca)
       </p>
 
       {plano.entradas.length === 0 ? (
@@ -302,9 +301,9 @@ export default async function PaginaGestao({
           lineHeight: 1.7,
         }}
       >
-        A plataforma é somente leitura: nenhuma aposta é enviada, nenhuma conta de casa é
-        vinculada e nenhum valor é movimentado. Os números acima são sugestão de tamanho, e a
-        decisão é sempre sua.
+        A plataforma é somente leitura: nenhuma aposta é enviada, nenhuma conta de casa é vinculada
+        e nenhum valor é movimentado. Os números acima são sugestão de tamanho, e a decisão é sempre
+        sua.
       </footer>
     </Moldura>
   )

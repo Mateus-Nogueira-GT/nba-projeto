@@ -1,0 +1,4 @@
+ALTER TABLE "comissoes_afiliados" DROP CONSTRAINT "comissoes_afiliados_valores_validos";--> statement-breakpoint
+ALTER TABLE "comissoes_afiliados" ALTER COLUMN "item_importacao_id" DROP NOT NULL;--> statement-breakpoint
+ALTER TABLE "comissoes_afiliados" ADD CONSTRAINT "comissoes_afiliados_origem_valida" CHECK (("comissoes_afiliados"."item_importacao_id" is not null and "comissoes_afiliados"."ajuste_de_id" is null) or ("comissoes_afiliados"."item_importacao_id" is null and "comissoes_afiliados"."ajuste_de_id" is not null));--> statement-breakpoint
+ALTER TABLE "comissoes_afiliados" ADD CONSTRAINT "comissoes_afiliados_valores_validos" CHECK ("comissoes_afiliados"."percentual_pontos_base" between 0 and 10000);

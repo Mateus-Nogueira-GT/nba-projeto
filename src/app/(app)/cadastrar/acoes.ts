@@ -1,7 +1,7 @@
 'use server'
 
 import { redirect } from 'next/navigation'
-import { headers } from 'next/headers'
+import { cookies, headers } from 'next/headers'
 import { ZodError } from 'zod'
 
 import { getDb } from '@/modules/dominio/db/cliente'
@@ -13,6 +13,8 @@ import {
 import { gravarCookieDeSessao } from '@/modules/plataforma/auth/cookies'
 import { ipDaRequisicao } from '@/modules/plataforma/auth/requisicao'
 import { autenticar } from '@/modules/plataforma/auth/sessao'
+import { COOKIE_VISITANTE_AFILIADO } from '@/modules/plataforma/afiliados/http'
+import { associarVisitanteAoUsuario } from '@/modules/plataforma/afiliados/servico'
 
 const DURACAO_MS = 30 * 24 * 3600_000
 
@@ -32,12 +34,7 @@ export async function cadastrar(
   let resultado
 
   try {
-    resultado = await cadastrarUsuario(
-      getDb(),
-      config,
-      { email, senha, nome },
-      { ip, agora },
-    )
+    resultado = await cadastrarUsuario(getDb(), config, { email, senha, nome }, { ip, agora })
   } catch (erro) {
     if (erro instanceof ZodError) return erro.issues[0]?.message ?? 'Dados inválidos.'
     throw erro
@@ -66,5 +63,13 @@ export async function cadastrar(
   if (!login.ok) return 'Conta criada. Entre novamente para continuar.'
 
   await gravarCookieDeSessao(login.token, new Date(agora.getTime() + DURACAO_MS))
+  const visitante = (await cookies()).get(COOKIE_VISITANTE_AFILIADO)?.value
+  if (visitante && login.usuarioId) {
+    try {
+      await associarVisitanteAoUsuario(getDb(), visitante, login.usuarioId, agora, 'CADASTRO')
+    } catch (erro) {
+      console.error('Falha ao associar atribuição de afiliado após cadastro', erro)
+    }
+  }
   redirect('/assinar')
 }

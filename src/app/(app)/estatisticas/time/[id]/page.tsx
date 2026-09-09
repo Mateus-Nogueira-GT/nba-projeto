@@ -360,7 +360,7 @@ export default async function PaginaTime({
        * elenco do provedor. Os dois convivem nesta tela e por isso cada um
        * carrega o seu rótulo: aqui "lista do CJ", no elenco "time atual".
        */}
-      <Secao titulo={`Hierarquia do CJ · ${porExtenso}`} aux="lista do CJ">
+      <Secao titulo={`Hierarquia NIP · ${porExtenso}`} aux="curadoria NIP">
         <AbasDeAtributo timeId={time.id} ativo={atributo} />
         {jogoDeHoje === null && hierarquia.length > 0 && (
           <p style={{ margin: '0 0 10px', fontSize: 12, color: semantico.texto40 }}>
@@ -370,7 +370,7 @@ export default async function PaginaTime({
         <HierarquiaDoTime
           linhas={hierarquia}
           hrefDoJogador={rotaDoJogador}
-          vazio="A lista do CJ ainda não classifica este time neste atributo."
+          vazio="A curadoria NIP ainda não classifica este time neste atributo."
         />
       </Secao>
 

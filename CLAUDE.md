@@ -1,8 +1,8 @@
-# IA da NBA — instruções do projeto
+# NIP — instruções do projeto
 
-PWA que lê dados da NBA, aplica as estratégias do CJ (**Lista Secreta** pré-live e
+PWA que lê dados da NBA, aplica a metodologia NIP (**Lista Secreta** pré-live e
 **Fire Live** ao vivo) e apresenta entradas sugeridas em cards. Assinatura via Mercado
-Pago. Capacidade contratada: 10.000 usuários simultâneos.
+Pago e área independente de afiliados. Capacidade contratada: 10.000 usuários simultâneos.
 
 **Leia antes de codar:** [`docs/01-arquitetura.md`](docs/01-arquitetura.md) e
 [`docs/02-motor-regras.md`](docs/02-motor-regras.md).
@@ -65,7 +65,7 @@ queima confiança em uma noite.
 ## Onde as coisas ficam
 
 ```
-config/ruleset.v1.yaml       as estratégias do CJ — o coração
+config/ruleset.v1.yaml       a metodologia esportiva versionada — o coração
 docs/                        arquitetura, regras, modelo de dados, design system
 docs/adr/                    decisões e seus custos
 src/modules/ingestao/        L0 · adapters NBA e casas (anticorrupção)
@@ -73,7 +73,7 @@ src/modules/ingestao/llm/     L0 · porta de LLM (OpenRouter) — narra, nunca d
 src/modules/dominio/         L1 · modelo canônico
 src/modules/motor/           L2 · funções puras — SEM I/O
 src/modules/entrega/         L3 · feed, push, API
-src/modules/plataforma/      L4 · auth, dispositivos, assinatura, admin
+src/modules/plataforma/      L4 · auth, dispositivos, assinatura, afiliados, admin
 src/design-system/           tokens em 3 camadas + componentes
 src/workflows/               Vercel Workflow — loop do 1Q
 ```
@@ -82,7 +82,7 @@ src/workflows/               Vercel Workflow — loop do 1Q
 
 ## Vocabulário
 
-O vocabulário do CJ é o vocabulário do código. Domínio em português, infraestrutura em
+O vocabulário homologado é o vocabulário do código. Domínio em português, infraestrutura em
 inglês.
 
 | Termo                | Significado                                           |

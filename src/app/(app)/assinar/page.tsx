@@ -11,7 +11,7 @@ import { sessaoAtual } from '@/modules/plataforma/auth/cookies'
 import { contratar } from './acoes'
 
 export const dynamic = 'force-dynamic'
-export const metadata = { title: 'Assinar · IA da NBA' }
+export const metadata = { title: 'Assinar' }
 
 export default async function PaginaAssinar({
   searchParams,
@@ -34,7 +34,7 @@ export default async function PaginaAssinar({
   return (
     <MolduraConta
       titulo={config.nomePlano}
-      descricao="Lista Secreta, alertas e análises da IA da NBA em até dois aparelhos."
+      descricao="Lista Secreta, alertas e análises da NIP em até dois aparelhos."
     >
       <div style={{ display: 'grid', gap: 18 }}>
         <div>
@@ -43,7 +43,7 @@ export default async function PaginaAssinar({
         </div>
         <ul style={{ margin: 0, paddingLeft: 20, lineHeight: 1.8 }}>
           <li>Checkout hospedado pelo Mercado Pago</li>
-          <li>Nenhum dado de cartão passa pela IA da NBA</li>
+          <li>Nenhum dado de cartão passa pela NIP</li>
           <li>Acesso liberado somente após pagamento confirmado</li>
           <li>Cancelamento disponível na página da conta</li>
         </ul>

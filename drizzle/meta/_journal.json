@@ -134,6 +134,27 @@
       "when": 1788885827495,
       "tag": "0018_experiencia_por_conta",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1788905051418,
+      "tag": "0019_demonic_silver_surfer",
+      "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1788905839412,
+      "tag": "0020_new_brood",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1788910277783,
+      "tag": "0021_flashy_texas_twister",
+      "breakpoints": true
     }
   ]
 }

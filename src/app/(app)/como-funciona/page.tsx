@@ -11,7 +11,7 @@ import { sessaoAtual } from '@/modules/plataforma/auth/cookies'
 import '@/design-system/tokens/tokens.css'
 
 export const dynamic = 'force-dynamic'
-export const metadata = { title: 'Como funciona · IA da NBA' }
+export const metadata = { title: 'Como funciona' }
 
 function n(v: number): string {
   return String(v).replace('.', ',')
@@ -23,13 +23,7 @@ const ATRIBUTO_ROTULO: Record<Atributo, string> = {
   ASSISTENCIAS: 'Assistências',
 }
 
-function Secao({
-  titulo,
-  children,
-}: {
-  titulo: string
-  children: React.ReactNode
-}) {
+function Secao({ titulo, children }: { titulo: string; children: React.ReactNode }) {
   return (
     <section style={{ marginBottom: 28 }}>
       <h2 style={{ fontSize: 17, margin: '0 0 8px' }}>{titulo}</h2>
@@ -38,13 +32,7 @@ function Secao({
   )
 }
 
-function Caixa({
-  children,
-  destaque,
-}: {
-  children: React.ReactNode
-  destaque?: boolean
-}) {
+function Caixa({ children, destaque }: { children: React.ReactNode; destaque?: boolean }) {
   return (
     <div
       style={{
@@ -84,17 +72,17 @@ export default async function PaginaComoFunciona() {
 
   return (
     <Moldura aba={null}>
-      <CabecalhoTela sobrancelha="METODOLOGIA DO CJ" titulo="COMO FUNCIONA" voltarHref="/" />
+      <CabecalhoTela sobrancelha="METODOLOGIA NIP" titulo="COMO FUNCIONA" voltarHref="/" />
       <div>
         <p style={{ margin: '0 0 24px', color: semantico.textoSecundario, fontSize: 14 }}>
-          As duas estratégias do Mestre da NBA, o que cada cor significa e como ler as notas de
+          As duas estratégias da metodologia NIP, o que cada cor significa e como ler as notas de
           confiança. Leia uma vez: depois os cards se explicam sozinhos.
         </p>
 
         <Caixa destaque>
           <p style={{ margin: 0, fontWeight: 700 }}>Antes de tudo: o que o app faz</p>
           <p style={{ margin: '6px 0 0' }}>
-            Ele lê os números da NBA, aplica os critérios do CJ e mostra os jogadores{' '}
+            A NIP lê os números da NBA, aplica sua metodologia e mostra os jogadores{' '}
             <strong>apitados</strong> — os que a análise aponta como bons candidatos. São duas
             estratégias: a <strong>Lista Secreta</strong>, publicada antes dos jogos, e o{' '}
             <strong>Fire Live</strong>, que observa o {t.fireLive.quarto}º quarto ao vivo.
@@ -103,8 +91,8 @@ export default async function PaginaComoFunciona() {
 
         <Secao titulo="Os quatro níveis de jogador">
           <p style={{ margin: '0 0 10px' }}>
-            Todo jogador da lista tem um nível, definido pelo CJ, por atributo. Ele diz o que
-            esperar daquele jogador — e muda os números de todas as regras abaixo.
+            Todo jogador da lista tem um nível, definido pela curadoria NIP, por atributo. Ele diz o
+            que esperar daquele jogador — e muda os números de todas as regras abaixo.
           </p>
           <div style={{ display: 'grid', gap: 6 }}>
             {t.niveis.ordem.map((nivel) => (
@@ -122,7 +110,8 @@ export default async function PaginaComoFunciona() {
               >
                 <strong style={{ minWidth: 78 }}>{NIVEL_JOGADOR[nivel].rotulo}</strong>
                 <span style={{ fontSize: 13, color: semantico.textoSecundario }}>
-                  {nivel === 'MVP' && 'Superestrela consolidada, estatística consistentemente alta.'}
+                  {nivel === 'MVP' &&
+                    'Superestrela consolidada, estatística consistentemente alta.'}
                   {nivel === 'ALL_STAR' && 'Grande destaque da liga, ainda abaixo do MVP.'}
                   {nivel === 'SUPORTE' && 'Oscila bastante, mas tem papel fundamental no time.'}
                   {nivel === 'RANDOLA' && 'Poucas aparições brilhantes, na maioria reserva.'}
@@ -169,8 +158,8 @@ export default async function PaginaComoFunciona() {
           </p>
           <Caixa>
             <p style={{ margin: 0, fontSize: 13 }}>
-              <strong>Exemplo do CJ.</strong> LeBron tem média de 25,7 pontos. Ele faz um jogo de
-              20 ou menos — está oscilando. No jogo seguinte, apitado.
+              <strong>Exemplo da metodologia.</strong> LeBron tem média de 25,7 pontos. Ele faz um
+              jogo de 20 ou menos — está oscilando. No jogo seguinte, apitado.
             </p>
           </Caixa>
           <p style={{ margin: '10px 0 6px' }}>Quantos pontos abaixo contam, por nível:</p>
@@ -213,8 +202,8 @@ export default async function PaginaComoFunciona() {
           </ul>
           <Caixa>
             <p style={{ margin: 0, fontSize: 13 }}>
-              <strong>Exemplo do CJ.</strong> Nos Lakers, Luka é o principal. Confirmado que está
-              fora, apitam Austin Reaves (verde), Grimes (laranja) e Kessler (amarelo).
+              <strong>Exemplo da metodologia.</strong> Nos Lakers, Luka é o principal. Confirmado
+              que está fora, apitam Austin Reaves (verde), Grimes (laranja) e Kessler (amarelo).
             </p>
           </Caixa>
           <p style={{ margin: '8px 0 0', fontSize: 13, color: semantico.textoSecundario }}>
@@ -231,7 +220,7 @@ export default async function PaginaComoFunciona() {
           </p>
           <Caixa destaque>
             <p style={{ margin: 0, fontSize: 13 }}>
-              O número é a <strong>nota de confiança da análise do CJ</strong>, sem sinal de
+              O número é a <strong>nota de confiança da análise NIP</strong>, sem sinal de
               porcentagem. Não é probabilidade de acerto nem promessa de resultado.
             </p>
           </Caixa>
@@ -275,9 +264,11 @@ export default async function PaginaComoFunciona() {
             ))}
           </div>
           {ruleset.confianca_exibicao.origem === 'demonstracao' && (
-            <p style={{ margin: '10px 0 0', fontSize: 12, color: semantico.alerta, lineHeight: 1.6 }}>
+            <p
+              style={{ margin: '10px 0 0', fontSize: 12, color: semantico.alerta, lineHeight: 1.6 }}
+            >
               Régua de demonstração: estes limiares são um exemplo de leitura visual — ainda não
-              vieram do Mestre da NBA.
+              vieram da curadoria NIP.
             </p>
           )}
 
@@ -291,9 +282,9 @@ export default async function PaginaComoFunciona() {
 
         <Secao titulo="Pontos, rebotes e assistências">
           <p style={{ margin: '0 0 8px' }}>
-            Cada atributo tem classificação, hierarquia e parâmetros próprios. Uma linha de
-            25+ faz sentido em pontos e nenhum sentido em assistências, então cada atributo tem sua
-            própria tabela de linhas. Os blocos ainda demonstrativos estão identificados abaixo.
+            Cada atributo tem classificação, hierarquia e parâmetros próprios. Uma linha de 25+ faz
+            sentido em pontos e nenhum sentido em assistências, então cada atributo tem sua própria
+            tabela de linhas. Os blocos ainda demonstrativos estão identificados abaixo.
           </p>
           <div style={{ display: 'grid', gap: 8 }}>
             {t.atributos.map((a) => (
@@ -324,9 +315,11 @@ export default async function PaginaComoFunciona() {
             ))}
           </div>
           {t.atributos.some((a) => a.origem === 'demonstracao') && (
-            <p style={{ margin: '10px 0 0', fontSize: 12, color: semantico.alerta, lineHeight: 1.6 }}>
+            <p
+              style={{ margin: '10px 0 0', fontSize: 12, color: semantico.alerta, lineHeight: 1.6 }}
+            >
               Os atributos marcados como demonstração usam números de exemplo. A lista oficial de
-              níveis de rebotes e assistências do Mestre da NBA ainda não foi carregada.
+              níveis de rebotes e assistências da metodologia NIP ainda não foi carregada.
             </p>
           )}
         </Secao>
@@ -341,7 +334,7 @@ export default async function PaginaComoFunciona() {
             da última coleta. O detalhe reúne as cotações por casa disponíveis.
           </p>
           <p style={{ margin: '8px 0 0' }}>
-            Sem coleta suficiente, o detalhe pode mostrar a tabela de referência do CJ, identificada
+            Sem coleta suficiente, o detalhe pode mostrar a tabela de referência NIP, identificada
             como referência. Ela não é uma cotação atual da sua casa. A plataforma é somente
             leitura: não envia apostas nem vincula contas de casas.
           </p>
@@ -361,11 +354,10 @@ export default async function PaginaComoFunciona() {
               {t.fireLive.travas.pontosAlvoMinimo} pontos)
             </li>
             <li>
-              Pontos, {NIVEL_JOGADOR.RANDOLA.rotulo}: × {n(t.fireLive.multiplicadores.pontosRandola)}
+              Pontos, {NIVEL_JOGADOR.RANDOLA.rotulo}: ×{' '}
+              {n(t.fireLive.multiplicadores.pontosRandola)}
             </li>
-            <li>
-              Pontos, fora da lista: × {n(t.fireLive.multiplicadores.pontosNaoClassificado)}
-            </li>
+            <li>Pontos, fora da lista: × {n(t.fireLive.multiplicadores.pontosNaoClassificado)}</li>
             <li>Rebotes: × {n(t.fireLive.multiplicadores.rebotes)}</li>
             <li>
               Assistências: média por quarto + {t.fireLive.assistencias.valor} (só para quem tem
@@ -380,7 +372,10 @@ export default async function PaginaComoFunciona() {
             alta.
           </p>
           <p style={{ margin: 0, fontSize: 13, color: semantico.textoSecundario }}>
-            Em pontos, {t.fireLive.presencaTopo.bloqueiaNiveis.map((nv) => NIVEL_JOGADOR[nv].rotulo).join(' e ')}{' '}
+            Em pontos,{' '}
+            {t.fireLive.presencaTopo.bloqueiaNiveis
+              .map((nv) => NIVEL_JOGADOR[nv].rotulo)
+              .join(' e ')}{' '}
             só apitam quando o topo do time está fora da partida — exceto{' '}
             {t.fireLive.presencaTopo.timesIsentos.join(', ')}.
           </p>

@@ -6,7 +6,7 @@ import { destinoInternoSeguro } from '@/modules/plataforma/auth/requisicao'
 import '@/design-system/tokens/tokens.css'
 
 export const dynamic = 'force-dynamic'
-export const metadata = { title: 'Entrar · IA da NBA' }
+export const metadata = { title: 'Entrar' }
 
 export default async function PaginaEntrar({
   searchParams,
@@ -14,7 +14,9 @@ export default async function PaginaEntrar({
   searchParams: Promise<Record<string, string | string[] | undefined>>
 }) {
   const parametros = await searchParams
-  const destinoBruto = Array.isArray(parametros.destino) ? parametros.destino[0] : parametros.destino
+  const destinoBruto = Array.isArray(parametros.destino)
+    ? parametros.destino[0]
+    : parametros.destino
   const destino = destinoInternoSeguro(destinoBruto ?? '/')
   const cadastroAberto = configuracaoProdutoPago().cadastroPublicoHabilitado
   return (
@@ -39,7 +41,7 @@ export default async function PaginaEntrar({
             textTransform: 'uppercase',
           }}
         >
-          IA da NBA
+          NIP
         </h1>
         <p style={{ margin: '0 0 20px', fontSize: 13, color: semantico.textoSecundario }}>
           Entre para ver a Lista Secreta do dia.

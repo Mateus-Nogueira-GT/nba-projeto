@@ -589,7 +589,7 @@ describe('a aba teórica', () => {
     // que cair.
     expect(html).toContain('Régua de demonstração')
     expect(html).toContain('ainda não')
-    expect(html).toContain('vieram do Mestre da NBA')
+    expect(html).toContain('vieram da curadoria NIP')
   }, 60_000)
 
   it('não fala mais em círculo para o indicador do apito — o Avatar é um quadrado arredondado', async () => {

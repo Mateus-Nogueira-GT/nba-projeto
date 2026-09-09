@@ -5,6 +5,7 @@ import type { ReactNode } from 'react'
 import { FaixaDemonstracao } from '@/components/navegacao'
 import { RegistrarServiceWorker } from '@/components/pwa'
 import { semantico } from '@/design-system/tokens/semantico'
+import { marcaNip } from '@/design-system/marca'
 
 import '@/design-system/tokens/tokens.css'
 import './globals.css'
@@ -12,7 +13,11 @@ import './globals.css'
 // Fontes da identidade "02 Rota Transmissão" — self-hosted em build pelo
 // next/font/google (zero request ao Google em runtime).
 const anton = Anton({ weight: '400', subsets: ['latin'], variable: '--fonte-anton' })
-const barlow = Barlow({ weight: ['400', '600', '700'], subsets: ['latin'], variable: '--fonte-barlow' })
+const barlow = Barlow({
+  weight: ['400', '600', '700'],
+  subsets: ['latin'],
+  variable: '--fonte-barlow',
+})
 const barlowCondensed = Barlow_Condensed({
   weight: ['500', '600', '700'],
   subsets: ['latin'],
@@ -20,13 +25,13 @@ const barlowCondensed = Barlow_Condensed({
 })
 
 export const metadata: Metadata = {
-  applicationName: 'IA da NBA',
-  title: { default: 'IA da NBA', template: '%s · IA da NBA' },
-  description: 'Leitura rápida de entradas e estatísticas da NBA.',
+  applicationName: marcaNip.nome,
+  title: { default: marcaNip.nome, template: `%s · ${marcaNip.nome}` },
+  description: marcaNip.descricao,
   manifest: '/manifest.webmanifest',
   appleWebApp: {
     capable: true,
-    title: 'IA da NBA',
+    title: marcaNip.nome,
     statusBarStyle: 'black-translucent',
   },
   icons: {
@@ -48,7 +53,10 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="pt-BR" className={`${anton.variable} ${barlow.variable} ${barlowCondensed.variable}`}>
+    <html
+      lang="pt-BR"
+      className={`${anton.variable} ${barlow.variable} ${barlowCondensed.variable}`}
+    >
       <body>
         <RegistrarServiceWorker />
         <FaixaDemonstracao />

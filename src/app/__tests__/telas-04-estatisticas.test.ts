@@ -634,7 +634,7 @@ describe('tela do jogador · as duas visões de time', () => {
 
       expect(outro.sigla).not.toBe(naLista!.sigla)
       expect(visivel).toMatch(new RegExp(`TIME ATUAL\\s+${outro.sigla}`))
-      expect(visivel).toMatch(new RegExp(`NA LISTA DO CJ\\s+${naLista!.sigla}`))
+      expect(visivel).toMatch(new RegExp(`NA CURADORIA NIP\\s+${naLista!.sigla}`))
       // As siglas são os ÚNICOS links do hero e precisam se ANUNCIAR como
       // link: na cor do parágrafo e sem sublinhado eram indistinguíveis do
       // texto ao redor (WCAG 1.4.1), e mais fracas que os rótulos vizinhos,
@@ -676,7 +676,7 @@ describe('tela do jogador · as duas visões de time', () => {
     // E as DUAS visões continuam escritas — é o rótulo que separa uma da outra.
     const visivel = texto(hero)
     expect(visivel).toMatch(new RegExp(`TIME ATUAL\\s+${tela.perfil.timeSigla}`))
-    expect(visivel).toMatch(new RegExp(`NA LISTA DO CJ\\s+${tela.timeNaListaDoCj!.sigla}`))
+    expect(visivel).toMatch(new RegExp(`NA CURADORIA NIP\\s+${tela.timeNaListaDoCj!.sigla}`))
   }, 60_000)
 })
 
@@ -1070,7 +1070,7 @@ function marcacaoDaLista(html: string): string[] {
 
 /** A seção da hierarquia, do título dela até o da seguinte. */
 function secaoDaHierarquia(html: string): string {
-  return trecho(html, 'Hierarquia do CJ', 'Box score por jogo')
+  return trecho(html, 'Hierarquia NIP', 'Box score por jogo')
 }
 
 describe('tela do time · a hierarquia do CJ', () => {
@@ -1139,14 +1139,14 @@ describe('tela do time · a hierarquia do CJ', () => {
     const emRebotes = rebotes.find((r) => r.jogadorId === divergente!.jogadorId)!
 
     const padrao = await renderizarTime(sujeito.timeId)
-    expect(texto(padrao)).toContain('Hierarquia do CJ · PONTOS')
+    expect(texto(padrao)).toContain('Hierarquia NIP · PONTOS')
     const linhaEmPontos = itensDaLista(secaoDaHierarquia(padrao)).find((l) =>
       l.includes(divergente!.nome),
     )!
     expect(linhaEmPontos).toContain(NIVEL_ESCRITO[divergente!.nivel])
 
     const html = await renderizarTime(sujeito.timeId, { atributo: 'REBOTES' })
-    expect(texto(html)).toContain('Hierarquia do CJ · REBOTES')
+    expect(texto(html)).toContain('Hierarquia NIP · REBOTES')
     const linhaEmRebotes = itensDaLista(secaoDaHierarquia(html)).find((l) =>
       l.includes(divergente!.nome),
     )!
@@ -1155,7 +1155,7 @@ describe('tela do time · a hierarquia do CJ', () => {
 
     // Os três atributos ficam a um clique, e o ativo se anuncia — a cor nunca
     // é o único canal.
-    const seletor = trecho(html, 'Hierarquia do CJ', '</nav>')
+    const seletor = trecho(html, 'Hierarquia NIP', '</nav>')
     for (const [curto, valor] of [
       ['PTS', 'PONTOS'],
       ['REB', 'REBOTES'],
@@ -1169,17 +1169,17 @@ describe('tela do time · a hierarquia do CJ', () => {
 
   it('atributo desconhecido na URL cai em PONTOS, sem quebrar a tela', async () => {
     const html = await renderizarTime(sujeito.timeId, { atributo: 'CHUTES' })
-    expect(texto(html)).toContain('Hierarquia do CJ · PONTOS')
+    expect(texto(html)).toContain('Hierarquia NIP · PONTOS')
   }, 60_000)
 })
 
 describe('tela do time · as duas visões de time', () => {
-  it('a hierarquia é rotulada "lista do CJ" e o elenco, "time atual"', async () => {
+  it('a hierarquia é rotulada "curadoria NIP" e o elenco, "time atual"', async () => {
     // A divergência (Giannis no Miami) é intencional; sem rótulo ela é lida
     // como bug — a crítica ao Sofascore que a spec §4.5 cita.
     const html = await renderizarTime(sujeito.timeId)
 
-    expect(texto(secaoDaHierarquia(html))).toContain('lista do CJ')
+    expect(texto(secaoDaHierarquia(html))).toContain('curadoria NIP')
 
     const elenco = html.slice(html.indexOf('Elenco'))
     expect(texto(elenco)).toContain('time atual')
@@ -1530,7 +1530,7 @@ describe('tela de partida · os desfalques com a hierarquia do CJ', () => {
       expect(visivel).toContain(NIVEL_ESCRITO[escolhido!.linha.nivel])
       // A marcação é da lista do CJ, não do elenco real: as duas visões
       // divergem de propósito, e sem rótulo a divergência é lida como bug.
-      expect(visivel.toLowerCase()).toContain('lista do cj')
+      expect(visivel.toLowerCase()).toContain('curadoria nip')
       // A temporada já pode conter outros desfalques com classificação. O
       // contrato é por jogador: uma anotação no classificado, nenhuma no outro.
       const linhas = itensDaLista(secao)

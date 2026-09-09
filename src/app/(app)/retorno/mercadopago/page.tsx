@@ -7,7 +7,7 @@ import { avaliarAcesso } from '@/modules/plataforma/assinatura/direito'
 import { sessaoAtual } from '@/modules/plataforma/auth/cookies'
 
 export const dynamic = 'force-dynamic'
-export const metadata = { title: 'Confirmação de pagamento · IA da NBA' }
+export const metadata = { title: 'Confirmação de pagamento' }
 
 export default async function PaginaRetornoMercadoPago() {
   const sessao = await sessaoAtual()
@@ -29,7 +29,8 @@ export default async function PaginaRetornoMercadoPago() {
         ) : (
           <>
             <p style={{ margin: 0 }}>
-              Isso normalmente leva poucos instantes. Você pode acompanhar o estado sem refazer a cobrança.
+              Isso normalmente leva poucos instantes. Você pode acompanhar o estado sem refazer a
+              cobrança.
             </p>
             <Link href="/conta">Ver estado da conta</Link>
           </>

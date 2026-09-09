@@ -9,24 +9,19 @@ const pasta = resolve(process.cwd(), 'public/icons')
 function marcaSvg(tamanho: number, escala: number, raioCanto = 0.22): string {
   const centro = tamanho / 2
   const raio = (tamanho * escala) / 2
-  const x = centro - raio
-  const diametro = raio * 2
-  const traco = Math.max(8, tamanho * 0.035)
+  const fonte = Math.round(raio * 0.9)
 
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${tamanho}" height="${tamanho}" viewBox="0 0 ${tamanho} ${tamanho}">
   <rect width="${tamanho}" height="${tamanho}" rx="${tamanho * raioCanto}" fill="${primitivo.tinta900}"/>
-  <circle cx="${centro}" cy="${centro}" r="${raio * 1.08}" fill="none" stroke="${primitivo.azul400}" stroke-width="${traco}" opacity=".9"/>
-  <circle cx="${centro}" cy="${centro}" r="${raio}" fill="${primitivo.ambar400}"/>
-  <path d="M ${centro} ${x} V ${x + diametro} M ${x} ${centro} H ${x + diametro}" fill="none" stroke="${primitivo.tinta900}" stroke-width="${traco}" stroke-linecap="round"/>
-  <path d="M ${x + raio * 0.18} ${x + raio * 0.32} C ${x + raio * 0.72} ${x + raio * 0.72}, ${x + raio * 0.72} ${x + raio * 1.28}, ${x + raio * 0.18} ${x + raio * 1.68}" fill="none" stroke="${primitivo.tinta900}" stroke-width="${traco}" stroke-linecap="round"/>
-  <path d="M ${x + raio * 1.82} ${x + raio * 0.32} C ${x + raio * 1.28} ${x + raio * 0.72}, ${x + raio * 1.28} ${x + raio * 1.28}, ${x + raio * 1.82} ${x + raio * 1.68}" fill="none" stroke="${primitivo.tinta900}" stroke-width="${traco}" stroke-linecap="round"/>
+  <circle cx="${centro + raio * 0.9}" cy="${centro - raio * 0.7}" r="${Math.max(5, tamanho * 0.03)}" fill="${primitivo.ambar400}"/>
+  <text x="50%" y="54%" text-anchor="middle" dominant-baseline="middle" fill="white" font-family="Arial, Helvetica, sans-serif" font-size="${fonte}" font-weight="800" letter-spacing="${Math.max(2, tamanho * 0.015)}">NIP</text>
 </svg>`
 }
 
 function badgeSvg(tamanho: number): string {
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${tamanho}" height="${tamanho}" viewBox="0 0 ${tamanho} ${tamanho}">
   <circle cx="${tamanho / 2}" cy="${tamanho / 2}" r="${tamanho * 0.36}" fill="${primitivo.branco}"/>
-  <path d="M ${tamanho * 0.5} ${tamanho * 0.14} V ${tamanho * 0.86} M ${tamanho * 0.14} ${tamanho * 0.5} H ${tamanho * 0.86}" fill="none" stroke="${primitivo.tinta900}" stroke-width="${tamanho * 0.08}" stroke-linecap="round"/>
+  <text x="50%" y="53%" text-anchor="middle" dominant-baseline="middle" fill="${primitivo.tinta900}" font-family="Arial, Helvetica, sans-serif" font-size="${tamanho * 0.32}" font-weight="800">N</text>
 </svg>`
 }
 

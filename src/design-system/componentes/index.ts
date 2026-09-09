@@ -7,6 +7,7 @@ export { UltimaAtualizacao, type UltimaAtualizacaoProps } from './UltimaAtualiza
 export { Tabela, type TabelaProps, type Coluna } from './Tabela'
 export { Avatar, iniciaisDe, fundoDoTime } from './Avatar'
 export { LogoTime, type LogoTimeProps } from './LogoTime'
+export { MarcaNip } from './MarcaNip'
 export { IdentidadeTime, type IdentidadeTimeProps } from './IdentidadeTime'
 export { Pilula } from './Pilula'
 export { NotaPartida, type NotaPartidaProps } from './NotaPartida'

@@ -42,10 +42,9 @@ afterAll(async () => {
 // ---------------------------------------------------------------------------
 
 describe('migrations sobem e descem limpas', () => {
-  it('a subida cria as 52 tabelas dos grupos persistidos', async () => {
-    // 52 desde acompanhamento e exclusões de alerta por conta; 47 desde llm_chamadas e
-    // chat_mensagens (roteamento de LLM)
-    expect(await banco.contarTabelas()).toBe(52)
+  it('a subida cria as 68 tabelas dos grupos persistidos', async () => {
+    // 68 desde a operação de afiliados; 52 desde acompanhamento e exclusões por conta.
+    expect(await banco.contarTabelas()).toBe(68)
   })
 
   it('desce zerando o schema e sobe de novo sem resíduo', async () => {
@@ -53,8 +52,8 @@ describe('migrations sobem e descem limpas', () => {
     expect(await banco.contarTabelas()).toBe(0)
 
     await banco.subir()
-    // 52 desde acompanhamento e exclusões de alerta por conta
-    expect(await banco.contarTabelas()).toBe(52)
+    // 68 desde a operação de afiliados.
+    expect(await banco.contarTabelas()).toBe(68)
   })
 })
 
