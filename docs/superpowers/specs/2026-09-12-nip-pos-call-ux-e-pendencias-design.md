@@ -10,14 +10,15 @@ produção enviadas em 12/09 (Estatísticas, Perfil, Gestão de banca)
 ## 1 · Como ler esta spec
 
 A call decidiu seis coisas e distribuiu onze tarefas. Parte já está no ar; parte não existe;
-e há **um ponto que contradiz uma regra documentada do projeto** e não pode ser implementado
-sem você decidir. Esta spec separa exatamente isso:
+e um ponto contradizia uma regra documentada do projeto — esse foi resolvido em 12/09 e já
+está no ar (§7). Esta spec separa exatamente isso:
 
 - **§3** o que a call pediu e **já está pronto** — para ninguém trabalhar duas vezes;
 - **§4** os **ajustes de UX** dos três prints, que é o que você pediu agora;
 - **§5** o que **falta e depende de nós**;
 - **§6** o que **depende de terceiros** e nos bloqueia;
-- **§7** a **contradição** que precisa da sua palavra.
+- **§7** a **redação da confiança**, já decidida — e o acoplamento que a troca revelou;
+- **§9** o que **ainda depende de você**.
 
 O que **não** entra: nada de regra de estratégia, nada no motor, nada no ruleset. As regras
 invioláveis do `CLAUDE.md` continuam valendo integralmente.
@@ -272,37 +273,33 @@ mas a fronteira merece uma linha explícita na tela.
 ele só faz sentido depois que os planos existirem, porque a decisão foi que o alerta é
 benefício de plano superior. Fazer antes é construir uma porta sem casa.
 
-## 7 · A contradição que precisa da sua palavra
+## 7 · A redação da confiança — decidido em 12/09
 
-A call registrou como **alinhado**: trocar "confiança máxima" por **"probabilidade muito
-alta"**, para evitar problemas de comunicação com os usuários.
+A call registrou como alinhado trocar "confiança máxima" por "probabilidade muito alta".
+Isso colidia com uma regra do `CLAUDE.md` travada por quatorze arquivos de teste, e tinha um
+problema de mérito: o motivo alegado era reduzir risco jurídico, mas chamar de
+"probabilidade" um número que **não é** probabilidade cria exatamente a expectativa que a
+regra existe para impedir — que 91 signifique 91% de chance de acerto.
 
-**Isso contradiz frontalmente uma regra documentada e testada deste projeto.** O
-`CLAUDE.md` diz: *"O % não é probabilidade, é score de confiança. Nunca escreva
-'probabilidade' na UI."* Quatorze arquivos de teste travam essa proibição, e a tela de
-detalhe do apito escreve hoje, em texto: *"O número é a nota de confiança da análise NIP,
-não uma probabilidade."*
+**O parceiro decidiu pela terceira saída:** o incômodo estava no superlativo, não na palavra
+"confiança". O rótulo do grau 5 passou de `CONFIANÇA MÁXIMA` para **`SINAL MAIS FORTE`**. O
+nome do número continua sendo nota de confiança, a regra continua valendo e os quatorze
+testes ficaram intocados. **Feito e no ar** — era uma linha de ruleset.
 
-**E há um problema de mérito, não só de processo.** O motivo dado na call foi reduzir risco
-jurídico e de expectativa. Chamar de "probabilidade" um número que **não é** uma
-probabilidade tende a fazer o oposto: cria a expectativa de que 91 significa 91% de chance
-de acerto, que é exatamente a leitura que a regra atual existe para impedir. Trocar
-"confiança" por "probabilidade" é mais arriscado, não menos.
+### 7.1 · O que a troca revelou
 
-**O que eu proponho, e é uma terceira saída.** O incômodo da Ana provavelmente não está na
-palavra "confiança" — está no superlativo **"máxima"**, que soa como garantia. Dá para
-resolver a comunicação sem afirmar o que o número não é: manter "nota de confiança" como o
-nome do número e trocar só o rótulo do topo da escala, de "confiança máxima" para algo como
-**"sinal mais forte"** ou **"confiança muito alta"**.
+Uma linha de YAML quebrou quatro testes, e o motivo é instrutivo: **código e teste dependiam
+do texto do ruleset**, que é o oposto da regra 1.
 
-**Não vou mexer nisso sem você.** É vocabulário do produto e tem implicação jurídica; a
-regra 3 do projeto manda parar e perguntar. Três caminhos:
+A tela do detalhe cortava o prefixo "CONFIANÇA " com uma expressão regular, para o rótulo
+caber na coluna de 96 px do hero. Quando o grau 5 deixou de começar com essa palavra, o
+corte virou nada e o rótulo inteiro voltou para a coluna estreita. E quatro testes fixavam
+os rótulos como literais, de modo que mudar um valor no YAML obrigava a mudar teste.
 
-1. **Manter a regra** e trocar só o superlativo (minha recomendação).
-2. **Adotar "probabilidade"** como a call registrou — então a regra do `CLAUDE.md`, o
-   `docs/04-design-system.md` e os quatorze testes mudam junto, e isso precisa estar
-   escrito como decisão consciente, não como efeito colateral.
-3. **Esperar** o lucas vena voltar da investigação de comunicação que ele assumiu na call.
+Os dois foram corrigidos: a forma curta virou um campo do ruleset (`rotulo_curto`) e os
+testes passaram a ler do ruleset ativo — travam as bordas das faixas e a presença das cinco,
+não o texto. **Vale como alerta para o resto:** onde mais o código lê texto de ruleset
+esperando um formato? É o tipo de acoplamento que só aparece quando o valor muda.
 
 ## 8 · O que não está nesta spec, de propósito
 
@@ -311,3 +308,17 @@ As sete decisões comerciais e editoriais da
 continuam abertas e independem da call — entre elas se quem não jogou conta na taxa e a
 escolha entre odd média e faixa com o CJ. Elas não foram mencionadas na reunião e o
 comportamento atual segue preservado.
+
+## 9 · O que ainda depende de você
+
+Fechadas até aqui: a redação da confiança (§7) e a logo em toda tela (§4.4). Restam:
+
+| # | Decisão | O que muda |
+| --- | --- | --- |
+| 1 | **Recuperação de senha**: provedor de e-mail de verdade, ou link emitido pelo admin | o provedor é meia hora de configuração e resolve o usuário final; o link do admin resolve você e a equipe hoje e não resolve o usuário |
+| 2 | **Foto de perfil**: armazenamento de arquivo, ou um conjunto de avatares para escolher | o armazenamento permite foto própria; os avatares entregam personalização sem dependência nova |
+| 3 | **Por onde eu começo** | a ordem da §5.1 começa por senha e conta de teste, porque são as que travam você e a equipe |
+
+E seguem abertas, independentes desta call, as sete decisões da
+[spec das correções da Identidade 04](2026-09-08-correcoes-da-revisao-identidade-04.md) —
+entre elas se quem não jogou conta na taxa e a escolha entre odd média e faixa com o CJ.
