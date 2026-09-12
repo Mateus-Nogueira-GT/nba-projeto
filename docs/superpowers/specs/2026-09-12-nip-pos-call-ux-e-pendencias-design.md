@@ -95,7 +95,10 @@ declaração de largura em cada `page.tsx`.
   dado (§5.2). Com a divisão, o trilho passa a estar correto sem nenhuma outra mudança.
 - **Logo de todas as franquias** na coluna do time, ao lado da sigla em Anton. A fonte
   natural é o CDN da NBA, o mesmo de onde já vêm os rostos dos jogadores. O componente já
-  existe; falta popular `times.logo_url` e ligá-lo (§5.2).
+  existe; falta popular `times.logo_url` e ligá-lo (§5.2). **A logo vale em toda tela**
+  (§4.4), não só aqui: tela de time, tela de partida, cabeçalho de jogo e jogos do dia
+  entram junto — é uma passada só, e deixar metade do app com logo e metade sem seria pior
+  do que nenhuma.
 - **A tabela ganha o que a largura nova permite:** nome do time por extenso ao lado da
   sigla, jogos atrás do líder, e aproveitamento em casa e fora. Em celular essas colunas
   saem e fica o que já está no print.
@@ -180,10 +183,11 @@ system (já resolve foto e monograma — reaproveitar, não recriar).
 
 Ficam registrados aqui para não se perderem entre as pendências funcionais:
 
-- **Logos limitados à versão de navegador.** A call decidiu isso por causa de direitos de
-  nome. Hoje só existe a versão de navegador, então na prática os logos entram — mas a
-  restrição precisa estar escrita para o dia em que houver app nativo. **Confirme comigo se
-  a leitura está certa**, porque ela muda o que entra em §4.2.
+- **Logo entra em tudo.** Decidido pelo parceiro em 12/09. A call registrou a restrição a
+  "versão de navegador" por causa de direitos de nome; como o produto **é** a versão de
+  navegador, a logo vale em toda tela — classificação, tela de time, tela de partida,
+  cabeçalho de jogo, jogos do dia. A restrição volta à mesa **se e quando** existir app
+  nativo, e aí é decisão nova, não herança desta.
 - **Quadra de basquete ao fundo e fotos de perfil dos jogadores.** O componente da quadra já
   existe e os rostos já estão nos cards; falta decidir onde a quadra aparece e com que peso,
   para não competir com a leitura do card.
