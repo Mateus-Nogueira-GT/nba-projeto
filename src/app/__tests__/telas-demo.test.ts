@@ -236,10 +236,19 @@ describe('detalhe do apito', () => {
       }),
     )
     // Identidade 04: sob a pílula sai só o GRAU, em uma linha de 10 px como no
-    // artboard; o rótulo inteiro do ruleset ("CONFIANÇA MUITO FORTE") não cabe
-    // na coluna do hero — e o que sobra dele não se esconde num `title`, que
-    // em toque não existe.
-    expect(html).toMatch(/>(BOA|SÓLIDA|FORTE|MUITO FORTE|MÁXIMA)</)
+    // artboard; o rótulo inteiro do ruleset não cabe na coluna do hero — e o
+    // que sobra dele não se esconde num `title`, que em toque não existe.
+    //
+    // As formas curtas vêm do RULESET, não de uma lista aqui: trocar um rótulo
+    // no YAML não pode quebrar teste (regra 1).
+    const { rulesetAtivo: rulesetDoDetalhe } = await import('../../modules/entrega/ruleset-ativo')
+    const curtos = (await rulesetDoDetalhe()).confianca_exibicao.faixas.map(
+      (f) => f.rotulo_curto ?? f.rotulo,
+    )
+    expect(
+      curtos.some((c) => html.includes(`>${c}<`)),
+      'grau sob a pílula',
+    ).toBe(true)
     expect(html).not.toMatch(/title="[^"]*CONFIANÇA/)
     expect(html).toContain('MÉDIA')
     // Identidade 04: os últimos CINCO em quadrados viraram a forma no atributo
@@ -564,14 +573,14 @@ describe('a aba teórica', () => {
   it('mostra a régua de 5 faixas turquesa com rótulos, não a escala antiga', async () => {
     const { default: Pagina } = await import('../(app)/como-funciona/page')
     const html = renderToStaticMarkup(await Pagina())
-    for (const r of [
-      'CONFIANÇA BOA',
-      'CONFIANÇA SÓLIDA',
-      'CONFIANÇA FORTE',
-      'CONFIANÇA MUITO FORTE',
-      'CONFIANÇA MÁXIMA',
-    ])
-      expect(html).toContain(r)
+    // Os rótulos vêm do RULESET, não de uma lista aqui: a régua é exibição e o
+    // texto dela muda por YAML (em 12/09 o grau 5 deixou de ser "CONFIANÇA
+    // MÁXIMA"). O que o teste trava é que as CINCO faixas aparecem, com o
+    // texto que o ruleset ativo declara.
+    const { rulesetAtivo } = await import('../../modules/entrega/ruleset-ativo')
+    const faixas = (await rulesetAtivo()).confianca_exibicao.faixas
+    expect(faixas).toHaveLength(5)
+    for (const f of faixas) expect(html, `faixa grau ${f.grau}`).toContain(f.rotulo)
   }, 60_000)
 
   it('avisa que a régua é de demonstração quando o ruleset diz isso', async () => {

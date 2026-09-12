@@ -220,7 +220,7 @@ confianca_exibicao:
     - { de: 83, grau: 2, rotulo: CONFIANÇA SÓLIDA }
     - { de: 86, grau: 3, rotulo: CONFIANÇA FORTE }
     - { de: 89, grau: 4, rotulo: CONFIANÇA MUITO FORTE }
-    - { de: 93, grau: 5, rotulo: CONFIANÇA MÁXIMA }
+    - { de: 93, grau: 5, rotulo: SINAL MAIS FORTE, rotulo_curto: MAIS FORTE }
 ```
 
 Note a amplitude: 80 a 93+, porque a confiança calculada pelo motor **só varia de 80 a

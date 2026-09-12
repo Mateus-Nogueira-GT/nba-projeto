@@ -224,7 +224,9 @@ describe('Detalhe do apito — o esqueleto fixo da análise (identidade 04)', ()
     const html = await renderizar(item)
 
     expect(html).toContain(`LINHA ${item.linha}`)
-    expect(html).toContain(`aria-label="bateu ${detalhe.bateu.acertos} de ${detalhe.bateu.total}. Do mais antigo ao mais recente:`)
+    expect(html).toContain(
+      `aria-label="bateu ${detalhe.bateu.acertos} de ${detalhe.bateu.total}. Do mais antigo ao mais recente:`,
+    )
     expect(html).toContain(`bateu ${detalhe.bateu.acertos} de ${detalhe.bateu.total}`)
   }, 60_000)
 
@@ -360,7 +362,11 @@ describe('Detalhe do apito — o esqueleto fixo da análise (identidade 04)', ()
     // A pílula já significa confiança; o que falta embaixo é o GRAU. O rótulo
     // inteiro do ruleset não cabe na coluna do hero — quebraria em três linhas
     // e o hero deixaria de alinhar com o nome.
-    const grau = faixa!.rotulo.replace(/^CONFIANÇA\s+/, '')
+    //
+    // A forma curta vem do RULESET (`rotulo_curto`). Este teste já cortou o
+    // prefixo "CONFIANÇA " com regex, como a tela fazia — e os dois quebraram
+    // juntos em 12/09, quando o grau 5 deixou de começar com essa palavra.
+    const grau = faixa!.rotulo_curto ?? faixa!.rotulo
     expect(html).toContain(`>${grau}<`)
     expect(html).not.toContain(`>${faixa!.rotulo}<`)
     // E o resto do rótulo NÃO se esconde num `title`: em toque não há gesto

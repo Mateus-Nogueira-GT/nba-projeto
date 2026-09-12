@@ -7,12 +7,16 @@ const ruleset = carregarRuleset(yamlBruto)
 
 describe('faixa de confiança exibida', () => {
   it('mapeia as bordas exatas de cada faixa', () => {
-    expect(faixaDaConfianca(80, ruleset)).toEqual({ grau: 1, rotulo: 'CONFIANÇA BOA' })
+    // O RÓTULO vem do ruleset, nunca de um literal aqui: trocá-lo no YAML não
+    // pode quebrar teste (regra 1). O que este teste trava são as BORDAS.
+    const rotuloDo = (grau: number) =>
+      ruleset.confianca_exibicao.faixas.find((f) => f.grau === grau)!.rotulo
+    expect(faixaDaConfianca(80, ruleset)).toEqual({ grau: 1, rotulo: rotuloDo(1) })
     expect(faixaDaConfianca(82.9, ruleset)?.grau).toBe(1)
     expect(faixaDaConfianca(83, ruleset)?.grau).toBe(2)
     expect(faixaDaConfianca(86, ruleset)?.grau).toBe(3)
     expect(faixaDaConfianca(89, ruleset)?.grau).toBe(4)
-    expect(faixaDaConfianca(93, ruleset)).toEqual({ grau: 5, rotulo: 'CONFIANÇA MÁXIMA' })
+    expect(faixaDaConfianca(93, ruleset)).toEqual({ grau: 5, rotulo: rotuloDo(5) })
     expect(faixaDaConfianca(95, ruleset)?.grau).toBe(5)
   })
 

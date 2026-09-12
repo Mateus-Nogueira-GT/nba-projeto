@@ -312,16 +312,19 @@ export default async function PaginaApito({
   // materialização. A tela não executa o motor (`tela-nao-chama-o-motor`).
   // O rótulo é leitura de CONFIGURAÇÃO do ruleset, como em /como-funciona.
   const grau = principal.grauConfianca ?? null
-  const rotuloFaixa =
-    grau === null
-      ? null
-      : (ruleset.confianca_exibicao.faixas.find((f) => f.grau === grau)?.rotulo ?? null)
-  // O artboard escreve o GRAU em uma linha de 10 px sob a pílula ("Muito
-  // forte"). O rótulo do ruleset repete a palavra que a pílula já significa —
-  // e "CONFIANÇA MUITO FORTE" não cabe na coluna de 96 px: quebraria em três
-  // linhas e o hero deixaria de alinhar com o nome. O ruleset segue sendo a
-  // fonte (trocar lá muda aqui); o que sai é só o grau.
-  const grauEmUmaLinha = rotuloFaixa?.replace(/^CONFIANÇA\s+/, '') ?? null
+  const faixaDeConfianca =
+    grau === null ? null : (ruleset.confianca_exibicao.faixas.find((f) => f.grau === grau) ?? null)
+  const rotuloFaixa = faixaDeConfianca?.rotulo ?? null
+  // O artboard escreve o grau em UMA linha de 10 px sob a pílula. O rótulo
+  // inteiro não cabe na coluna de 96 px: quebraria em três linhas e o hero
+  // deixaria de alinhar com o nome.
+  //
+  // A forma curta vem do RULESET (`rotulo_curto`), não de um regex aqui. Antes
+  // a tela cortava o prefixo "CONFIANÇA " com uma expressão regular — e em
+  // 12/09, quando o grau 5 deixou de começar com essa palavra, o corte virou
+  // nada e o rótulo inteiro voltou para a coluna estreita. Texto de ruleset é
+  // dado do ruleset.
+  const grauEmUmaLinha = faixaDeConfianca?.rotulo_curto ?? rotuloFaixa
   const corFaixa = grau === null ? semantico.divisor : CONFIANCA_GRAU[grau]
   const brilha = grau === 5
 
