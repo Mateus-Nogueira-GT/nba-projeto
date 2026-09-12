@@ -63,6 +63,21 @@ hoje com a mesma régua.
 No celular nada muda — as duas caem para a largura da tela com o mesmo respiro lateral de
 hoje. É só o desktop que deixa de desperdiçar espaço.
 
+**Pronto quando:**
+
+- a moldura aceita a largura como parâmetro e cada tela declara a sua; nenhuma tela fica com
+  largura solta no meio do arquivo;
+- em 1280 px e em 1440 px, a Estatísticas, os Resultados, a Gestão e o Perfil ocupam a
+  largura de dados, e a Lista e o Fire Live seguem na de leitura;
+- em 390 px **nenhuma tela rola na horizontal** e o respiro lateral é o de hoje;
+- a barra de abas inferior continua ancorada e sem sobrepor o último card em qualquer
+  largura;
+- a captura das telas a 390 e a 1280 px entra no fechamento, lado a lado com o antes.
+
+**Arquivos:** `src/components/navegacao/Moldura.tsx`, `Esqueleto.tsx` (que repete o 640 e
+precisa acompanhar, senão o esqueleto de carregamento salta quando a tela chega) e a
+declaração de largura em cada `page.tsx`.
+
 ### 4.2 · A tabela de classificação
 
 **Três problemas no print, e o terceiro é um erro factual.**
@@ -86,6 +101,25 @@ hoje. É só o desktop que deixa de desperdiçar espaço.
   saem e fica o que já está no print.
 - **Leitura por varredura:** as duas conferências lado a lado no desktop, empilhadas no
   celular, com a linha de corte do play-in desenhada entre a 10ª e a 11ª posição.
+
+**Pronto quando:**
+
+- há **duas tabelas**, Leste e Oeste, cada uma com 15 times, e a posição reinicia em 1º em
+  cada uma;
+- o trilho marca playoff da 1ª à 6ª e play-in da 7ª à 10ª **dentro da conferência**, com a
+  linha de corte visível entre a 10ª e a 11ª;
+- **os 30 times têm logo**, e o time cuja imagem falhar cai na sigla em Anton sem buraco na
+  linha — a mesma regra dos rostos;
+- a logo tem texto alternativo com o nome do time e não é o único canal: a sigla continua
+  escrita ao lado;
+- em 390 px a tabela mostra posição, logo, sigla, vitórias e derrotas, aproveitamento e
+  últimos 5, e as colunas novas somem — **sem rolagem horizontal da página** (se a tabela
+  precisar rolar, ela rola dentro do próprio contêiner);
+- nenhum dado inventado: time sem conferência no banco não vira "Leste" por padrão — cai num
+  grupo rotulado e visível, para a falta de dado aparecer em vez de mentir.
+
+**Arquivos:** `src/app/(app)/estatisticas/page.tsx`, `src/design-system/componentes/LogoTime.tsx`
+(existe e nunca foi ligado), `Tabela.tsx`, e a carga de dados da §5.2.
 
 ### 4.3 · A aba de acesso do usuário (Perfil)
 
@@ -117,6 +151,45 @@ dispositivo, que hoje só é possível pelo admin). No desktop, dois blocos por 
 **Assinatura sem plano não pode parecer erro.** Hoje escreve "Sem plano · Não contratado ·
 — · —", quatro traços que parecem falha. Vira uma chamada: o que o plano dá e o botão de
 assinar.
+
+**Os estados que a tela precisa cobrir**, porque é onde telas de conta costumam quebrar:
+sem nome (cai nas iniciais do e-mail), sem foto (monograma), sem plano (a chamada acima),
+plano vencendo (contagem regressiva), plano vencido, e-mail novo aguardando confirmação
+(o antigo continua valendo até confirmar), e um só dispositivo (não faz sentido oferecer
+"encerrar sessão" no aparelho em uso sem dizer que é ele).
+
+**Pronto quando:**
+
+- o topo mostra foto ou monograma, nome e e-mail, e a etiqueta do plano;
+- **nome, e-mail, senha e foto são editáveis pelo próprio usuário**, cada um com o retorno
+  do que aconteceu — sucesso, erro e o que fazer;
+- trocar e-mail **não derruba o acesso**: o endereço novo só vale depois de confirmado;
+- trocar senha exige a senha atual;
+- existe caminho para **senha esquecida** a partir da tela de entrar (ver §5.3 para a
+  dependência);
+- cada dispositivo pode encerrar a própria sessão, e o aparelho em uso está marcado como tal;
+- em 390 px os blocos empilham na ordem Conta · Assinatura · Alertas · Dispositivos; no
+  desktop, dois por linha;
+- nenhuma ação destrutiva sem confirmação, e nenhuma senha ou token aparece em log.
+
+**Arquivos:** `src/app/(app)/conta/page.tsx` e ações novas ao lado dela,
+`src/modules/plataforma/auth/**`, migration para `usuarios.foto_url`, e o `Avatar` do design
+system (já resolve foto e monograma — reaproveitar, não recriar).
+
+### 4.4 · Os pontos de UX que vieram da call, não dos prints
+
+Ficam registrados aqui para não se perderem entre as pendências funcionais:
+
+- **Logos limitados à versão de navegador.** A call decidiu isso por causa de direitos de
+  nome. Hoje só existe a versão de navegador, então na prática os logos entram — mas a
+  restrição precisa estar escrita para o dia em que houver app nativo. **Confirme comigo se
+  a leitura está certa**, porque ela muda o que entra em §4.2.
+- **Quadra de basquete ao fundo e fotos de perfil dos jogadores.** O componente da quadra já
+  existe e os rostos já estão nos cards; falta decidir onde a quadra aparece e com que peso,
+  para não competir com a leitura do card.
+- **Classificação parecida com o Sofascore.** É o que a §4.2 entrega: tabela densa, logo,
+  sequência e últimos 5. O que **não** entra é o que a Identidade 04 já tinha descartado —
+  nada de probabilidade de vitória, nada de mapa de calor.
 
 ## 5 · Falta e depende de nós
 
