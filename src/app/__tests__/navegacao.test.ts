@@ -3,6 +3,8 @@ import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { BarraInferior } from '../../components/navegacao'
 import { CabecalhoTela, FolhaDeFiltros } from '../../components/navegacao'
+import { Moldura, LARGURA_DA_MOLDURA } from '../../components/navegacao/Moldura'
+import { Esqueleto } from '../../components/navegacao/Esqueleto'
 import { SeloContexto } from '../../design-system/componentes'
 import { componente } from '../../design-system/tokens/componente'
 import { semantico } from '../../design-system/tokens/semantico'
@@ -169,5 +171,21 @@ describe('navegação (identidade 04)', () => {
     // o ícone do FILTRAR é cinza (artboard), não herda a cor do rótulo
     expect(html).toContain(`stroke="${semantico.textoSecundario}"`)
     expect(html.toLowerCase()).not.toContain('probabilidade')
+  })
+
+  it('a moldura tem duas larguras: leitura (padrão) e dados', () => {
+    const leitura = renderToStaticMarkup(createElement(Moldura, { aba: 'lista' }, 'x'))
+    const dados = renderToStaticMarkup(
+      createElement(Moldura, { aba: 'stats', largura: 'dados' }, 'x'),
+    )
+    expect(leitura).toContain(`max-width:${LARGURA_DA_MOLDURA.leitura}px`)
+    expect(dados).toContain(`max-width:${LARGURA_DA_MOLDURA.dados}px`)
+    // o respiro lateral não muda com a largura — é o que protege o celular
+    expect(dados).toContain('padding:24px 16px')
+  })
+
+  it('o esqueleto de carregamento acompanha a largura, senão a tela pula quando o conteúdo chega', () => {
+    const html = renderToStaticMarkup(createElement(Esqueleto, { aba: 'stats', largura: 'dados' }))
+    expect(html).toContain(`max-width:${LARGURA_DA_MOLDURA.dados}px`)
   })
 })

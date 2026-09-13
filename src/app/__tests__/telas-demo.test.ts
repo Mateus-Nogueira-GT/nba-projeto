@@ -236,10 +236,19 @@ describe('detalhe do apito', () => {
       }),
     )
     // Identidade 04: sob a pílula sai só o GRAU, em uma linha de 10 px como no
-    // artboard; o rótulo inteiro do ruleset ("CONFIANÇA MUITO FORTE") não cabe
-    // na coluna do hero — e o que sobra dele não se esconde num `title`, que
-    // em toque não existe.
-    expect(html).toMatch(/>(BOA|SÓLIDA|FORTE|MUITO FORTE|MÁXIMA)</)
+    // artboard; o rótulo inteiro do ruleset não cabe na coluna do hero — e o
+    // que sobra dele não se esconde num `title`, que em toque não existe.
+    //
+    // As formas curtas vêm do RULESET, não de uma lista aqui: trocar um rótulo
+    // no YAML não pode quebrar teste (regra 1).
+    const { rulesetAtivo: rulesetDoDetalhe } = await import('../../modules/entrega/ruleset-ativo')
+    const curtos = (await rulesetDoDetalhe()).confianca_exibicao.faixas.map(
+      (f) => f.rotulo_curto ?? f.rotulo,
+    )
+    expect(
+      curtos.some((c) => html.includes(`>${c}<`)),
+      'grau sob a pílula',
+    ).toBe(true)
     expect(html).not.toMatch(/title="[^"]*CONFIANÇA/)
     expect(html).toContain('MÉDIA')
     // Identidade 04: os últimos CINCO em quadrados viraram a forma no atributo
@@ -564,14 +573,14 @@ describe('a aba teórica', () => {
   it('mostra a régua de 5 faixas turquesa com rótulos, não a escala antiga', async () => {
     const { default: Pagina } = await import('../(app)/como-funciona/page')
     const html = renderToStaticMarkup(await Pagina())
-    for (const r of [
-      'CONFIANÇA BOA',
-      'CONFIANÇA SÓLIDA',
-      'CONFIANÇA FORTE',
-      'CONFIANÇA MUITO FORTE',
-      'CONFIANÇA MÁXIMA',
-    ])
-      expect(html).toContain(r)
+    // Os rótulos vêm do RULESET, não de uma lista aqui: a régua é exibição e o
+    // texto dela muda por YAML (em 12/09 o grau 5 deixou de ser "CONFIANÇA
+    // MÁXIMA"). O que o teste trava é que as CINCO faixas aparecem, com o
+    // texto que o ruleset ativo declara.
+    const { rulesetAtivo } = await import('../../modules/entrega/ruleset-ativo')
+    const faixas = (await rulesetAtivo()).confianca_exibicao.faixas
+    expect(faixas).toHaveLength(5)
+    for (const f of faixas) expect(html, `faixa grau ${f.grau}`).toContain(f.rotulo)
   }, 60_000)
 
   it('avisa que a régua é de demonstração quando o ruleset diz isso', async () => {
@@ -623,7 +632,7 @@ describe('telas restantes — identidade 03 (conferência em lote)', () => {
 })
 
 describe('regras transversais da identidade', () => {
-  it('nenhuma tela contém meio ponto, ALTÍSSIMO VALOR ou três pontos', async () => {
+  it('nenhuma tela contém meio ponto, ALTÍSSIMO VALOR, três pontos, "Carlos" ou a lista do CJ', async () => {
     const comSearchParams = ['../(app)/page', '../(app)/fire-live/page', '../(app)/gestao/page']
     for (const rota of comSearchParams) {
       const { default: Pagina } = await import(rota)
@@ -631,6 +640,9 @@ describe('regras transversais da identidade', () => {
       expect(html).not.toMatch(/(PONTOS|REBOTES|ASSISTÊNCIAS)\s+\d+,\d/)
       expect(html).not.toContain('ALTÍSSIMO VALOR')
       expect(html).not.toContain('3 PONTOS')
+      expect(html).not.toContain('Carlos')
+      expect(html).not.toContain('lista do CJ')
+      expect(html).not.toContain('LISTA DO CJ')
     }
 
     // A rodada de /resultados vem da ROTA, não de searchParams.
@@ -641,6 +653,73 @@ describe('regras transversais da identidade', () => {
     expect(htmlResultados).not.toMatch(/(PONTOS|REBOTES|ASSISTÊNCIAS)\s+\d+,\d/)
     expect(htmlResultados).not.toContain('ALTÍSSIMO VALOR')
     expect(htmlResultados).not.toContain('3 PONTOS')
+    expect(htmlResultados).not.toContain('Carlos')
+    expect(htmlResultados).not.toContain('lista do CJ')
+    expect(htmlResultados).not.toContain('LISTA DO CJ')
+  }, 60_000)
+
+  // A rede acima cobre só 4 rotas — e nenhuma delas é onde "NA LISTA DO CJ" e
+  // o vazio da hierarquia de fato moravam. É exatamente a família de
+  // estatísticas (a aba que lê as duas visões de time) e as telas de texto
+  // fixo (como-funciona) que precisam da mesma rede. `/assinar` e
+  // `/preferencias` ficam de fora — ver a nota abaixo do teste.
+  it('nem em estatísticas, como-funciona, entrar, no detalhe do apito, na conta ou no cadastro aparece "Carlos" ou a lista do CJ', async () => {
+    const { jogadores: tabelaJogadores, times: tabelaTimes, jogos: tabelaJogos } = await import(
+      '../../modules/dominio/db/schema'
+    )
+    const [umJogador] = await banco.db.select().from(tabelaJogadores).limit(1)
+    const [umTime] = await banco.db.select().from(tabelaTimes).limit(1)
+    const [umJogo] = await banco.db.select().from(tabelaJogos).limit(1)
+
+    const { lerFeed } = await import('../../modules/entrega/lista-secreta')
+    const feed = await lerFeed(banco.db, HOJE)
+    const apitado = feed!.conteudo.itens[0]
+    expect(apitado, 'lista de hoje sem nenhum apito para render o detalhe').toBeDefined()
+
+    const { default: IndiceEstatisticas } = await import('../(app)/estatisticas/page')
+    const { default: PaginaJogador } = await import('../(app)/estatisticas/jogador/[id]/page')
+    const { default: PaginaTime } = await import('../(app)/estatisticas/time/[id]/page')
+    const { default: PaginaJogo } = await import('../(app)/estatisticas/jogo/[id]/page')
+    const { default: ComoFunciona } = await import('../(app)/como-funciona/page')
+    const { default: Entrar } = await import('../(app)/entrar/page')
+    const { default: Apito } = await import('../(app)/apito/[jogadorId]/page')
+    const { default: Conta } = await import('../(app)/conta/page')
+    const { default: Cadastrar } = await import('../(app)/cadastrar/page')
+
+    const htmls = [
+      renderToStaticMarkup(await IndiceEstatisticas({ searchParams: Promise.resolve({}) })),
+      renderToStaticMarkup(
+        await PaginaJogador({ params: Promise.resolve({ id: umJogador!.id }) }),
+      ),
+      renderToStaticMarkup(
+        await PaginaTime({
+          params: Promise.resolve({ id: umTime!.id }),
+          searchParams: Promise.resolve({}),
+        }),
+      ),
+      renderToStaticMarkup(
+        await PaginaJogo({
+          params: Promise.resolve({ id: umJogo!.id }),
+          searchParams: Promise.resolve({}),
+        }),
+      ),
+      renderToStaticMarkup(await ComoFunciona()),
+      renderToStaticMarkup(await Entrar({ searchParams: Promise.resolve({}) })),
+      renderToStaticMarkup(
+        await Apito({
+          params: Promise.resolve({ jogadorId: apitado!.jogadorId }),
+          searchParams: Promise.resolve({ atributo: apitado!.atributo }),
+        }),
+      ),
+      renderToStaticMarkup(await Conta({ searchParams: Promise.resolve({}) })),
+      renderToStaticMarkup(await Cadastrar()),
+    ]
+
+    for (const html of htmls) {
+      expect(html).not.toContain('Carlos')
+      expect(html).not.toContain('lista do CJ')
+      expect(html).not.toContain('LISTA DO CJ')
+    }
   }, 60_000)
 })
 

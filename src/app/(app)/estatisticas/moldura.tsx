@@ -129,7 +129,7 @@ export function Secao({
 
 export function SemBanco() {
   return (
-    <Moldura aba="stats">
+    <Moldura aba="stats" largura="dados">
       <CabecalhoTela sobrancelha={SOBRANCELHA_STATS} titulo="STATS" />
       <p style={{ color: semantico.textoSecundario }}>
         Banco não configurado. Rode <code>vercel env pull</code> e <code>npm run db:migrate</code>.

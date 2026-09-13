@@ -1,5 +1,26 @@
 import { randomBytes, scrypt, timingSafeEqual } from 'node:crypto'
 import { promisify } from 'node:util'
+import { z } from 'zod'
+
+/**
+ * Política de senha da NIP — uma só, para o cadastro (`assinatura/cadastro.ts`)
+ * e para a troca de senha no perfil (`app/(app)/conta/acoes.ts`). Duas
+ * políticas deixaria alguém entrar com senha forte e trocar por doze letras
+ * iguais. Mora aqui, ao lado de `gerarHash`/`conferirSenha`, porque é sobre a
+ * mesma coisa: o que conta como senha válida nesta conta.
+ */
+export const senhaSchema = z
+  .string()
+  .min(12)
+  .max(128)
+  .refine((senha) => /[A-Za-z]/.test(senha) && /\d/.test(senha), {
+    message: 'a senha deve conter letra e número',
+  })
+
+// Mesma frase de `cadastrar/formulario.tsx` (helper abaixo do campo de
+// senha) — a regra e a frase que a descreve moram no mesmo arquivo de
+// propósito, para nunca divergir.
+export const MENSAGEM_REGRA_SENHA = 'A senha precisa ter pelo menos 12 caracteres, com letra e número.'
 
 const derivar = promisify(scrypt) as (
   senha: string,

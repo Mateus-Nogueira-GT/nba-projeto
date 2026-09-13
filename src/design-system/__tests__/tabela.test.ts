@@ -5,6 +5,10 @@ import { describe, expect, it } from 'vitest'
 import { Tabela } from '../componentes'
 import type { Coluna } from '../componentes'
 import { componente } from '../tokens/componente'
+import { semantico } from '../tokens/semantico'
+
+/** A régua do separador: o divisor cheio e o dobro da espessura da régua comum. */
+const REGUA = `border-bottom:2px solid ${semantico.divisor}`
 
 /**
  * A TABELA DENSA DA IDENTIDADE 04.
@@ -65,6 +69,50 @@ describe('Tabela · a vestimenta da identidade 04', () => {
 
   it('sem `destaque` nenhuma coluna veste o universo quente', () => {
     expect(tabela()).not.toContain(componente.contextoQuente.faixaFundo)
+  })
+
+  it('a coluna `soDesktop` marca cabeçalho e célula com a classe que o celular esconde', () => {
+    const html = renderToStaticMarkup(
+      createElement(Tabela<Linha>, {
+        legenda: 'Uma linha por partida',
+        colunas: [COLUNAS[0]!, { ...COLUNAS[1]!, soDesktop: true }],
+        linhas: [{ id: 'a', pontos: 10 }],
+        chaveDaLinha: (l: Linha) => l.id,
+      }),
+    )
+    // A COLUNA inteira, não só o topo: esconder o cabeçalho e deixar a célula
+    // desalinharia a tabela no celular.
+    expect(html.match(/class="so-desktop"/g)).toHaveLength(2)
+    // E a coluna vizinha continua na tela estreita.
+    expect(html.match(/<th\b[^>]*>/g)?.filter((th) => th.includes('so-desktop'))).toHaveLength(1)
+  })
+
+  it('sem `soDesktop` nenhuma coluna sai do celular', () => {
+    expect(tabela()).not.toContain('so-desktop')
+  })
+
+  it('`separadorApos` desenha a régua no fim daquela linha — e só dela', () => {
+    const html = renderToStaticMarkup(
+      createElement(Tabela<Linha>, {
+        legenda: 'Uma linha por partida',
+        colunas: COLUNAS,
+        linhas: [
+          { id: 'a', pontos: 10 },
+          { id: 'b', pontos: 8 },
+        ],
+        chaveDaLinha: (l: Linha) => l.id,
+        separadorApos: (l: Linha) => l.id === 'a',
+      }),
+    )
+    const linhas = html.slice(html.indexOf('<tbody>')).split('<tr').slice(1)
+    expect(linhas).toHaveLength(2)
+    // A régua atravessa a linha INTEIRA: meia régua não é uma divisão.
+    expect(linhas[0]!.match(new RegExp(REGUA, 'g'))).toHaveLength(COLUNAS.length)
+    expect(linhas[1]).not.toContain(REGUA)
+  })
+
+  it('sem `separadorApos` nenhuma linha ganha régua', () => {
+    expect(tabela()).not.toContain(REGUA)
   })
 
   it('a coluna em destaque veste o quente do cabeçalho à última célula', () => {

@@ -295,7 +295,7 @@ export default async function PaginaResultadosDaRodada({
 
   if (!process.env.DATABASE_URL) {
     return (
-      <Moldura aba="lista">
+      <Moldura aba="lista" largura="dados">
         <h1>Resultados</h1>
         <p style={{ color: semantico.textoSecundario }}>Banco não configurado.</p>
       </Moldura>
@@ -462,7 +462,7 @@ export default async function PaginaResultadosDaRodada({
 
   if (rodadaInteira.porJogo.length === 0 && fireLido.length === 0) {
     return (
-      <Moldura aba="lista">
+      <Moldura aba="lista" largura="dados">
         {cabecalho}
         {controles}
         <Vazio>
@@ -476,7 +476,7 @@ export default async function PaginaResultadosDaRodada({
   }
 
   return (
-    <Moldura aba="lista">
+    <Moldura aba="lista" largura="dados">
       {cabecalho}
       {controles}
       <style>{`@keyframes resultados-entrada { from { opacity: 0.7; } to { opacity: 1; } } .resultados-resumo { animation: resultados-entrada 180ms ease-out; } @media (prefers-reduced-motion: reduce) { .resultados-resumo { animation: none; } }`}</style>

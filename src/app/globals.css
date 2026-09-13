@@ -259,3 +259,44 @@ textarea {
     animation: esqueleto-brilho 1.4s ease-in-out infinite;
   }
 }
+
+/*
+ * Colunas que só cabem na largura de dados (Tabela, `soDesktop`). Inline não
+ * faz media query — é a única razão de uma regra de layout de tabela morar
+ * aqui.
+ */
+.so-desktop {
+  display: none;
+}
+
+/*
+ * As duas conferências lado a lado no desktop, empilhadas no celular. A grade
+ * em si é inline, na tela; aqui fica só o que o inline não faz.
+ */
+@media (min-width: 900px) {
+  .so-desktop {
+    display: table-cell;
+  }
+  .grade-conferencias {
+    grid-template-columns: 1fr 1fr;
+  }
+  /*
+   * Banco sem conferência nenhuma cai numa tabela só — e ela toma a largura
+   * inteira, em vez de ficar na metade esquerda com a direita vazia, que é
+   * exatamente a sobra de tela que esta passada veio corrigir.
+   */
+  .grade-conferencias > :only-child {
+    grid-column: 1 / -1;
+  }
+}
+
+/*
+ * Os quatro blocos da conta, dois por linha no desktop (spec 12/09, §4.3) e
+ * empilhados no celular na ordem Conta · Assinatura · Alertas · Dispositivos.
+ * A grade em si é inline, na tela; aqui fica só o que o inline não faz.
+ */
+@media (min-width: 900px) {
+  .grade-conta {
+    grid-template-columns: 1fr 1fr;
+  }
+}

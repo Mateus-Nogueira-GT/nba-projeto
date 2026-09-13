@@ -321,6 +321,12 @@ export async function semearClassificacao(
       .onConflictDoUpdate({
         target: [classificacao.temporada, classificacao.timeId],
         set: {
+          // A conferência entra no recálculo como qualquer outro derivado: a
+          // linha de classificação guarda a sua cópia, e ela GANHA da coluna
+          // do cadastro na hora de agrupar a tela. Sem isto, corrigir a
+          // conferência de uma franquia e reexecutar o seed deixava a
+          // classificação repetindo a divisão antiga, calada.
+          conferencia: time.conferencia,
           vitorias: time.v,
           derrotas: time.d,
           posicao,

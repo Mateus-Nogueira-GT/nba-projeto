@@ -1,3 +1,4 @@
+import { Fragment } from 'react'
 import estilos from '@/components/afiliados/PainelComercial.module.css'
 import Link from 'next/link'
 import { ShellComercial } from '@/components/afiliados/ShellComercial'
@@ -14,6 +15,7 @@ import {
   acaoCriarCasa,
   acaoCriarOferta,
   acaoCriarParceiro,
+  acaoDefinirSaidaDoApito,
   acaoImportar,
   acaoLiberar,
   acaoRecebimento,
@@ -335,6 +337,13 @@ export default async function PaginaAdminAfiliados({
         <section className={`${estilos.painel} ${estilos.largo}`} id="links">
           <h2>Parceiros e links</h2>
           <p>Pausas entram em vigor no próximo acesso ao link.</p>
+          <p>
+            A saída do apito (detalhe do jogador) é sempre UM link, escolhido aqui — nunca o
+            primeiro ativo.
+          </p>
+          <form action={acaoDefinirSaidaDoApito}>
+            <button className={estilos.botaoSecundario}>Nenhuma saída</button>
+          </form>
           <table className={estilos.tabela}>
             <thead>
               <tr>
@@ -362,13 +371,23 @@ export default async function PaginaAdminAfiliados({
                     <td>{parceiro.status}</td>
                     <td>
                       {links.map((link) => (
-                        <form key={link.id} action={acaoStatusLink}>
-                          <input type="hidden" name="id" value={link.id} />
-                          <input type="hidden" name="ativo" value={String(!link.ativo)} />
-                          <button className={estilos.botaoSecundario}>
-                            /r/{link.codigo} · {link.ativo ? 'pausar' : 'ativar'}
-                          </button>
-                        </form>
+                        <Fragment key={link.id}>
+                          <form action={acaoStatusLink}>
+                            <input type="hidden" name="id" value={link.id} />
+                            <input type="hidden" name="ativo" value={String(!link.ativo)} />
+                            <button className={estilos.botaoSecundario}>
+                              /r/{link.codigo} · {link.ativo ? 'pausar' : 'ativar'}
+                            </button>
+                          </form>
+                          <form action={acaoDefinirSaidaDoApito}>
+                            <input type="hidden" name="linkId" value={link.id} />
+                            <button className={estilos.botaoSecundario} disabled={link.saidaDoApito}>
+                              {link.saidaDoApito
+                                ? 'Saída do apito atual'
+                                : 'Usar como saída do apito'}
+                            </button>
+                          </form>
+                        </Fragment>
                       ))}
                     </td>
                     <td>

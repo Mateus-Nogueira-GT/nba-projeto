@@ -101,6 +101,18 @@ const semScript = (html: string) => html.replace(/<script[\s\S]*?<\/script>/g, '
 /** Um pedaço por card — `CardEntrada` é o único `<article>` desta tela. */
 const cards = (html: string) => html.split('<article').slice(1)
 
+function semEntidades(texto: string): string {
+  return texto
+    .replace(/&#x27;/g, "'")
+    .replace(/&quot;/g, '"')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&amp;/g, '&')
+}
+
+/** O texto que o assinante lê, sem marcação e sem entidade — nunca o CSS. */
+const textoDaTela = (html: string) => semEntidades(html.replace(/<[^>]+>/g, ''))
+
 const ocorrencias = (html: string, texto: string) => html.split(texto).length - 1
 
 describe('Fire Live · 04 — regras de escrita da TELA', () => {
@@ -322,7 +334,11 @@ describe('Fire Live · 04 — por jogo, com os três estados', () => {
         .where(eq(jogos.id, item!.jogoId))
 
       const html = semScript(await renderizar({ jogo: item!.jogoId }))
-      expect(html).toContain(item!.nome)
+      // `toContain` compara com o HTML escapado; nomes com apóstrofo (a NBA
+      // tem vários) viram `&#x27;` em `renderToStaticMarkup` — decodifica
+      // antes de comparar, senão o teste falha sempre que o sorteio calhar
+      // num desses nomes.
+      expect(textoDaTela(html)).toContain(item!.nome)
       expect(html).toContain('FIM 1º Q')
       expect(html).not.toContain('1º Q · AO VIVO')
     } finally {

@@ -12,6 +12,7 @@ import { linhasDoJogador } from '@/modules/entrega/lista-secreta'
 import { cotacoesPorCasa, faixasDoJogador } from '@/modules/entrega/odds/leitura'
 import { rotaDoJogador } from '@/modules/entrega/estatisticas/rotas'
 import { rulesetAtivo } from '@/modules/entrega/ruleset-ativo'
+import { saidaDoApito } from '@/modules/entrega/saida-para-casa'
 // Os valores vêm do enum do BANCO, não do motor: a fronteira permite tipo,
 // nunca valor, e a lista de atributos é a mesma nos dois lados.
 import { atributoEnum } from '@/modules/dominio/db/schema'
@@ -296,9 +297,10 @@ export default async function PaginaApito({
   // Faixa REAL das casas quando houve coleta; a tabela de referência do
   // ruleset é o fallback, exatamente como o motor define.
   const jogosDaTela = [...new Set([principal.jogoId, ...itens.map((i) => i.jogoId)])]
-  const [cotadas, gradeDeCasas] = await Promise.all([
+  const [cotadas, gradeDeCasas, saida] = await Promise.all([
     faixasDoJogador(getDb(), jogosDaTela, jogadorId, principal.atributo),
     cotacoesPorCasa(getDb(), jogosDaTela, jogadorId, principal.atributo),
+    saidaDoApito(getDb()),
   ])
   const referencia =
     principal.atributo === 'PONTOS'
@@ -312,16 +314,19 @@ export default async function PaginaApito({
   // materialização. A tela não executa o motor (`tela-nao-chama-o-motor`).
   // O rótulo é leitura de CONFIGURAÇÃO do ruleset, como em /como-funciona.
   const grau = principal.grauConfianca ?? null
-  const rotuloFaixa =
-    grau === null
-      ? null
-      : (ruleset.confianca_exibicao.faixas.find((f) => f.grau === grau)?.rotulo ?? null)
-  // O artboard escreve o GRAU em uma linha de 10 px sob a pílula ("Muito
-  // forte"). O rótulo do ruleset repete a palavra que a pílula já significa —
-  // e "CONFIANÇA MUITO FORTE" não cabe na coluna de 96 px: quebraria em três
-  // linhas e o hero deixaria de alinhar com o nome. O ruleset segue sendo a
-  // fonte (trocar lá muda aqui); o que sai é só o grau.
-  const grauEmUmaLinha = rotuloFaixa?.replace(/^CONFIANÇA\s+/, '') ?? null
+  const faixaDeConfianca =
+    grau === null ? null : (ruleset.confianca_exibicao.faixas.find((f) => f.grau === grau) ?? null)
+  const rotuloFaixa = faixaDeConfianca?.rotulo ?? null
+  // O artboard escreve o grau em UMA linha de 10 px sob a pílula. O rótulo
+  // inteiro não cabe na coluna de 96 px: quebraria em três linhas e o hero
+  // deixaria de alinhar com o nome.
+  //
+  // A forma curta vem do RULESET (`rotulo_curto`), não de um regex aqui. Antes
+  // a tela cortava o prefixo "CONFIANÇA " com uma expressão regular — e em
+  // 12/09, quando o grau 5 deixou de começar com essa palavra, o corte virou
+  // nada e o rótulo inteiro voltou para a coluna estreita. Texto de ruleset é
+  // dado do ruleset.
+  const grauEmUmaLinha = faixaDeConfianca?.rotulo_curto ?? rotuloFaixa
   const corFaixa = grau === null ? semantico.divisor : CONFIANCA_GRAU[grau]
   const brilha = grau === 5
 
@@ -759,6 +764,38 @@ export default async function PaginaApito({
       >
         VER ESTATÍSTICAS
       </Link>
+
+      {/* A saída para a casa parceira (spec 12/09, §5.4) — só existe se o
+          admin marcou UM link ativo, de uma oferta e campanha ativas. Sem
+          isso, nada aparece: a tela nunca inventa destino. `rel` declara o
+          link como patrocinado, e o aviso repete a letra do ADR-0004 que já
+          acompanha a odd, aqui na saída em vez de na leitura. */}
+      {saida && (
+        <p style={{ margin: '12px 0 0' }}>
+          <a
+            href={`/ir/${saida.codigo}`}
+            rel="nofollow sponsored"
+            style={{
+              display: 'block',
+              padding: 12,
+              borderRadius: 12,
+              textAlign: 'center',
+              border: `1.5px solid ${semantico.acento}`,
+              color: semantico.acento,
+              fontFamily: semantico.fonteTitulo,
+              fontSize: 14,
+              letterSpacing: 1,
+              textTransform: 'uppercase',
+              textDecoration: 'none',
+            }}
+          >
+            VER NA CASA PARCEIRA · {saida.rotulo}
+          </a>
+          <span style={{ display: 'block', marginTop: 6, fontSize: 12, color: semantico.texto55 }}>
+            Você sai da NIP. A odd da sua casa pode ser outra; nenhuma aposta é feita por aqui.
+          </span>
+        </p>
+      )}
 
       <footer
         style={{ margin: '16px 0 0', fontSize: 12, lineHeight: 1.5, color: semantico.texto40 }}

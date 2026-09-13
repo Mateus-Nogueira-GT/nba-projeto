@@ -172,6 +172,17 @@ export const rulesetSchema = z.object({
           de: z.number(),
           grau: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4), z.literal(5)]),
           rotulo: z.string().min(1),
+          /**
+           * Forma curta, para onde o rótulo inteiro não cabe (a coluna de 96 px
+           * do hero do detalhe). Ausente, vale o `rotulo`.
+           *
+           * Existe porque a tela FATIAVA o rótulo com um regex que assumia o
+           * prefixo "CONFIANÇA " — e em 12/09, quando o grau 5 virou "SINAL
+           * MAIS FORTE", o corte virou nada e a tela passou a escrever o rótulo
+           * inteiro onde ele não cabe. Texto de ruleset é dado: quem escreve é
+           * o ruleset, não um regex no componente.
+           */
+          rotulo_curto: z.string().min(1).optional(),
         }),
       )
       .min(1),

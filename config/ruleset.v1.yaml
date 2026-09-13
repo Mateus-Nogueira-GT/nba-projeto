@@ -207,11 +207,17 @@ confianca:
 confianca_exibicao:
   origem: demonstracao
   faixas:
-    - { de: 80, grau: 1, rotulo: CONFIANÇA BOA }
-    - { de: 83, grau: 2, rotulo: CONFIANÇA SÓLIDA }
-    - { de: 86, grau: 3, rotulo: CONFIANÇA FORTE }
-    - { de: 89, grau: 4, rotulo: CONFIANÇA MUITO FORTE }
-    - { de: 93, grau: 5, rotulo: CONFIANÇA MÁXIMA }
+    # `rotulo_curto` é o que cabe na coluna do hero do detalhe. Sem ele, a tela
+    # usa o `rotulo` inteiro — nenhum componente fatia texto de ruleset.
+    - { de: 80, grau: 1, rotulo: CONFIANÇA BOA, rotulo_curto: BOA }
+    - { de: 83, grau: 2, rotulo: CONFIANÇA SÓLIDA, rotulo_curto: SÓLIDA }
+    - { de: 86, grau: 3, rotulo: CONFIANÇA FORTE, rotulo_curto: FORTE }
+    - { de: 89, grau: 4, rotulo: CONFIANÇA MUITO FORTE, rotulo_curto: MUITO FORTE }
+    # "MÁXIMA" saiu em 12/09: o superlativo soava como garantia de acerto
+    # (pedido do parceiro depois da call de 08/09). O NOME do número continua
+    # sendo nota de confiança — trocar por "probabilidade" diria que ele é o
+    # que ele não é, e criaria justamente a expectativa que a troca evita.
+    - { de: 93, grau: 5, rotulo: SINAL MAIS FORTE, rotulo_curto: MAIS FORTE }
 
 # -----------------------------------------------------------------------------
 # ODDS — leitura das casas, agregação em faixa. Nunca envio de aposta. ADR-0004.

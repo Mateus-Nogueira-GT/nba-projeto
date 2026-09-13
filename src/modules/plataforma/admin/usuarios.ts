@@ -9,7 +9,7 @@ import {
   usuarios,
 } from '../../dominio/db/schema'
 import type { Db } from '../../dominio/db/tipos'
-import { gerarHash } from '../auth/senha'
+import { gerarHash, MENSAGEM_REGRA_SENHA, senhaSchema } from '../auth/senha'
 import { encerrarTodasAsSessoesNaTransacao } from '../auth/sessao'
 
 export type FiltroUsuarios = {
@@ -101,11 +101,22 @@ export async function listarUsuarios(
   return linhas
 }
 
-/** Adição manual pelo painel — o caminho de exceção quando o pagamento falha. */
+/**
+ * Adição manual pelo painel — o caminho de exceção quando o pagamento falha.
+ *
+ * Valida com `senhaSchema` porque a política de senha "é uma só, para o
+ * cadastro e para a troca no perfil" (comentário de `auth/senha.ts`) — antes
+ * desta validação, essa frase não era verdade: o painel deixava passar
+ * qualquer senha de 8+ caracteres (`admin/usuarios/acoes.ts`), mais fraca do
+ * que o cadastro normal exige. Validar AQUI, e não só no chamador, fecha a
+ * porta para qualquer chamador futuro — `scripts/criar-conta-teste.ts` já
+ * valida antes de chamar, então não muda nada para ele.
+ */
 export async function adicionarUsuario(
   db: Db,
   dados: { email: string; senha: string; nome?: string; papel?: 'USUARIO' | 'ADMIN' },
 ): Promise<{ id: string }> {
+  if (!senhaSchema.safeParse(dados.senha).success) throw new Error(MENSAGEM_REGRA_SENHA)
   const [criado] = await db
     .insert(usuarios)
     .values({

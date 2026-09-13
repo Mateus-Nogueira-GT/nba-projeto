@@ -3,6 +3,7 @@ import { eq, sql } from 'drizzle-orm'
 
 import { jogadores, mapaJogadores, niveis, times } from '../../dominio/db/schema'
 import type { Db } from '../../dominio/db/tipos'
+import { conferenciaDe } from '../../dominio/conferencias'
 import { identidadeNbaPorAlias } from '../../dominio/identidades-nba'
 import { ativarVersaoNiveis } from '../../dominio/repositorios/niveis'
 import { ATRIBUTOS } from '../../motor/tipos'
@@ -56,7 +57,10 @@ async function cadastrar(db: Db, conteudo: string, agora: Date): Promise<Cadastr
   ]
   for (const sigla of siglas) {
     const nome = analise.jogadores.find((j) => j.timeSigla === sigla)?.timeNaLista ?? sigla
-    await db.insert(times).values({ sigla, nome }).onConflictDoNothing({ target: times.sigla })
+    await db
+      .insert(times)
+      .values({ sigla, nome, conferencia: conferenciaDe(sigla) })
+      .onConflictDoUpdate({ target: times.sigla, set: { conferencia: conferenciaDe(sigla) } })
   }
   const timePorSigla = new Map((await db.select().from(times)).map((t) => [t.sigla, t.id] as const))
 

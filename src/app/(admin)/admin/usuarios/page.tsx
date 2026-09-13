@@ -1,7 +1,15 @@
+import { cookies } from 'next/headers'
 import { getDb } from '@/modules/dominio/db/cliente'
 import { exigirAdmin } from '@/modules/plataforma/auth/cookies'
 import { dispositivosDoUsuario, listarUsuarios } from '@/modules/plataforma/admin/usuarios'
-import { acaoAdicionar, acaoBloquear, acaoDesbloquear, acaoExcluir } from './acoes'
+import {
+  acaoAdicionar,
+  acaoBloquear,
+  acaoDesbloquear,
+  acaoEmitirRedefinicao,
+  acaoExcluir,
+} from './acoes'
+import { NOME_COOKIE_LINK_REDEFINICAO } from './link-redefinicao'
 import { dataHora, diaCompleto } from '@/components/formato'
 
 // O painel admin é operado do Brasil e não passa pelo ruleset — o fuso aqui é
@@ -38,6 +46,11 @@ export default async function PaginaUsuarios({
   const busca = texto(p.busca)
   const status = texto(p.status) as 'ATIVO' | 'BLOQUEADO' | ''
 
+  // O link só existe aqui: `acaoEmitirRedefinicao` o entrega por um cookie
+  // httpOnly de 2 minutos (nunca pela querystring, que vaza em log/Referer),
+  // e esta é a única tela que o lê.
+  const linkRedefinicao = (await cookies()).get(NOME_COOKIE_LINK_REDEFINICAO)?.value
+
   const db = getDb()
   const linhas = await listarUsuarios(db, {
     busca: busca || undefined,
@@ -53,6 +66,11 @@ export default async function PaginaUsuarios({
   return (
     <main style={{ padding: 24, fontFamily: 'system-ui', maxWidth: 1100, lineHeight: 1.5 }}>
       <h1 style={{ marginBottom: 4 }}>Usuários</h1>
+      {linkRedefinicao && (
+        <p role="status" style={{ fontSize: 13, padding: 8, background: '#fffbcc' }}>
+          Link de redefinição (válido por 1 hora, uso único): <code>{linkRedefinicao}</code>
+        </p>
+      )}
       <p style={{ fontSize: 13, opacity: 0.7 }}>{linhas.length} conta(s)</p>
 
       <form method="get" style={{ display: 'flex', gap: 8, margin: '16px 0' }}>
@@ -120,6 +138,10 @@ export default async function PaginaUsuarios({
                       <button type="submit">Desbloquear</button>
                     </form>
                   )}
+                  <form action={acaoEmitirRedefinicao}>
+                    <input type="hidden" name="usuarioId" value={u.id} />
+                    <button type="submit">Emitir link de redefinição</button>
+                  </form>
                   <form action={acaoExcluir}>
                     <input type="hidden" name="id" value={u.id} />
                     <button type="submit">Excluir</button>

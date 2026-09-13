@@ -15,7 +15,7 @@ import {
   usuarios,
 } from '../../dominio/db/schema'
 
-import { conferirSenha, gerarHash } from '../auth/senha'
+import { conferirSenha, gerarHash, MENSAGEM_REGRA_SENHA } from '../auth/senha'
 import { excedeuTentativas, registrarTentativa } from '../auth/rate-limit'
 import {
   autenticar,
@@ -588,6 +588,17 @@ describe('painel administrativo', () => {
     expect((await listarUsuarios(banco.db, { status: 'ATIVO' }))[0]?.email).toBe(
       'outro@exemplo.com',
     )
+  })
+
+  // Achado da revisão final: o painel aceitava qualquer senha de 8+
+  // caracteres (`admin/usuarios/acoes.ts`), mais fraca do que a política
+  // única que `auth/senha.ts` documenta para "o cadastro e a troca no
+  // perfil" — 'abcdefgh' tem 8 letras e passaria no `< 8` antigo.
+  it('adicionarUsuario aplica a MESMA política de senha do cadastro, sem abrir porta mais fraca', async () => {
+    await expect(
+      adicionarUsuario(banco.db, { email: 'senha-fraca@exemplo.com', senha: 'abcdefgh' }),
+    ).rejects.toThrow(MENSAGEM_REGRA_SENHA)
+    expect(await listarUsuarios(banco.db, { busca: 'senha-fraca@exemplo.com' })).toHaveLength(0)
   })
 
   it('mostra os dispositivos de cada usuário', async () => {

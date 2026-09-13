@@ -14,7 +14,7 @@ import { rulesetAtivo } from '@/modules/entrega/ruleset-ativo'
 import { exigirAcessoEstatisticasSeConfigurado } from '@/modules/plataforma/assinatura/guarda'
 import { dataHora, diaCurto } from '@/components/formato'
 import { CabecalhoTela, Moldura } from '@/components/navegacao'
-import { Avatar, NotaPartida, Tabela, UltimaAtualizacao } from '@/design-system/componentes'
+import { Avatar, LogoTime, NotaPartida, Tabela, UltimaAtualizacao } from '@/design-system/componentes'
 import type { Coluna } from '@/design-system/componentes'
 import { NIVEL_JOGADOR } from '@/design-system/tokens/css'
 import { semantico } from '@/design-system/tokens/semantico'
@@ -104,7 +104,10 @@ function Placar({
       {[casa, visitante].map((lado) => (
         <div key={lado.timeId} style={{ textAlign: 'center', minWidth: 96 }}>
           <a href={rotaDoTime(lado.timeId)} style={{ color: semantico.textoPrimario }}>
-            <div style={{ fontFamily: semantico.fonteTitulo, fontSize: 22 }}>{lado.sigla}</div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, marginBottom: 6 }}>
+              <LogoTime sigla={lado.sigla} tamanho={26} />
+              <div style={{ fontFamily: semantico.fonteTitulo, fontSize: 22 }}>{lado.sigla}</div>
+            </div>
           </a>
           <div style={{ fontSize: 34, fontWeight: 800 }}>{lado.placar ?? '—'}</div>
           {lado.forma.length > 0 && (
@@ -266,7 +269,7 @@ export default async function PaginaDoJogo({
   const temBox = tela.casa.boxScore.length > 0 || tela.visitante.boxScore.length > 0
 
   return (
-    <Moldura aba="stats">
+    <Moldura aba="stats" largura="dados">
       <CabecalhoTela
         sobrancelha={SOBRANCELHA_STATS}
         titulo={`${tela.casa.sigla} × ${tela.visitante.sigla}`}

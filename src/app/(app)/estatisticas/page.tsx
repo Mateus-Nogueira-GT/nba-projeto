@@ -11,9 +11,10 @@ import { rotaDoJogador, rotaDoJogo, rotaDoTime } from '@/modules/entrega/estatis
 import { rulesetAtivo } from '@/modules/entrega/ruleset-ativo'
 import { diaLongo, horaCurta } from '@/components/formato'
 import { CabecalhoTela, Moldura } from '@/components/navegacao'
-import { Tabela, UltimaAtualizacao } from '@/design-system/componentes'
+import { LogoTime, Tabela, UltimaAtualizacao } from '@/design-system/componentes'
 import type { Coluna } from '@/design-system/componentes'
 import { dataDeReferencia } from '@/modules/dominio/rodada'
+import { identidadeDoTime } from '@/design-system/times'
 import { semantico } from '@/design-system/tokens/semantico'
 import '@/design-system/tokens/tokens.css'
 import { Secao, SemBanco, SOBRANCELHA_STATS } from './moldura'
@@ -104,15 +105,18 @@ function LinhaDeJogo({ jogo, fuso, href }: { jogo: JogoDoDia; fuso: string; href
   const encerrado = jogo.status === 'ENCERRADO'
 
   const sigla = (texto: string) => (
-    <span
-      style={{
-        fontFamily: semantico.fonteTitulo,
-        fontSize: 18,
-        letterSpacing: 0.5,
-        color: semantico.texto100,
-      }}
-    >
-      {texto}
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+      <LogoTime sigla={texto} tamanho={20} />
+      <span
+        style={{
+          fontFamily: semantico.fonteTitulo,
+          fontSize: 18,
+          letterSpacing: 0.5,
+          color: semantico.texto100,
+        }}
+      >
+        {texto}
+      </span>
     </span>
   )
 
@@ -274,86 +278,165 @@ function Ultimos({ forma }: { forma: readonly ('V' | 'D')[] }) {
 }
 
 /**
+ * JOGOS ATRÁS DO LÍDER DA CONFERÊNCIA — ((Vl − V) + (D − Dl)) / 2.
+ *
+ * É a conta da liga, e ela responde o que o aproveitamento não responde: dois
+ * times com campanhas diferentes podem ter o mesmo percentual, e é a distância
+ * em jogos que diz quem ainda alcança quem.
+ *
+ * O líder recebe "—", não zero: ele não está atrás de ninguém, e um "0" na
+ * primeira linha se lê como distância medida.
+ */
+function jogosAtras(lider: LinhaDaClassificacao | undefined, linha: LinhaDaClassificacao): string {
+  if (lider === undefined || lider.timeId === linha.timeId) return '—'
+  const atraso = (lider.vitorias - linha.vitorias + (linha.derrotas - lider.derrotas)) / 2
+  return atraso === 0 ? '—' : atraso.toFixed(1).replace('.0', '').replace('.', ',')
+}
+
+/**
+ * COMO O GRUPO SE ANUNCIA.
+ *
+ * Sem linha nenhuma não existe grupo a rotular: a tela ainda precisa dizer que
+ * não há classificação, mas "sem conferência" ali anunciaria um conjunto de
+ * times que não existe — e a temporada vazia é exatamente o estado de um banco
+ * recém-migrado.
+ */
+function rotuloDoGrupo(
+  conferencia: string | null,
+  quantasLinhas: number,
+): { titulo: string; legenda: string } {
+  if (quantasLinhas === 0) {
+    return {
+      titulo: 'Classificação',
+      legenda: 'Classificação da temporada, da primeira posição para a última',
+    }
+  }
+  return {
+    titulo: `Classificação · ${conferencia ?? 'sem conferência'}`,
+    legenda:
+      conferencia === null
+        ? 'Classificação dos times sem conferência registrada, da primeira posição para a última'
+        : `Classificação da conferência ${conferencia}, da primeira posição para a última`,
+  }
+}
+
+/**
  * A CLASSIFICAÇÃO COMO TABELA (spec 04, §4.5), no lugar da grade de
  * caixinhas — que gastava a tela inteira para dizer sigla e campanha, e não
  * dizia posição, aproveitamento, sequência nem forma.
  *
  * A sigla continua sendo a porta do time: era o único serviço que a grade
  * prestava, e ele não podia se perder na troca.
+ *
+ * As colunas dependem do LÍDER da conferência — "jogos atrás" só existe em
+ * relação a alguém —, e é por isso que isto é função e não constante. Sem
+ * linha nenhuma não há líder, e a tabela nem chega a desenhar célula: escreve
+ * a frase de vazio.
  */
-const COLUNAS_DA_CLASSIFICACAO: Coluna<LinhaDaClassificacao>[] = [
-  {
-    chave: 'pos',
-    rotulo: 'POS',
-    descricao: 'posição na conferência',
-    celula: (l) => (
-      <span style={{ color: semantico.texto55 }}>{l.posicao === null ? '—' : `${l.posicao}º`}</span>
-    ),
-  },
-  {
-    chave: 'time',
-    rotulo: 'TIME',
-    descricao: 'sigla do time',
-    celula: (l) => (
-      <a
-        href={rotaDoTime(l.timeId)}
-        style={{
-          fontFamily: semantico.fonteTitulo,
-          fontSize: 16,
-          letterSpacing: 0.5,
-          textDecoration: 'none',
-          color: semantico.texto100,
-        }}
-      >
-        {l.sigla}
-      </a>
-    ),
-  },
-  {
-    chave: 'vd',
-    rotulo: 'V–D',
-    descricao: 'vitórias e derrotas',
-    alinhamento: 'direita',
-    celula: (l) => `${l.vitorias}–${l.derrotas}`,
-  },
-  {
-    chave: 'aprov',
-    rotulo: '%',
-    descricao: 'aproveitamento',
-    alinhamento: 'direita',
-    celula: (l) => aproveitamentoEscrito(l.aproveitamento),
-  },
-  {
-    chave: 'seq',
-    rotulo: 'SEQ',
-    descricao: 'sequência atual',
-    alinhamento: 'direita',
-    celula: (l) => l.sequencia ?? '—',
-  },
-  {
-    chave: 'ultimos',
-    rotulo: 'ÚLT. 5',
-    descricao: 'últimos cinco jogos',
-    celula: (l) => <Ultimos forma={l.forma} />,
-  },
-  {
-    chave: 'trilho',
-    rotulo: 'TRILHO',
-    descricao: 'trilho de playoff ou play-in',
-    celula: (l) => (
-      <span
-        style={{
-          color:
-            l.posicao !== null && l.posicao <= TRILHO.playIn
-              ? semantico.texto70
-              : semantico.texto40,
-        }}
-      >
-        {trilhoDa(l.posicao)}
-      </span>
-    ),
-  },
-]
+function colunasDaClassificacao(
+  lider: LinhaDaClassificacao | undefined,
+): Coluna<LinhaDaClassificacao>[] {
+  return [
+    {
+      chave: 'pos',
+      rotulo: 'POS',
+      descricao: 'posição na conferência',
+      celula: (l) => (
+        <span style={{ color: semantico.texto55 }}>
+          {l.posicao === null ? '—' : `${l.posicao}º`}
+        </span>
+      ),
+    },
+    {
+      chave: 'time',
+      rotulo: 'TIME',
+      descricao: 'sigla do time',
+      celula: (l) => (
+        <a
+          href={rotaDoTime(l.timeId)}
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 8,
+            textDecoration: 'none',
+            color: semantico.texto100,
+          }}
+        >
+          {/* A logo NOMEIA o time (`role="img"` + `aria-label`): quem ouve a
+              linha no celular ouve a franquia inteira, e ali o nome por
+              extenso não existe — a coluna FRANQUIA some abaixo de 900 px. E
+              ela nunca é o único canal: a sigla vem escrita ao lado. */}
+          <LogoTime sigla={l.sigla} tamanho={22} />
+          <span style={{ fontFamily: semantico.fonteTitulo, fontSize: 16, letterSpacing: 0.5 }}>
+            {l.sigla}
+          </span>
+        </a>
+      ),
+    },
+    {
+      chave: 'franquia',
+      rotulo: 'FRANQUIA',
+      descricao: 'nome do time',
+      soDesktop: true,
+      celula: (l) => identidadeDoTime(l.sigla).nome,
+    },
+    {
+      chave: 'vd',
+      rotulo: 'V–D',
+      descricao: 'vitórias e derrotas',
+      alinhamento: 'direita',
+      celula: (l) => `${l.vitorias}–${l.derrotas}`,
+    },
+    {
+      chave: 'aprov',
+      rotulo: '%',
+      descricao: 'aproveitamento',
+      alinhamento: 'direita',
+      celula: (l) => aproveitamentoEscrito(l.aproveitamento),
+    },
+    {
+      chave: 'seq',
+      rotulo: 'SEQ',
+      descricao: 'sequência atual',
+      alinhamento: 'direita',
+      // Fora do celular: "V3" repete o que os pontinhos de ÚLT. 5 já mostram,
+      // e o que cabe em 390 px é a lista da spec §4.2.
+      soDesktop: true,
+      celula: (l) => l.sequencia ?? '—',
+    },
+    {
+      chave: 'ultimos',
+      rotulo: 'ÚLT. 5',
+      descricao: 'últimos cinco jogos',
+      celula: (l) => <Ultimos forma={l.forma} />,
+    },
+    {
+      chave: 'ja',
+      rotulo: 'JA',
+      descricao: 'jogos atrás do líder da conferência',
+      alinhamento: 'direita',
+      soDesktop: true,
+      celula: (l) => jogosAtras(lider, l),
+    },
+    {
+      chave: 'trilho',
+      rotulo: 'TRILHO',
+      descricao: 'trilho de playoff ou play-in',
+      celula: (l) => (
+        <span
+          style={{
+            color:
+              l.posicao !== null && l.posicao <= TRILHO.playIn
+                ? semantico.texto70
+                : semantico.texto40,
+          }}
+        >
+          {trilhoDa(l.posicao)}
+        </span>
+      ),
+    },
+  ]
+}
 
 export default async function PaginaEstatisticas({
   searchParams,
@@ -384,8 +467,10 @@ export default async function PaginaEstatisticas({
 
   // A classificação é POR CONFERÊNCIA: é assim que a liga a publica e é o
   // único recorte em que o trilho de playoff/play-in significa alguma coisa.
-  // Sem conferência no dado, sai UMA tabela sem rótulo de conferência — em
-  // vez de carimbar uma divisão que ninguém verificou.
+  // Time sem conferência no cadastro cai num grupo ROTULADO como tal: a falta
+  // de dado aparece na tela em vez de virar "Leste" por padrão — carimbar uma
+  // divisão que ninguém verificou é o erro que esta tela existe para não
+  // repetir.
   const conferencias = [...new Set(classificacao.linhas.map((l) => l.conferencia))].sort((a, b) =>
     a === null ? 1 : b === null ? -1 : a.localeCompare(b),
   )
@@ -395,7 +480,7 @@ export default async function PaginaEstatisticas({
   const grupos = conferencias.length > 0 ? conferencias : [null]
 
   return (
-    <Moldura aba="stats">
+    <Moldura aba="stats" largura="dados">
       <CabecalhoTela sobrancelha={SOBRANCELHA_STATS} titulo="STATS" />
 
       <Campo valor={termo} />
@@ -499,25 +584,42 @@ export default async function PaginaEstatisticas({
         )}
       </Secao>
 
-      {grupos.map((conferencia) => (
-        <Secao
-          key={conferencia ?? 'liga'}
-          titulo={conferencia === null ? 'Classificação' : `Classificação · ${conferencia}`}
-          aux={`temporada ${temporada}`}
-        >
-          <Tabela
-            legenda={
-              conferencia === null
-                ? 'Classificação da temporada, da primeira posição para a última'
-                : `Classificação da conferência ${conferencia}, da primeira posição para a última`
-            }
-            colunas={COLUNAS_DA_CLASSIFICACAO}
-            linhas={classificacao.linhas.filter((l) => l.conferencia === conferencia)}
-            chaveDaLinha={(l) => l.timeId}
-            vazio="Sem classificação registrada para esta temporada."
-          />
-        </Secao>
-      ))}
+      {/* Lado a lado no desktop, empilhadas no celular: a classificação se lê
+          por varredura, e duas conferências em sequência obrigam a rolar para
+          comparar o que a liga publica em paralelo. A classe leva SÓ a media
+          query — é o que o estilo inline não faz. */}
+      <div className="grade-conferencias" style={{ display: 'grid', gap: 24 }}>
+        {grupos.map((conferencia) => {
+          const linhas = classificacao.linhas.filter((l) => l.conferencia === conferencia)
+          const grupo = rotuloDoGrupo(conferencia, linhas.length)
+          return (
+            <Secao
+              key={conferencia ?? 'sem-conferencia'}
+              titulo={grupo.titulo}
+              aux={`temporada ${temporada}`}
+            >
+              <Tabela
+                legenda={grupo.legenda}
+                colunas={colunasDaClassificacao(linhas[0])}
+                linhas={linhas}
+                chaveDaLinha={(l) => l.timeId}
+                vazio="Sem classificação registrada para esta temporada."
+                separadorApos={(l) => l.posicao === TRILHO.playIn}
+              />
+              {/* O corte é desenhado NA tabela e dito EMBAIXO dela: uma régua
+                  sozinha obriga a contar linhas para saber de que lado o seu
+                  time caiu, e some para quem não a enxerga. Sem linha nenhuma
+                  não há corte a explicar. */}
+              {linhas.length > 0 && (
+                <p style={{ margin: '6px 0 0', fontSize: 11, color: semantico.texto40 }}>
+                  playoff da 1ª à {TRILHO.playoff}ª · play-in até a {TRILHO.playIn}ª · corte do
+                  play-in entre a {TRILHO.playIn}ª e a {TRILHO.playIn + 1}ª
+                </p>
+              )}
+            </Secao>
+          )
+        })}
+      </div>
 
       {/* Requisito: TODA tela da aba informa o horário do dado. */}
       <UltimaAtualizacao
