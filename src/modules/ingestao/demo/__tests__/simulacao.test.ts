@@ -7,7 +7,9 @@ import type { Nivel } from '../../../motor/tipos'
 import { lerListaDeNiveis } from '../../niveis/parser'
 import {
   boxScoreDoTime,
+  CESTA_DE_DESEMPATE,
   criarSorteio,
+  desempatar,
   diaAbsoluto,
   desfalquesDoDia,
   elencosDaLista,
@@ -501,4 +503,68 @@ describe('sequências que o turbo exige, em toda janela que o cron pode produzir
       expect(comSequencia.length).toBeGreaterThanOrEqual(1)
     })
   }
+})
+
+describe('desempatar — a NBA não empata, a demo também não', () => {
+  const linha = (nome: string, pontos: number) => ({ nome, pontos })
+  const soma = (lado: { pontos: number }[]) => lado.reduce((t, l) => t + l.pontos, 0)
+
+  it('sem empate, devolve cópias iguais e não decide nada', () => {
+    const casa = [linha('a', 20), linha('b', 10)]
+    const fora = [linha('c', 25)]
+    const r = desempatar(casa, fora, criarSorteio('x'))
+    expect(r.desempatou).toBeNull()
+    expect(r.casa).toEqual(casa)
+    expect(r.visitante).toEqual(fora)
+    expect(r.casa).not.toBe(casa) // cópia, não a mesma referência
+  })
+
+  it('com empate, soma UMA cesta ao maior pontuador de um lado só — e o placar deixa de empatar', () => {
+    const casa = [linha('a', 12), linha('b', 18)]
+    const fora = [linha('c', 30)]
+    const r = desempatar(casa, fora, criarSorteio('jogo-1|desempate'))
+    expect(r.desempatou).not.toBeNull()
+    expect(soma(r.casa)).not.toBe(soma(r.visitante))
+    const ladoMudado = r.desempatou === 'casa' ? r.casa : r.visitante
+    const ladoIntacto = r.desempatou === 'casa' ? r.visitante : r.casa
+    expect(soma(ladoMudado)).toBe(30 + CESTA_DE_DESEMPATE)
+    expect(ladoIntacto).toEqual(r.desempatou === 'casa' ? fora : casa)
+    // a cesta foi para o maior pontuador do lado
+    const maior = ladoMudado.reduce((m, l) => (l.pontos > m.pontos ? l : m))
+    expect(maior.pontos).toBe((r.desempatou === 'casa' ? 18 : 30) + CESTA_DE_DESEMPATE)
+  })
+
+  it('é determinístico pela chave: mesma chave, mesmo lado', () => {
+    const casa = [linha('a', 10)]
+    const fora = [linha('b', 10)]
+    const a = desempatar(casa, fora, criarSorteio('k'))
+    const b = desempatar(casa, fora, criarSorteio('k'))
+    expect(a.desempatou).toBe(b.desempatou)
+    expect(a).toEqual(b)
+  })
+
+  it('escolhe cada lado em alguma chave — o sorteio não é viciado', () => {
+    const casa = [linha('a', 10)]
+    const fora = [linha('b', 10)]
+    const lados = new Set(
+      Array.from({ length: 40 }, (_, i) => desempatar(casa, fora, criarSorteio(`k${i}`)).desempatou),
+    )
+    expect(lados).toEqual(new Set(['casa', 'visitante']))
+  })
+
+  it('lado sorteado sem linhas: a cesta vai para o outro; os dois sem linhas: nada a decidir', () => {
+    const r = desempatar([], [linha('b', 0)], criarSorteio('k'))
+    expect(r.desempatou).toBe('visitante')
+    expect(r.visitante[0]!.pontos).toBe(CESTA_DE_DESEMPATE)
+    const vazio = desempatar([], [], criarSorteio('k'))
+    expect(vazio.desempatou).toBeNull()
+  })
+
+  it('não muta a entrada', () => {
+    const casa = [linha('a', 10)]
+    const fora = [linha('b', 10)]
+    desempatar(casa, fora, criarSorteio('k'))
+    expect(casa[0]!.pontos).toBe(10)
+    expect(fora[0]!.pontos).toBe(10)
+  })
 })

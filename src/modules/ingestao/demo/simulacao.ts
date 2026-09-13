@@ -334,3 +334,38 @@ export function boxScoreDoTime(opcoes: {
     }
   })
 }
+
+/** Uma cesta. Só um lado é somado, então o resultado nunca volta a empatar. */
+export const CESTA_DE_DESEMPATE = 2
+
+/**
+ * DESEMPATE — a NBA não empata, a demo também não.
+ *
+ * Age sobre as linhas que VÃO PARA O BANCO (as já filtradas), porque é a soma
+ * delas que vira placar (`semearPlacares`): decidir sobre o box cru decidiria
+ * sobre um placar que não existe. A cesta vai para o maior pontuador do lado
+ * sorteado, e o sorteio vem da chave do jogo — mesma chave, mesma escolha, em
+ * qualquer banco, inclusive no script que repara o passado.
+ *
+ * Regra de simulação, não de estratégia: não muda apito nenhum e não entra no
+ * ruleset. Nunca muta a entrada: devolve cópias.
+ */
+export function desempatar<T extends { pontos: number }>(
+  casa: readonly T[],
+  visitante: readonly T[],
+  sorteio: () => number,
+): { casa: T[]; visitante: T[]; desempatou: 'casa' | 'visitante' | null } {
+  const soma = (lado: readonly T[]) => lado.reduce((total, l) => total + l.pontos, 0)
+  const copia = { casa: casa.map((l) => ({ ...l })), visitante: visitante.map((l) => ({ ...l })) }
+  if (soma(casa) !== soma(visitante)) return { ...copia, desempatou: null }
+
+  const sorteado: 'casa' | 'visitante' = sorteio() < 0.5 ? 'casa' : 'visitante'
+  const outro = sorteado === 'casa' ? 'visitante' : 'casa'
+  const lado = copia[sorteado].length > 0 ? sorteado : outro
+  if (copia[lado].length === 0) return { ...copia, desempatou: null }
+
+  // `>` estrito: em empate de pontos, a primeira linha — estável entre execuções.
+  const maior = copia[lado].reduce((m, l) => (l.pontos > m.pontos ? l : m))
+  maior.pontos += CESTA_DE_DESEMPATE
+  return { ...copia, desempatou: lado }
+}

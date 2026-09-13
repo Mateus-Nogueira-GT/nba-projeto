@@ -85,7 +85,16 @@ function diasDaTemporada(data: string, config: ConfigTemporada): number {
   const anoBase = temporadaDe(new Date(meioDia), config).slice(0, 4)
   const abertura = `${anoBase}-${String(config.mesInicio).padStart(2, '0')}-01T12:00:00.000Z`
   const dias = Math.round((Date.parse(meioDia) - Date.parse(abertura)) / 86_400_000)
-  return Math.max(1, dias + 1)
+  // Defesa em profundidade: com o ano preenchido isto não dispara, mas uma
+  // abertura ilegível não pode virar NaN dentro de `somarDias`.
+  if (!Number.isFinite(dias)) return 1
+  // NÃO HÁ ANO 0 no calendário do Postgres: a temporada de 0001-01-01 abriria
+  // em 0000-10-01 e a consulta da taxa morreria convertendo o parâmetro
+  // (diagnóstico de 13/09). A janela para na primeira data que existe — isto
+  // não é limite de calendário da liga, é o alcance do tipo `date`.
+  const ateAPrimeiraData =
+    Math.round((Date.parse(meioDia) - Date.parse('0001-01-01T12:00:00.000Z')) / 86_400_000) + 1
+  return Math.max(1, Math.min(dias + 1, ateAPrimeiraData))
 }
 
 /** Percentual inteiro. O da NOITE e o da TEMPORADA nunca são % de confiança. */

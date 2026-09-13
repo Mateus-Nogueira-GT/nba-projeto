@@ -235,7 +235,7 @@ export async function semearClassificacao(
   db: Db,
   ruleset: Ruleset,
   dataReferencia: string,
-): Promise<number> {
+): Promise<{ linhas: number; empates: number }> {
   const temporada = temporadaDe(
     intervaloDoDia(dataReferencia, ruleset.rodada.fuso).inicio,
     calendarioDoRuleset(ruleset),
@@ -262,13 +262,23 @@ export async function semearClassificacao(
     atual.sequencia.push(venceu ? 'V' : 'D')
     campanha.set(timeId, atual)
   }
+  let empates = 0
   for (const j of encerrados) {
     if (j.placarCasa === null || j.placarVisitante === null) continue
+    // EMPATE É ESTADO INVÁLIDO, não derrota. A NBA não empata; um empate aqui é
+    // dado errado (a demo antiga produzia — diagnóstico de 13/09). Decidir com
+    // `>` dava a vitória ao visitante e mentia na tabela; lançar derrubaria o
+    // cron das 6h por um dado velho. Fica fora da conta e vai para o retorno,
+    // e o `demo:conferir` reprova enquanto houver um.
+    if (j.placarCasa === j.placarVisitante) {
+      empates += 1
+      continue
+    }
     const casaVenceu = j.placarCasa > j.placarVisitante
     anotar(j.timeCasaId, casaVenceu)
     anotar(j.timeVisitanteId, !casaVenceu)
   }
-  if (campanha.size === 0) return 0
+  if (campanha.size === 0) return { linhas: 0, empates }
 
   const listaTimes = await db.select().from(times)
   const conferenciaPorTime = new Map(listaTimes.map((t) => [t.id, t.conferencia] as const))
@@ -335,5 +345,5 @@ export async function semearClassificacao(
         },
       })
   }
-  return ordenados.length
+  return { linhas: ordenados.length, empates }
 }

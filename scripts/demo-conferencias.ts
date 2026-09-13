@@ -32,11 +32,15 @@ async function principal() {
   }
   const ruleset = await rulesetAtivo()
   const hoje = dataDeReferencia(new Date(), ruleset.rodada.fuso)
-  const linhas = await semearClassificacao(db, ruleset, hoje)
+  const resultado = await semearClassificacao(db, ruleset, hoje)
   console.log(`Conferência gravada em ${gravadas} de ${lista.length} times.`)
   if (semConferencia.length > 0)
     console.log(`Sem conferência (sigla fora da NBA): ${semConferencia.join(', ')}`)
-  console.log(`Classificação recomputada: ${linhas} linhas, posição por conferência.`)
+  console.log(`Classificação recomputada: ${resultado.linhas} linhas, posição por conferência.`)
+  if (resultado.empates > 0)
+    console.log(
+      `⚠ ${resultado.empates} jogo(s) encerrado(s) empatado(s) fora da conta — rode: npm run demo:desempatar`,
+    )
 }
 
 principal()
