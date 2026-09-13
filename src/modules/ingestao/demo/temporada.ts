@@ -37,12 +37,14 @@ import {
 import { semearOdds } from './odds'
 import {
   boxScoreDoTime,
+  criarSorteio,
+  desempatar,
   desfalquesDoDia,
   elencosDaLista,
   gerarCalendario,
   SEMENTE_TEMPORADA,
 } from './simulacao'
-import type { Calendario, JogadorSim, JogoSim } from './simulacao'
+import type { Calendario, JogadorSim, JogoSim, LinhaBox } from './simulacao'
 
 /**
  * A TEMPORADA SIMULADA — sete semanas de história que o motor produziu.
@@ -94,6 +96,8 @@ export type ResumoTemporada = {
   apitosFireLive: number
   linhasComOdd: number
   classificados: number
+  /** Jogos encerrados empatados fora da conta da tabela — ver `semearClassificacao`. */
+  empates: number
   times: number
   jogadores: number
   versaoNiveis: string
@@ -192,6 +196,7 @@ export async function simularAte(
   let boxScores = 0
   let publicacoes = 0
   let classificados = 0
+  let empates = 0
   for (const [indice, dia] of pendentes.entries()) {
     if (Date.now() - inicioDaExecucao > orcamento) break
     opcoes.aoProduzirDia?.(dia, indice, pendentes.length)
@@ -201,6 +206,10 @@ export async function simularAte(
     boxScores += r.boxScores
     publicacoes += r.publicou ? 1 : 0
     classificados = r.classificados
+    // ESTADO, não novidade: cada dia recomputa a tabela inteira, então este é o
+    // número de empates que o banco TEM agora — somar contaria o mesmo empate
+    // uma vez por dia produzido.
+    empates = r.empates
   }
 
   /*
@@ -232,6 +241,7 @@ export async function simularAte(
     apitosFireLive: deHoje.apitosFireLive,
     linhasComOdd: deHoje.linhasComOdd,
     classificados,
+    empates,
     times: cadastro.timePorSigla.size,
     jogadores: cadastro.jogadorPorChave.size,
     versaoNiveis: cadastro.versaoNiveis,
@@ -530,7 +540,13 @@ async function jaTemLista(db: Db, dia: string): Promise<boolean> {
 async function produzirDiaPassado(
   c: Contexto,
   dia: string,
-): Promise<{ jogos: number; boxScores: number; publicou: boolean; classificados: number }> {
+): Promise<{
+  jogos: number
+  boxScores: number
+  publicou: boolean
+  classificados: number
+  empates: number
+}> {
   // 0 · O que o banco já sabe deste dia em diante — perguntado antes de mexer
   //     em nada, porque o passo 1 devolve os jogos do dia a AGENDADO.
   const jaAconteceu = await algoJaAconteceuDe(c, dia)
@@ -538,7 +554,8 @@ async function produzirDiaPassado(
   // 1 · Agendar a rodada e sortear os desfalques. O upsert devolve os jogos ao
   //     estado "por acontecer": refazer um dia começa por desfazê-lo.
   const agendados = await agendarRodada(c, dia)
-  if (agendados.length === 0) return { jogos: 0, boxScores: 0, publicou: false, classificados: 0 }
+  if (agendados.length === 0)
+    return { jogos: 0, boxScores: 0, publicou: false, classificados: 0, empates: 0 }
   const idsDoDia = agendados.map((a) => a.jogoId)
   const fora = await registrarDesfalques(c, dia, agendados)
 
@@ -568,7 +585,12 @@ async function produzirDiaPassado(
   // 3 · Jogar. Só agora os números do dia existem.
   let boxScores = 0
   for (const a of agendados) {
-    const linhas: (typeof estatisticasJogo.$inferInsert)[] = []
+    // As linhas FILTRADAS de cada lado (sem vínculo e homônimo já descartados):
+    // são elas que `semearPlacares` soma, então é sobre elas que se desempata.
+    const porLado: Record<'casa' | 'visitante', Array<LinhaBox & { jogadorId: string }>> = {
+      casa: [],
+      visitante: [],
+    }
     for (const lado of ['casa', 'visitante'] as const) {
       const sigla = a.jogo[lado]
       const timeId = lado === 'casa' ? a.timeCasaId : a.timeVisitanteId
@@ -588,18 +610,32 @@ async function produzirDiaPassado(
         // o gerador é uma sequência, e tirar um jogador do meio dela mudaria
         // os números de todos os que vêm atrás.
         if (c.timeDoJogador.get(jogadorId) !== timeId) continue
-        linhas.push({
-          jogoId: a.jogoId,
-          jogadorId,
-          minutos: l.minutos.toFixed(2),
-          pontos: l.pontos,
-          rebotesTotal: l.rebotes,
-          assistencias: l.assistencias,
-          ...decomporPontos(l.pontos),
-          ...boxComplementar(`${c.semente}|${dia}|${l.nome}`, l.rebotes),
-        })
+        porLado[lado].push({ ...l, jogadorId })
       }
     }
+    // DESEMPATE antes da inserção — a NBA não empata; a demo também não. A
+    // chave é a do jogo mais `|desempate`: o reparo do passado reproduz a
+    // mesma escolha (ver `reparo-empates.ts`).
+    const decidido = desempatar(
+      porLado.casa,
+      porLado.visitante,
+      criarSorteio(`${c.semente}|${dia}|${a.jogo.casa}x${a.jogo.visitante}|desempate`),
+    )
+    // O desdobramento em 2C/3C/LL sai do valor FINAL de pontos: é o que mantém
+    // `2·doisC + 3·tresC + lanceC = pontos` na linha que recebeu a cesta.
+    const linhas: (typeof estatisticasJogo.$inferInsert)[] = [
+      ...decidido.casa,
+      ...decidido.visitante,
+    ].map((l) => ({
+      jogoId: a.jogoId,
+      jogadorId: l.jogadorId,
+      minutos: l.minutos.toFixed(2),
+      pontos: l.pontos,
+      rebotesTotal: l.rebotes,
+      assistencias: l.assistencias,
+      ...decomporPontos(l.pontos),
+      ...boxComplementar(`${c.semente}|${dia}|${l.nome}`, l.rebotes),
+    }))
     if (linhas.length > 0) {
       // O passo 1b já esvaziou o dia, então o conflito só aparece se duas
       // execuções se cruzarem (o cron e a carga à mão, por exemplo). O upsert
@@ -652,9 +688,15 @@ async function produzirDiaPassado(
     configTemporada: calendarioDoRuleset(c.ruleset),
     agora: primeiro,
   })
-  const classificados = await semearClassificacao(c.db, c.ruleset, dia)
+  const resultado = await semearClassificacao(c.db, c.ruleset, dia)
 
-  return { jogos: agendados.length, boxScores, publicou, classificados }
+  return {
+    jogos: agendados.length,
+    boxScores,
+    publicou,
+    classificados: resultado.linhas,
+    empates: resultado.empates,
+  }
 }
 
 // ---------------------------------------------------------------------------

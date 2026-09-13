@@ -1,4 +1,4 @@
-import { and, eq, lt } from 'drizzle-orm'
+import { and, eq, lt, sql } from 'drizzle-orm'
 
 import { fecharDb, getDb } from '../src/modules/dominio/db/cliente'
 import type { Db } from '../src/modules/dominio/db/tipos'
@@ -304,6 +304,25 @@ async function conferir(db: Db, ruleset: Awaited<ReturnType<typeof rulesetAtivo>
     '  · um jogo ao vivo',
     noStatus('AO_VIVO') === 1,
     `${noStatus('AO_VIVO')} jogo(s) AO_VIVO hoje (esperado 1)`,
+  )
+
+  // A NBA não empata. Um empate na tabela é dado errado na frente do cliente
+  // (diagnóstico de 13/09); reprova até `demo:desempatar` consertar.
+  const [empatados] = await db
+    .select({ n: sql<number>`count(*)::int` })
+    .from(tabelaJogos)
+    .where(
+      and(
+        eq(tabelaJogos.status, 'ENCERRADO'),
+        sql`${tabelaJogos.placarCasa} = ${tabelaJogos.placarVisitante}`,
+      ),
+    )
+  registrar(
+    'Temporada · sem empate',
+    (empatados?.n ?? 0) === 0,
+    (empatados?.n ?? 0) === 0
+      ? 'nenhum jogo encerrado empatado'
+      : `${empatados!.n} jogo(s) encerrado(s) empatado(s) — rode "npm run demo:desempatar"`,
   )
 
   // 5 · Gestão de banca.

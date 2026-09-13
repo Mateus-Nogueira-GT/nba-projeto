@@ -76,6 +76,8 @@ async function principal() {
   console.log(`${rotulo('times / jogadores')} ${resumo.times} / ${resumo.jogadores}`)
   console.log(`${rotulo('versão de níveis')} ${resumo.versaoNiveis}`)
   console.log(`${rotulo('times classificados')} ${resumo.classificados}`)
+  if (resumo.empates > 0)
+    console.log(`\n⚠ ${resumo.empates} jogo(s) encerrado(s) empatado(s) — rode: npm run demo:desempatar`)
 
   if (completa) {
     console.log('\n✓ Temporada pronta até hoje. Confira com: npm run demo:conferir')

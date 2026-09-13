@@ -45,6 +45,18 @@ export async function bancoDeTeste() {
     return r.rows[0]?.n ?? 0
   }
 
+  /**
+   * FECHAR SÓ DEPOIS DO QUE ESTÁ EM VOO. Um teste que falha no meio de um
+   * Promise.all deixa consultas pendentes; `pg.close()` nesse estado gira o
+   * worker a 100% de CPU sem fim (diagnóstico de 13/09). O `select 1` entra
+   * na fila do mesmo mutex do PGlite e só volta quando o que estava na frente
+   * terminou — aí fechar é seguro.
+   */
+  const fechar = async () => {
+    await pg.query('select 1').catch(() => undefined)
+    await pg.close()
+  }
+
   await subir()
-  return { pg, db, subir, descer, contarTabelas, fechar: () => pg.close() }
+  return { pg, db, subir, descer, contarTabelas, fechar }
 }

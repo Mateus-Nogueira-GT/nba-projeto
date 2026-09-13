@@ -1,6 +1,6 @@
 import { and, eq } from 'drizzle-orm'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it, onTestFailed, vi } from 'vitest'
 
 import { bancoDeTeste } from '../../modules/dominio/__tests__/ajuda-banco'
 import { feedSnapshot, jogadores } from '../../modules/dominio/db/schema'
@@ -402,6 +402,16 @@ describe('a rodada segue o fuso do cliente', () => {
   it('os horários dos jogos saem no fuso, não no do servidor', async () => {
     const { default: Pagina } = await import('../(app)/estatisticas/page')
     const html = renderToStaticMarkup(await Pagina({ searchParams: Promise.resolve({}) }))
+
+    // Flake registrado em 13/09 e nunca reproduzido: na próxima ocorrência, o
+    // HTML fica em disco para alguém ver ONDE o "00:00" apareceu. Não depende
+    // de CONFERENCIA=1 — é justamente no CI, sem ela, que o flake vive.
+    onTestFailed(async () => {
+      const { mkdir, writeFile } = await import('node:fs/promises')
+      const dir = process.env.CONFERENCIA_DIR ?? '.superpowers/conferencia'
+      await mkdir(dir, { recursive: true })
+      await writeFile(`${dir}/flake-00-00.html`, html)
+    })
 
     // O calendário simulado sorteia os horários entre 19:00 e 22:30 LOCAIS, em
     // meia-horas — não há mais horário fixo para nomear aqui. Então o teste lê

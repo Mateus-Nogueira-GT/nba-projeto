@@ -39,12 +39,15 @@ export function temporadaDe(data: Date, config: ConfigTemporada): string {
 
   const anoInicial = mes >= config.mesInicio ? ano : ano - 1
 
-  if (config.formato === 'ano_inicial') return String(anoInicial)
+  // Quatro dígitos SEMPRE: é este ano que vira a abertura da temporada, e um
+  // "0-01" chegava a `Date.parse` como NaN (diagnóstico de 13/09).
+  const anoInicialTexto = String(anoInicial).padStart(4, '0')
+  if (config.formato === 'ano_inicial') return anoInicialTexto
 
   // "2025-26" — dois dígitos finais do ano seguinte, com zero à esquerda na
   // virada de século (2099-00).
   const seguinte = String((anoInicial + 1) % 100).padStart(2, '0')
-  return `${anoInicial}-${seguinte}`
+  return `${anoInicialTexto}-${seguinte}`
 }
 
 /**

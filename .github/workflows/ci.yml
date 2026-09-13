@@ -28,3 +28,16 @@ jobs:
 
       - name: test
         run: npm run test
+
+      # Sem isto, um erro de build só aparecia no deploy da Vercel — depois do
+      # merge, e com a produção esperando (diagnóstico de 13/09).
+      - name: build
+        run: npm run build
+
+      - name: conferência (HTML das telas na falha)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: conferencia
+          path: .superpowers/conferencia
+          if-no-files-found: ignore

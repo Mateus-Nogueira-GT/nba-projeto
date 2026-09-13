@@ -52,9 +52,12 @@ function deslocamentoMs(instante: Date, fuso: string): number {
 /** A data (YYYY-MM-DD) que aquele instante tem no fuso dado. */
 export function dataDeReferencia(agora: Date, fuso: string): string {
   const p = partes(agora, fuso)
+  // Quatro dígitos SEMPRE: `Intl` devolve "1" para o ano 1, e uma data "1-01-01"
+  // chegava a `Date.parse` como NaN três funções depois (diagnóstico de 13/09).
+  const ano = String(p.year).padStart(4, '0')
   const mes = String(p.month).padStart(2, '0')
   const dia = String(p.day).padStart(2, '0')
-  return `${p.year}-${mes}-${dia}`
+  return `${ano}-${mes}-${dia}`
 }
 
 /** A data de N dias antes (ou depois, com N negativo), no mesmo fuso. */

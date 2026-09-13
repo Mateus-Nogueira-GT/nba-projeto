@@ -66,6 +66,8 @@ export type ResumoDemo = {
   boxScoresDeTime: number
   /** Times com campanha na tabela de classificação. */
   classificados: number
+  /** Jogos encerrados empatados fora da conta — ver `semearClassificacao`. */
+  empates: number
 }
 
 /**
@@ -438,7 +440,7 @@ export async function semearDemo(
   //     (posição, vitórias, derrotas, sequência). Sem ela o cliente abre o
   //     time e encontra um cabeçalho sem campanha. Derivada dos jogos
   //     encerrados que a demo já criou; nada digitado.
-  const classificados = await semearClassificacao(db, ruleset, dataReferencia)
+  const classificacaoSemeada = await semearClassificacao(db, ruleset, dataReferencia)
 
   const contarJogosHoje = await db
     .select({ id: jogos.id })
@@ -456,7 +458,8 @@ export async function semearDemo(
     rodadasPublicadas,
     placares,
     boxScoresDeTime,
-    classificados,
+    classificados: classificacaoSemeada.linhas,
+    empates: classificacaoSemeada.empates,
   }
 }
 
