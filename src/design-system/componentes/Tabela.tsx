@@ -21,6 +21,12 @@ export type Coluna<T> = {
    * nunca é canal único.
    */
   destaque?: boolean
+  /**
+   * Some abaixo de 900 px (classe `so-desktop`, em globals.css). Para colunas
+   * que só cabem na largura de dados — nome por extenso, jogos atrás. Estilo
+   * inline não faz media query; é a única razão de existir uma classe aqui.
+   */
+  soDesktop?: boolean
   celula: (linha: T) => ReactNode
 }
 
@@ -30,6 +36,17 @@ export type TabelaProps<T> = {
   linhas: T[]
   chaveDaLinha: (linha: T) => string
   vazio?: string
+  /**
+   * Desenha uma régua no fim desta linha — o divisor cheio, no dobro da
+   * espessura da régua que separa registros. É para o corte que divide a
+   * tabela em duas faixas de significado: na classificação, onde termina o
+   * play-in.
+   *
+   * Quem usa deve escrever ao lado da tabela o que a régua significa — forma
+   * nunca é canal único, e contar linhas para achar o corte é justamente o que
+   * ela existe para evitar.
+   */
+  separadorApos?: (linha: T) => boolean
 }
 
 /**
@@ -43,7 +60,14 @@ export type TabelaProps<T> = {
  * A primeira coluna fica presa: perder de vista contra quem foi o jogo torna
  * as outras colunas ilegíveis.
  */
-export function Tabela<T>({ legenda, colunas, linhas, chaveDaLinha, vazio }: TabelaProps<T>) {
+export function Tabela<T>({
+  legenda,
+  colunas,
+  linhas,
+  chaveDaLinha,
+  vazio,
+  separadorApos,
+}: TabelaProps<T>) {
   if (linhas.length === 0) {
     return (
       <p style={{ fontSize: 13, color: semantico.textoSecundario, margin: '8px 0' }}>
@@ -76,6 +100,7 @@ export function Tabela<T>({ legenda, colunas, linhas, chaveDaLinha, vazio }: Tab
                 key={c.chave}
                 scope="col"
                 title={c.descricao}
+                className={c.soDesktop ? 'so-desktop' : undefined}
                 style={{
                   textAlign: c.alinhamento === 'direita' ? 'right' : 'left',
                   // A primeira coluna nasce colada à margem esquerda.
@@ -108,37 +133,45 @@ export function Tabela<T>({ legenda, colunas, linhas, chaveDaLinha, vazio }: Tab
           </tr>
         </thead>
         <tbody>
-          {linhas.map((linha) => (
-            <tr key={chaveDaLinha(linha)}>
-              {colunas.map((c, i) => (
-                <td
-                  key={c.chave}
-                  style={{
-                    textAlign: c.alinhamento === 'direita' ? 'right' : 'left',
-                    padding: i === 0 ? '8px 6px 8px 0' : '8px 6px',
-                    // Régua a meia força ENTRE registros: a linha cheia por
-                    // linha vira grade e a densidade some.
-                    borderBottom: `1px solid ${semantico.divisorSuave}`,
-                    position: c.fixa ? 'sticky' : undefined,
-                    left: c.fixa ? 0 : undefined,
-                    background: c.destaque
-                      ? componente.contextoQuente.faixaFundo
-                      : c.fixa
-                        ? semantico.fundo
+          {linhas.map((linha) => {
+            const corta = separadorApos?.(linha) === true
+            return (
+              <tr key={chaveDaLinha(linha)}>
+                {colunas.map((c, i) => (
+                  <td
+                    key={c.chave}
+                    className={c.soDesktop ? 'so-desktop' : undefined}
+                    style={{
+                      textAlign: c.alinhamento === 'direita' ? 'right' : 'left',
+                      padding: i === 0 ? '8px 6px 8px 0' : '8px 6px',
+                      // Régua a meia força ENTRE registros: a linha cheia por
+                      // linha vira grade e a densidade some. No corte, a régua
+                      // cheia e o dobro da espessura — é uma divisão, não mais
+                      // um registro.
+                      borderBottom: corta
+                        ? `2px solid ${semantico.divisor}`
+                        : `1px solid ${semantico.divisorSuave}`,
+                      position: c.fixa ? 'sticky' : undefined,
+                      left: c.fixa ? 0 : undefined,
+                      background: c.destaque
+                        ? componente.contextoQuente.faixaFundo
+                        : c.fixa
+                          ? semantico.fundo
+                          : undefined,
+                      borderLeft: c.destaque
+                        ? `1px solid ${componente.contextoQuente.borda}`
                         : undefined,
-                    borderLeft: c.destaque
-                      ? `1px solid ${componente.contextoQuente.borda}`
-                      : undefined,
-                    borderRight: c.destaque
-                      ? `1px solid ${componente.contextoQuente.borda}`
-                      : undefined,
-                  }}
-                >
-                  {c.celula(linha)}
-                </td>
-              ))}
-            </tr>
-          ))}
+                      borderRight: c.destaque
+                        ? `1px solid ${componente.contextoQuente.borda}`
+                        : undefined,
+                    }}
+                  >
+                    {c.celula(linha)}
+                  </td>
+                ))}
+              </tr>
+            )
+          })}
         </tbody>
       </table>
     </div>

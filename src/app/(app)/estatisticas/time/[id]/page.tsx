@@ -20,7 +20,7 @@ import { rulesetAtivo } from '@/modules/entrega/ruleset-ativo'
 import { diaCurto } from '@/components/formato'
 import { CabecalhoTela, Moldura } from '@/components/navegacao'
 import { BotaoAcompanharTime } from '@/components/preferencias/BotaoAcompanharJogador'
-import { HierarquiaDoTime, Tabela, UltimaAtualizacao } from '@/design-system/componentes'
+import { HierarquiaDoTime, LogoTime, Tabela, UltimaAtualizacao } from '@/design-system/componentes'
 import type { Coluna } from '@/design-system/componentes'
 import { componente } from '@/design-system/tokens/componente'
 import { semantico } from '@/design-system/tokens/semantico'
@@ -305,12 +305,15 @@ export default async function PaginaTime({
   const temProrrogacao = tela.jogosDoTime.some((j) => (j.nosso?.prorrogacao ?? 0) > 0)
 
   return (
-    <Moldura aba={null}>
+    <Moldura aba={null} largura="dados">
       <CabecalhoTela
         sobrancelha={SOBRANCELHA_STATS}
         titulo={`${identidade.sigla} · ${identidade.nome}`}
         voltarHref={BASE_ESTATISTICAS}
       />
+      <div style={{ marginBottom: 12 }}>
+        <LogoTime sigla={identidade.sigla} tamanho={32} decorativo />
+      </div>
       {experiencia && (
         <div style={{ marginBottom: 12 }}>
           <BotaoAcompanharTime timeId={id} inicial={experiencia.timesAcompanhados.includes(id)} />

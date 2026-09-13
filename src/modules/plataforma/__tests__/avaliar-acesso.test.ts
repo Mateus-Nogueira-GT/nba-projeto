@@ -3,7 +3,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
 import { bancoDeTeste } from '../../dominio/__tests__/ajuda-banco'
 import { direitosAcesso, usuarios } from '../../dominio/db/schema'
-import { avaliarAcesso } from '../assinatura/direito'
+import { avaliarAcesso, concederCortesia } from '../assinatura/direito'
 import { PRODUTO_PAGO } from '../assinatura/configuracao'
 
 /**
@@ -87,5 +87,37 @@ describe('avaliarAcesso — as quatro respostas', () => {
       permitido: false,
       motivo: 'bloqueio-administrativo',
     })
+  })
+})
+
+describe('concederCortesia — reexecutar não duplica', () => {
+  // A conta de teste da equipe (Task 8, call de 08/09) roda este script
+  // repetidas vezes. A garantia de não empilhar cortesia não é código novo
+  // do script — é esta constraint única (origem, referencia_origem, produto)
+  // em `direitos_acesso`, que faz `concederCortesia` ser um upsert. Este
+  // teste prova o upsert diretamente, sem depender do script.
+  it('mesma referência duas vezes: atualiza a mesma linha, não cria outra', async () => {
+    const id = await criarUsuario('cortesia-idempotente@teste.com')
+    const referencia = 'cortesia:teste:cortesia-idempotente@teste.com'
+
+    const primeiroId = await concederCortesia(banco.db, {
+      usuarioId: id,
+      referencia,
+      inicio: AGORA,
+      fim: null,
+    })
+    const segundoId = await concederCortesia(banco.db, {
+      usuarioId: id,
+      referencia,
+      inicio: AGORA,
+      fim: null,
+    })
+
+    expect(segundoId).toBe(primeiroId)
+    const linhas = await banco.db
+      .select()
+      .from(direitosAcesso)
+      .where(eq(direitosAcesso.usuarioId, id))
+    expect(linhas).toHaveLength(1)
   })
 })

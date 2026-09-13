@@ -5,7 +5,9 @@ import {
   index,
   integer,
   jsonb,
+  numeric,
   pgTable,
+  smallint,
   text,
   timestamp,
   unique,
@@ -32,6 +34,8 @@ export const usuarios = pgTable('usuarios', {
   email: text('email').notNull().unique(),
   senhaHash: text('senha_hash').notNull(),
   nome: text('nome'),
+  /** Avatar escolhido (caminho em public/avatares) — ou, no futuro, upload. */
+  fotoUrl: text('foto_url'),
   // Estado administrativo/segurança. Situação financeira vive em
   // `assinaturas` e nunca altera esta coluna pelo webhook.
   status: statusUsuarioEnum('status').notNull().default('ATIVO'),
@@ -85,6 +89,28 @@ export const sessoes = pgTable(
     index('sessoes_usuario_idx').on(t.usuarioId, t.encerradaEm),
     index('sessoes_antiguidade_idx').on(t.usuarioId, t.criadaEm),
   ],
+)
+
+/**
+ * REDEFINIÇÃO DE SENHA — token de uso único, com validade curta, guardado
+ * como hash (o token em claro só existe no link). Hoje quem emite é o admin,
+ * que entrega o link por fora; quando houver provedor de e-mail, ele entrega
+ * o mesmo link — nada aqui muda.
+ */
+export const redefinicoesSenha = pgTable(
+  'redefinicoes_senha',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    usuarioId: uuid('usuario_id')
+      .notNull()
+      .references(() => usuarios.id, { onDelete: 'cascade' }),
+    tokenHash: text('token_hash').notNull().unique(),
+    expiraEm: timestamp('expira_em', { withTimezone: true }).notNull(),
+    usadaEm: timestamp('usada_em', { withTimezone: true }),
+    criadaPorId: uuid('criada_por_id').references(() => usuarios.id, { onDelete: 'set null' }),
+    criadaEm: timestamp('criada_em', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index('redefinicoes_senha_usuario_idx').on(t.usuarioId)],
 )
 
 export const assinaturas = pgTable(
@@ -527,4 +553,26 @@ export const chatMensagens = pgTable(
     criadoEm: timestamp('criado_em', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index('chat_mensagens_usuario_dia_idx').on(t.usuarioId, t.criadoEm)],
+)
+
+/**
+ * ENTRADAS REALIZADAS — o que o usuário registra ter feito em outro lugar,
+ * separado do que a NIP sugeriu (spec 12/09, §5.5). A plataforma continua
+ * somente leitura: nada aqui envia aposta. Chave natural evita duplicar no
+ * segundo toque.
+ */
+export const entradasRealizadas = pgTable(
+  'entradas_realizadas',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    usuarioId: uuid('usuario_id').notNull().references(() => usuarios.id, { onDelete: 'cascade' }),
+    dataReferencia: text('data_referencia').notNull(),
+    jogadorId: uuid('jogador_id').notNull().references(() => jogadores.id),
+    atributo: atributoEnum('atributo').notNull(),
+    linha: smallint('linha').notNull(),
+    unidades: numeric('unidades', { precision: 6, scale: 2 }).notNull(),
+    odd: numeric('odd', { precision: 6, scale: 2 }),
+    registradaEm: timestamp('registrada_em', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [unique('entradas_realizadas_unica').on(t.usuarioId, t.dataReferencia, t.jogadorId, t.atributo, t.linha)],
 )

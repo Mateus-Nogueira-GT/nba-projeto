@@ -5,6 +5,7 @@ import { eq } from 'drizzle-orm'
 import { bancoDeTeste } from '../../dominio/__tests__/ajuda-banco'
 import {
   casas,
+  classificacao,
   feedSnapshot,
   jogadores,
   niveisVersao,
@@ -173,6 +174,18 @@ describe('semearDemo (PGlite, banco vazio)', () => {
   it('carrega os 30 times e o elenco inteiro do documento do CJ', () => {
     expect(resumo.times).toBe(30)
     expect(resumo.jogadores).toBeGreaterThan(200)
+  })
+
+  it('todo time semeado nasce com conferência, e a classificação numera por conferência', async () => {
+    const lista = await banco.db
+      .select({ sigla: times.sigla, conferencia: times.conferencia })
+      .from(times)
+    expect(lista.length).toBeGreaterThan(0)
+    for (const t of lista) expect(t.conferencia, t.sigla).toMatch(/^(Leste|Oeste)$/)
+    const linhas = await banco.db.select().from(classificacao)
+    const primeiros = linhas.filter((l) => l.posicao === 1)
+    // duas conferências → dois primeiros lugares
+    expect(primeiros).toHaveLength(2)
   })
 
   it('a versão de níveis fica ativa', async () => {

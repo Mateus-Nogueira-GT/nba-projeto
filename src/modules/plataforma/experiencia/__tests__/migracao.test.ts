@@ -34,7 +34,9 @@ it('upgrade/rollback aditivo preserva dados anteriores de preferências, canais 
   await banco.pg.exec(readFileSync('drizzle/down/0020_new_brood.sql', 'utf8'))
   await banco.pg.exec(readFileSync('drizzle/down/0019_demonic_silver_surfer.sql', 'utf8'))
   await banco.pg.exec(readFileSync('drizzle/down/0018_experiencia_por_conta.sql', 'utf8'))
-  expect(await banco.contarTabelas()).toBe(48)
+  // 50 (era 49): a 0025 (entradas_realizadas, Task 10) não é descida aqui,
+  // então soma à contagem de base como qualquer migration fora deste range.
+  expect(await banco.contarTabelas()).toBe(50)
   expect(await preferenciasDoUsuario(banco.db, usuarioId)).toEqual({
     ordemLista: 'POR_NIVEL',
     lente: 'ODDS',
@@ -46,7 +48,7 @@ it('upgrade/rollback aditivo preserva dados anteriores de preferências, canais 
     '--> statement-breakpoint',
   ))
     await banco.pg.exec(sql)
-  expect(await banco.contarTabelas()).toBe(52)
+  expect(await banco.contarTabelas()).toBe(54)
   const esperado = estadoExperienciaPadrao()
   esperado.canais.GREEN = false
   expect(await estadoExperienciaDoUsuario(banco.db, usuarioId)).toEqual(esperado)
@@ -64,7 +66,7 @@ it('upgrade/rollback aditivo preserva dados anteriores de preferências, canais 
       if (sql.trim()) await banco.pg.exec(sql)
     }
   }
-  expect(await banco.contarTabelas()).toBe(68)
+  expect(await banco.contarTabelas()).toBe(70)
 })
 
 it('falha ao reexibir desfaz o acompanhamento na mesma transação', async () => {

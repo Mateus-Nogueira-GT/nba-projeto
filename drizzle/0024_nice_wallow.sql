@@ -1,0 +1,2 @@
+ALTER TABLE "links_afiliados" ADD COLUMN "saida_do_apito" boolean DEFAULT false NOT NULL;--> statement-breakpoint
+CREATE UNIQUE INDEX "links_afiliados_saida_do_apito_unica" ON "links_afiliados" USING btree ("saida_do_apito") WHERE "links_afiliados"."saida_do_apito";

@@ -12,6 +12,14 @@ import { lerFeedFireLive } from '../../modules/entrega/fire-live/leitura'
 import { cotacoesPorCasa } from '../../modules/entrega/odds/leitura'
 import { rotaDoJogador } from '../../modules/entrega/estatisticas/rotas'
 import { rulesetAtivo } from '../../modules/entrega/ruleset-ativo'
+import {
+  criarCampanhaComLink,
+  criarCasaComercial,
+  criarOferta,
+  criarParceiro,
+  definirSaidaDoApito,
+  type AtorAfiliados,
+} from '../../modules/plataforma/afiliados/servico'
 import { simularAte } from '../../modules/ingestao/demo/temporada'
 import { LLMFake } from '../../modules/ingestao/llm'
 import type { ItemFeed } from '../../modules/entrega/lista-secreta'
@@ -273,6 +281,72 @@ describe('Detalhe do apito — o esqueleto fixo da análise (identidade 04)', ()
     // O disclaimer inteiro, na letra do ADR.
     expect(html).toContain('Referência de mercado: a odd da sua casa pode ser outra.')
     expect(html).toContain('Nenhuma aposta é feita por aqui.')
+  }, 60_000)
+
+  it('sem link marcado, o detalhe não oferece saída; com link, oferece a saída rastreada com o aviso do ADR-0004 — e nunca um formulário de aposta', async () => {
+    const item = await sujeito()
+    let html = await renderizar(item)
+    expect(html).not.toContain('href="/ir/')
+
+    // Parceiro → oferta ATIVA → campanha → link, como no teste da entrega
+    // (`saida-para-casa.test.ts`) — a mesma porta, exercitada pela tela.
+    const { usuarios, ofertasAfiliados } = await import('../../modules/dominio/db/schema')
+    const sufixo = Math.random().toString(36).slice(2)
+    const [admin] = await banco.db
+      .insert(usuarios)
+      .values({ email: `admin-cta-${sufixo}@teste.com`, senhaHash: 'x', papel: 'ADMIN' })
+      .returning()
+    const ator: AtorAfiliados = { usuarioId: admin!.id, papel: 'ADMIN' }
+    const agora = new Date('2026-09-12T00:00:00.000Z')
+    const casa = await criarCasaComercial(banco.db, ator, `Casa CTA ${sufixo}`, agora)
+    const oferta = await criarOferta(
+      banco.db,
+      ator,
+      {
+        casaId: casa.id,
+        nome: `Oferta CTA ${sufixo}`,
+        modalidade: 'HIBRIDO',
+        moeda: 'BRL',
+        urlDestino: 'https://casa-cta.test/nba',
+        hostDestino: 'casa-cta.test',
+      },
+      agora,
+    )
+    await banco.db
+      .update(ofertasAfiliados)
+      .set({ status: 'ATIVA' })
+      .where(eq(ofertasAfiliados.id, oferta.id))
+    const parceiro = await criarParceiro(
+      banco.db,
+      ator,
+      { codigo: `parceiro-cta-${sufixo}`, nomePublico: 'Parceiro CTA' },
+      agora,
+    )
+    const link = await criarCampanhaComLink(
+      banco.db,
+      ator,
+      {
+        parceiroId: parceiro.id,
+        ofertaId: oferta.id,
+        nome: `Campanha CTA ${sufixo}`,
+        canal: 'SOCIAL',
+        codigo: `cta-link-${sufixo}`,
+        tipoDestino: 'CASA',
+      },
+      agora,
+    )
+
+    try {
+      await definirSaidaDoApito(banco.db, ator, link.id, agora)
+      html = await renderizar(item)
+      expect(html).toContain(`href="/ir/${link.codigo}"`)
+      expect(html).toContain('rel="nofollow sponsored"')
+      expect(html.toLowerCase()).toContain('a odd da sua casa pode ser outra')
+      expect(html).not.toMatch(/<form[^>]*aposta/i)
+      expect(html).not.toContain('name="valor"')
+    } finally {
+      await definirSaidaDoApito(banco.db, ator, null, agora)
+    }
   }, 60_000)
 
   it('o jogo fecha a análise com as siglas e os desfalques que a entrega leu', async () => {

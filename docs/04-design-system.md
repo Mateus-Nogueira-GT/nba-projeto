@@ -324,6 +324,16 @@ Resultados e Estatísticas oferecem a análise. A anatomia de três zonas do car
 a posição das abas ficam **congeladas durante a temporada**. Uma reorganização
 exige uma feature própria, não uma correção de acabamento.
 
+### Duas larguras de moldura
+
+A `Moldura` tem duas larguras, nunca uma só (spec 12/09, §4.1). `leitura` (640) é a
+coluna das telas de varredura — Lista Secreta, Fire Live, o detalhe do apito, Como
+funciona: ali uma linha curta é decisão de legibilidade, não limitação. `dados` (1120)
+é para o que carrega tabela, box score ou a conta da pessoa — Estatísticas, Resultados,
+Gestão de banca, Perfil: nessas telas a largura vira informação, e a coluna de leitura
+deixava a tabela espremida no meio de uma página vazia em volta. No celular as duas
+caem para a largura da tela com o mesmo respiro de 16px — só o desktop distingue.
+
 ### Vocabulário numérico
 
 | Informação | Escrita | Uso |
@@ -352,12 +362,26 @@ pendência comercial sobre sua inclusão no card. A redação dos dois sentidos 
 - `CabecalhoJogo`: única fronteira entre jogos, com siglas, horário, status e placar.
 - `FormaNoAtributo`: últimos dez jogos e régua da linha; `Barrinhas` mantém os últimos
   cinco no card e pode destacar a conferência mais recente.
-- `HierarquiaDoTime`: lista do CJ por atributo com desfalques em prefixo; deixa visível
+- `HierarquiaDoTime`: curadoria NIP por atributo com desfalques em prefixo; deixa visível
   a diferença entre time da lista e time atual do provedor.
 - `BarraAlvo`: alvo, marco do modo fire e ponto do apito **somente quando existe o valor
   observado naquele instante**. Horário do apito não é valor; não se inventa esse ponto.
 - `SeloContexto`, `FolhaDeFiltros` e `FaixaDemonstracao`: contexto explícito, recortes
   fora da lista de cards e aviso fino de dados simulados.
+- `Coluna.soDesktop` na `Tabela`: esconde a coluna abaixo de 900 px — para o que só cabe
+  na largura de dados, como nome do time por extenso ou jogos atrás do líder. `separadorApos`
+  desenha, ao fim de uma linha, a régua cheia no dobro da espessura da régua entre
+  registros — o corte de significado dentro da mesma tabela, como o fim do play-in na
+  classificação. Quem usa qualquer um dos dois escreve ao lado o que ele significa: forma
+  nunca é canal único.
+- `AvatarUsuario` e os oito avatares prontos (`AVATARES_PRONTOS`): o rosto da CONTA, não
+  o do jogador. Sem foto, as iniciais do nome; sem nome, a inicial do e-mail — nunca um
+  quadrado vazio. Não é o `Avatar` do jogador: aquele carrega o anel do nível do apito e o
+  fundo por time, que não significam nada para a pessoa dona da conta.
+- **Logo nunca é canal único.** `LogoTime` aparece sempre ao lado da sigla ou do nome do
+  time, nunca sozinha — é a sigla (ou o nome) que carrega a identificação quando a imagem
+  falha ou não existe. `decorativo` só vale `true` quando o texto ao lado já nomeia o
+  time; do contrário, é a própria logo que leva o `alt`.
 
 ### Ciclo e navegação
 
@@ -376,7 +400,7 @@ mostra o placar desse quarto, sem substituí-lo pelo total posterior da partida.
 Resultados sem data abrem a última rodada conferida. Uma rodada ainda em andamento
 declara espera, sem vender uma taxa parcial como resultado final da noite. A consulta
 de Estatísticas mantém o elenco real; a seção explicitamente rotulada de apitos e
-hierarquia usa a lista do CJ. O adversário é resolvido no contexto de cada jogo.
+hierarquia usa a curadoria NIP. O adversário é resolvido no contexto de cada jogo.
 
 ### Verificação reproduzível
 

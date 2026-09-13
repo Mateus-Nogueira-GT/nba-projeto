@@ -875,6 +875,62 @@ export async function definirStatusLink(
   return link
 }
 
+/**
+ * Marca `linkId` como a saída do apito — o link que o detalhe de todo apito
+ * oferece como porta para a casa parceira (spec 12/09, §5.4). Movida de
+ * `entrega/saida-para-casa.ts` (achado da revisão final): morava fora do
+ * módulo de afiliados, escrevia em `links_afiliados` sem `exigirAdmin` nem
+ * `auditar`, ao contrário das vinte outras mutações comerciais deste arquivo
+ * — inclusive `definirStatusLink`, sua vizinha imediata. Escolher qual
+ * parceiro recebe o clique de todo assinante é exatamente o que a trilha de
+ * auditoria existe para registrar. `saidaDoApito`, a LEITURA que a tela usa,
+ * fica em `entrega/` — não é mutação e é ela que a tela de fato chama.
+ *
+ * `linkId` nulo apenas desmarca: "nenhuma saída" é uma escolha válida do
+ * admin, não um estado inválido — mas um `linkId` que não existe é erro, não
+ * silêncio: sem o SELECT abaixo, um id inexistente desmarcava a saída atual
+ * e não marcava nada, sem avisar o admin que a marca some.
+ *
+ * O índice único parcial garante no máximo um link marcado, mas a troca em
+ * si (desmarcar o velho, marcar o novo) são DUAS instruções — dois admins
+ * marcando ao mesmo tempo intercalariam as suas e um dos dois estouraria o
+ * erro cru do índice único. O lock de advisory serializa a seção crítica
+ * inteira (mesmo padrão de `registrarClique`/`associarVisitanteAoUsuario`
+ * acima): a segunda chamada espera a primeira commitar em vez de colidir —
+ * "só existe um" continua valendo, e quem marcar por último vence, como já
+ * acontece com duas chamadas em sequência.
+ */
+export async function definirSaidaDoApito(
+  db: Db,
+  ator: AtorAfiliados,
+  linkId: string | null,
+  agora: Date,
+): Promise<void> {
+  exigirAdmin(ator)
+  await db.transaction(async (tx) => {
+    await tx.execute(sql`select pg_advisory_xact_lock(hashtext('saida_do_apito'))`)
+    if (linkId) {
+      const [link] = await tx
+        .select({ id: linksAfiliados.id })
+        .from(linksAfiliados)
+        .where(eq(linksAfiliados.id, linkId))
+        .limit(1)
+      if (!link) throw new Error('Link não encontrado')
+    }
+    await tx
+      .update(linksAfiliados)
+      .set({ saidaDoApito: false, atualizadoEm: agora })
+      .where(eq(linksAfiliados.saidaDoApito, true))
+    if (linkId) {
+      await tx
+        .update(linksAfiliados)
+        .set({ saidaDoApito: true, atualizadoEm: agora })
+        .where(eq(linksAfiliados.id, linkId))
+    }
+    await auditar(tx, ator.usuarioId, 'SAIDA_DO_APITO_DEFINIDA', 'LINK', linkId, agora)
+  })
+}
+
 export async function definirStatusOferta(
   db: Db,
   ator: AtorAfiliados,

@@ -174,9 +174,9 @@ describe('HierarquiaDoTime — semântica e vazio', () => {
   })
 
   it('sem linha nenhuma diz o que falta, e não desenha lista vazia', () => {
-    const html = render({ linhas: [], vazio: 'A lista do CJ não cobre este atributo.' })
+    const html = render({ linhas: [], vazio: 'A lista NIP não cobre este atributo.' })
 
-    expect(texto(html)).toContain('A lista do CJ não cobre este atributo.')
+    expect(texto(html)).toContain('A lista NIP não cobre este atributo.')
     expect(html).not.toContain('role="listitem"')
   })
 })

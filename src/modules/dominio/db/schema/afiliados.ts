@@ -10,6 +10,7 @@ import {
   text,
   timestamp,
   unique,
+  uniqueIndex,
   uuid,
 } from 'drizzle-orm/pg-core'
 
@@ -153,6 +154,12 @@ export const linksAfiliados = pgTable(
     utms: jsonb('utms').$type<Record<string, string>>(),
     parametrosCasa: jsonb('parametros_casa').$type<Record<string, string>>(),
     ativo: boolean('ativo').notNull().default(true),
+    /**
+     * O link que a tela do apito usa como saída para a casa (spec 12/09,
+     * §5.4). No máximo UM (índice único parcial); o admin escolhe. Sem nenhum
+     * marcado, a tela não mostra saída — nunca inventa destino.
+     */
+    saidaDoApito: boolean('saida_do_apito').notNull().default(false),
     criadoEm: timestamp('criado_em', { withTimezone: true }).notNull().defaultNow(),
     atualizadoEm: timestamp('atualizado_em', { withTimezone: true }).notNull().defaultNow(),
   },
@@ -162,6 +169,9 @@ export const linksAfiliados = pgTable(
       'links_afiliados_caminho_nip_valido',
       sql`${t.tipoDestino} <> 'NIP' or ${t.caminhoNip} is not null`,
     ),
+    uniqueIndex('links_afiliados_saida_do_apito_unica')
+      .on(t.saidaDoApito)
+      .where(sql`${t.saidaDoApito}`),
   ],
 )
 

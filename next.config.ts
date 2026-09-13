@@ -35,6 +35,16 @@ const nextConfig: NextConfig = {
         source: '/manifest.webmanifest',
         headers: [{ key: 'Cache-Control', value: 'public, max-age=0, must-revalidate' }],
       },
+      {
+        // O token de redefinição de senha viaja no PATH (decisão registrada
+        // na spec, §5.3): uso único e validade de uma hora limitam a janela
+        // de exposição, mas o `Referer` para um destino EXTERNO continua
+        // evitável — sem este cabeçalho, um link ou recurso de fora nesta
+        // página vazaria a URL (e o token) pela origem da navegação
+        // (achado da revisão final).
+        source: '/redefinir/:token',
+        headers: [{ key: 'Referrer-Policy', value: 'no-referrer' }],
+      },
     ]
   },
 }

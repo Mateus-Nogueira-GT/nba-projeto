@@ -14,6 +14,7 @@ import {
   criarOferta,
   criarParceiro,
   criarPreviaImportacao,
+  definirSaidaDoApito,
   definirStatusLink,
   definirStatusOferta,
   definirStatusParceiro,
@@ -313,6 +314,16 @@ export async function acaoStatusLink(formulario: FormData): Promise<void> {
   const ator = await atorAdmin()
   const id = z.string().uuid().parse(texto(formulario, 'id'))
   await definirStatusLink(getDb(), ator, id, texto(formulario, 'ativo') === 'true', new Date())
+  atualizar()
+}
+
+// `linkId` vazio (o botão "Nenhuma saída") desmarca sem marcar outro — é uma
+// escolha válida do admin, não erro de formulário.
+export async function acaoDefinirSaidaDoApito(formulario: FormData): Promise<void> {
+  const ator = await atorAdmin()
+  const bruto = texto(formulario, 'linkId')
+  const linkId = bruto ? z.string().uuid().parse(bruto) : null
+  await definirSaidaDoApito(getDb(), ator, linkId, new Date())
   atualizar()
 }
 

@@ -3,7 +3,7 @@ import { z } from 'zod'
 
 import { usuarios } from '../../dominio/db/schema'
 import type { Db } from '../../dominio/db/tipos'
-import { gerarHash } from '../auth/senha'
+import { gerarHash, senhaSchema } from '../auth/senha'
 import type { ConfiguracaoProdutoPago } from './configuracao'
 import { excedeuOperacoes, registrarOperacao } from './operacoes'
 
@@ -11,13 +11,7 @@ export const cadastroSchema = z
   .object({
     nome: z.string().trim().min(2).max(120),
     email: z.string().trim().toLowerCase().email().max(254),
-    senha: z
-      .string()
-      .min(12)
-      .max(128)
-      .refine((senha) => /[A-Za-z]/.test(senha) && /\d/.test(senha), {
-        message: 'a senha deve conter letra e número',
-      }),
+    senha: senhaSchema,
   })
   .strict()
 

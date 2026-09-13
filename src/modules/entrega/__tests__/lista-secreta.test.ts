@@ -144,6 +144,18 @@ async function escalar(nome: string, status: StatusEscalacao) {
     })
 }
 
+function semEntidades(texto: string): string {
+  return texto
+    .replace(/&#x27;/g, "'")
+    .replace(/&quot;/g, '"')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&amp;/g, '&')
+}
+
+/** O texto que o assinante lê, sem marcação e sem entidade — nunca o CSS. */
+const textoDaTela = (html: string) => semEntidades(html.replace(/<[^>]+>/g, ''))
+
 async function apitosDeOpd() {
   const feed = await lerFeed(banco.db, HOJE)
   const nomePorId = new Map([...idPorNome].map(([n, id]) => [id, n] as const))
@@ -562,7 +574,11 @@ describe('a tela consome o feed materializado', () => {
       }),
     )
 
-    expect(html).toContain(item.nome)
+    // `toContain` compara com o HTML escapado; nomes com apóstrofo (a NBA
+    // tem vários) viram `&#x27;` em `renderToStaticMarkup` — decodifica antes
+    // de comparar, senão o teste falha sempre que o sorteio calhar num
+    // desses nomes.
+    expect(textoDaTela(html)).toContain(item.nome)
     expect(html).toContain('LAL')
     expect(html).toContain(`N${item.nivelApito}`)
     // A palavra proibida não pode aparecer na saída renderizada (P12).

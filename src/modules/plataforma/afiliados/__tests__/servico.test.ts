@@ -4,8 +4,10 @@ import { and, eq } from 'drizzle-orm'
 import { bancoDeTeste } from '@/modules/dominio/__tests__/ajuda-banco'
 import {
   atribuicoesAfiliados,
+  auditoriaAfiliados,
   casas,
   eventosAfiliados,
+  linksAfiliados,
   parceirosAfiliados,
   usuarios,
 } from '@/modules/dominio/db/schema'
@@ -19,6 +21,7 @@ import {
   criarOferta,
   criarParceiro,
   criarPreviaImportacao,
+  definirSaidaDoApito,
   definirStatusLink,
   definirStatusOferta,
   definirStatusParceiro,
@@ -503,6 +506,70 @@ describe('operação de afiliados', () => {
     await expect(painelDoAfiliado(banco.db, c.usuarioA.id)).rejects.toThrow(
       'Acesso de afiliado exigido',
     )
+  })
+
+  // ACHADO DA REVISÃO FINAL: definirSaidaDoApito morava em `entrega/`, sem
+  // `exigirAdmin` nem `auditar` — a única mutação comercial da passada sem
+  // trilha. Movida para cá, ao lado de `definirStatusLink`, sua vizinha
+  // imediata.
+  it('definirSaidaDoApito exige admin e grava a trilha de quem escolheu o parceiro', async () => {
+    const c = await contexto()
+    const agora = new Date('2026-09-13T10:00:00.000Z')
+
+    await expect(
+      definirSaidaDoApito(banco.db, { usuarioId: c.usuarioA.id, papel: 'USUARIO' }, c.linkA.id, agora),
+    ).rejects.toThrow('Acesso administrativo exigido')
+
+    await definirSaidaDoApito(banco.db, c.admin, c.linkA.id, agora)
+    const [trilha] = await banco.db
+      .select()
+      .from(auditoriaAfiliados)
+      .where(eq(auditoriaAfiliados.acao, 'SAIDA_DO_APITO_DEFINIDA'))
+    expect(trilha).toMatchObject({
+      atorUsuarioId: c.admin.usuarioId,
+      entidade: 'LINK',
+      entidadeId: c.linkA.id,
+    })
+  })
+
+  it('linkId inexistente recusa em vez de só desmarcar a saída atual em silêncio', async () => {
+    const c = await contexto()
+    const agora = new Date('2026-09-13T10:00:00.000Z')
+    await definirSaidaDoApito(banco.db, c.admin, c.linkA.id, agora)
+
+    await expect(
+      definirSaidaDoApito(banco.db, c.admin, '11111111-1111-4111-8111-111111111111', agora),
+    ).rejects.toThrow('Link não encontrado')
+
+    // A chamada recusada não pode ter limpado a marca que já existia.
+    const [linkA] = await banco.db
+      .select({ saidaDoApito: linksAfiliados.saidaDoApito })
+      .from(linksAfiliados)
+      .where(eq(linksAfiliados.id, c.linkA.id))
+    expect(linkA?.saidaDoApito).toBe(true)
+  })
+
+  it('dois admins marcando ao mesmo tempo não estouram o índice único — o último a commitar vence', async () => {
+    const c = await contexto()
+    const agora = new Date('2026-09-13T10:00:00.000Z')
+
+    // Concorrente de propósito (Promise.all, não sequencial): antes deste
+    // achado, a corrida entre "desmarcar o velho" e "marcar o novo" de duas
+    // chamadas podia intercalar e estourar o erro cru do índice único
+    // parcial. As duas devem RESOLVER — nenhuma é logicamente inválida.
+    await expect(
+      Promise.all([
+        definirSaidaDoApito(banco.db, c.admin, c.linkA.id, agora),
+        definirSaidaDoApito(banco.db, c.admin, c.linkB.id, agora),
+      ]),
+    ).resolves.toBeDefined()
+
+    const marcados = await banco.db
+      .select({ id: linksAfiliados.id })
+      .from(linksAfiliados)
+      .where(eq(linksAfiliados.saidaDoApito, true))
+    expect(marcados).toHaveLength(1)
+    expect([c.linkA.id, c.linkB.id]).toContain(marcados[0]?.id)
   })
 
   it('protege convite, distingue cadastro de login e preserva primeiro toque entre dispositivos', async () => {

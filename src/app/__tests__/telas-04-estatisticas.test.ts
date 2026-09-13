@@ -26,7 +26,7 @@ import type { ApitoDoJogador, TelaJogador } from '../../modules/entrega/estatist
 import { telaDoJogo } from '../../modules/entrega/estatisticas/jogo'
 import { telaJogosDoDia } from '../../modules/entrega/estatisticas/jogos-do-dia'
 import { rotaDoTime } from '../../modules/entrega/estatisticas/rotas'
-import { hierarquiaDoTime, telaDaClassificacao } from '../../modules/entrega/estatisticas/time'
+import { hierarquiaDoTime, telaDaClassificacao, telaDoTime } from '../../modules/entrega/estatisticas/time'
 import type { LinhaHierarquia } from '../../modules/entrega/estatisticas/time'
 import { rulesetAtivo } from '../../modules/entrega/ruleset-ativo'
 import { simularAte } from '../../modules/ingestao/demo/temporada'
@@ -614,9 +614,9 @@ describe('tela do jogador · o hero', () => {
 })
 
 describe('tela do jogador · as duas visões de time', () => {
-  it('rotula TIME ATUAL e NA LISTA DO CJ, distintos quando os times divergem', async () => {
+  it('rotula TIME ATUAL e NA CURADORIA NIP, distintos quando os times divergem', async () => {
     const naLista = tela.timeNaListaDoCj
-    expect(naLista, 'o jogador apitado está, por definição, na lista do CJ').not.toBeNull()
+    expect(naLista, 'o jogador apitado está, por definição, na curadoria NIP').not.toBeNull()
 
     const [original] = await banco.db
       .select()
@@ -1077,6 +1077,7 @@ describe('tela do time · a hierarquia do CJ', () => {
   it('lista as posições do CJ em ordem, cada uma com o nível do jogador no atributo', async () => {
     const html = await renderizarTime(sujeito.timeId)
     await gravarConferencia('estatisticas-time', html)
+
     const linhas = itensDaLista(secaoDaHierarquia(html))
     const esperadas = [...sujeito.hierarquia].sort((a, b) => a.posicao - b.posicao)
 
@@ -1191,6 +1192,17 @@ describe('tela do time · as duas visões de time', () => {
     expect(doProvedor.length).toBeGreaterThan(0)
     for (const jogador of doProvedor) expect(texto(elenco)).toContain(jogador.nome)
   }, 60_000)
+
+  it('o cabeçalho traz a logo do time — o nome por extenso já acompanha, portanto a logo fica decorativa', async () => {
+    const html = await renderizarTime(sujeito.timeId)
+    const tela = await telaDoTime(banco.db, sujeito.timeId, { temporada })
+
+    // A logo decora: o nome completo está no título da página, linhas acima, no mesmo
+    // bloco visual. Sem `decorativo`, o leitor de tela repetiria o nome do time.
+    expect(html).toContain(`src="/times/${tela!.time.sigla}.svg"`)
+    // O nome por extenso que acompanha a logo está visível uma única vez (no cabeçalho).
+    expect((texto(html).match(new RegExp(tela!.time.nome, 'g')) ?? []).length).toBe(1)
+  }, 60_000)
 })
 
 describe('tela do time · regras de escrita', () => {
@@ -1254,6 +1266,18 @@ function linhasDaTabela(html: string): string[] {
 /** O HTML de cada `<th>` de um trecho. */
 function cabecalhosDaTabela(html: string): string[] {
   return html.match(/<th\b[^>]*>[\s\S]*?<\/th>/g) ?? []
+}
+
+/**
+ * A linha daquele time numa tabela — achada pela PORTA que ela abre, não pela
+ * posição no documento: a tela escreve uma tabela por conferência, e a lista
+ * que a entrega devolve é da liga inteira, em outra ordem. A sigla continua
+ * sendo a porta do time — era o que a grade de caixinhas dava.
+ */
+function linhaDoTime(linhas: string[], timeId: string): string {
+  const linha = linhas.find((l) => l.includes(`href="${rotaDoTime(timeId)}"`))
+  expect(linha, 'o time tem uma linha na classificação').toBeDefined()
+  return linha!
 }
 
 /** A cor com que a tela escreveu aquele número — `color` fecha o estilo. */
@@ -1329,6 +1353,27 @@ describe('índice da aba · os jogos do dia como lista', () => {
     expect(visivel).toContain(String(encerrado.placarCasa))
     expect(visivel).toContain(String(encerrado.placarVisitante))
   }, 60_000)
+
+  it('toda linha de jogo traz a logo de visitante e casa — a sigla continua escrita ao lado, pois a logo nunca é canal único', async () => {
+    const doDia = await telaJogosDoDia(banco.db, dataDeReferencia(AGORA, fuso), fuso)
+    const html = await renderizarIndice()
+    const secao = trecho(html, 'Jogos do dia', 'Classificação')
+
+    for (const jogo of doDia.jogos) {
+      // A logo nomeia o time para quem não a vê; a sigla está escrita ao lado para quem vê.
+      expect(secao).toContain(`src="/times/${jogo.visitante.sigla}.svg"`)
+      expect(secao).toContain(`src="/times/${jogo.casa.sigla}.svg"`)
+
+      const linhas = itensDaLista(secao)
+      const linha = linhas.find((l) =>
+        l.includes(jogo.visitante.sigla) && l.includes(jogo.casa.sigla),
+      )
+      expect(linha, `linha do jogo ${jogo.visitante.sigla} @ ${jogo.casa.sigla}`).toBeDefined()
+      // A sigla que acompanha a logo está escrita e visível — a logo não carrega sentido sozinha.
+      expect(texto(linha!)).toContain(jogo.visitante.sigla)
+      expect(texto(linha!)).toContain(jogo.casa.sigla)
+    }
+  }, 60_000)
 })
 
 describe('índice da aba · a classificação como tabela', () => {
@@ -1349,19 +1394,17 @@ describe('índice da aba · a classificação como tabela', () => {
     const linhas = linhasDaTabela(secao)
     expect(linhas.length).toBe(tabela.linhas.length)
 
-    tabela.linhas.forEach((time, indice) => {
-      const linha = linhas[indice]!
+    for (const time of tabela.linhas) {
+      const linha = linhaDoTime(linhas, time.timeId)
       const visivel = texto(linha)
       expect(visivel).toContain(time.sigla)
       expect(visivel).toContain(`${time.vitorias}–${time.derrotas}`)
       expect(visivel).toContain(aproveitamentoEscrito(time.aproveitamento))
       if (time.sequencia !== null) expect(visivel).toContain(time.sequencia)
-      // A sigla continua sendo a porta do time — era o que a grade dava.
-      expect(linha).toContain(`href="${rotaDoTime(time.timeId)}"`)
       // Os pontinhos são NOMEADOS um a um: a cor não é o único canal.
       const nomeados = linha.match(/aria-label="(vitória|derrota)"/g) ?? []
       expect(nomeados.length).toBe(time.forma.length)
-    })
+    }
   }, 60_000)
 
   it('as posições 1 a 6 dizem playoff e as 7 a 10 dizem play-in, por escrito', async () => {
@@ -1369,8 +1412,7 @@ describe('índice da aba · a classificação como tabela', () => {
     const secao = trecho(await renderizarIndice(), 'Classificação', 'Última atualização')
     const linhas = linhasDaTabela(secao)
 
-    tabela.linhas.forEach((time, indice) => {
-      const visivel = texto(linhas[indice]!)
+    for (const time of tabela.linhas) {
       const esperado =
         time.posicao === null
           ? '—'
@@ -1379,14 +1421,28 @@ describe('índice da aba · a classificação como tabela', () => {
             : time.posicao <= 10
               ? 'play-in'
               : '—'
+      const visivel = texto(linhaDoTime(linhas, time.timeId))
       expect(visivel, `posição ${time.posicao}`).toContain(esperado)
-    })
+    }
 
     // O trilho é ESCRITO, não uma cor de fundo: seis vagas de playoff e quatro
-    // de play-in por conferência, e a tela diz qual é qual em cada linha.
-    const visivel = texto(secao)
-    expect((visivel.match(/playoff/g) ?? []).length).toBe(6)
-    expect((visivel.match(/play-in/g) ?? []).length).toBe(4)
+    // de play-in POR CONFERÊNCIA — sobre a liga a conta daria o dobro, e é
+    // exatamente o erro que a divisão em duas tabelas corrigiu. A conta é
+    // sobre as LINHAS de cada conferência: a legenda sob a tabela também
+    // escreve as duas palavras, e grupos pequenos (um time sem conferência,
+    // por exemplo) não têm seis vagas para distribuir.
+    const porConferencia = new Map<string | null, string[]>()
+    for (const time of tabela.linhas) {
+      const grupo = porConferencia.get(time.conferencia) ?? []
+      grupo.push(texto(linhaDoTime(linhas, time.timeId)))
+      porConferencia.set(time.conferencia, grupo)
+    }
+    const cheias = [...porConferencia.values()].filter((g) => g.length >= 10)
+    expect(cheias.length, 'há conferência cheia para conferir').toBeGreaterThan(0)
+    for (const grupo of cheias) {
+      expect(grupo.filter((l) => l.includes('playoff'))).toHaveLength(6)
+      expect(grupo.filter((l) => l.includes('play-in'))).toHaveLength(4)
+    }
   }, 60_000)
 
   it('time sem partida encerrada mostra "—" nos últimos 5, em vez de inventar resultado', async () => {
@@ -1422,6 +1478,7 @@ describe('tela de partida · o 1º quarto em destaque', () => {
     const jogo = await umJogo('ENCERRADO')
     const html = await renderizarJogo(jogo.id)
     await gravarConferencia('estatisticas-partida', html)
+
     const secao = trecho(html, 'Pontos por quarto', 'Líderes da partida')
     const quente = componente.contextoQuente.faixaFundo
 
@@ -1446,6 +1503,20 @@ describe('tela de partida · o 1º quarto em destaque', () => {
 
     // O rótulo explica o destaque UMA vez — repetido por célula viraria ruído.
     expect((texto(html).match(/1º Q · o que o Fire Live observa/g) ?? []).length).toBe(1)
+  }, 60_000)
+
+  it('o placar traz a logo de visitante e casa — a sigla continua escrita ao lado, pois a logo nunca é canal único', async () => {
+    const jogo = await umJogo('ENCERRADO')
+    const tela = (await telaDoJogo(banco.db, jogo.id, {}))!
+    const html = await renderizarJogo(jogo.id)
+
+    // A logo nomeia o time para quem não a vê; a sigla está escrita ao lado para quem vê.
+    expect(html).toContain(`src="/times/${tela.casa.sigla}.svg"`)
+    expect(html).toContain(`src="/times/${tela.visitante.sigla}.svg"`)
+
+    // A sigla que acompanha a logo está escrita e visível — a logo não carrega sentido sozinha.
+    expect(html).toContain(tela.casa.sigla)
+    expect(html).toContain(tela.visitante.sigla)
   }, 60_000)
 })
 

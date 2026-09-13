@@ -1,3 +1,4 @@
+import Link from 'next/link'
 import { componente } from '@/design-system/tokens/componente'
 import { semantico } from '@/design-system/tokens/semantico'
 import { FormularioLogin } from './formulario'
@@ -7,6 +8,14 @@ import '@/design-system/tokens/tokens.css'
 
 export const dynamic = 'force-dynamic'
 export const metadata = { title: 'Entrar' }
+
+// Mensagem de cada `?aviso=` que esta tela pode receber por redirect de fora
+// (hoje só o "encerrar sessão" do próprio aparelho, em `conta/acoes.ts`: essa
+// sessão acabou de morrer, então o aviso chega aqui em vez de em `/conta`).
+const TEXTO_DO_AVISO: Record<string, string> = {
+  'sessao-encerrada': 'A sessão deste aparelho foi encerrada. Entre novamente.',
+  'senha-redefinida': 'Senha redefinida. Entre com a senha nova.',
+}
 
 export default async function PaginaEntrar({
   searchParams,
@@ -19,6 +28,8 @@ export default async function PaginaEntrar({
     : parametros.destino
   const destino = destinoInternoSeguro(destinoBruto ?? '/')
   const cadastroAberto = configuracaoProdutoPago().cadastroPublicoHabilitado
+  const avisoBruto = Array.isArray(parametros.aviso) ? parametros.aviso[0] : parametros.aviso
+  const mensagemDoAviso = avisoBruto ? TEXTO_DO_AVISO[avisoBruto] : undefined
   return (
     <main
       style={{
@@ -46,12 +57,24 @@ export default async function PaginaEntrar({
         <p style={{ margin: '0 0 20px', fontSize: 13, color: semantico.textoSecundario }}>
           Entre para ver a Lista Secreta do dia.
         </p>
-        <FormularioLogin destino={destino} />
-        {cadastroAberto && (
-          <p style={{ marginTop: 16, fontSize: 13, color: semantico.textoSecundario }}>
-            Ainda não tem conta? <a href="/cadastrar">Cadastre-se</a>
+        {mensagemDoAviso && (
+          <p role="status" style={{ margin: '0 0 16px', fontSize: 13, color: semantico.apitoNivel3 }}>
+            {mensagemDoAviso}
           </p>
         )}
+        <FormularioLogin destino={destino} />
+        {/* "Esqueci a senha" fica FORA do `cadastroAberto`: cadastro fechado
+            não significa conta inexistente — é sempre quem já tem conta que
+            perde a senha, então o link precisa valer também quando o
+            cadastro público está desligado. */}
+        <p style={{ marginTop: 16, fontSize: 13, color: semantico.textoSecundario }}>
+          {cadastroAberto && (
+            <>
+              Ainda não tem conta? <a href="/cadastrar">Cadastre-se</a> ·{' '}
+            </>
+          )}
+          <Link href="/redefinir">Esqueci a senha</Link>
+        </p>
       </div>
     </main>
   )

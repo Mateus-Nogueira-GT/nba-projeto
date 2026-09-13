@@ -2,6 +2,7 @@ import { componente } from '@/design-system/tokens/componente'
 import { semantico } from '@/design-system/tokens/semantico'
 
 import { BarraInferior, type Aba } from './BarraInferior'
+import { LARGURA_DA_MOLDURA, type LarguraDaMoldura } from './Moldura'
 
 /**
  * O QUE A TELA MOSTRA ENQUANTO O SERVIDOR RESPONDE.
@@ -30,7 +31,15 @@ function Barra({ largura, altura = 14 }: { largura: string | number; altura?: nu
   )
 }
 
-export function Esqueleto({ aba, linhas = 4 }: { aba: Aba | null; linhas?: number }) {
+export function Esqueleto({
+  aba,
+  largura = 'leitura',
+  linhas = 4,
+}: {
+  aba: Aba | null
+  largura?: LarguraDaMoldura
+  linhas?: number
+}) {
   return (
     <>
       <main
@@ -44,7 +53,14 @@ export function Esqueleto({ aba, linhas = 4 }: { aba: Aba | null; linhas?: numbe
           fontFamily: semantico.fonteCorpo,
         }}
       >
-        <div style={{ maxWidth: 640, margin: '0 auto', display: 'grid', gap: 18 }}>
+        <div
+          style={{
+            maxWidth: LARGURA_DA_MOLDURA[largura],
+            margin: '0 auto',
+            display: 'grid',
+            gap: 18,
+          }}
+        >
           <div style={{ display: 'grid', gap: 8 }}>
             <Barra largura={140} altura={10} />
             <Barra largura={220} altura={26} />

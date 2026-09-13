@@ -485,7 +485,7 @@ export default async function PaginaJogador({
     `${rotaDoJogo(jogoId)}?jogador=${id}&${parametrosEstatisticas(contexto)}`
 
   return (
-    <Moldura aba="stats">
+    <Moldura aba="stats" largura="dados">
       {/* Cabeçalho SEM título: o nome do jogador é o <h1> do hero, ao lado do
           rosto, como no artboard. Repeti-lo aqui em 30 px seria o mesmo nome
           duas vezes, e deixava o hero com um rosto de 72 px ao lado de duas

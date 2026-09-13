@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from 'node:crypto'
-import { and, asc, eq, gt, gte, inArray, isNull, sql } from 'drizzle-orm'
+import { and, asc, eq, gt, gte, inArray, isNull, ne, sql } from 'drizzle-orm'
 
 import { dispositivos, eventosConta, sessoes, usuarios } from '../../dominio/db/schema'
 import type { Db } from '../../dominio/db/tipos'
@@ -405,27 +405,103 @@ export async function encerrarSessaoPorToken(
   })
 }
 
-/** Encerra todas as sessões do usuário — usado ao bloquear pelo painel. */
+/**
+ * "Encerrar sessão" POR DISPOSITIVO, pelo próprio usuário (perfil). Escopado
+ * ao `usuarioId` de propósito: o id do dispositivo vem de um formulário, e
+ * sem o escopo qualquer id colado encerraria a sessão de outra pessoa.
+ *
+ * Mesma transação registra o evento de auditoria e invalida as inscrições de
+ * push do dispositivo — como os outros três lugares deste arquivo que
+ * encerram sessão de dispositivo (`encerrarSessaoPorToken`,
+ * `encerrarTodasAsSessoesNaTransacao`, o corte por `MAX_DISPOSITIVOS`
+ * acima). Sem isso, a pessoa perde a navegação naquele aparelho mas
+ * continua recebendo apito por push nele — e o push é o canal de tempo real
+ * do produto (CLAUDE.md), não a navegação.
+ */
+export async function encerrarSessoesDoDispositivo(
+  db: Db,
+  usuarioId: string,
+  dispositivoId: string,
+  motivo: string,
+  agora: Date,
+): Promise<number> {
+  return db.transaction(async (tx) => {
+    const encerradas = await tx
+      .update(sessoes)
+      .set({ encerradaEm: agora, motivoEncerramento: motivo })
+      .where(
+        and(
+          eq(sessoes.usuarioId, usuarioId),
+          eq(sessoes.dispositivoId, dispositivoId),
+          isNull(sessoes.encerradaEm),
+        ),
+      )
+      .returning({ id: sessoes.id, ip: sessoes.ip })
+
+    if (encerradas.length === 0) return 0
+
+    await registrar(tx, usuarioId, 'SESSAO_ENCERRADA', motivo, encerradas[0]?.ip ?? null, agora, {
+      dispositivoId,
+      sessoesIds: encerradas.map((sessao) => sessao.id),
+    })
+    await invalidarInscricoesDoDispositivoNaTransacao(tx, usuarioId, dispositivoId, motivo, agora)
+
+    return encerradas.length
+  })
+}
+
+/** Encerra as sessões do usuário — usado ao bloquear pelo painel. */
 export async function encerrarTodasAsSessoes(
   db: Db,
   usuarioId: string,
   motivo: string,
   agora: Date,
+  opcoes: { excetoSessaoId?: string } = {},
 ): Promise<void> {
-  await db.transaction((tx) => encerrarTodasAsSessoesNaTransacao(tx, usuarioId, motivo, agora))
+  await db.transaction((tx) =>
+    encerrarTodasAsSessoesNaTransacao(tx, usuarioId, motivo, agora, opcoes),
+  )
 }
 
+/**
+ * Encerra as sessões do usuário — todas, ou todas MENOS `excetoSessaoId`.
+ * Quem troca a própria senha ou e-mail no perfil poupa a sessão que fez a
+ * troca (`app/(app)/conta/acoes.ts`); o bloqueio pelo painel e a redefinição
+ * por token (`auth/redefinicao.ts`) não têm uma sessão "de quem pediu" para
+ * poupar, então encerram tudo — por isso o parâmetro é opcional.
+ *
+ * Grava UM evento SESSAO_ENCERRADA para o lote inteiro (não um por sessão):
+ * "encerrei tudo" é um fato só para a trilha do admin. Até este achado da
+ * revisão final, esta era a ÚNICA das três funções deste arquivo que encerra
+ * sessão de dispositivo (junto com `encerrarSessaoPorToken` e
+ * `encerrarSessoesDoDispositivo`, ambas acima) que não auditava — quem
+ * chamava por fora tinha que gravar o evento à mão (era o caso de
+ * `concluirRedefinicao`, agora dispensado).
+ */
 export async function encerrarTodasAsSessoesNaTransacao(
   db: Db,
   usuarioId: string,
   motivo: string,
   agora: Date,
+  opcoes: { excetoSessaoId?: string } = {},
 ): Promise<void> {
   const encerradas = await db
     .update(sessoes)
     .set({ encerradaEm: agora, motivoEncerramento: motivo })
-    .where(and(eq(sessoes.usuarioId, usuarioId), isNull(sessoes.encerradaEm)))
-    .returning({ dispositivoId: sessoes.dispositivoId })
+    .where(
+      and(
+        eq(sessoes.usuarioId, usuarioId),
+        isNull(sessoes.encerradaEm),
+        opcoes.excetoSessaoId ? ne(sessoes.id, opcoes.excetoSessaoId) : undefined,
+      ),
+    )
+    .returning({ id: sessoes.id, dispositivoId: sessoes.dispositivoId, ip: sessoes.ip })
+
+  if (encerradas.length === 0) return
+
+  await registrar(db, usuarioId, 'SESSAO_ENCERRADA', motivo, encerradas[0]?.ip ?? null, agora, {
+    sessoesIds: encerradas.map((sessao) => sessao.id),
+  })
 
   const dispositivosEncerrados = [
     ...new Set(

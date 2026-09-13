@@ -1,9 +1,15 @@
 # NIP · o que falta depois da call de 08/09 — UX e pendências nossas
 
-**Data:** 12/09/2026 · **Status:** rascunho para decisão do parceiro
+**Data:** 12/09/2026 · **Status:** implementada em 12/09/2026
 **Origem:** a call de 08/09/2026 às 11h (anotações do Gemini) e três capturas do app em
 produção enviadas em 12/09 (Estatísticas, Perfil, Gestão de banca)
 **Prazo citado na call:** a versão final é para **o dia 13** — amanhã.
+
+**O que ficou de fora, e por quê** (todos em §6, dependentes de terceiros): os planos Star e
+MVP não têm nível definido; o alerta por Telegram depende de os planos existirem primeiro
+(é benefício de plano superior); e a gestão de banca mostra as entradas registradas pelo
+usuário, mas os números ainda são o modelo de demonstração — o modelo real de gestão é
+material do Carlos que ainda não chegou.
 
 ---
 
@@ -37,8 +43,10 @@ comerciais que a call desenhou.
 | **Rastreamento de afiliados por UTM** (sua tarefa) | pronto: rotas de redirecionamento, painel, parâmetros por link e vínculo do cadastro à origem |
 | Remover a imagem de Carlos dos métodos | o texto já fala em "metodologia NIP"; falta só uma varredura de sobras |
 | Classificação dividida por conferência | **o código já agrupa** — falta o dado (ver §5.2) |
-| Componente de logo de time | **existe** (`LogoTime`) — nunca é renderizado e não há dado (ver §4.2) |
+| Componente de logo de time | **existe, com dado** (`LogoTime` + `identidadeDoTime()`, SVGs em `public/times/`) — só não era renderizado ainda (ver §4.2) |
 | Quadra ao vivo no fundo | componente `QuadraAoVivo` existe |
+| Integração de duas casas (MGM e mais uma) | configuradas nos endpoints, como você disse na call; as demais esperam documentação (§6) |
+| A IA que explica cada apito | é a narrativa de cada card e do detalhe — já no ar |
 
 ## 4 · Ajustes de UX — o que você pediu nos prints
 
@@ -94,9 +102,9 @@ declaração de largura em cada `page.tsx`.
 
 - **Dividir por conferência**, Leste e Oeste, como na NBA. O código já faz isso; falta o
   dado (§5.2). Com a divisão, o trilho passa a estar correto sem nenhuma outra mudança.
-- **Logo de todas as franquias** na coluna do time, ao lado da sigla em Anton. A fonte
-  natural é o CDN da NBA, o mesmo de onde já vêm os rostos dos jogadores. O componente já
-  existe; falta popular `times.logo_url` e ligá-lo (§5.2). **A logo vale em toda tela**
+- **Logo de todas as franquias** na coluna do time, ao lado da sigla em Anton. O componente
+  (`LogoTime`) e o dado (30 SVGs em `public/times/`, via `identidadeDoTime()`) já existem;
+  faltava só chamá-lo aqui — não é carga de dado nenhuma (§5.2). **A logo vale em toda tela**
   (§4.4), não só aqui: tela de time, tela de partida, cabeçalho de jogo e jogos do dia
   entram junto — é uma passada só, e deixar metade do app com logo e metade sem seria pior
   do que nenhuma.
@@ -198,10 +206,28 @@ Ficam registrados aqui para não se perderem entre as pendências funcionais:
 
 ## 5 · Falta e depende de nós
 
+### 5.0 · Antes de tudo: a demonstração parou no dia 8
+
+Os prints mostram "Nenhum jogo hoje" e "A lista de hoje ainda não foi publicada". **Não é
+bug de tela — a temporada simulada parou em 08/09.** No banco não há jogo nem lista depois
+dessa data: o último jogo é o da noite da apresentação. Hoje o app em produção está vazio, e
+**amanhã, dia 13, a "versão final" vai abrir vazia** se nada for feito.
+
+O motivo é o combinado de 08/09: `DEMO_AUTOSSEMEADURA` ficou desligada de propósito até o
+merge e o deploy, e depois deles ninguém a ligou. Duas saídas, e as duas são suas de decidir:
+
+- **ligar a variável na Vercel** — o cron passa a produzir a rodada de cada dia às 6h, e a
+  faixa "Temporada demonstrativa" acende sozinha. É o desenho original;
+- **rodar `demo:temporada` à mão** antes de cada apresentação, como foi feito no dia 8. Serve
+  para amanhã; não serve para a equipe testar sozinha no dia a dia.
+
+Item zero da lista abaixo, porque todo o resto se apresenta em cima de uma rodada que exista.
+
 ### 5.1 · Ordenado por risco para o dia 13
 
 | # | O que | Por que agora |
 | --- | --- | --- |
+| 0 | **A rodada de amanhã existir** (§5.0) | sem ela, a versão final abre com "Nenhum jogo hoje" |
 | 1 | **Recuperação de senha** | não existe; foi o que te impediu de entrar na própria conta na manhã da apresentação |
 | 2 | **Conta de teste para a equipe** (sua tarefa da call) | a equipe não consegue testar sem isso |
 | 3 | **Dados de conferência e logo** | desbloqueia §4.2 inteiro com uma carga, sem código de tela |
@@ -209,17 +235,26 @@ Ficam registrados aqui para não se perderem entre as pendências funcionais:
 | 5 | **Perfil** | §4.3 |
 | 6 | **Saída do apito para a casa** | é o fluxo que monetiza; hoje só existe na página de oferta |
 | 7 | **Filtro da gestão de banca** | decisão "Alinhada" da call |
-| 8 | **Planos Star e MVP** | bloqueado por terceiros (§6) |
+| 8 | **Planos Star e MVP**, cada um em **mensal e temporada** | bloqueado por terceiros (§6): o que cada plano dá ainda não foi definido; as duas modalidades, sim |
 | 9 | **Telegram** | bloqueado por decisão de escopo (§6) |
 
-### 5.2 · Os dados que faltam (itens 3)
+### 5.2 · O único dado que faltava era a conferência (item 3)
 
-Duas colunas existem no banco e estão **vazias nos 30 times**: `conferencia` (em `times` e
-em `classificacao`) e `logo_url`. Não é bug de tela — é carga.
+**Correção de 12/09 — a versão anterior desta seção estava errada.** Ela dizia que faltava
+carregar `times.logo_url` e que a fonte seria o CDN da NBA. Não é: as logos das 30 franquias
+já existem como SVGs estáticos em `public/times/` (ver `public/times/README.md`), o catálogo
+`identidadeDoTime()` (`src/design-system/times.ts`) já aponta cada sigla para o seu
+`/times/{SIGLA}.svg`, e `LogoTime` (`src/design-system/componentes/LogoTime.tsx`) já sabe
+desenhá-lo, com sigla em Anton como saída para o time desconhecido. Nada precisou ser
+carregado — o componente e o dado sempre existiram; faltava chamá-lo nas telas (§4.2, §4.4).
 
-O mapa de conferências é fixo e conhecido. Os logos vêm do CDN da NBA, com verificação na
-gravação como já fazemos com os rostos: **nenhuma imagem quebrada pode chegar à tela**, e
-time sem logo cai na sigla em Anton, que é o que a tela já faz hoje.
+O único dado que faltava de verdade era `times.conferencia`, vazia nos 30 times. O script
+`demo:conferencias` (`npm run demo:conferencias`, `scripts/demo-conferencias.ts`) preenche
+essa coluna a partir de `conferenciaDe()` (`src/modules/dominio/conferencias.ts`) — um mapa
+fixo por sigla real da NBA, fato da liga e não da curadoria do CJ — e em seguida recomputa a
+classificação. É esse recálculo que corrige o trilho: a posição passa a ser numerada **por
+conferência**, e só assim "playoff"/"play-in" volta a significar o que significa na NBA em
+vez de medir contra a liga inteira.
 
 ### 5.3 · Recuperação de senha e foto de perfil precisam de infraestrutura nova
 
@@ -235,6 +270,14 @@ Estes dois são os únicos itens da lista que **não se resolvem só com código
 
 **Decida qual das duas saídas você quer em cada caso** — as duas são defensáveis e a escolha
 muda o tamanho do trabalho.
+
+**Decisão registrada em 13/09 — o token de redefinição viaja no path, não na querystring.**
+`/redefinir/[token]` é a prática corrente de todo fluxo de redefinição por link, e o path cai
+nos mesmos três lugares que uma querystring cairia (log da plataforma, histórico do
+navegador, `Referer`). O que limita o risco: o token é de uso único e expira em uma hora
+(`VALIDADE_DA_REDEFINICAO_MS`, `auth/redefinicao.ts`), então a janela de exposição é curta e
+reaproveitar um token vazado não funciona. O que mitiga o vetor que sobra — o `Referer` para
+um destino externo — é `Referrer-Policy: no-referrer` na própria rota (`next.config.ts`).
 
 ### 5.4 · Saída do apito para a casa de apostas (item 6)
 
@@ -254,6 +297,9 @@ O print mostra "Entradas sugeridas para hoje" e nada mais. A call alinhou separa
 NIP sugeriu** do **que o usuário realmente fez**. Isso é uma tabela nova (as entradas do
 usuário) e um filtro na tela.
 
+O modelo de gestão em si continua sendo o de demonstração até o Carlos entregar o real
+(§6) — o filtro não depende disso, os percentuais dependem.
+
 Vale dizer o que isso implica: registrar aposta feita aproxima o produto de um caderno de
 apostas. Continua sendo somente leitura — o usuário digita o que já fez em outro lugar —,
 mas a fronteira merece uma linha explícita na tela.
@@ -267,7 +313,7 @@ mas a fronteira merece uma linha explícita na tela.
 | Ana Furtado | print da gestão de banca como referência | §5.5: a forma da tela |
 | lucas vena | painel de afiliados de exemplo e prints do dashboard | comparação com o painel que já temos |
 | lucas vena | investigar a restrição de comunicação | §7 — é o ponto mais importante |
-| Carlos | materiais pendentes | — |
+| Carlos | materiais pendentes, entre eles **o modelo real de gestão de banca** | a tela avisa hoje "Modelo de demonstração … ele ainda não foi carregado": o filtro da §5.5 pode ser feito, mas os números continuam de exemplo até o modelo chegar |
 
 **Sobre o Telegram (§5.1 item 9):** tecnicamente é simples e eu confirmei isso na call. Mas
 ele só faz sentido depois que os planos existirem, porque a decisão foi que o alerta é
