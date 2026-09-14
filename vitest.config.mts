@@ -6,7 +6,7 @@ export default defineConfig({
     alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) },
   },
   test: {
-    include: ['src/**/*.{test,spec}.ts'],
+    include: ['src/**/*.{test,spec}.{ts,tsx}'],
     environment: 'node',
     // Concessão de andaime: no prompt 1 ainda não existe regra de negócio para testar.
     // Os 15 testes-âncora chegam no prompt 2.

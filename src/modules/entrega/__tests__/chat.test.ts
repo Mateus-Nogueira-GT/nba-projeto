@@ -6,6 +6,8 @@ import { chatMensagens, usuarios } from '../../dominio/db/schema'
 import { LLMFake } from '../../ingestao/llm'
 import { semearDemo } from '../../ingestao/demo/semear'
 import { carregarRuleset } from '../../motor/ruleset/carregar'
+import { calendarioDoRuleset, temporadaDe } from '../../dominio/temporada'
+import { intervaloDoDia } from '../../dominio/rodada'
 import { lerFeed } from '../lista-secreta'
 import {
   LIMITE_PERGUNTA,
@@ -21,6 +23,11 @@ const HOJE = '2026-08-24'
 // América/São_Paulo é UTC-3 o ano inteiro (sem horário de verão desde 2019) —
 // os testes de fronteira de dia dependem desse deslocamento fixo.
 const FUSO = ruleset.rodada.fuso
+// Os freios (o assunto deste arquivo) não têm nada a ver com temporada ou
+// direito de acesso — fixamos `comDireito: true` em toda chamada abaixo para
+// que a lista do dia sempre chegue, como já acontecia antes destes dois
+// campos existirem.
+const TEMPORADA = temporadaDe(intervaloDoDia(HOJE, FUSO).inicio, calendarioDoRuleset(ruleset))
 
 let banco: Awaited<ReturnType<typeof bancoDeTeste>>
 let usuarioId: string
@@ -87,6 +94,8 @@ describe('chat do assinante', () => {
       texto: 'Por que o Curry entrou hoje?',
       dataReferencia: HOJE,
       fuso: FUSO,
+      temporada: TEMPORADA,
+      comDireito: true,
       agora: AGORA,
     })
     expect(r.ok).toBe(true)
@@ -114,6 +123,8 @@ describe('chat do assinante', () => {
       texto: 'mais uma',
       dataReferencia: HOJE,
       fuso: FUSO,
+      temporada: TEMPORADA,
+      comDireito: true,
       agora: AGORA,
     })
     expect(r.ok).toBe(false)
@@ -149,6 +160,8 @@ describe('chat do assinante', () => {
           texto: `concorrente ${i}`,
           dataReferencia: HOJE,
           fuso: FUSO,
+          temporada: TEMPORADA,
+          comDireito: true,
           agora: AGORA,
         }),
       ),
@@ -169,6 +182,8 @@ describe('chat do assinante', () => {
       texto: 'pergunta',
       dataReferencia: HOJE,
       fuso: FUSO,
+      temporada: TEMPORADA,
+      comDireito: true,
       agora: AGORA,
     })
     expect(r.ok).toBe(false)
@@ -189,6 +204,8 @@ describe('chat do assinante', () => {
         texto: 'pergunta',
         dataReferencia: HOJE,
         fuso: FUSO,
+        temporada: TEMPORADA,
+        comDireito: true,
         agora: AGORA,
       },
     )
@@ -208,6 +225,8 @@ describe('chat do assinante', () => {
       texto: '   ',
       dataReferencia: HOJE,
       fuso: FUSO,
+      temporada: TEMPORADA,
+      comDireito: true,
       agora: AGORA,
     })
     expect(r.ok).toBe(false)
@@ -223,6 +242,8 @@ describe('chat do assinante', () => {
       texto: 'quem entrou hoje?',
       dataReferencia: HOJE,
       fuso: FUSO,
+      temporada: TEMPORADA,
+      comDireito: true,
       agora: AGORA,
     })
     const enviado = porta.chamadas[0]!.pedido
@@ -232,10 +253,10 @@ describe('chat do assinante', () => {
     // repetição uma chamada PAGA.
     expect(enviado.sistema.toLowerCase()).toContain('probabilidade')
     expect(enviado.sistema.toLowerCase()).toContain('provável')
-    // E a metodologia do CJ vai junto: sem ela, "o que é OPD?" só teria
-    // resposta inventada.
-    expect(enviado.sistema).toContain('OPD')
-    expect(enviado.sistema.toLowerCase()).toContain('oportunidade por desfalque')
+    // E a metodologia do CJ vai junto — nos FATOS (`montarContexto`), não no
+    // sistema: sem ela, "o que é OPD?" só teria resposta inventada.
+    expect(enviado.usuario).toContain('OPD')
+    expect(enviado.usuario.toLowerCase()).toContain('oportunidade por desfalque')
     expect(enviado.usuario.length).toBeGreaterThan(50)
   })
 
@@ -250,6 +271,8 @@ describe('chat do assinante', () => {
       texto: 'a'.repeat(LIMITE_PERGUNTA + 1),
       dataReferencia: HOJE,
       fuso: FUSO,
+      temporada: TEMPORADA,
+      comDireito: true,
       agora: AGORA,
     })
     expect(r.ok).toBe(false)
@@ -266,6 +289,8 @@ describe('chat do assinante', () => {
       texto: 'a'.repeat(LIMITE_PERGUNTA),
       dataReferencia: HOJE,
       fuso: FUSO,
+      temporada: TEMPORADA,
+      comDireito: true,
       agora: AGORA,
     })
     expect(r.ok).toBe(true)
@@ -282,6 +307,8 @@ describe('chat do assinante', () => {
         texto: `rajada ${i}`,
         dataReferencia: HOJE,
         fuso: FUSO,
+        temporada: TEMPORADA,
+        comDireito: true,
         agora: AGORA,
       })
       expect(ok.ok).toBe(true)
@@ -293,6 +320,8 @@ describe('chat do assinante', () => {
       texto: 'mais uma na mesma rajada',
       dataReferencia: HOJE,
       fuso: FUSO,
+      temporada: TEMPORADA,
+      comDireito: true,
       agora: AGORA,
     })
     expect(barrada.ok).toBe(false)
@@ -307,6 +336,8 @@ describe('chat do assinante', () => {
       texto: 'e agora, um minuto depois',
       dataReferencia: HOJE,
       fuso: FUSO,
+      temporada: TEMPORADA,
+      comDireito: true,
       agora: new Date(AGORA.getTime() + 61_000),
     })
     expect(depois.ok).toBe(true)
@@ -321,6 +352,8 @@ describe('chat do assinante', () => {
       texto: 'Por que o LeBron entrou hoje?',
       dataReferencia: HOJE,
       fuso: FUSO,
+      temporada: TEMPORADA,
+      comDireito: true,
       agora: AGORA,
     })
     expect(primeira.ok).toBe(true)
@@ -331,6 +364,8 @@ describe('chat do assinante', () => {
       texto: 'e o outro?',
       dataReferencia: HOJE,
       fuso: FUSO,
+      temporada: TEMPORADA,
+      comDireito: true,
       agora: new Date(AGORA.getTime() + 5_000),
     })
 
@@ -350,9 +385,9 @@ describe('chat do assinante', () => {
   })
 
   it('número legítimo do feed (uma linha real) é aprovado pelo validador', async () => {
-    // A lista de números do chat reaproveita `numerosDoItem` (a mesma das
-    // narrativas) em vez de manter uma segunda lista mais estreita — uma
-    // linha real da lista do dia tem que passar.
+    // Os números permitidos vêm de `numerosDoTexto` sobre os PRÓPRIOS fatos
+    // montados por `chat-contexto.ts`, nunca de uma lista escrita à mão —
+    // uma linha real da lista do dia tem que passar.
     await banco.db.delete(chatMensagens)
     const feed = await lerFeed(banco.db, HOJE)
     const comLinha = feed?.conteudo.itens.find((i) => i.linha != null)
@@ -366,6 +401,8 @@ describe('chat do assinante', () => {
       texto: 'me fala de uma linha da lista',
       dataReferencia: HOJE,
       fuso: FUSO,
+      temporada: TEMPORADA,
+      comDireito: true,
       agora: AGORA,
     })
     expect(r.ok).toBe(true)

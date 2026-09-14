@@ -43,7 +43,14 @@ describe('metodologia no prompt', () => {
   })
 
   it('os DOIS prompts a carregam', () => {
-    for (const caminho of ['src/modules/entrega/narrativa.ts', 'src/modules/entrega/chat.ts']) {
+    // O chat passou a montar o contexto em `chat-contexto.ts` (task do
+    // guardrail de assunto): a metodologia sai do SISTEMA de `chat.ts` e
+    // entra pelos FATOS, via `montarContexto`. Quem carrega o texto agora é
+    // esse módulo, não mais `chat.ts`.
+    for (const caminho of [
+      'src/modules/entrega/narrativa.ts',
+      'src/modules/entrega/chat-contexto.ts',
+    ]) {
       const fonte = readFileSync(caminho, 'utf8')
       expect(fonte, `${caminho} não inclui a metodologia`).toContain('METODOLOGIA')
     }

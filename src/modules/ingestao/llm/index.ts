@@ -4,7 +4,7 @@ import type { PortaLLM } from './porta'
 
 export { LLMFake } from './fake'
 export { OpenRouter } from './openrouter'
-export { validarTexto, type ResultadoValidacao } from './validador'
+export { validarTexto, numerosDoTexto, type ResultadoValidacao } from './validador'
 export { PALAVRAS_PROIBIDAS, regrasDoTexto } from './regras-do-texto'
 export * from './porta'
 export { PERFIS, modelosDoPerfil, parametrosDoPerfil } from './perfis'

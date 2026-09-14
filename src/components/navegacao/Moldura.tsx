@@ -2,8 +2,10 @@ import type { ReactNode } from 'react'
 
 import { componente } from '@/design-system/tokens/componente'
 import { semantico } from '@/design-system/tokens/semantico'
+import { configuracaoChat } from '@/modules/entrega/chat-limites'
 
 import { BarraInferior, type Aba } from './BarraInferior'
+import { BotaoChat } from '../chat/BotaoChat'
 
 /**
  * DUAS LARGURAS, não uma (spec 12/09, §4.1). `leitura` (640) é a coluna de
@@ -48,6 +50,10 @@ export function Moldura({
         <div style={{ maxWidth: LARGURA_DA_MOLDURA[largura], margin: '0 auto' }}>{children}</div>
       </main>
       {aba !== null && <BarraInferior atual={aba} />}
+      {/* A flag decide se o assistente EXISTE na tela. Sem esta condição, o
+          trabalho entregue com CHAT_HABILITADO desligada põe em produção um
+          botão que só sabe dizer "fora do ar" — pior que não ter botão. */}
+      {aba !== null && configuracaoChat().habilitado && <BotaoChat />}
     </>
   )
 }
