@@ -4,12 +4,9 @@ import { chatMensagens, usuarios } from '../dominio/db/schema'
 import type { Db } from '../dominio/db/tipos'
 import { intervaloDoDia } from '../dominio/rodada'
 import { validarTexto } from '../ingestao/llm'
-import { regrasDoTexto } from '../ingestao/llm/regras-do-texto'
 import { registrarChamada } from '../ingestao/llm/registro'
 import type { PortaLLM } from '../ingestao/llm'
-import { METODOLOGIA } from './metodologia'
-import { numerosDoItem } from './narrativa'
-import { lerFeed } from './lista-secreta'
+import { montarContexto } from './chat-contexto'
 
 /**
  * CHAT DO ASSINANTE — o único caminho de LLM por REQUISIÇÃO.
@@ -19,54 +16,34 @@ import { lerFeed } from './lista-secreta'
  * cota diária por assinante e teto de gasto no painel do provedor (fora do
  * código, o freio que não depende de acertarmos).
  *
- * O contexto é montado pelo SERVIDOR: feed materializado do dia + metodologia
- * + as últimas mensagens da conversa. A LLM não consulta banco e não sugere
- * entrada fora da lista.
+ * O contexto é montado pelo SERVIDOR: os fatos de `chat-contexto.ts` (feed
+ * materializado do dia quando há direito, metodologia, classificação e
+ * rodada) + as últimas mensagens da conversa. O escopo — os dois assuntos
+ * permitidos e a recusa do resto — vive em `chat-prompt.ts`. A LLM não
+ * consulta banco e não sugere entrada fora da lista.
  */
 
-const COTA_PADRAO = 20
-const LIMITE_RESPOSTA = 1200
+// Os freios moram em `chat-limites.ts` porque `chat-contexto.ts` também
+// precisa deles, e um import cruzado entre os dois fecharia um ciclo. A
+// reexportação mantém `chat.ts` como a porta de entrada que os testes e a
+// rota já conhecem.
+export {
+  configuracaoChat,
+  LIMITE_PERGUNTA,
+  LIMITE_POR_MINUTO,
+  LIMITE_RESPOSTA,
+} from './chat-limites'
+import { configuracaoChat, LIMITE_PERGUNTA, LIMITE_POR_MINUTO, LIMITE_RESPOSTA } from './chat-limites'
 
-/**
- * Tamanho máximo da pergunta, em caracteres.
- *
- * É uma pergunta, não uma redação. Sem teto, o texto do assinante ia inteiro
- * para o prompt (tokens de entrada que ELE escolhe) e para uma coluna `text`
- * sem limite — os dois custos crescem com o que o outro lado digitar. Meio
- * milhar de caracteres é largo para qualquer pergunta sobre um card.
- */
-export const LIMITE_PERGUNTA = 500
-
-/**
- * Perguntas por minuto, por assinante.
- *
- * A cota diária sozinha não impede queimá-la inteira em cinco segundos, nem
- * um laço de script fazendo vinte chamadas pagas de uma vez. Cinco por minuto
- * é uma pergunta a cada doze segundos — mais rápido do que dá para LER a
- * resposta anterior; acima disso não é assinante, é automação.
- *
- * Medido como a cota: COUNT das mensagens do próprio usuário na janela, sem
- * contador paralelo. `plataforma/auth/rate-limit.ts` NÃO serve aqui — ele é
- * do login, chaveado por identificador e sucesso da tentativa.
- */
-export const LIMITE_POR_MINUTO = 5
+// RECUSA_FORA_DE_ESCOPO mora em `chat-prompt.ts` (motivo no comentário de
+// lá: um script fora deste agente precisa dela sem importar `responder`
+// inteiro). Reexportada aqui pelo mesmo motivo do bloco acima — manter
+// `chat.ts` como a porta de entrada já conhecida.
+export { RECUSA_FORA_DE_ESCOPO } from './chat-prompt'
+import { sistema } from './chat-prompt'
 
 /** Quantas mensagens da conversa (dos dois lados) o prompt carrega. */
 const HISTORICO_MAXIMO = 10
-
-export function configuracaoChat(ambiente: NodeJS.ProcessEnv = process.env): {
-  habilitado: boolean
-  cotaDiaria: number
-} {
-  const bruta = Number(ambiente.CHAT_COTA_DIARIA)
-  return {
-    // Só a string exata liga: qualquer outro valor mantém desligado.
-    habilitado: ambiente.CHAT_HABILITADO === 'true',
-    // Valor inválido cai no padrão. Virar 0 trancaria todo mundo fora; virar
-    // NaN liberaria geral — os dois acidentes acontecem por env mal digitado.
-    cotaDiaria: Number.isFinite(bruta) && bruta > 0 ? Math.floor(bruta) : COTA_PADRAO,
-  }
-}
 
 /**
  * A cota é o COUNT das perguntas do dia LOCAL — sem contador paralelo para
@@ -130,6 +107,7 @@ export async function ultimasMensagens(
   usuarioId: string,
   dataReferencia: string,
   fuso: string,
+  limite = HISTORICO_MAXIMO,
 ): Promise<{ papel: string; texto: string }[]> {
   const { inicio, fim } = intervaloDoDia(dataReferencia, fuso)
 
@@ -151,9 +129,26 @@ export async function ultimasMensagens(
     // da pergunta. Na listagem descendente, 'ASSISTENTE' antes de 'USUARIO' é
     // o que, depois do `reverse`, deixa a pergunta na frente.
     .orderBy(desc(chatMensagens.criadoEm), asc(chatMensagens.papel))
-    .limit(HISTORICO_MAXIMO)
+    .limit(limite)
 
   return linhas.reverse()
+}
+
+/**
+ * A CONVERSA DO DIA INTEIRA — o que o painel mostra ao abrir.
+ *
+ * O prompt leva só as últimas dez (`HISTORICO_MAXIMO`); a pessoa que reabre a
+ * gaveta quer ver tudo o que perguntou hoje, senão o assistente "lembra" de uma
+ * conversa que a tela não mostra. O teto é a própria cota: cada pergunta vira
+ * duas linhas, então a conversa de um dia nunca passa de duas vezes a cota.
+ */
+export async function conversaDoDia(
+  db: Db,
+  usuarioId: string,
+  dataReferencia: string,
+  fuso: string,
+): Promise<{ papel: string; texto: string }[]> {
+  return ultimasMensagens(db, usuarioId, dataReferencia, fuso, configuracaoChat().cotaDiaria * 2)
 }
 
 export type RespostaChat =
@@ -162,21 +157,6 @@ export type RespostaChat =
       ok: false
       motivo: 'cota-esgotada' | 'limite-por-minuto' | 'indisponivel' | 'vazio' | 'muito-longa'
     }
-
-/**
- * As proibições e o limite saem de `regras-do-texto.ts`, o MESMO módulo da
- * narrativa. Enquanto cada prompt escrevia as suas, este aqui esquecia
- * "provável" — que o validador reprova — e cada reprovação virava uma
- * retentativa PAGA do assinante (ver o comentário lá).
- */
-const SISTEMA = [
-  'Você é o assistente da NIP, falando com um assinante brasileiro.',
-  'Responda em no máximo três parágrafos curtos.',
-  ...regrasDoTexto(LIMITE_RESPOSTA),
-  'Use SOMENTE os fatos da lista do dia fornecidos abaixo e a metodologia a seguir.',
-  'NUNCA sugira uma entrada que não esteja na lista do dia.',
-  METODOLOGIA,
-].join('\n')
 
 /** Apaga a mensagem reservada. Nunca lança: é uma limpeza best-effort. */
 async function apagarReserva(db: Db, id: string): Promise<void> {
@@ -194,7 +174,15 @@ type Reserva =
 export async function responder(
   db: Db,
   porta: PortaLLM,
-  entrada: { usuarioId: string; texto: string; dataReferencia: string; fuso: string; agora: Date },
+  entrada: {
+    usuarioId: string
+    texto: string
+    dataReferencia: string
+    fuso: string
+    temporada: string
+    agora: Date
+    comDireito: boolean
+  },
 ): Promise<RespostaChat> {
   const pergunta = entrada.texto.trim()
   if (pergunta.length === 0) return { ok: false, motivo: 'vazio' }
@@ -262,15 +250,8 @@ export async function responder(
     // A rede da LLM roda FORA da transação: seguraria o lock da linha do
     // usuário pela duração inteira de uma chamada de rede (10s, 15s…), e
     // outras operações do MESMO usuário (login, outra aba) ficariam
-    // bloqueadas esperando um provedor de LLM responder.
-    const feed = await lerFeed(db, entrada.dataReferencia)
-    const contexto = (feed?.conteudo.itens ?? [])
-      .map(
-        (i) =>
-          `- ${i.nome} (${i.timeSigla}) · ${i.atributo} ${i.linha ?? '-'} · nível ${i.nivelApito}${i.turbo ? ' turbo' : ''} · método ${i.metodo ?? 'oscilação'}`,
-      )
-      .join('\n')
-
+    // bloqueadas esperando um provedor de LLM responder. O mesmo vale para as
+    // consultas de `montarContexto` (rodada, classificação, feed do dia).
     const conversa =
       historico.length === 0
         ? ''
@@ -278,18 +259,21 @@ export async function responder(
             .map((m) => `${m.papel === 'USUARIO' ? 'Assinante' : 'Assistente'}: ${m.texto}`)
             .join('\n')}\n\n`
 
-    const r = await porta.gerar('chat', {
-      sistema: SISTEMA,
-      usuario: `Lista de hoje:\n${contexto || '(sem entradas)'}\n\n${conversa}Pergunta do assinante: ${pergunta}`,
+    const contexto = await montarContexto(db, {
+      dataReferencia: entrada.dataReferencia,
+      fuso: entrada.fuso,
+      temporada: entrada.temporada,
+      comDireito: entrada.comDireito,
+      cotaDiaria,
     })
 
-    // Mesma lista que as narrativas usam (`numerosDoItem`) — não uma segunda
-    // lista mais estreita que divergiria dela. Some a contagem de itens: é o
-    // número legítimo para perguntas como "quantos entraram hoje".
-    const itens = feed?.conteudo.itens ?? []
-    const numeros = [...itens.flatMap(numerosDoItem), itens.length]
+    const r = await porta.gerar('chat', {
+      sistema: sistema(entrada.comDireito),
+      usuario: `${contexto.fatos}\n\n${conversa}Pergunta do usuário: ${pergunta}`,
+    })
+
     const validado = validarTexto(r.texto, {
-      numeros,
+      numeros: contexto.numeros,
       limiteCaracteres: LIMITE_RESPOSTA,
     })
     // Registra DEPOIS do validador, com `ok` sendo o desfecho do texto — a

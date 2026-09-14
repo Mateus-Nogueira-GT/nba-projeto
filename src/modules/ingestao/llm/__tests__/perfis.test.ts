@@ -65,3 +65,25 @@ describe('adapter fake', () => {
     await expect(fake.gerar('narrativa', { sistema: 's', usuario: 'x' })).rejects.toThrow()
   })
 })
+
+describe('os ids apontam para modelos que existem (medido em 14/09/2026)', () => {
+  // `google/gemini-2.0-flash-001` e `anthropic/claude-3-5-haiku` saíram do
+  // catálogo da OpenRouter. Eram o PRIMEIRO da fila de três perfis: as cadeias
+  // de fallback, que existem para um modelo indisponível não derrubar a
+  // feature, estavam reduzidas a um único modelo vivo.
+  const MORTOS = ['google/gemini-2.0-flash-001', 'anthropic/claude-3-5-haiku']
+
+  it('nenhum perfil referencia um id morto', () => {
+    for (const [nome, perfil] of Object.entries(PERFIS))
+      for (const morto of MORTOS) expect(perfil.modelos, nome).not.toContain(morto)
+  })
+
+  it('todo perfil tem pelo menos dois modelos — a cadeia de fallback é o ponto dela', () => {
+    for (const [nome, perfil] of Object.entries(PERFIS))
+      expect(perfil.modelos.length, nome).toBeGreaterThanOrEqual(2)
+  })
+
+  it('o chat usa o DeepSeek V4 Flash na frente', () => {
+    expect(PERFIS.chat.modelos[0]).toBe('deepseek/deepseek-v4-flash')
+  })
+})

@@ -44,7 +44,7 @@ describe('regras do texto × validador', () => {
     // Sem esta amarra estrutural, nada impede alguém de voltar a escrever um
     // `const SISTEMA` com proibições próprias num dos dois arquivos, e a
     // divergência volta silenciosa.
-    for (const caminho of ['src/modules/entrega/narrativa.ts', 'src/modules/entrega/chat.ts']) {
+    for (const caminho of ['src/modules/entrega/narrativa.ts', 'src/modules/entrega/chat-prompt.ts']) {
       const fonte = readFileSync(caminho, 'utf8')
       expect(fonte, `${caminho} não compõe de regras-do-texto`).toContain('regrasDoTexto(')
     }

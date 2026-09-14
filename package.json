@@ -33,6 +33,7 @@
     "demo:conferencias": "vite-node scripts/demo-conferencias.ts",
     "demo:desempatar": "vite-node scripts/demo-desempatar.ts",
     "demo:conferir": "vite-node scripts/demo-conferir.ts",
+    "chat:sondar": "dotenv -e .env.local -- vite-node scripts/chat-sondar.ts",
     "identidades:relatorio": "dotenv -e .env.local -- vite-node scripts/identidades-relatorio.ts",
     "ingestao:backfill": "vite-node scripts/backfill-ingestao.ts",
     "tokens": "vite-node scripts/gerar-tokens-css.mts",

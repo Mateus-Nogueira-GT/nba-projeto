@@ -36,6 +36,18 @@ function comoNumero(bruto: string): number {
   return Number(bruto.replace(',', '.'))
 }
 
+/**
+ * Os números "livres" de um texto, na mesma leitura que a validação usa.
+ *
+ * Exportada porque quem MONTA os fatos precisa derivar daí a lista de números
+ * permitidos: se a extração aqui e a de lá fossem duas, elas divergiriam — e a
+ * divergência apareceria como resposta certa recusada, não como erro de teste.
+ * Mesma lição de `regras-do-texto.ts`.
+ */
+export function numerosDoTexto(texto: string): number[] {
+  return [...texto.matchAll(NUMERO_NO_TEXTO)].map((achado) => comoNumero(achado[1]!))
+}
+
 export function validarTexto(
   texto: string,
   fatos: { numeros: number[]; limiteCaracteres: number },
@@ -47,8 +59,7 @@ export function validarTexto(
 
   // Comparação com tolerância: o texto pode arredondar 25.70 para 25,7.
   const permitidos = fatos.numeros
-  for (const achado of aparado.matchAll(NUMERO_NO_TEXTO)) {
-    const valor = comoNumero(achado[1]!)
+  for (const valor of numerosDoTexto(aparado)) {
     const conhecido = permitidos.some((n) => Math.abs(n - valor) < 0.05)
     if (!conhecido) return { ok: false, motivo: 'numero-inventado' }
   }

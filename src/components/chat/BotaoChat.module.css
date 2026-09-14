@@ -1,0 +1,34 @@
+.botao {
+  position: fixed;
+  right: 16px;
+  /* Acima da barra de abas (a Moldura reserva 96px) mais a área segura. */
+  bottom: calc(96px + env(safe-area-inset-bottom, 0px));
+  z-index: 40;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 52px;
+  height: 52px;
+  border: 1px solid var(--divisor);
+  border-radius: 999px;
+  background: var(--superficie-elevada);
+  color: var(--acento);
+  cursor: pointer;
+}
+
+.botao:focus-visible {
+  outline: 2px solid var(--acento);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .botao {
+    transition: transform 120ms ease;
+  }
+
+  @media (hover: hover) {
+    .botao:hover {
+      transform: translateY(-2px);
+    }
+  }
+}
