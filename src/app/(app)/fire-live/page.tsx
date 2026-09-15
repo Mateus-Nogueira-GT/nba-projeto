@@ -33,7 +33,7 @@ import { avaliarAcesso } from '@/modules/plataforma/assinatura/direito'
 import '@/design-system/tokens/tokens.css'
 import { decorridoCurto, horaCurta } from '@/components/formato'
 import { AtualizarAoVivo } from '@/components/AtualizarAoVivo'
-import { CabecalhoTela, Chip, Moldura } from '@/components/navegacao'
+import { CabecalhoTela, Chip, GRADE_DE_CARDS, Moldura } from '@/components/navegacao'
 import { dataDeReferencia } from '@/modules/dominio/rodada'
 import { selecionarJogoAoVivo } from '@/modules/entrega/fire-live/selecao'
 import { classePainelJogoFixo, SeletorJogosAoVivo } from '@/components/ao-vivo/SeletorJogosAoVivo'
@@ -247,7 +247,7 @@ export default async function PaginaFireLive({
 
   if (!process.env.DATABASE_URL) {
     return (
-      <Moldura aba="fire-live">
+      <Moldura aba="fire-live" largura="dados">
         <h1>Fire Live</h1>
         <p style={{ color: semantico.textoSecundario }}>
           Banco não configurado. Rode <code>vercel env pull</code> e <code>npm run db:migrate</code>
@@ -319,7 +319,7 @@ export default async function PaginaFireLive({
   const primeiraEspera = visiveis.find((g) => g.estado === 'AGUARDANDO')?.jogoId ?? null
 
   return (
-    <Moldura aba="fire-live">
+    <Moldura aba="fire-live" largura="dados">
       <CabecalhoTela
         sobrancelha="FIRE LIVE"
         titulo="ACONTECENDO"
@@ -453,7 +453,7 @@ export default async function PaginaFireLive({
               </LinhaDeApoio>
             )}
 
-            <div style={{ display: 'grid', gap: 10 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: GRADE_DE_CARDS, gap: 10 }}>
               {grupoSelecionado.itens.map((item) => (
                 <div key={item.chave} data-live-key={item.chave}>
                   <CartaoAoVivo
