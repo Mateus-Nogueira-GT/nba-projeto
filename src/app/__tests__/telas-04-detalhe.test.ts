@@ -339,7 +339,11 @@ describe('Detalhe do apito — o esqueleto fixo da análise (identidade 04)', ()
     try {
       await definirSaidaDoApito(banco.db, ator, link.id, agora)
       html = await renderizar(item)
-      expect(html).toContain(`href="/ir/${link.codigo}"`)
+      // A saída carrega de qual apito nasceu. `encodeURIComponent` porque a
+      // chave contém `|`, que truncaria a query string se fosse crua.
+      expect(html).toContain(
+        `href="/ir/${link.codigo}?apito=${encodeURIComponent(item.chave)}"`,
+      )
       expect(html).toContain('rel="nofollow sponsored"')
       expect(html.toLowerCase()).toContain('a odd da sua casa pode ser outra')
       expect(html).not.toMatch(/<form[^>]*aposta/i)

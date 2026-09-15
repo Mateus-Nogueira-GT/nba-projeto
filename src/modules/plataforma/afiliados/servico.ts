@@ -1,18 +1,21 @@
 import { createHash, randomBytes } from 'node:crypto'
 
-import { and, asc, desc, eq, gt, gte, inArray, lt, ne, sql } from 'drizzle-orm'
+import { and, asc, desc, eq, gt, gte, inArray, isNull, lt, ne, sql } from 'drizzle-orm'
 
 import {
   acordosAfiliados,
   alocacoesRepasses,
+  apitos,
   atribuicoesAfiliados,
   auditoriaAfiliados,
   campanhasAfiliados,
   casas,
   comissoesAfiliados,
   convitesAfiliados,
+  entradasRealizadas,
   eventosAfiliados,
   itensImportacaoAfiliados,
+  jogadores,
   liberacoesRepasses,
   linksAfiliados,
   lotesImportacaoAfiliados,
@@ -23,6 +26,7 @@ import {
   usuarios,
 } from '@/modules/dominio/db/schema'
 import type { Db } from '@/modules/dominio/db/tipos'
+import { dataDeReferencia } from '@/modules/dominio/rodada'
 
 import { decidirAtribuicao } from './atribuicao'
 import { calcularParcelaDoParceiro } from './financeiro'
@@ -280,7 +284,7 @@ export async function criarCampanhaComLink(
   })
 }
 
-function hashVisitante(token: string): string {
+export function hashVisitante(token: string): string {
   if (!/^[A-Za-z0-9_-]{16,160}$/.test(token)) throw new Error('Identificador de visitante inválido')
   return createHash('sha256').update(token).digest('hex')
 }
@@ -553,9 +557,57 @@ export async function registrarClique(
   })
 }
 
+/**
+ * A CHAVE DO APITO VIRA ID — e nunca vira palpite.
+ *
+ * `montarChave` (motor/tipos.ts) é exatamente o índice único de `apitos`, e o
+ * item do feed já a carrega: é por isso que a origem viaja por ela em vez de
+ * por um id que o snapshot não tem. Quem adulterar o parâmetro na URL só
+ * consegue apontar para um apito que EXISTE — não há como inventar um. E
+ * chave que não resolve devolve `null`, porque uma trilha que vai embasar
+ * conversa comercial prefere "não sei" a um vínculo fabricado.
+ */
+async function apitoDaChave(db: Db, chave: string | null | undefined): Promise<string | null> {
+  if (!chave) return null
+  const [jogoId, jogadorId, atributo, estrategia, linha] = chave.split('|')
+  if (!jogoId || !jogadorId || !atributo || !estrategia) return null
+  if (linha !== '' && linha !== undefined && !Number.isInteger(Number(linha))) return null
+  // `linha` vazia é o apito de Fire Live, que não tem linha: `is null` no SQL,
+  // igual ao `nullsNotDistinct` do índice.
+  const filtroLinha =
+    linha === '' || linha === undefined ? isNull(apitos.linha) : eq(apitos.linha, Number(linha))
+  try {
+    const [achado] = await db
+      .select({ id: apitos.id })
+      .from(apitos)
+      .where(
+        and(
+          eq(apitos.jogoId, jogoId),
+          eq(apitos.jogadorId, jogadorId),
+          eq(apitos.atributo, atributo as (typeof apitos.atributo.enumValues)[number]),
+          eq(apitos.estrategia, estrategia as (typeof apitos.estrategia.enumValues)[number]),
+          filtroLinha,
+        ),
+      )
+      .limit(1)
+    return achado?.id ?? null
+  } catch {
+    // uuid malformado faz o Postgres recusar a conversão. Degradar é o
+    // comportamento certo: o clique do usuário não pode virar erro porque
+    // alguém mexeu na URL.
+    return null
+  }
+}
+
 export async function registrarSaidaParaCasa(
   db: Db,
-  entrada: { codigo: string; visitanteToken: string; agora: Date; usuarioId?: string | null },
+  entrada: {
+    codigo: string
+    visitanteToken: string
+    agora: Date
+    usuarioId?: string | null
+    chaveDoApito?: string | null
+  },
 ) {
   const configuracao = await configuracaoDoLink(db, entrada.codigo)
   const visitanteHash = hashVisitante(entrada.visitanteToken)
@@ -565,11 +617,13 @@ export async function registrarSaidaParaCasa(
     entrada.usuarioId,
     entrada.agora,
   )
+  const apitoId = await apitoDaChave(db, entrada.chaveDoApito)
   await db.insert(eventosAfiliados).values({
     visitanteHash,
     usuarioId: entrada.usuarioId ?? null,
     linkId: configuracao.link.id,
     atribuicaoId: atribuicao?.id ?? null,
+    apitoId,
     tipo: 'SAIDA_CASA',
     ocorridoEm: entrada.agora,
   })
@@ -1532,7 +1586,110 @@ export async function painelDoAfiliado(
   }
 }
 
-export async function painelAdministrativo(db: Db, filtro: FiltroPeriodoAfiliados = {}) {
+export type SaidaDaTrilha = {
+  id: string
+  ocorridoEm: Date
+  parceiro: string
+  campanha: string
+  casa: string
+  origem: { nome: string; atributo: string; linha: number | null } | null
+  registrou: boolean
+}
+
+/**
+ * A TRILHA DAS SAÍDAS — só para o admin.
+ *
+ * O vínculo entre a saída e a aposta NÃO é gravado em lugar nenhum: é
+ * derivado aqui, casando pela chave natural que a gestão já usa (usuário,
+ * dia, jogador, atributo, linha). Gravar o id da saída em
+ * `entradas_realizadas` obrigaria a gestão a consultar afiliados no caminho
+ * de ESCRITA, acoplando entrega à plataforma comercial na hora em que o
+ * usuário aperta "Registrei".
+ *
+ * `registrou` é DECLARAÇÃO DO USUÁRIO, nunca confirmação da casa: a NIP não
+ * viu a aposta. Não gera comissão e a tela diz isso (ADR-0010).
+ */
+export async function trilhaDeSaidas(
+  db: Db,
+  opcoes: { fuso: string; filtro?: FiltroPeriodoAfiliados; limite?: number },
+): Promise<SaidaDaTrilha[]> {
+  const filtros = [eq(eventosAfiliados.tipo, 'SAIDA_CASA')]
+  // `lt` no fim, não `lte`: `filtroDePeriodo` devolve a meia-noite do dia
+  // SEGUINTE, então o limite é exclusivo — é assim que `totaisEventos` recorta.
+  if (opcoes.filtro?.inicio) filtros.push(gte(eventosAfiliados.ocorridoEm, opcoes.filtro.inicio))
+  if (opcoes.filtro?.fim) filtros.push(lt(eventosAfiliados.ocorridoEm, opcoes.filtro.fim))
+
+  const linhas = await db
+    .select({
+      id: eventosAfiliados.id,
+      ocorridoEm: eventosAfiliados.ocorridoEm,
+      usuarioId: eventosAfiliados.usuarioId,
+      parceiro: parceirosAfiliados.nomePublico,
+      campanha: campanhasAfiliados.nome,
+      casa: casas.nome,
+      jogadorId: apitos.jogadorId,
+      nome: jogadores.nomeCompleto,
+      atributo: apitos.atributo,
+      linha: apitos.linha,
+    })
+    .from(eventosAfiliados)
+    .innerJoin(linksAfiliados, eq(eventosAfiliados.linkId, linksAfiliados.id))
+    .innerJoin(campanhasAfiliados, eq(linksAfiliados.campanhaId, campanhasAfiliados.id))
+    .innerJoin(ofertasAfiliados, eq(campanhasAfiliados.ofertaId, ofertasAfiliados.id))
+    .innerJoin(casas, eq(ofertasAfiliados.casaId, casas.id))
+    .innerJoin(parceirosAfiliados, eq(campanhasAfiliados.parceiroId, parceirosAfiliados.id))
+    // LEFT: a saída sem origem continua na trilha, só sem apito.
+    .leftJoin(apitos, eq(eventosAfiliados.apitoId, apitos.id))
+    .leftJoin(jogadores, eq(apitos.jogadorId, jogadores.id))
+    .where(and(...filtros))
+    .orderBy(desc(eventosAfiliados.ocorridoEm))
+    .limit(opcoes.limite ?? 200)
+
+  // O casamento roda em memória sobre o recorte já lido: são no máximo
+  // `limite` linhas, e assim o DIA LOCAL usa `dataDeReferencia`, o mesmo
+  // helper da rodada, em vez de um `AT TIME ZONE` que duplicaria a regra
+  // dentro do SQL.
+  return Promise.all(
+    linhas.map(async (l) => {
+      const origem =
+        l.jogadorId && l.nome && l.atributo
+          ? { nome: l.nome, atributo: l.atributo as string, linha: l.linha }
+          : null
+      let registrou = false
+      if (origem && l.usuarioId && l.jogadorId && l.atributo && l.linha !== null) {
+        const [entrada] = await db
+          .select({ id: entradasRealizadas.id })
+          .from(entradasRealizadas)
+          .where(
+            and(
+              eq(entradasRealizadas.usuarioId, l.usuarioId),
+              eq(entradasRealizadas.dataReferencia, dataDeReferencia(l.ocorridoEm, opcoes.fuso)),
+              eq(entradasRealizadas.jogadorId, l.jogadorId),
+              eq(entradasRealizadas.atributo, l.atributo),
+              eq(entradasRealizadas.linha, l.linha),
+            ),
+          )
+          .limit(1)
+        registrou = entrada !== undefined
+      }
+      return {
+        id: l.id,
+        ocorridoEm: l.ocorridoEm,
+        parceiro: l.parceiro,
+        campanha: l.campanha,
+        casa: l.casa,
+        origem,
+        registrou,
+      }
+    }),
+  )
+}
+
+export async function painelAdministrativo(
+  db: Db,
+  filtro: FiltroPeriodoAfiliados = {},
+  opcoes: { fuso: string },
+) {
   const [
     parceiros,
     casasCadastradas,
@@ -1547,6 +1704,7 @@ export async function painelAdministrativo(db: Db, filtro: FiltroPeriodoAfiliado
     repasses,
     lotes,
     itens,
+    trilha,
   ] = await Promise.all([
     db.select().from(parceirosAfiliados).orderBy(desc(parceirosAfiliados.criadoEm)),
     db.select().from(casas).orderBy(casas.nome),
@@ -1607,6 +1765,7 @@ export async function painelAdministrativo(db: Db, filtro: FiltroPeriodoAfiliado
       .from(itensImportacaoAfiliados)
       .orderBy(desc(itensImportacaoAfiliados.criadoEm))
       .limit(200),
+    trilhaDeSaidas(db, { fuso: opcoes.fuso, filtro }),
   ])
   const [totaisComissoes, totaisRepasses, totaisRecebimentos] = await Promise.all([
     db
@@ -1672,6 +1831,7 @@ export async function painelAdministrativo(db: Db, filtro: FiltroPeriodoAfiliado
     repasses,
     lotes,
     itens,
+    trilha,
     totais: {
       cliquesObservados: totaisEventos.cliquesObservados,
       saidasParaCasa: totaisEventos.saidasParaCasa,

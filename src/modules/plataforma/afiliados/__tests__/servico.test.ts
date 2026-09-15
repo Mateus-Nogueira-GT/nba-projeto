@@ -5,26 +5,24 @@ import { bancoDeTeste } from '@/modules/dominio/__tests__/ajuda-banco'
 import {
   atribuicoesAfiliados,
   auditoriaAfiliados,
-  casas,
   eventosAfiliados,
   linksAfiliados,
-  parceirosAfiliados,
   usuarios,
 } from '@/modules/dominio/db/schema'
+import { montarChave } from '@/modules/motor/tipos'
 import {
   aceitarConvite,
   associarVisitanteAoUsuario,
   confirmarImportacao,
   criarAcordo,
-  criarCampanhaComLink,
   criarConvite,
-  criarOferta,
   criarParceiro,
   criarPreviaImportacao,
   definirSaidaDoApito,
   definirStatusLink,
   definirStatusOferta,
   definirStatusParceiro,
+  hashVisitante,
   liberarComissao,
   painelDoAfiliado,
   registrarAjusteComissao,
@@ -35,6 +33,7 @@ import {
   registrarVisitaNip,
   resolverDestinoDaCasaSemRegistrar,
 } from '../servico'
+import { apitoDeTeste, cenarioDeAfiliados } from './cenario'
 
 let banco: Awaited<ReturnType<typeof bancoDeTeste>>
 
@@ -46,115 +45,7 @@ afterAll(async () => {
   await banco?.fechar()
 })
 
-async function contexto() {
-  const sufixo = Math.random().toString(36).slice(2)
-  const [admin, usuarioA, usuarioB] = await banco.db
-    .insert(usuarios)
-    .values([
-      { email: `admin-${sufixo}@teste.com`, senhaHash: 'x', papel: 'ADMIN' },
-      { email: `a-${sufixo}@teste.com`, senhaHash: 'x' },
-      { email: `b-${sufixo}@teste.com`, senhaHash: 'x' },
-    ])
-    .returning()
-  const [casa] = await banco.db
-    .insert(casas)
-    .values({ nome: `Casa ${sufixo}` })
-    .returning()
-  const atorAdmin = { usuarioId: admin!.id, papel: 'ADMIN' as const }
-  const parceiroA = await criarParceiro(
-    banco.db,
-    atorAdmin,
-    { codigo: `a-${sufixo}`, nomePublico: 'Parceiro A' },
-    new Date('2026-09-01T00:00:00.000Z'),
-  )
-  const parceiroB = await criarParceiro(
-    banco.db,
-    atorAdmin,
-    { codigo: `b-${sufixo}`, nomePublico: 'Parceiro B' },
-    new Date('2026-09-01T00:00:00.000Z'),
-  )
-  const oferta = await criarOferta(
-    banco.db,
-    atorAdmin,
-    {
-      casaId: casa!.id,
-      nome: `Oferta ${sufixo}`,
-      modalidade: 'HIBRIDO',
-      moeda: 'BRL',
-      urlDestino: 'https://ofertas.casa.test/nba',
-      hostDestino: 'ofertas.casa.test',
-      status: 'RASCUNHO',
-    },
-    new Date('2026-09-01T00:00:00.000Z'),
-  )
-  const acordoA = await criarAcordo(
-    banco.db,
-    atorAdmin,
-    {
-      parceiroId: parceiroA.id,
-      ofertaId: oferta.id,
-      moeda: 'BRL',
-      percentualPontosBase: 4_000,
-      inicio: new Date('2026-09-01T00:00:00.000Z'),
-    },
-    new Date('2026-09-01T00:00:00.000Z'),
-  )
-  await banco.db
-    .update(parceirosAfiliados)
-    .set({ usuarioId: usuarioA!.id })
-    .where(eq(parceirosAfiliados.id, parceiroA.id))
-  await banco.db
-    .update(parceirosAfiliados)
-    .set({ usuarioId: usuarioB!.id })
-    .where(eq(parceirosAfiliados.id, parceiroB.id))
-  await definirStatusOferta(
-    banco.db,
-    atorAdmin,
-    oferta.id,
-    'ATIVA',
-    new Date('2026-09-01T00:00:00.000Z'),
-    'Contrato, URL e teste de destino homologados',
-  )
-  const linkA = await criarCampanhaComLink(
-    banco.db,
-    atorAdmin,
-    {
-      parceiroId: parceiroA.id,
-      ofertaId: oferta.id,
-      nome: `Campanha A ${sufixo}`,
-      canal: 'SOCIAL',
-      codigo: `nip-a-${sufixo}`,
-      tipoDestino: 'CASA',
-      utms: { utm_source: 'parceiro-a', utm_medium: 'affiliate' },
-    },
-    new Date('2026-09-01T00:00:00.000Z'),
-  )
-  const linkB = await criarCampanhaComLink(
-    banco.db,
-    atorAdmin,
-    {
-      parceiroId: parceiroB.id,
-      ofertaId: oferta.id,
-      nome: `Campanha B ${sufixo}`,
-      canal: 'SOCIAL',
-      codigo: `nip-b-${sufixo}`,
-      tipoDestino: 'NIP',
-      caminhoNip: `/oferta/nip-b-${sufixo}`,
-    },
-    new Date('2026-09-01T00:00:00.000Z'),
-  )
-  return {
-    admin: atorAdmin,
-    usuarioA: usuarioA!,
-    usuarioB: usuarioB!,
-    parceiroA,
-    parceiroB,
-    oferta,
-    acordoA,
-    linkA,
-    linkB,
-  }
-}
+const contexto = () => cenarioDeAfiliados(banco.db)
 
 describe('operação de afiliados', () => {
   it('autoriza somente admin nas configurações e mantém portal independente da assinatura', async () => {
@@ -764,5 +655,117 @@ describe('operação de afiliados', () => {
     await expect(
       aceitarConvite(banco.db, usuarioConvidado!.id, convite.token, agora),
     ).rejects.toThrow('inválido ou expirado')
+  })
+})
+
+describe('a saída para a casa carrega de qual apito nasceu', () => {
+  it('com a chave do apito, o evento grava a origem', async () => {
+    const c = await contexto()
+    const { apito, chave } = await apitoDeTeste(banco.db)
+    await registrarSaidaParaCasa(banco.db, {
+      codigo: c.linkA.codigo,
+      visitanteToken: 'visitante-com-origem',
+      agora: new Date('2026-09-15T20:00:00.000Z'),
+      chaveDoApito: chave,
+    })
+    const [evento] = await banco.db
+      .select()
+      .from(eventosAfiliados)
+      .where(eq(eventosAfiliados.visitanteHash, hashVisitante('visitante-com-origem')))
+    expect(evento!.tipo).toBe('SAIDA_CASA')
+    expect(evento!.apitoId).toBe(apito.id)
+  })
+
+  it('apito de Fire Live (sem linha) também resolve — chave com o último segmento vazio', async () => {
+    const c = await contexto()
+    // Fire Live não tem linha: `linha` fica NULL no apito, e `montarChave`
+    // produz o último segmento vazio (spec §10 — a origem viaja, mas nunca
+    // casa com entrada registrada, porque a gestão exige linha).
+    const { apito, chave } = await apitoDeTeste(banco.db, { estrategia: 'FIRE_LIVE', linha: null })
+    expect(chave.endsWith('|')).toBe(true)
+    await registrarSaidaParaCasa(banco.db, {
+      codigo: c.linkA.codigo,
+      visitanteToken: 'visitante-fire-live',
+      agora: new Date('2026-09-15T20:00:00.000Z'),
+      chaveDoApito: chave,
+    })
+    const [evento] = await banco.db
+      .select()
+      .from(eventosAfiliados)
+      .where(eq(eventosAfiliados.visitanteHash, hashVisitante('visitante-fire-live')))
+    expect(evento!.apitoId).toBe(apito.id)
+  })
+
+  it('sem chave nenhuma, continua funcionando como antes — origem nula', async () => {
+    const c = await contexto()
+    await registrarSaidaParaCasa(banco.db, {
+      codigo: c.linkA.codigo,
+      visitanteToken: 'visitante-sem-chave',
+      agora: new Date('2026-09-15T20:00:00.000Z'),
+    })
+    const [evento] = await banco.db
+      .select()
+      .from(eventosAfiliados)
+      .where(eq(eventosAfiliados.visitanteHash, hashVisitante('visitante-sem-chave')))
+    expect(evento!.apitoId).toBeNull()
+  })
+
+  it('chave que não resolve grava SEM origem e não lança — nunca uma origem inventada', async () => {
+    const c = await contexto()
+    // Forjada: uuid válido, apito que não existe. É o que um parâmetro
+    // adulterado na URL produz.
+    const forjada = montarChave(
+      '00000000-0000-4000-8000-000000000001',
+      '00000000-0000-4000-8000-000000000002',
+      'PONTOS',
+      'LISTA_SECRETA',
+      99,
+    )
+    const destino = await registrarSaidaParaCasa(banco.db, {
+      codigo: c.linkA.codigo,
+      visitanteToken: 'visitante-chave-forjada',
+      agora: new Date('2026-09-15T20:00:00.000Z'),
+      chaveDoApito: forjada,
+    })
+    expect(destino).toContain('https://')
+    const [evento] = await banco.db
+      .select()
+      .from(eventosAfiliados)
+      .where(eq(eventosAfiliados.visitanteHash, hashVisitante('visitante-chave-forjada')))
+    expect(evento!.apitoId).toBeNull()
+  })
+
+  it('chave malformada também degrada, sem lançar', async () => {
+    const c = await contexto()
+    const destino = await registrarSaidaParaCasa(banco.db, {
+      codigo: c.linkA.codigo,
+      visitanteToken: 'visitante-chave-lixo',
+      agora: new Date('2026-09-15T20:00:00.000Z'),
+      chaveDoApito: 'isto-nao-e-uma-chave',
+    })
+    expect(destino).toContain('https://')
+    const [evento] = await banco.db
+      .select()
+      .from(eventosAfiliados)
+      .where(eq(eventosAfiliados.visitanteHash, hashVisitante('visitante-chave-lixo')))
+    expect(evento!.apitoId).toBeNull()
+  })
+
+  it('uuid malformado na chave é recusado pelo Postgres e degrada, sem lançar', async () => {
+    const c = await contexto()
+    const destino = await registrarSaidaParaCasa(banco.db, {
+      codigo: c.linkA.codigo,
+      visitanteToken: 'visitante-uuid-invalido',
+      agora: new Date('2026-09-15T20:00:00.000Z'),
+      // Cinco segmentos, então passa as guardas — mas "nao-e-uuid" não é uuid, e
+      // é o Postgres que recusa. É o caminho do catch.
+      chaveDoApito: montarChave('nao-e-uuid', 'tambem-nao', 'PONTOS', 'LISTA_SECRETA', 25),
+    })
+    expect(destino).toContain('https://')
+    const [evento] = await banco.db
+      .select()
+      .from(eventosAfiliados)
+      .where(eq(eventosAfiliados.visitanteHash, hashVisitante('visitante-uuid-invalido')))
+    expect(evento!.apitoId).toBeNull()
   })
 })

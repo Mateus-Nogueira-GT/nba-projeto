@@ -773,7 +773,7 @@ export default async function PaginaApito({
       {saida && (
         <p style={{ margin: '12px 0 0' }}>
           <a
-            href={`/ir/${saida.codigo}`}
+            href={`/ir/${saida.codigo}?apito=${encodeURIComponent(principal.chave)}`}
             rel="nofollow sponsored"
             style={{
               display: 'block',

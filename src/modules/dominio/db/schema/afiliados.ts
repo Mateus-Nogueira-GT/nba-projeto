@@ -14,6 +14,7 @@ import {
   uuid,
 } from 'drizzle-orm/pg-core'
 
+import { apitos } from './motor'
 import { casas } from './odds'
 import { usuarios } from './plataforma'
 
@@ -213,6 +214,13 @@ export const eventosAfiliados = pgTable(
       .notNull()
       .references(() => linksAfiliados.id),
     atribuicaoId: uuid('atribuicao_id').references(() => atribuicoesAfiliados.id),
+    /**
+     * De qual apito a saída nasceu. Anulável porque só a SAIDA_CASA tem
+     * origem — clique e visita não vêm de um apito — e porque uma chave que
+     * não resolve grava a saída SEM origem, o que é honesto; inventar origem
+     * contaminaria uma trilha que vai embasar conversa comercial.
+     */
+    apitoId: uuid('apito_id').references(() => apitos.id, { onDelete: 'set null' }),
     tipo: text('tipo').notNull(),
     automatizado: boolean('automatizado').notNull().default(false),
     ocorridoEm: timestamp('ocorrido_em', { withTimezone: true }).notNull(),
@@ -223,6 +231,10 @@ export const eventosAfiliados = pgTable(
     check(
       'eventos_afiliados_tipo_valido',
       sql`${t.tipo} in ('CLIQUE', 'VISITA_NIP', 'SAIDA_CASA', 'CADASTRO_NIP')`,
+    ),
+    check(
+      'eventos_afiliados_apito_so_em_saida',
+      sql`${t.apitoId} is null or ${t.tipo} = 'SAIDA_CASA'`,
     ),
   ],
 )

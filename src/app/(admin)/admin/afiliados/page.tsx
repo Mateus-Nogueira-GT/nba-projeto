@@ -2,8 +2,9 @@ import { Fragment } from 'react'
 import estilos from '@/components/afiliados/PainelComercial.module.css'
 import Link from 'next/link'
 import { ShellComercial } from '@/components/afiliados/ShellComercial'
-import { dataCurta, dinheiro } from '@/components/afiliados/formato'
+import { dataCurta, dataHoraCurta, dinheiro } from '@/components/afiliados/formato'
 import { getDb } from '@/modules/dominio/db/cliente'
+import { rulesetAtivo } from '@/modules/entrega/ruleset-ativo'
 import { exigirAdmin } from '@/modules/plataforma/auth/cookies'
 import { painelAdministrativo } from '@/modules/plataforma/afiliados/servico'
 import { filtroDePeriodo } from '@/modules/plataforma/afiliados/periodo'
@@ -50,7 +51,14 @@ export default async function PaginaAdminAfiliados({
   }
   const inicio = valor('inicio')
   const fim = valor('fim')
-  const painel = await painelAdministrativo(getDb(), filtroDePeriodo(inicio, fim))
+  // O fuso do casamento da trilha é o da RODADA, não o comercial de
+  // `periodo.ts`: `entradas_realizadas.data_referencia` é escrita pela gestão
+  // com `ruleset.rodada.fuso`, e casar contra um dia calculado por outra
+  // autoridade quebraria em silêncio no dia em que uma das duas mudasse.
+  const ruleset = await rulesetAtivo()
+  const painel = await painelAdministrativo(getDb(), filtroDePeriodo(inicio, fim), {
+    fuso: ruleset.rodada.fuso,
+  })
   const principal = painel.totaisPorMoeda[0] ?? {
     moeda: 'BRL',
     receitaNipCentavos: 0,
@@ -639,6 +647,48 @@ export default async function PaginaAdminAfiliados({
               Registrar pagamento
             </button>
           </form>
+        </section>
+
+        <section className={`${estilos.painel} ${estilos.largo}`} id="trilha">
+          <h2>Trilha de saídas</h2>
+          <p>
+            Saídas para casas parceiras e o que o usuário declarou ter apostado depois.
+            Declaração do usuário, não confirmação da casa: não gera comissão. &quot;Não&quot;
+            também cobre a saída que não tem como casar — visitante sem conta, ou apito de
+            Fire Live, que não tem linha.
+          </p>
+          {painel.trilha.length === 0 ? (
+            <div className={estilos.vazio}>Nenhuma saída no período.</div>
+          ) : (
+            <table className={estilos.tabela}>
+              <thead>
+                <tr>
+                  <th>Quando</th>
+                  <th>Parceiro · campanha</th>
+                  <th>Casa</th>
+                  <th>Apito de origem</th>
+                  <th>Declarou ter apostado</th>
+                </tr>
+              </thead>
+              <tbody>
+                {painel.trilha.map((s) => (
+                  <tr key={s.id}>
+                    <td>{dataHoraCurta(s.ocorridoEm)}</td>
+                    <td>
+                      {s.parceiro} · {s.campanha}
+                    </td>
+                    <td>{s.casa}</td>
+                    <td>
+                      {s.origem
+                        ? `${s.origem.nome} · ${s.origem.atributo}${s.origem.linha === null ? '' : ` ${s.origem.linha}`}`
+                        : '—'}
+                    </td>
+                    <td>{s.registrou ? 'Sim' : 'Não'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
         </section>
       </div>
     </ShellComercial>

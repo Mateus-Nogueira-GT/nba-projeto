@@ -33,6 +33,9 @@ async function resolver(request: Request, codigo: string, registrar: boolean): P
       visitanteToken: token,
       usuarioId: sessao?.usuarioId,
       agora: new Date(),
+      // A origem vem da tela do apito. Query string porque o `<a>` é um GET
+      // simples: nada de formulário só para carregar um identificador.
+      chaveDoApito: new URL(request.url).searchParams.get('apito'),
     })
     const resposta = NextResponse.redirect(destino, { headers: SEM_CACHE })
     if (!tokenExistente) {

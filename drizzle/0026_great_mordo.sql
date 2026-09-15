@@ -1,0 +1,3 @@
+ALTER TABLE "eventos_afiliados" ADD COLUMN "apito_id" uuid;--> statement-breakpoint
+ALTER TABLE "eventos_afiliados" ADD CONSTRAINT "eventos_afiliados_apito_id_apitos_id_fk" FOREIGN KEY ("apito_id") REFERENCES "public"."apitos"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "eventos_afiliados" ADD CONSTRAINT "eventos_afiliados_apito_so_em_saida" CHECK ("eventos_afiliados"."apito_id" is null or "eventos_afiliados"."tipo" = 'SAIDA_CASA');
