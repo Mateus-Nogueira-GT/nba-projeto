@@ -88,9 +88,16 @@ describe('apitosDoJogador — os DOIS motivos de não haver veredito', () => {
     throw new Error('a temporada simulada precisa de ao menos um apito conferido')
   }
 
-  it('jogo ainda não encerrado é "aguardando dado oficial", nunca DNP', async () => {
-    // O campo `estado` existe para isso: sem ele a tela chamaria de "não
-    // jogou" o apito do jogo desta noite (spec §5.1, "nunca inferir de parcial").
+  it('jogo que ainda não encerrou SOME da lista — o sinal do dia não é público', async () => {
+    // Este teste AFIRMAVA o contrário: que o apito do jogo desta noite
+    // aparecia como "aguardando dado oficial". Era justamente a falha — a aba
+    // de estatísticas não exige conta, então atributo e linha do apito de hoje
+    // ficavam legíveis de graça, na mesma noite em que a Lista Secreta os
+    // vende. Bastava saber o nome do jogador.
+    //
+    // A regra de nunca inferir "não jogou" a partir de dado ausente continua
+    // valendo e continua testada, nos dois `it` abaixo — onde ela de fato se
+    // aplica: jogo ENCERRADO sem box score, e linha de box com zero minuto.
     const { jogadorId, apito } = await apitoConferido()
     expect(apito.estado).toBe('CONFERIDO')
 
@@ -99,10 +106,8 @@ describe('apitosDoJogador — os DOIS motivos de não haver veredito', () => {
       await banco.db.update(jogos).set({ status: 'AGENDADO' }).where(eq(jogos.id, apito.jogoId))
       const depois = (await apitosDoJogador(banco.db, jogadorId, 20)).find(
         (a) => a.jogoId === apito.jogoId && a.atributo === apito.atributo,
-      )!
-      expect(depois.estado).toBe('AGUARDANDO_OFICIAL')
-      expect(depois.fez).toBeNull()
-      expect(depois.bateu).toBeNull()
+      )
+      expect(depois, 'apito de jogo não encerrado não pode aparecer na aba pública').toBeUndefined()
     } finally {
       await banco.db.update(jogos).set({ status: jogo!.status }).where(eq(jogos.id, apito.jogoId))
     }

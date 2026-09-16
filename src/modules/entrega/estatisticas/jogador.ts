@@ -682,7 +682,25 @@ export async function apitosDoJogador(
         eq(estatisticasJogo.jogadorId, apitos.jogadorId),
       ),
     )
-    .where(and(eq(apitos.estrategia, 'LISTA_SECRETA'), eq(apitos.jogadorId, jogadorId)))
+    .where(
+      and(
+        eq(apitos.estrategia, 'LISTA_SECRETA'),
+        eq(apitos.jogadorId, jogadorId),
+        // SÓ JOGO ENCERRADO — e isto é portão comercial, não filtro de tela.
+        //
+        // Esta aba é PÚBLICA: não exige conta. Sem este corte, a seção
+        // entregava o apito de HOJE com o jogo ainda por começar — atributo e
+        // linha exatos, de graça, na mesma noite em que a Lista Secreta os
+        // vende. Bastava saber o nome do jogador.
+        //
+        // O corte não é escolha de produto: a própria seção se anuncia como o
+        // que a estratégia fez com o jogador CONFERIDO, e apito de jogo que
+        // não terminou não foi conferido por definição. `AGUARDANDO_OFICIAL`
+        // continua existindo para o caso legítimo — o jogo acabou e o box
+        // score ainda não chegou.
+        eq(jogos.status, 'ENCERRADO'),
+      ),
+    )
     .orderBy(desc(jogos.dataHoraUtc), asc(apitos.atributo), asc(apitos.linha))
 
   if (linhas.length === 0) return []

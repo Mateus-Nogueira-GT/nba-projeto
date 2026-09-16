@@ -72,9 +72,10 @@ const USUARIO_DEMO = '00000000-0000-4000-8000-000000000001'
 vi.mock('../../modules/plataforma/auth/cookies', () => ({
   sessaoAtual: async () => ({ usuarioId: USUARIO_DEMO, email: 'demo@teste.com' }),
 }))
-vi.mock('../../modules/plataforma/assinatura/direito', () => ({
-  avaliarAcesso: async () => ({ permitido: true }),
-}))
+vi.mock('../../modules/plataforma/assinatura/direito', async () => {
+  const { acessoDeTeste } = await import('../../modules/plataforma/__tests__/acesso-de-teste')
+  return { avaliarAcesso: async () => acessoDeTeste('ALL_STAR') }
+})
 vi.mock('../../modules/dominio/db/cliente', () => ({
   getDb: () => banco.db,
   fecharDb: async () => {},
@@ -323,7 +324,16 @@ describe('tela do jogador · apitos da estratégia', () => {
     expect(visivel).not.toContain('aguardando dado oficial')
   }, 60_000)
 
-  it('apito de jogo ainda não encerrado fica "aguardando dado oficial", nunca "não jogou"', async () => {
+  it('apito de jogo que voltou a não estar encerrado SOME da tela — o sinal do dia não é público', async () => {
+    // Este teste AFIRMAVA que o apito ficava visível como "aguardando dado
+    // oficial". Era o vazamento: esta aba não exige conta, então atributo e
+    // linha do apito de hoje ficavam legíveis de graça, na mesma noite em que
+    // a Lista Secreta os vende. `apitosDoJogador` passou a exigir jogo
+    // ENCERRADO — ver `entrega/__tests__/apitos-do-jogador-nao-vazam.test.ts`.
+    //
+    // A regra de nunca inferir "não jogou" a partir de dado ausente continua
+    // valendo, e continua afirmada abaixo: ela se aplica a jogo encerrado sem
+    // box score, não a jogo que ainda não aconteceu.
     const conferido = historicoDeApitos.find((a) => a.estado === 'CONFERIDO')!
     const [jogo] = await banco.db
       .select()
@@ -336,7 +346,10 @@ describe('tela do jogador · apitos da estratégia', () => {
       const visivel = texto(await renderizarJogador(alvo))
       const conferidos = historicoDeApitos.filter((a) => a.estado === 'CONFERIDO')
 
-      expect(visivel).toContain('aguardando dado oficial')
+      // O apito sumiu da FONTE, não só da tela.
+      const depois = await apitosDoJogador(banco.db, alvo, LIMITE_DE_APITOS_DO_JOGADOR)
+      expect(depois.some((a) => a.jogoId === conferido.jogoId)).toBe(false)
+
       expect(visivel).not.toContain('não jogou')
       // Um veredito a menos: o do jogo que voltou a não estar encerrado.
       expect(visivel.match(/fez \d+/g)?.length ?? 0).toBe(conferidos.length - 1)
