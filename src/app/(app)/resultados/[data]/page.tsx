@@ -29,8 +29,8 @@ import type {
   ResultadoFireLive,
 } from '@/modules/entrega/resultados'
 import { rulesetAtivo } from '@/modules/entrega/ruleset-ativo'
-import { avaliarAcesso } from '@/modules/plataforma/assinatura/direito'
-import { sessaoAtual } from '@/modules/plataforma/auth/cookies'
+import { exigirNivel } from '@/modules/plataforma/assinatura/guarda'
+import { atende } from '@/modules/plataforma/assinatura/nivel-do-plano'
 import type { Atributo, NivelApito } from '@/modules/motor/tipos'
 import '@/design-system/tokens/tokens.css'
 
@@ -311,10 +311,11 @@ export default async function PaginaResultadosDaRodada({
     )
   }
 
-  const sessao = await sessaoAtual()
-  if (!sessao) redirect(`/entrar?destino=${encodeURIComponent(rotaResultados(data, filtros))}`)
-  const acesso = await avaliarAcesso(getDb(), sessao.usuarioId)
-  if (!acesso.permitido) redirect('/assinar')
+  // Resultados é inteiro para TODO nível (spec, decisão 9) — a prova social
+  // que convence quem ainda não assina. `exigirNivel` continua aqui porque a
+  // tela exige sessão (é a guarda de LOGIN, não de plano). `acesso` só serve
+  // ao botão do assistente (MVP+, decisão 7): o resto da tela não depende dele.
+  const { acesso } = await exigirNivel('GRATIS', rotaResultados(data, filtros))
 
   const ruleset = await rulesetAtivo()
   const { fuso } = ruleset.rodada
@@ -471,7 +472,7 @@ export default async function PaginaResultadosDaRodada({
 
   if (rodadaInteira.porJogo.length === 0 && fireLido.length === 0) {
     return (
-      <Moldura aba="lista" largura="dados">
+      <Moldura aba="lista" largura="dados" assistente={atende(acesso.nivel, 'MVP')}>
         {cabecalho}
         {controles}
         <Vazio>
@@ -485,7 +486,7 @@ export default async function PaginaResultadosDaRodada({
   }
 
   return (
-    <Moldura aba="lista" largura="dados">
+    <Moldura aba="lista" largura="dados" assistente={atende(acesso.nivel, 'MVP')}>
       {cabecalho}
       {controles}
       <style>{`@keyframes resultados-entrada { from { opacity: 0.7; } to { opacity: 1; } } .resultados-resumo { animation: resultados-entrada 180ms ease-out; } @media (prefers-reduced-motion: reduce) { .resultados-resumo { animation: none; } }`}</style>

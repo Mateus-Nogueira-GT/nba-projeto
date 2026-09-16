@@ -189,10 +189,11 @@ igual para quem assina e para quem não assina.
 
 **O botão.** Fixo no canto inferior direito, montado pela `Moldura` quando `aba !== null` **e a
 flag `CHAT_HABILITADO` está ligada** — com a flag desligada o botão não existe na tela, senão a
-entrega poria em produção um botão que só sabe dizer "fora do ar". Nem toda tela de aba exige
-sessão (STATS abre sem login enquanto `ESTATISTICAS_EXIGEM_DIREITO` estiver desligada): o
-visitante anônimo que clicar ali recebe "Entre na sua conta para conversar comigo", sem custo e
-sem vazamento, porque a rota devolve 401 antes de qualquer chamada paga. Sobe **acima** da barra: a `Moldura` já reserva
+entrega poria em produção um botão que só sabe dizer "fora do ar". Nem toda tela de aba exigia
+sessão no momento em que esta seção foi escrita (STATS abria sem login atrás de uma flag; a
+spec de planos, §5, apagou a flag — STATS agora exige sessão como qualquer outra aba): o
+visitante anônimo que clicar numa aba sem sessão recebe "Entre na sua conta para conversar
+comigo", sem custo e sem vazamento, porque a rota devolve 401 antes de qualquer chamada paga. Sobe **acima** da barra: a `Moldura` já reserva
 96px de `paddingBottom` para ela, e o botão fica acima disso mais a área segura do aparelho
 (`env(safe-area-inset-bottom)`), senão tapa o polegar em cima das abas. Ícone geométrico em SVG,
 como o resto da navegação (identidade 02: **sem emoji**), com `aria-label` e foco visível.

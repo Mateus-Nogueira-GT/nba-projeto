@@ -9,13 +9,7 @@ import { carregarRuleset } from '../../motor/ruleset/carregar'
 import { calendarioDoRuleset, temporadaDe } from '../../dominio/temporada'
 import { intervaloDoDia } from '../../dominio/rodada'
 import { lerFeed } from '../lista-secreta'
-import {
-  LIMITE_PERGUNTA,
-  LIMITE_POR_MINUTO,
-  configuracaoChat,
-  mensagensUsadasHoje,
-  responder,
-} from '../chat'
+import { LIMITE_PERGUNTA, LIMITE_POR_MINUTO, mensagensUsadasHoje, responder } from '../chat'
 
 const ruleset = carregarRuleset(readFileSync('config/ruleset.v1.yaml', 'utf8'))
 const AGORA = new Date('2026-08-24T18:00:00.000Z')
@@ -23,11 +17,13 @@ const HOJE = '2026-08-24'
 // América/São_Paulo é UTC-3 o ano inteiro (sem horário de verão desde 2019) —
 // os testes de fronteira de dia dependem desse deslocamento fixo.
 const FUSO = ruleset.rodada.fuso
-// Os freios (o assunto deste arquivo) não têm nada a ver com temporada ou
-// direito de acesso — fixamos `comDireito: true` em toda chamada abaixo para
-// que a lista do dia sempre chegue, como já acontecia antes destes dois
-// campos existirem.
+// Os freios (o assunto deste arquivo) não têm nada a ver com nível de plano:
+// `responder` não conhece nível, só o número de `cotaDiaria` que o chamador
+// já resolveu (a rota resolve via `configuracaoChat().cotaDiariaPorNivel`).
+// Por isso toda chamada abaixo fixa `cotaDiaria: 20` — um valor qualquer,
+// alto o bastante para não interferir nos freios que CADA teste testa.
 const TEMPORADA = temporadaDe(intervaloDoDia(HOJE, FUSO).inicio, calendarioDoRuleset(ruleset))
+const COTA_TESTE = 20
 
 let banco: Awaited<ReturnType<typeof bancoDeTeste>>
 let usuarioId: string
@@ -42,27 +38,6 @@ beforeAll(async () => {
   usuarioId = u!.id
 }, 180_000)
 afterAll(async () => banco.fechar())
-
-describe('configuração do chat', () => {
-  it('vem DESLIGADO por padrão', () => {
-    // Ligar sem teto de gasto configurado no provedor é o cenário caro.
-    expect(configuracaoChat({} as NodeJS.ProcessEnv).habilitado).toBe(false)
-  })
-
-  it('cota padrão é 20 e o env sobrepõe', () => {
-    expect(configuracaoChat({} as NodeJS.ProcessEnv).cotaDiaria).toBe(20)
-    expect(
-      configuracaoChat({ CHAT_COTA_DIARIA: '5' } as unknown as NodeJS.ProcessEnv).cotaDiaria,
-    ).toBe(5)
-  })
-
-  it('cota inválida cai no padrão em vez de virar zero ou NaN', () => {
-    // "abc" virando 0 trancaria todo mundo fora; virando NaN, liberaria geral.
-    expect(
-      configuracaoChat({ CHAT_COTA_DIARIA: 'abc' } as unknown as NodeJS.ProcessEnv).cotaDiaria,
-    ).toBe(20)
-  })
-})
 
 describe('mensagensUsadasHoje — fronteira de dia no fuso local', () => {
   it('mensagem perto da meia-noite UTC, mas ainda no MESMO dia local, conta para o dia local', async () => {
@@ -95,7 +70,7 @@ describe('chat do assinante', () => {
       dataReferencia: HOJE,
       fuso: FUSO,
       temporada: TEMPORADA,
-      comDireito: true,
+      cotaDiaria: COTA_TESTE,
       agora: AGORA,
     })
     expect(r.ok).toBe(true)
@@ -124,7 +99,7 @@ describe('chat do assinante', () => {
       dataReferencia: HOJE,
       fuso: FUSO,
       temporada: TEMPORADA,
-      comDireito: true,
+      cotaDiaria: COTA_TESTE,
       agora: AGORA,
     })
     expect(r.ok).toBe(false)
@@ -138,7 +113,7 @@ describe('chat do assinante', () => {
     // passam pelo `>= cotaDiaria` — furando a cota. A reserva de vaga em
     // transação com FOR UPDATE tem que impedir isso.
     await banco.db.delete(chatMensagens)
-    const { cotaDiaria } = configuracaoChat()
+    const cotaDiaria = COTA_TESTE
     const jaUsadas = cotaDiaria - 3
     for (let i = 0; i < jaUsadas; i++) {
       await banco.db.insert(chatMensagens).values({
@@ -161,7 +136,7 @@ describe('chat do assinante', () => {
           dataReferencia: HOJE,
           fuso: FUSO,
           temporada: TEMPORADA,
-          comDireito: true,
+          cotaDiaria,
           agora: AGORA,
         }),
       ),
@@ -183,7 +158,7 @@ describe('chat do assinante', () => {
       dataReferencia: HOJE,
       fuso: FUSO,
       temporada: TEMPORADA,
-      comDireito: true,
+      cotaDiaria: COTA_TESTE,
       agora: AGORA,
     })
     expect(r.ok).toBe(false)
@@ -205,7 +180,7 @@ describe('chat do assinante', () => {
         dataReferencia: HOJE,
         fuso: FUSO,
         temporada: TEMPORADA,
-        comDireito: true,
+        cotaDiaria: COTA_TESTE,
         agora: AGORA,
       },
     )
@@ -226,7 +201,7 @@ describe('chat do assinante', () => {
       dataReferencia: HOJE,
       fuso: FUSO,
       temporada: TEMPORADA,
-      comDireito: true,
+      cotaDiaria: COTA_TESTE,
       agora: AGORA,
     })
     expect(r.ok).toBe(false)
@@ -243,7 +218,7 @@ describe('chat do assinante', () => {
       dataReferencia: HOJE,
       fuso: FUSO,
       temporada: TEMPORADA,
-      comDireito: true,
+      cotaDiaria: COTA_TESTE,
       agora: AGORA,
     })
     const enviado = porta.chamadas[0]!.pedido
@@ -272,7 +247,7 @@ describe('chat do assinante', () => {
       dataReferencia: HOJE,
       fuso: FUSO,
       temporada: TEMPORADA,
-      comDireito: true,
+      cotaDiaria: COTA_TESTE,
       agora: AGORA,
     })
     expect(r.ok).toBe(false)
@@ -290,7 +265,7 @@ describe('chat do assinante', () => {
       dataReferencia: HOJE,
       fuso: FUSO,
       temporada: TEMPORADA,
-      comDireito: true,
+      cotaDiaria: COTA_TESTE,
       agora: AGORA,
     })
     expect(r.ok).toBe(true)
@@ -308,7 +283,7 @@ describe('chat do assinante', () => {
         dataReferencia: HOJE,
         fuso: FUSO,
         temporada: TEMPORADA,
-        comDireito: true,
+        cotaDiaria: COTA_TESTE,
         agora: AGORA,
       })
       expect(ok.ok).toBe(true)
@@ -321,7 +296,7 @@ describe('chat do assinante', () => {
       dataReferencia: HOJE,
       fuso: FUSO,
       temporada: TEMPORADA,
-      comDireito: true,
+      cotaDiaria: COTA_TESTE,
       agora: AGORA,
     })
     expect(barrada.ok).toBe(false)
@@ -337,7 +312,7 @@ describe('chat do assinante', () => {
       dataReferencia: HOJE,
       fuso: FUSO,
       temporada: TEMPORADA,
-      comDireito: true,
+      cotaDiaria: COTA_TESTE,
       agora: new Date(AGORA.getTime() + 61_000),
     })
     expect(depois.ok).toBe(true)
@@ -353,7 +328,7 @@ describe('chat do assinante', () => {
       dataReferencia: HOJE,
       fuso: FUSO,
       temporada: TEMPORADA,
-      comDireito: true,
+      cotaDiaria: COTA_TESTE,
       agora: AGORA,
     })
     expect(primeira.ok).toBe(true)
@@ -365,7 +340,7 @@ describe('chat do assinante', () => {
       dataReferencia: HOJE,
       fuso: FUSO,
       temporada: TEMPORADA,
-      comDireito: true,
+      cotaDiaria: COTA_TESTE,
       agora: new Date(AGORA.getTime() + 5_000),
     })
 
@@ -402,7 +377,7 @@ describe('chat do assinante', () => {
       dataReferencia: HOJE,
       fuso: FUSO,
       temporada: TEMPORADA,
-      comDireito: true,
+      cotaDiaria: COTA_TESTE,
       agora: AGORA,
     })
     expect(r.ok).toBe(true)

@@ -3,13 +3,39 @@ import { and, eq, gt, isNull, lte, or } from 'drizzle-orm'
 import { direitosAcesso, usuarios } from '../../dominio/db/schema'
 import type { Db } from '../../dominio/db/tipos'
 import { PRODUTO_PAGO } from './configuracao'
+import type { Modalidade, NivelDoPlano, NivelPago } from './nivel-do-plano'
+import { atende } from './nivel-do-plano'
 
+export type AcessoComNivel = {
+  nivel: NivelDoPlano
+  direitoId: string | null
+  validoAte: Date | null
+  modalidade: Modalidade | null
+}
+
+/**
+ * A RESPOSTA DE `avaliarAcesso` — um nível, ou a ausência de nível.
+ *
+ * `nivel: null` não é "não pode": é "não há a quem atribuir nível" — sem
+ * sessão, ou conta bloqueada pelo painel. Quem está logado e não assinou tem
+ * nível: GRATIS. A diferença é o que separa a tela de entrar da home do
+ * grátis.
+ */
 export type ResultadoAcesso =
-  | { permitido: true; direitoId: string; validoAte: Date | null }
+  | AcessoComNivel
   | {
-      permitido: false
-      motivo: 'sem-sessao' | 'bloqueio-administrativo' | 'sem-direito-ativo'
+      nivel: null
+      motivo: 'sem-sessao' | 'bloqueio-administrativo'
     }
+
+// Congelado porque é UMA instância devolvida a todo chamador: uma tela que
+// mutasse o objeto mutaria o de todas as outras requisições do processo.
+const GRATIS: AcessoComNivel = Object.freeze({
+  nivel: 'GRATIS',
+  direitoId: null,
+  validoAte: null,
+  modalidade: null,
+})
 
 export async function avaliarAcesso(
   db: Db,
@@ -17,7 +43,7 @@ export async function avaliarAcesso(
   agora = new Date(),
   produto = PRODUTO_PAGO,
 ): Promise<ResultadoAcesso> {
-  if (!usuarioId) return { permitido: false, motivo: 'sem-sessao' }
+  if (!usuarioId) return { nivel: null, motivo: 'sem-sessao' }
 
   // UMA consulta, não duas. Eram dois SELECTs em sequência (o usuário, depois
   // o direito) e toda tela autenticada pagava os dois. Numa cadeia que
@@ -26,13 +52,16 @@ export async function avaliarAcesso(
   //
   // O LEFT JOIN preserva a distinção que importa: sem LINHA é usuário
   // inexistente (sem-sessao, leva a /entrar); linha COM direito nulo é
-  // usuário sem assinatura (sem-direito-ativo, leva a /assinar). Colapsar os
-  // dois mandaria quem perdeu a sessão para a tela de pagamento.
-  const [linha] = await db
+  // usuário sem assinatura — que agora é um nível, GRATIS, e não uma recusa.
+  // Sem `.limit(1)`: com dois direitos ativos (o instante do upgrade) vale o
+  // MAIOR, e é o código que escolhe, não a ordem física das linhas.
+  const linhas = await db
     .select({
       status: usuarios.status,
       direitoId: direitosAcesso.id,
       fim: direitosAcesso.fim,
+      nivelDoPlano: direitosAcesso.nivelDoPlano,
+      modalidade: direitosAcesso.modalidade,
     })
     .from(usuarios)
     .leftJoin(
@@ -46,24 +75,43 @@ export async function avaliarAcesso(
       ),
     )
     .where(eq(usuarios.id, usuarioId))
-    .limit(1)
 
-  if (!linha) return { permitido: false, motivo: 'sem-sessao' }
+  const primeira = linhas[0]
+  if (!primeira) return { nivel: null, motivo: 'sem-sessao' }
   // A ORDEM é regra de negócio (Spec 04, princípio 4): bloqueio administrativo
-  // prevalece sobre direito vigente. Com as duas informações chegando juntas,
-  // quem responde primeiro passou a ser escolha explícita do código.
-  if (linha.status === 'BLOQUEADO') {
-    return { permitido: false, motivo: 'bloqueio-administrativo' }
-  }
+  // prevalece sobre direito vigente.
+  if (primeira.status === 'BLOQUEADO') return { nivel: null, motivo: 'bloqueio-administrativo' }
 
-  return linha.direitoId
-    ? { permitido: true, direitoId: linha.direitoId, validoAte: linha.fim }
-    : { permitido: false, motivo: 'sem-direito-ativo' }
+  let vencedor: AcessoComNivel | null = null
+  for (const l of linhas) {
+    if (!l.direitoId) continue
+    // `as` é a fronteira entre `text` no banco e o tipo do domínio; os checks
+    // da migration garantem que só estes valores existem na coluna.
+    const candidato: AcessoComNivel = {
+      nivel: l.nivelDoPlano as NivelDoPlano,
+      direitoId: l.direitoId,
+      validoAte: l.fim,
+      modalidade: (l.modalidade as Modalidade | null) ?? null,
+    }
+    if (
+      !vencedor ||
+      (atende(candidato.nivel, vencedor.nivel) && candidato.nivel !== vencedor.nivel)
+    ) {
+      vencedor = candidato
+    }
+  }
+  return vencedor ?? GRATIS
 }
 
 export async function concederCortesia(
   db: Db,
-  entrada: { usuarioId: string; referencia: string; inicio: Date; fim: Date | null },
+  entrada: {
+    usuarioId: string
+    referencia: string
+    inicio: Date
+    fim: Date | null
+    nivelDoPlano: NivelPago
+  },
 ): Promise<string> {
   const [direito] = await db
     .insert(direitosAcesso)
@@ -74,6 +122,9 @@ export async function concederCortesia(
       referenciaOrigem: entrada.referencia,
       inicio: entrada.inicio,
       fim: entrada.fim,
+      nivelDoPlano: entrada.nivelDoPlano,
+      // Cortesia não tem modalidade: ninguém pagou nada.
+      modalidade: null,
       atualizadoEm: entrada.inicio,
     })
     .onConflictDoUpdate({
@@ -82,6 +133,7 @@ export async function concederCortesia(
         usuarioId: entrada.usuarioId,
         inicio: entrada.inicio,
         fim: entrada.fim,
+        nivelDoPlano: entrada.nivelDoPlano,
         revogadoEm: null,
         motivoRevogacao: null,
         atualizadoEm: entrada.inicio,

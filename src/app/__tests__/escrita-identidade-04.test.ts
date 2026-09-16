@@ -16,9 +16,10 @@ vi.mock('../../modules/entrega/ruleset-ativo', () => ({ rulesetAtivo: async () =
 vi.mock('../../modules/plataforma/auth/cookies', () => ({
   sessaoAtual: async () => ({ usuarioId: 'usuario', email: 'teste@example.com' }),
 }))
-vi.mock('../../modules/plataforma/assinatura/direito', () => ({
-  avaliarAcesso: async () => ({ permitido: true }),
-}))
+vi.mock('../../modules/plataforma/assinatura/direito', async () => {
+  const { acessoDeTeste } = await import('../../modules/plataforma/__tests__/acesso-de-teste')
+  return { avaliarAcesso: async () => acessoDeTeste('ALL_STAR') }
+})
 vi.mock('../../modules/dominio/db/cliente', () => ({ getDb: () => ({}) }))
 vi.mock('../../modules/entrega/gestao', () => ({
   BANCA_PADRAO: 1000,

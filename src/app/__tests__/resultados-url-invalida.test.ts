@@ -10,9 +10,10 @@ vi.mock('../../modules/plataforma/auth/cookies', () => ({
     email: 'demo@teste.com',
   }),
 }))
-vi.mock('../../modules/plataforma/assinatura/direito', () => ({
-  avaliarAcesso: async () => ({ permitido: true }),
-}))
+vi.mock('../../modules/plataforma/assinatura/direito', async () => {
+  const { acessoDeTeste } = await import('../../modules/plataforma/__tests__/acesso-de-teste')
+  return { avaliarAcesso: async () => acessoDeTeste('ALL_STAR') }
+})
 
 beforeAll(async () => {
   vi.stubEnv('DATABASE_URL', 'postgres://teste-local')

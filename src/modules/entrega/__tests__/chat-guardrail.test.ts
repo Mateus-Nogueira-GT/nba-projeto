@@ -39,7 +39,7 @@ let chamada = 0
 // é o assunto daqui.
 const proximoInstante = () => new Date(AGORA.getTime() + chamada++ * 60_000)
 
-const perguntar = async (comDireito: boolean) => {
+const perguntar = async () => {
   const porta = new LLMFake()
   const r = await responder(banco.db, porta, {
     usuarioId,
@@ -48,7 +48,7 @@ const perguntar = async (comDireito: boolean) => {
     fuso: FUSO,
     temporada: TEMPORADA,
     agora: proximoInstante(),
-    comDireito,
+    cotaDiaria: 20,
   })
   return { r, pedido: porta.chamadas[0]!.pedido }
 }
@@ -63,26 +63,19 @@ describe('o guardrail de assunto', () => {
   })
 
   it('o prompt de sistema nomeia os dois assuntos permitidos e a frase exata da recusa', async () => {
-    const { pedido } = await perguntar(true)
+    const { pedido } = await perguntar()
     expect(pedido.sistema).toContain('temporada da NBA')
     expect(pedido.sistema).toContain('funcionamento da plataforma')
     expect(pedido.sistema).toContain(RECUSA_FORA_DE_ESCOPO)
   })
 
   it('o prompt proíbe palpite de aposta — regra 4, odds somente leitura', async () => {
-    const { pedido } = await perguntar(true)
+    const { pedido } = await perguntar()
     expect(pedido.sistema.toLowerCase()).toContain('não sugira aposta')
   })
 
-  it('sem direito ativo, a lista do dia não chega ao modelo', async () => {
-    const { r, pedido } = await perguntar(false)
-    expect(r.ok).toBe(true)
-    expect(pedido.usuario).not.toContain('ENTRADAS DE HOJE')
-    expect(pedido.usuario).toContain('CLASSIFICAÇÃO')
-  })
-
-  it('com direito ativo, a lista do dia chega', async () => {
-    const { pedido } = await perguntar(true)
+  it('a lista do dia chega ao modelo — quem chega aqui já passou pelo portão de nível', async () => {
+    const { pedido } = await perguntar()
     expect(pedido.usuario).toContain('ENTRADAS DE HOJE')
   })
 })

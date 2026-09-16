@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 /**
  * TELAS DE REDEFINIÇÃO DE SENHA (Task 7).
@@ -64,10 +64,14 @@ describe('telas de redefinição de senha', () => {
   })
 
   it('a tela de entrar leva ao "esqueci a senha", e ela explica que o link vem do admin', async () => {
+    // Cadastro público abre por padrão (spec de planos, §7); a config falha
+    // alto sem APP_PUBLIC_URL, e /entrar a lê no render.
+    vi.stubEnv('APP_PUBLIC_URL', 'https://app.example.com')
     const { default: Entrar } = await import('../(app)/entrar/page')
     expect(renderToStaticMarkup(await Entrar({ searchParams: Promise.resolve({}) }))).toContain(
       'href="/redefinir"',
     )
+    vi.unstubAllEnvs()
 
     const { default: Esqueci } = await import('../redefinir/page')
     expect(renderToStaticMarkup(await Esqueci()).toLowerCase()).toContain('uma hora')

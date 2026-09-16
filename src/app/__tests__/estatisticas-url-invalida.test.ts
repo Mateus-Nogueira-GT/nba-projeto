@@ -3,9 +3,6 @@ import { bancoDeTeste } from '../../modules/dominio/__tests__/ajuda-banco'
 
 let banco: Awaited<ReturnType<typeof bancoDeTeste>>
 vi.mock('../../modules/dominio/db/cliente', () => ({ getDb: () => banco.db }))
-vi.mock('../../modules/plataforma/assinatura/guarda', () => ({
-  exigirAcessoEstatisticasSeConfigurado: async () => {},
-}))
 
 beforeAll(async () => {
   vi.stubEnv('DATABASE_URL', 'postgres://teste-local')

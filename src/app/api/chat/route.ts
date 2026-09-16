@@ -7,6 +7,7 @@ import { portaLLMDoAmbiente } from '@/modules/ingestao/llm'
 import { configuracaoChat, conversaDoDia, responder } from '@/modules/entrega/chat'
 import { rulesetAtivo } from '@/modules/entrega/ruleset-ativo'
 import { avaliarAcesso } from '@/modules/plataforma/assinatura/direito'
+import { atende, type NivelPago } from '@/modules/plataforma/assinatura/nivel-do-plano'
 import { sessaoAtual } from '@/modules/plataforma/auth/cookies'
 
 export const dynamic = 'force-dynamic'
@@ -17,13 +18,23 @@ export const dynamic = 'force-dynamic'
  * mostra — e "e o outro?" vira resposta a uma pergunta invisível.
  */
 export async function GET(): Promise<Response> {
-  if (!configuracaoChat().habilitado) {
+  const config = configuracaoChat()
+  if (!config.habilitado || !config.cotaDiariaPorNivel) {
     return NextResponse.json({ erro: 'desabilitado' }, { status: 503 })
   }
 
   try {
     const sessao = await sessaoAtual()
     if (!sessao) return NextResponse.json({ erro: 'sem-sessao' }, { status: 401 })
+
+    const acesso = await avaliarAcesso(getDb(), sessao.usuarioId)
+    // O assistente começa no MVP (spec, decisão 7), a mesma régua do POST:
+    // a conversa salva é conteúdo do assistente, não existe para quem não
+    // tem nível para ele.
+    if (acesso.nivel === null) return NextResponse.json({ erro: 'sem-sessao' }, { status: 401 })
+    if (!atende(acesso.nivel, 'MVP')) {
+      return NextResponse.json({ erro: 'nivel-insuficiente' }, { status: 403 })
+    }
 
     const ruleset = await rulesetAtivo()
     const { fuso } = ruleset.rodada
@@ -32,6 +43,7 @@ export async function GET(): Promise<Response> {
       sessao.usuarioId,
       dataDeReferencia(new Date(), fuso),
       fuso,
+      config.cotaDiariaPorNivel[acesso.nivel as NivelPago],
     )
     return NextResponse.json({ mensagens })
   } catch {
@@ -40,13 +52,16 @@ export async function GET(): Promise<Response> {
 }
 
 /**
- * Chat de suporte. Sessão válida continua obrigatória (401 sem ela); direito
- * de assinatura ativo NÃO é — ele decide o CONTEÚDO da resposta, não a porta.
- * Ver o comentário junto de `avaliarAcesso`, abaixo.
+ * Chat de suporte. Sessão válida continua obrigatória (401 sem ela); a
+ * partir daqui, direito de assinatura MVP+ também é (403 abaixo disso —
+ * spec, decisão 7). Antes desta task o direito só mudava o CONTEÚDO da
+ * resposta; agora é portão: cada pergunta é uma chamada paga de LLM, e uma
+ * conta que não paga perguntando é prejuízo direto, não só conteúdo dado.
  */
 export async function POST(requisicao: Request): Promise<Response> {
-  if (!configuracaoChat().habilitado) {
-    return NextResponse.json({ erro: 'desabilitado' }, { status: 503 })
+  const config = configuracaoChat()
+  if (!config.habilitado || !config.cotaDiariaPorNivel) {
+    return NextResponse.json({ erro: 'fora-do-ar' }, { status: 503 })
   }
 
   const corpo = (await requisicao.json().catch(() => null)) as { texto?: unknown } | null
@@ -60,9 +75,17 @@ export async function POST(requisicao: Request): Promise<Response> {
     if (!sessao) return NextResponse.json({ erro: 'sem-sessao' }, { status: 401 })
 
     const acesso = await avaliarAcesso(getDb(), sessao.usuarioId)
-    // Sem direito NÃO é barreira. O suporte sobre a plataforma serve
-    // principalmente a quem ainda está decidindo assinar; o direito decide o
-    // CONTEÚDO (a lista do dia entra ou não), não a porta.
+    // `nivel: null` só acontece por bloqueio administrativo aqui (o usuarioId
+    // já é válido) — tratado como sessão inválida, não como "sem nível
+    // suficiente": quem foi bloqueado não tem conta para negociar plano.
+    if (acesso.nivel === null) return NextResponse.json({ erro: 'sem-sessao' }, { status: 401 })
+    // O assistente começa no MVP (spec, decisão 7). É portão, não conteúdo:
+    // quem não tem nível não chega à LLM, e a resposta diz o motivo em JSON
+    // para o painel traduzir.
+    if (!atende(acesso.nivel, 'MVP')) {
+      return NextResponse.json({ erro: 'nivel-insuficiente' }, { status: 403 })
+    }
+    const cotaDiaria = config.cotaDiariaPorNivel[acesso.nivel as NivelPago]
 
     const ruleset = await rulesetAtivo()
     const agora = new Date()
@@ -80,7 +103,7 @@ export async function POST(requisicao: Request): Promise<Response> {
         calendarioDoRuleset(ruleset),
       ),
       agora,
-      comDireito: acesso.permitido,
+      cotaDiaria,
     })
 
     if (r.ok) return NextResponse.json({ texto: r.texto })

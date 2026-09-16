@@ -9,7 +9,7 @@ import {
   usuarios,
 } from '../../dominio/db/schema'
 import type { Db } from '../../dominio/db/tipos'
-import { PRODUTO_PAGO } from './configuracao'
+import { MODALIDADE_DO_CHECKOUT_LEGADO, NIVEL_DO_CHECKOUT_LEGADO, PRODUTO_PAGO } from './configuracao'
 import type { EventoPagamento, PortaPagamento } from './porta'
 
 export type ResultadoWebhook =
@@ -138,6 +138,8 @@ async function assinaturaDoEvento(
       produto: PRODUTO_PAGO,
       status,
       plano: evento.plano,
+      nivelDoPlano: NIVEL_DO_CHECKOUT_LEGADO,
+      modalidade: MODALIDADE_DO_CHECKOUT_LEGADO,
       inicio,
       proximaCobranca,
       ocorridoEmOrigem: ocorridoEm,
@@ -230,6 +232,8 @@ async function aplicarEfeito(
         produto: PRODUTO_PAGO,
         origem: provedor,
         referenciaOrigem: cobrancaId,
+        nivelDoPlano: NIVEL_DO_CHECKOUT_LEGADO,
+        modalidade: MODALIDADE_DO_CHECKOUT_LEGADO,
         inicio,
         fim,
         atualizadoEm: agora,
@@ -240,6 +244,7 @@ async function aplicarEfeito(
           usuarioId,
           inicio,
           fim,
+          nivelDoPlano: NIVEL_DO_CHECKOUT_LEGADO,
           revogadoEm: null,
           motivoRevogacao: null,
           atualizadoEm: agora,

@@ -58,9 +58,10 @@ vi.mock('../../modules/plataforma/auth/cookies', () => ({
     email: 'demo@teste.com',
   }),
 }))
-vi.mock('../../modules/plataforma/assinatura/direito', () => ({
-  avaliarAcesso: async () => ({ permitido: true }),
-}))
+vi.mock('../../modules/plataforma/assinatura/direito', async () => {
+  const { acessoDeTeste } = await import('../../modules/plataforma/__tests__/acesso-de-teste')
+  return { avaliarAcesso: async () => acessoDeTeste('ALL_STAR') }
+})
 vi.mock('../../modules/dominio/db/cliente', () => ({
   getDb: () => banco.db,
   fecharDb: async () => {},
@@ -77,6 +78,9 @@ vi.mock('next/navigation', async (importOriginal) => {
 
 beforeAll(async () => {
   process.env.DATABASE_URL = 'postgres://demo'
+  // Cadastro público abre por padrão (spec de planos, §7); a config falha
+  // alto sem APP_PUBLIC_URL, e /entrar e /assinar a leem no render.
+  process.env.APP_PUBLIC_URL = 'https://app.example.com'
   banco = await bancoDeTeste()
   // Com a porta FAKE: é o que roda no ambiente de demonstração (sem
   // OPENROUTER_API_KEY) e é o que faz a lista nascer com narrativa nos cards e

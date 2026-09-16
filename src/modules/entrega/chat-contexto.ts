@@ -28,9 +28,9 @@ function horaLocal(quando: Date, fuso: string): string {
  * acrescenta uma seção, esquece os números dela, e o validador passa a recusar
  * a resposta CERTA. Derivando, a invariante vale por construção.
  *
- * O direito ativo decide o CONTEÚDO, não o acesso: quem não assina recebe
- * plataforma e temporada, e a lista do dia simplesmente não está aqui para
- * vazar.
+ * Quem chama `montarContexto` já passou pelo portão de nível (a rota exige
+ * MVP+ antes de chegar aqui — spec, decisão 7): não existe mais um "sem
+ * direito" para decidir conteúdo, então a lista do dia entra sempre.
  */
 export async function montarContexto(
   db: Db,
@@ -38,14 +38,13 @@ export async function montarContexto(
     dataReferencia: string
     fuso: string
     temporada: string
-    comDireito: boolean
     cotaDiaria: number
   },
 ): Promise<ContextoDoChat> {
   const [rodada, tabela, feed] = await Promise.all([
     telaJogosDoDia(db, opcoes.dataReferencia, opcoes.fuso),
     telaDaClassificacao(db, opcoes.temporada),
-    opcoes.comDireito ? lerFeed(db, opcoes.dataReferencia) : Promise.resolve(null),
+    lerFeed(db, opcoes.dataReferencia),
   ])
 
   const partes: string[] = [CONHECIMENTO, '', METODOLOGIA, '']
@@ -91,17 +90,15 @@ export async function montarContexto(
   partes.push('')
 
   const itens = feed?.conteudo.itens ?? []
-  if (opcoes.comDireito) {
-    partes.push('ENTRADAS DE HOJE (curadoria NIP — elenco projetado, não o time real)')
-    if (itens.length === 0) partes.push('- A lista de hoje ainda não foi publicada.')
-    else
-      for (const i of itens)
-        partes.push(
-          `- ${i.nome} (${i.timeSigla}), ${i.atributo} ${i.linha ?? '-'}, nível do apito ${i.nivelApito}${i.turbo ? ', turbo' : ''}, método ${i.metodo ?? 'oscilação'}`,
-        )
-    partes.push(`- Total de entradas na lista de hoje: ${itens.length}.`)
-    partes.push('')
-  }
+  partes.push('ENTRADAS DE HOJE (curadoria NIP — elenco projetado, não o time real)')
+  if (itens.length === 0) partes.push('- A lista de hoje ainda não foi publicada.')
+  else
+    for (const i of itens)
+      partes.push(
+        `- ${i.nome} (${i.timeSigla}), ${i.atributo} ${i.linha ?? '-'}, nível do apito ${i.nivelApito}${i.turbo ? ', turbo' : ''}, método ${i.metodo ?? 'oscilação'}`,
+      )
+  partes.push(`- Total de entradas na lista de hoje: ${itens.length}.`)
+  partes.push('')
 
   const fatos = partes.join('\n')
   // Derivado, nunca escrito à mão — ver o comentário do cabeçalho.

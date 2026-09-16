@@ -1,6 +1,5 @@
 import { getDb } from '@/modules/dominio/db/cliente'
 import { calendarioDoRuleset, temporadaDe } from '@/modules/dominio/temporada'
-import { exigirAcessoEstatisticasSeConfigurado } from '@/modules/plataforma/assinatura/guarda'
 import { buscar } from '@/modules/entrega/estatisticas/busca'
 import { dataValidaOuHoje, navegacaoDeDatas } from '@/modules/entrega/estatisticas/calendario'
 import { telaJogosDoDia } from '@/modules/entrega/estatisticas/jogos-do-dia'
@@ -16,6 +15,8 @@ import type { Coluna } from '@/design-system/componentes'
 import { dataDeReferencia } from '@/modules/dominio/rodada'
 import { identidadeDoTime } from '@/design-system/times'
 import { semantico } from '@/design-system/tokens/semantico'
+import { exigirNivel } from '@/modules/plataforma/assinatura/guarda'
+import { atende } from '@/modules/plataforma/assinatura/nivel-do-plano'
 import '@/design-system/tokens/tokens.css'
 import { Secao, SemBanco, SOBRANCELHA_STATS } from './moldura'
 
@@ -443,12 +444,16 @@ export default async function PaginaEstatisticas({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>
 }) {
-  await exigirAcessoEstatisticasSeConfigurado()
   const params = await searchParams
   const bruto = Array.isArray(params.q) ? params.q[0] : params.q
   const termo = (bruto ?? '').trim()
 
   if (!process.env.DATABASE_URL) return <SemBanco />
+
+  // A classificação é 100% grátis (spec §5, régua da linha 5): a guarda pede
+  // login (R-A3) e nada mais. `acesso` só é desestruturado para o botão do
+  // assistente (MVP+, decisão 7) — nenhum outro trecho da tela depende dele.
+  const { acesso } = await exigirNivel('GRATIS', '/estatisticas')
 
   const db = getDb()
   const agora = new Date()
@@ -480,7 +485,7 @@ export default async function PaginaEstatisticas({
   const grupos = conferencias.length > 0 ? conferencias : [null]
 
   return (
-    <Moldura aba="stats" largura="dados">
+    <Moldura aba="stats" largura="dados" assistente={atende(acesso.nivel, 'MVP')}>
       <CabecalhoTela sobrancelha={SOBRANCELHA_STATS} titulo="STATS" />
 
       <Campo valor={termo} />

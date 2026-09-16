@@ -4,9 +4,10 @@ import { z } from 'zod'
 
 import { getDb } from '@/modules/dominio/db/cliente'
 import { calendarioDoRuleset, temporadaDe } from '@/modules/dominio/temporada'
-import { exigirAcessoEstatisticasSeConfigurado } from '@/modules/plataforma/assinatura/guarda'
-import { sessaoAtual } from '@/modules/plataforma/auth/cookies'
 import { estadoExperienciaDoUsuario } from '@/modules/plataforma/experiencia/servico'
+import { exigirNivel } from '@/modules/plataforma/assinatura/guarda'
+import { atende } from '@/modules/plataforma/assinatura/nivel-do-plano'
+import { ConviteDoPlano } from '@/components/planos/ConviteDoPlano'
 import { apitosDoJogador, telaDoJogador } from '@/modules/entrega/estatisticas/jogador'
 import type {
   ApitoDoJogador,
@@ -447,7 +448,6 @@ export default async function PaginaJogador({
   searchParams?: Promise<Record<string, string | string[] | undefined>>
 }) {
   const contexto = contextoEstatisticas((await searchParams) ?? {})
-  await exigirAcessoEstatisticasSeConfigurado()
   const { id } = await params
   if (!z.uuid().safeParse(id).success) notFound()
   if (!process.env.DATABASE_URL) return <SemBanco />
@@ -463,8 +463,14 @@ export default async function PaginaJogador({
   // sobre linhas que podem atravessar duas.
   const tela = await telaDoJogador(db, id, { temporada, calendario, periodo: contexto.periodo })
   if (tela === null) notFound()
-  const sessao = await sessaoAtual()
-  const experiencia = sessao ? await estadoExperienciaDoUsuario(db, sessao.usuarioId) : null
+
+  // R-A3: a aba inteira passa a exigir login — DEPOIS do "não encontrado",
+  // não antes: um id que não existe responde 404 sem tocar sessão nem cookie
+  // (mesma ordem que `sessaoAtual()` já respeitava aqui). O resumo (hero,
+  // desempenho) continua grátis; a profundidade (apitos, jogo a jogo,
+  // números completos) é MVP — ver a régua da spec §5.
+  const { sessao, acesso } = await exigirNivel('GRATIS', `/estatisticas/jogador/${id}`)
+  const experiencia = await estadoExperienciaDoUsuario(db, sessao.usuarioId)
 
   const { perfil, aoVivo, timeNaListaDoCj } = tela
   /** O caso comum: o time do provedor e o da lista do CJ são o mesmo. */
@@ -483,9 +489,12 @@ export default async function PaginaJogador({
   const identidade = [perfil.posicao, recorte].filter(Boolean).join(' · ')
   const hrefDoJogo = (jogoId: string) =>
     `${rotaDoJogo(jogoId)}?jogador=${id}&${parametrosEstatisticas(contexto)}`
+  // A PROFUNDIDADE — apitos, jogo a jogo e números completos — é MVP; o
+  // resumo acima (quatro números, hero) continua grátis para todo mundo.
+  const profundidade = atende(acesso.nivel, 'MVP')
 
   return (
-    <Moldura aba="stats" largura="dados">
+    <Moldura aba="stats" largura="dados" assistente={atende(acesso.nivel, 'MVP')}>
       {/* Cabeçalho SEM título: o nome do jogador é o <h1> do hero, ao lado do
           rosto, como no artboard. Repeti-lo aqui em 30 px seria o mesmo nome
           duas vezes, e deixava o hero com um rosto de 72 px ao lado de duas
@@ -720,8 +729,17 @@ export default async function PaginaJogador({
       {/* O auxiliar mora em `resumoDosApitos` (moldura): ele tem três casos
           que se contradizem em silêncio, e caso que se contradiz em silêncio
           precisa de teste. */}
-      <Secao titulo="Apitos da estratégia" aux={resumoDosApitos(apitos, truncado)}>
-        {apitos.length === 0 ? (
+      <Secao
+        titulo="Apitos da estratégia"
+        aux={profundidade ? resumoDosApitos(apitos, truncado) : undefined}
+      >
+        {!profundidade ? (
+          <ConviteDoPlano
+            minimo="MVP"
+            recurso="O histórico de apitos"
+            voltar={`/estatisticas/jogador/${id}`}
+          />
+        ) : apitos.length === 0 ? (
           <p style={{ margin: 0, fontSize: 13, color: semantico.textoSecundario }}>
             A Lista Secreta ainda não apitou este jogador.
           </p>
@@ -739,21 +757,42 @@ export default async function PaginaJogador({
       </Secao>
 
       {/* O auxiliar PRECISA dizer o corte: a tabela para no limite do histórico
-          e o hero, duas linhas acima, conta a temporada inteira. */}
-      <Secao titulo="Jogo a jogo" aux={recorte}>
-        <Tabela
-          legenda="Uma linha por partida, da mais recente para a mais antiga"
-          colunas={colunas(ruleset.rodada.fuso, hrefDoJogo)}
-          linhas={tela.historico}
-          chaveDaLinha={(l) => l.jogoId}
-          vazio="Nenhuma partida registrada para este jogador."
-        />
+          e o hero, duas linhas acima, conta a temporada inteira. Some no
+          grátis de propósito — ele descreve um recorte de um conteúdo que
+          não está lá. */}
+      <Secao titulo="Jogo a jogo" aux={profundidade ? recorte : undefined}>
+        {profundidade ? (
+          <Tabela
+            legenda="Uma linha por partida, da mais recente para a mais antiga"
+            colunas={colunas(ruleset.rodada.fuso, hrefDoJogo)}
+            linhas={tela.historico}
+            chaveDaLinha={(l) => l.jogoId}
+            vazio="Nenhuma partida registrada para este jogador."
+          />
+        ) : (
+          <ConviteDoPlano
+            minimo="MVP"
+            recurso="O jogo a jogo"
+            voltar={`/estatisticas/jogador/${id}`}
+          />
+        )}
       </Secao>
 
       {/* Estas médias (FG%, 2P%, LL%, rebotes, roubos, saldo…) nascem da MESMA
           janela cortada — o recorte vale para elas do mesmo jeito. */}
-      <Secao titulo="Números completos" aux={`${recorte} · médias de jogo inteiro`}>
-        <NumerosCompletos n={tela.perfilNumeros} />
+      <Secao
+        titulo="Números completos"
+        aux={profundidade ? `${recorte} · médias de jogo inteiro` : undefined}
+      >
+        {profundidade ? (
+          <NumerosCompletos n={tela.perfilNumeros} />
+        ) : (
+          <ConviteDoPlano
+            minimo="MVP"
+            recurso="Os números completos"
+            voltar={`/estatisticas/jogador/${id}`}
+          />
+        )}
       </Secao>
 
       <UltimaAtualizacao

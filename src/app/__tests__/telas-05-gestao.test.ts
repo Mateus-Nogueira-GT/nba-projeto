@@ -34,9 +34,10 @@ const USUARIO_DEMO = '00000000-0000-4000-8000-000000000001'
 vi.mock('../../modules/plataforma/auth/cookies', () => ({
   sessaoAtual: async () => ({ usuarioId: USUARIO_DEMO, email: 'demo@teste.com' }),
 }))
-vi.mock('../../modules/plataforma/assinatura/direito', () => ({
-  avaliarAcesso: async () => ({ permitido: true }),
-}))
+vi.mock('../../modules/plataforma/assinatura/direito', async () => {
+  const { acessoDeTeste } = await import('../../modules/plataforma/__tests__/acesso-de-teste')
+  return { avaliarAcesso: async () => acessoDeTeste('ALL_STAR') }
+})
 vi.mock('../../modules/dominio/db/cliente', () => ({
   getDb: () => banco.db,
   fecharDb: async () => {},

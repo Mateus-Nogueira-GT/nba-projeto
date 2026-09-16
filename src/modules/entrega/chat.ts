@@ -17,10 +17,11 @@ import { montarContexto } from './chat-contexto'
  * código, o freio que não depende de acertarmos).
  *
  * O contexto é montado pelo SERVIDOR: os fatos de `chat-contexto.ts` (feed
- * materializado do dia quando há direito, metodologia, classificação e
- * rodada) + as últimas mensagens da conversa. O escopo — os dois assuntos
- * permitidos e a recusa do resto — vive em `chat-prompt.ts`. A LLM não
- * consulta banco e não sugere entrada fora da lista.
+ * materializado do dia, metodologia, classificação e rodada — quem chega
+ * aqui já passou pelo portão de nível, MVP+) + as últimas mensagens da
+ * conversa. O escopo — os dois assuntos permitidos e a recusa do resto —
+ * vive em `chat-prompt.ts`. A LLM não consulta banco e não sugere entrada
+ * fora da lista.
  */
 
 // Os freios moram em `chat-limites.ts` porque `chat-contexto.ts` também
@@ -33,7 +34,7 @@ export {
   LIMITE_POR_MINUTO,
   LIMITE_RESPOSTA,
 } from './chat-limites'
-import { configuracaoChat, LIMITE_PERGUNTA, LIMITE_POR_MINUTO, LIMITE_RESPOSTA } from './chat-limites'
+import { LIMITE_PERGUNTA, LIMITE_POR_MINUTO, LIMITE_RESPOSTA } from './chat-limites'
 
 // RECUSA_FORA_DE_ESCOPO mora em `chat-prompt.ts` (motivo no comentário de
 // lá: um script fora deste agente precisa dela sem importar `responder`
@@ -141,14 +142,19 @@ export async function ultimasMensagens(
  * gaveta quer ver tudo o que perguntou hoje, senão o assistente "lembra" de uma
  * conversa que a tela não mostra. O teto é a própria cota: cada pergunta vira
  * duas linhas, então a conversa de um dia nunca passa de duas vezes a cota.
+ *
+ * `cotaDiaria` chega como PARÂMETRO — ela depende do nível de quem pergunta
+ * (spec, decisão 7), e este módulo não sabe quem está perguntando; quem
+ * chama já resolveu isso com `configuracaoChat().cotaDiariaPorNivel`.
  */
 export async function conversaDoDia(
   db: Db,
   usuarioId: string,
   dataReferencia: string,
   fuso: string,
+  cotaDiaria: number,
 ): Promise<{ papel: string; texto: string }[]> {
-  return ultimasMensagens(db, usuarioId, dataReferencia, fuso, configuracaoChat().cotaDiaria * 2)
+  return ultimasMensagens(db, usuarioId, dataReferencia, fuso, cotaDiaria * 2)
 }
 
 export type RespostaChat =
@@ -181,7 +187,14 @@ export async function responder(
     fuso: string
     temporada: string
     agora: Date
-    comDireito: boolean
+    /**
+     * A cota do NÍVEL DO PLANO de quem pergunta (spec, decisão 7 — MVP e All
+     * Star têm tetos diários distintos). Quem chama já passou pelo portão de
+     * nível e já resolveu `configuracaoChat().cotaDiariaPorNivel[acesso.nivel]`;
+     * `responder` não conhece nível de plano, só o número que vale para esta
+     * chamada.
+     */
+    cotaDiaria: number
   },
 ): Promise<RespostaChat> {
   const pergunta = entrada.texto.trim()
@@ -190,7 +203,7 @@ export async function responder(
   // assinante é entrada não confiável, e recusar cedo não gasta nada.
   if (pergunta.length > LIMITE_PERGUNTA) return { ok: false, motivo: 'muito-longa' }
 
-  const { cotaDiaria } = configuracaoChat()
+  const cotaDiaria = entrada.cotaDiaria
   const inicio = Date.now()
   let reservaId: string | null = null
 
@@ -263,12 +276,11 @@ export async function responder(
       dataReferencia: entrada.dataReferencia,
       fuso: entrada.fuso,
       temporada: entrada.temporada,
-      comDireito: entrada.comDireito,
       cotaDiaria,
     })
 
     const r = await porta.gerar('chat', {
-      sistema: sistema(entrada.comDireito),
+      sistema: sistema(),
       usuario: `${contexto.fatos}\n\n${conversa}Pergunta do usuário: ${pergunta}`,
     })
 

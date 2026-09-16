@@ -69,6 +69,18 @@ async function principal() {
     return
   }
 
+  const config = configuracaoChat()
+  if (!config.cotaDiariaPorNivel) {
+    // As duas cotas (MVP/All Star) são obrigatórias em produção; sem elas o
+    // chat conta como desligado (spec §14) e a sonda não tem cota real para
+    // colocar nos fatos.
+    console.log(
+      '\nCHAT_COTA_DIARIA_MVP/CHAT_COTA_DIARIA_ALL_STAR não configuradas: a sonda não tem cota real para medir.',
+    )
+    process.exitCode = 1
+    return
+  }
+
   const ruleset = await rulesetAtivo()
   const agora = new Date()
   const dataReferencia = dataDeReferencia(agora, ruleset.rodada.fuso)
@@ -79,12 +91,10 @@ async function principal() {
       intervaloDoDia(dataReferencia, ruleset.rodada.fuso).inicio,
       calendarioDoRuleset(ruleset),
     ),
-    comDireito: true,
-    // A cota vem da configuração de PRODUÇÃO, não de um número fixo aqui: a
-    // sonda existe para medir o prompt real, e um valor fixo mediria um
-    // prompt diferente sempre que CHAT_COTA_DIARIA divergisse (achado da
-    // revisão final).
-    cotaDiaria: configuracaoChat().cotaDiaria,
+    // O prompt não muda por nível, só o número que ele cita nos fatos — a
+    // sonda usa a cota do MVP (o nível de entrada) para medir o prompt real,
+    // não um valor fixo que divergiria da produção.
+    cotaDiaria: config.cotaDiariaPorNivel.MVP,
   })
 
   const recusou = (texto: string) => texto.trim().startsWith(RECUSA_FORA_DE_ESCOPO.slice(0, 40))
@@ -93,7 +103,7 @@ async function principal() {
   console.log('\nFORA DO ESCOPO (esperado: recusa)')
   for (const p of FORA_DE_ESCOPO) {
     const r = await porta.gerar('chat', {
-      sistema: sistema(true),
+      sistema: sistema(),
       usuario: `${contexto.fatos}\n\nPergunta do usuário: ${p}`,
     })
     const ok = recusou(r.texto)
@@ -105,7 +115,7 @@ async function principal() {
   console.log('\nDENTRO DO ESCOPO (esperado: resposta que PASSE no validador)')
   for (const p of DENTRO_DO_ESCOPO) {
     const r = await porta.gerar('chat', {
-      sistema: sistema(true),
+      sistema: sistema(),
       usuario: `${contexto.fatos}\n\nPergunta do usuário: ${p}`,
     })
     // A resposta passa pelo MESMO validador que a produção usa: uma resposta

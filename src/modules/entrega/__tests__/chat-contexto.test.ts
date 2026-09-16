@@ -19,11 +19,13 @@ const TEMPORADA = temporadaDe(
 )
 
 let banco: Awaited<ReturnType<typeof bancoDeTeste>>
-const opcoes = (comDireito: boolean) => ({
+// Sem `comDireito`: quem chama `montarContexto` já passou pelo portão de
+// nível (a rota exige MVP+ antes — spec, decisão 7), então só existe o caso
+// "com direito" — o ramo que faltava a lista do dia morreu junto com ele.
+const opcoes = () => ({
   dataReferencia: HOJE,
   fuso: FUSO,
   temporada: TEMPORADA,
-  comDireito,
   cotaDiaria: 20,
 })
 
@@ -40,35 +42,26 @@ describe('montarContexto', () => {
     // Se um número do bloco ficasse de fora de `numeros`, o modelo o repetiria
     // e o validador recusaria a resposta CERTA — "indisponível" para o
     // assinante e uma chamada paga jogada fora.
-    for (const comDireito of [true, false]) {
-      const c = await montarContexto(banco.db, opcoes(comDireito))
-      const r = validarTexto(c.fatos, { numeros: c.numeros, limiteCaracteres: 1_000_000 })
-      expect(r.ok, `comDireito=${comDireito}: ${r.ok ? '' : r.motivo}`).toBe(true)
-    }
+    const c = await montarContexto(banco.db, opcoes())
+    const r = validarTexto(c.fatos, { numeros: c.numeros, limiteCaracteres: 1_000_000 })
+    expect(r.ok, r.ok ? '' : r.motivo).toBe(true)
   })
 
-  it('com direito ativo, a lista do dia entra', async () => {
-    const c = await montarContexto(banco.db, opcoes(true))
+  it('a lista do dia entra nos fatos', async () => {
+    const c = await montarContexto(banco.db, opcoes())
     expect(c.fatos).toContain('ENTRADAS DE HOJE')
   })
 
-  it('sem direito ativo, a lista do dia NÃO entra', async () => {
-    const c = await montarContexto(banco.db, opcoes(false))
-    expect(c.fatos).not.toContain('ENTRADAS DE HOJE')
-  })
-
-  it('leva o conhecimento da plataforma, a metodologia e o retrato da temporada nos dois casos', async () => {
-    for (const comDireito of [true, false]) {
-      const c = await montarContexto(banco.db, opcoes(comDireito))
-      expect(c.fatos).toContain('A PLATAFORMA')
-      expect(c.fatos).toContain('METODOLOGIA NIP')
-      expect(c.fatos).toContain('CLASSIFICAÇÃO')
-      expect(c.fatos).toContain('RODADA DE HOJE')
-    }
+  it('leva o conhecimento da plataforma, a metodologia e o retrato da temporada', async () => {
+    const c = await montarContexto(banco.db, opcoes())
+    expect(c.fatos).toContain('A PLATAFORMA')
+    expect(c.fatos).toContain('METODOLOGIA NIP')
+    expect(c.fatos).toContain('CLASSIFICAÇÃO')
+    expect(c.fatos).toContain('RODADA DE HOJE')
   })
 
   it('as seções do retrato trazem o vínculo de time no rótulo — sem isso o agente troca um pelo outro', async () => {
-    const c = await montarContexto(banco.db, opcoes(true))
+    const c = await montarContexto(banco.db, opcoes())
     // A armadilha do CLAUDE.md: o retrato é time REAL, as entradas são curadoria.
     expect(c.fatos).toMatch(/RODADA DE HOJE \([^)]*time real da liga\)/)
     expect(c.fatos).toMatch(/CLASSIFICAÇÃO \([^)]*time real da liga\)/)
@@ -76,13 +69,13 @@ describe('montarContexto', () => {
   })
 
   it('os limites de uso entram nos fatos e nos números — é o que deixa o agente respondê-los', async () => {
-    const c = await montarContexto(banco.db, opcoes(false))
+    const c = await montarContexto(banco.db, opcoes())
     expect(c.fatos).toContain('SEUS LIMITES')
     expect(c.numeros).toContain(20)
   })
 
   it('a classificação traz um time por linha, um por cada time da demo', async () => {
-    const c = await montarContexto(banco.db, opcoes(false))
+    const c = await montarContexto(banco.db, opcoes())
     const linhas = c.fatos.split('\n').filter((l) => l.startsWith('- ') && l.includes('V-'))
     // Medido rodando este teste: a demo (`semearDemo`) cadastra só os times do
     // documento fonte (`ARQUIVO_LISTA` em `ingestao/demo/cadastro.ts`), não os
@@ -93,7 +86,7 @@ describe('montarContexto', () => {
   })
 
   it('cada linha da classificação traz a sequência (spec §4.1) e o aproveitamento — os números que mais se perguntam', async () => {
-    const c = await montarContexto(banco.db, opcoes(false))
+    const c = await montarContexto(banco.db, opcoes())
     const linhas = c.fatos.split('\n').filter((l) => l.startsWith('- ') && l.includes('V-D'))
     expect(linhas.length).toBeGreaterThan(0)
     for (const linha of linhas) {

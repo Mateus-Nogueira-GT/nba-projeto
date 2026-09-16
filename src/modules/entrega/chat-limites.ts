@@ -1,3 +1,5 @@
+import type { NivelPago } from '../plataforma/assinatura/nivel-do-plano'
+
 /**
  * OS FREIOS DO CHAT — à parte de `chat.ts`.
  *
@@ -8,9 +10,15 @@
  * ciclo, que a regra `sem-dependencia-circular` do `boundaries` reprova — daí
  * os freios morarem num módulo à parte, de onde os dois leem. `chat.ts`
  * reexporta os símbolos públicos para quem já importava deles de lá.
+ *
+ * A cota diária NÃO tem padrão (spec §14, decisão 7): grátis não tem
+ * assistente, e MVP/All Star têm cotas DISTINTAS que só o parceiro define.
+ * `configuracaoChat` devolve `cotaDiariaPorNivel: null` — e `habilitado:
+ * false` junto — enquanto qualquer uma das duas variáveis não estiver
+ * definida. Chutar um número aqui gastaria dinheiro do parceiro por conta
+ * própria; degradar para desligado é o que a regra 3 do CLAUDE.md pede.
  */
 
-const COTA_PADRAO = 20
 export const LIMITE_RESPOSTA = 1200
 
 /**
@@ -37,16 +45,26 @@ export const LIMITE_PERGUNTA = 500
  */
 export const LIMITE_POR_MINUTO = 5
 
+function cotaLida(bruta: string | undefined): number | null {
+  const n = Number(bruta)
+  // Só inteiro positivo vale. Zero trancaria todo mundo fora; NaN liberaria
+  // geral — os dois acidentes acontecem por env mal digitado, e aqui viram
+  // "chat desligado" em vez de um número inventado.
+  return Number.isFinite(n) && n > 0 ? Math.floor(n) : null
+}
+
 export function configuracaoChat(ambiente: NodeJS.ProcessEnv = process.env): {
   habilitado: boolean
-  cotaDiaria: number
+  cotaDiariaPorNivel: Record<NivelPago, number> | null
 } {
-  const bruta = Number(ambiente.CHAT_COTA_DIARIA)
+  const mvp = cotaLida(ambiente.CHAT_COTA_DIARIA_MVP)
+  const allStar = cotaLida(ambiente.CHAT_COTA_DIARIA_ALL_STAR)
+  const cotaDiariaPorNivel = mvp !== null && allStar !== null ? { MVP: mvp, ALL_STAR: allStar } : null
   return {
-    // Só a string exata liga: qualquer outro valor mantém desligado.
-    habilitado: ambiente.CHAT_HABILITADO === 'true',
-    // Valor inválido cai no padrão. Virar 0 trancaria todo mundo fora; virar
-    // NaN liberaria geral — os dois acidentes acontecem por env mal digitado.
-    cotaDiaria: Number.isFinite(bruta) && bruta > 0 ? Math.floor(bruta) : COTA_PADRAO,
+    // Só a string exata liga — e só com as DUAS cotas definidas. Cota que
+    // falta é decisão comercial que ainda não chegou (spec §14): degradar
+    // para "desligado" é melhor que quebrar o boot e melhor que chutar.
+    habilitado: ambiente.CHAT_HABILITADO === 'true' && cotaDiariaPorNivel !== null,
+    cotaDiariaPorNivel,
   }
 }

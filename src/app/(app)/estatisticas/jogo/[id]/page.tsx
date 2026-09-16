@@ -8,16 +8,19 @@ import {
   BASE_ESTATISTICAS,
   contextoEstatisticas,
   rotaDoJogador,
+  rotaDoJogo,
   rotaDoTime,
 } from '@/modules/entrega/estatisticas/rotas'
 import { rulesetAtivo } from '@/modules/entrega/ruleset-ativo'
-import { exigirAcessoEstatisticasSeConfigurado } from '@/modules/plataforma/assinatura/guarda'
 import { dataHora, diaCurto } from '@/components/formato'
 import { CabecalhoTela, Moldura } from '@/components/navegacao'
 import { Avatar, LogoTime, NotaPartida, Tabela, UltimaAtualizacao } from '@/design-system/componentes'
 import type { Coluna } from '@/design-system/componentes'
 import { NIVEL_JOGADOR } from '@/design-system/tokens/css'
 import { semantico } from '@/design-system/tokens/semantico'
+import { exigirNivel } from '@/modules/plataforma/assinatura/guarda'
+import { atende } from '@/modules/plataforma/assinatura/nivel-do-plano'
+import { ConviteDoPlano } from '@/components/planos/ConviteDoPlano'
 import '@/design-system/tokens/tokens.css'
 import { Secao, SemBanco, SOBRANCELHA_STATS } from '../../moldura'
 import { AtualizarAoVivo } from '@/components/AtualizarAoVivo'
@@ -238,10 +241,10 @@ export default async function PaginaDoJogo({
   searchParams: Promise<Record<string, string | string[] | undefined>>
 }) {
   if (!process.env.DATABASE_URL) return <SemBanco />
-  await exigirAcessoEstatisticasSeConfigurado()
 
   const { id } = await params
   if (!z.uuid().safeParse(id).success) notFound()
+
   // Preserva a data que a lista de jogos passou na URL (`?data=`), para o
   // "voltar" pousar no MESMO dia navegado, não sempre em hoje — sem
   // validar aqui: `/estatisticas` já sabe cair para hoje diante de
@@ -264,12 +267,20 @@ export default async function PaginaDoJogo({
   const tela = await telaDoJogo(getDb(), id, {})
   if (tela === null) notFound()
 
+  // R-A3: a tela passa a exigir login — DEPOIS do "não encontrado": um id que
+  // não existe responde 404 sem tocar sessão nem cookie. Pontos por quarto,
+  // líderes e desfalques continuam grátis; box score e confrontos anteriores
+  // são MVP (spec §5).
+  const { acesso } = await exigirNivel('GRATIS', rotaDoJogo(id))
+
   const aoVivo = tela.status === 'AO_VIVO'
   const encerrado = tela.status === 'ENCERRADO'
   const temBox = tela.casa.boxScore.length > 0 || tela.visitante.boxScore.length > 0
+  // Box score e confrontos anteriores são MVP; o resto da tela é grátis.
+  const profundidade = atende(acesso.nivel, 'MVP')
 
   return (
-    <Moldura aba="stats" largura="dados">
+    <Moldura aba="stats" largura="dados" assistente={atende(acesso.nivel, 'MVP')}>
       <CabecalhoTela
         sobrancelha={SOBRANCELHA_STATS}
         titulo={`${tela.casa.sigla} × ${tela.visitante.sigla}`}
@@ -309,8 +320,16 @@ export default async function PaginaDoJogo({
         </Secao>
       )}
 
+      {/* Box score é MVP. As DUAS formas — por lado do confronto, e a única
+          quando só um lado sincronizou — colapsam num convite SÓ (nunca dois)
+          quando falta profundidade: a régua fecha o dado, não a variação de
+          onde ele viria. */}
       {(aoVivo || encerrado) &&
-        (temBox ? (
+        (!profundidade ? (
+          <Secao titulo="Box score">
+            <ConviteDoPlano minimo="MVP" recurso="O box score" voltar={rotaDoJogo(id)} />
+          </Secao>
+        ) : temBox ? (
           [tela.casa, tela.visitante].map((lado) => (
             <Secao key={lado.timeId} titulo={`Box score · ${lado.nome}`}>
               <Tabela
@@ -336,9 +355,16 @@ export default async function PaginaDoJogo({
 
       {/* Sempre renderiza — h2h vazio é um FATO ("nunca se enfrentaram"), não
           ausência de seção. Spec §6 promete a frase abaixo; escondida, a
-          seção some de vez em vez de anunciar a ausência (achado da revisão). */}
+          seção some de vez em vez de anunciar a ausência (achado da revisão).
+          MVP também, como o box score. */}
       <Secao titulo="Confrontos anteriores">
-        {tela.h2h.length === 0 ? (
+        {!profundidade ? (
+          <ConviteDoPlano
+            minimo="MVP"
+            recurso="Os confrontos anteriores"
+            voltar={rotaDoJogo(id)}
+          />
+        ) : tela.h2h.length === 0 ? (
           <p style={{ fontSize: 13, color: semantico.textoSecundario }}>
             Primeiro confronto da temporada.
           </p>

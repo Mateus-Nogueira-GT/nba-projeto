@@ -1,5 +1,4 @@
 import Link from 'next/link'
-import { redirect } from 'next/navigation'
 
 import { getDb } from '@/modules/dominio/db/cliente'
 import {
@@ -15,7 +14,7 @@ import type {
   GrupoFireLive,
   ItemFireLiveNaTela,
 } from '@/modules/entrega/fire-live/leitura'
-import { confrontoDoItem, estadoDoCiclo } from '@/modules/entrega/lista-por-jogo'
+import { confrontoDoItem, estadoDoCiclo, jogosDoDiaResumo } from '@/modules/entrega/lista-por-jogo'
 import { lerFeed } from '@/modules/entrega/lista-secreta'
 import { rulesetAtivo } from '@/modules/entrega/ruleset-ativo'
 import { rotaDoJogador } from '@/modules/entrega/estatisticas/rotas'
@@ -26,10 +25,12 @@ import {
   UltimaAtualizacao,
 } from '@/design-system/componentes'
 import { semantico } from '@/design-system/tokens/semantico'
-import { sessaoAtual } from '@/modules/plataforma/auth/cookies'
 import { filtrarOcultos, jogadoresOcultosComNome } from '@/modules/plataforma/jogadores-ocultos'
 import { exibir } from './acoes'
-import { avaliarAcesso } from '@/modules/plataforma/assinatura/direito'
+import { ConviteDoPlano } from '@/components/planos/ConviteDoPlano'
+import { JogosDoDia } from '@/components/planos/JogosDoDia'
+import { atende } from '@/modules/plataforma/assinatura/nivel-do-plano'
+import { exigirNivel } from '@/modules/plataforma/assinatura/guarda'
 import '@/design-system/tokens/tokens.css'
 import { decorridoCurto, horaCurta } from '@/components/formato'
 import { AtualizarAoVivo } from '@/components/AtualizarAoVivo'
@@ -257,16 +258,34 @@ export default async function PaginaFireLive({
     )
   }
 
-  const sessao = await sessaoAtual()
-  if (!sessao) redirect('/entrar?destino=/fire-live')
-  const acesso = await avaliarAcesso(getDb(), sessao.usuarioId)
-  if (!acesso.permitido) redirect('/assinar')
+  const { sessao, acesso } = await exigirNivel('GRATIS', '/fire-live')
 
   const ruleset = await rulesetAtivo()
   const { fuso } = ruleset.rodada
   const quartoFireLive = ruleset.fire_live.quarto
   const agora = new Date()
   const hoje = dataDeReferencia(agora, fuso)
+
+  // O GRÁTIS PARA AQUI, antes do snapshot do Fire Live. Vê os jogos — ao
+  // vivo, com placar e quarto, se houver — e o convite. O apito do modo fire
+  // é MVP (spec, decisão 6). O grátis não lê `lerFeedFireLive`: não é
+  // esconder o apito na tela, é não tocar o feed pago.
+  if (!atende(acesso.nivel, 'MVP')) {
+    const jogos = await jogosDoDiaResumo(getDb(), hoje, fuso)
+    return (
+      <Moldura aba="fire-live" assistente={atende(acesso.nivel, 'MVP')}>
+        <CabecalhoTela
+          sobrancelha="FIRE LIVE"
+          titulo="ACONTECENDO"
+          contexto="aoVivo"
+          selo={<SeloContexto contexto="aoVivo" />}
+        />
+        <JogosDoDia jogos={jogos} fuso={fuso} />
+        <ConviteDoPlano minimo="MVP" recurso="O Fire Live" voltar="/fire-live" />
+      </Moldura>
+    )
+  }
+
   // A tela lê o snapshot MATERIALIZADO por jogo — nunca executa o motor. A
   // Lista de hoje entra como terceira leitura: é dela que sai a contagem de
   // alvos esperando o 1º quarto de cada jogo agendado.
@@ -319,7 +338,7 @@ export default async function PaginaFireLive({
   const primeiraEspera = visiveis.find((g) => g.estado === 'AGUARDANDO')?.jogoId ?? null
 
   return (
-    <Moldura aba="fire-live" largura="dados">
+    <Moldura aba="fire-live" largura="dados" assistente={atende(acesso.nivel, 'MVP')}>
       <CabecalhoTela
         sobrancelha="FIRE LIVE"
         titulo="ACONTECENDO"

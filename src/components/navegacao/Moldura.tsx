@@ -48,11 +48,20 @@ export const GRADE_DE_CARDS_CSS = `grid-template-columns:${GRADE_DE_CARDS}`
 export function Moldura({
   aba,
   largura = 'leitura',
+  assistente = false,
   children,
 }: {
   /** `null` nas telas que não são abas (detalhe, teoria): sem barra. */
   aba: Aba | null
   largura?: LarguraDaMoldura
+  /**
+   * O nível da sessão dá direito ao assistente (MVP ou mais — spec, decisão
+   * 7). A PÁGINA sabe (ela já tem `acesso` de `exigirNivel`); a Moldura não
+   * consulta banco nem sessão, só recebe a resposta. Padrão `false`: uma
+   * tela que esqueceu de passar a prop erra para o lado de ESCONDER o botão,
+   * nunca de mostrá-lo a quem não tem direito.
+   */
+  assistente?: boolean
   children?: ReactNode
 }) {
   return (
@@ -70,10 +79,13 @@ export function Moldura({
         <div style={{ maxWidth: LARGURA_DA_MOLDURA[largura], margin: '0 auto' }}>{children}</div>
       </main>
       {aba !== null && <BarraInferior atual={aba} />}
-      {/* A flag decide se o assistente EXISTE na tela. Sem esta condição, o
-          trabalho entregue com CHAT_HABILITADO desligada põe em produção um
-          botão que só sabe dizer "fora do ar" — pior que não ter botão. */}
-      {aba !== null && configuracaoChat().habilitado && <BotaoChat />}
+      {/* Duas condições, duas perguntas diferentes. A flag decide se o
+          assistente EXISTE em produção (sem ela, CHAT_HABILITADO desligada
+          publicaria um botão que só sabe dizer "fora do ar"). `assistente`
+          decide se ESTE nível tem direito (grátis não tem — spec, decisão
+          7): sem ela, o botão apareceria para quem a API vai barrar com
+          403 na primeira pergunta. */}
+      {aba !== null && assistente && configuracaoChat().habilitado && <BotaoChat />}
     </>
   )
 }

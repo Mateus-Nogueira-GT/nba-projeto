@@ -4,6 +4,8 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 
 import { gravarConferencia } from './conferencia'
 import { bancoDeTeste } from '../../modules/dominio/__tests__/ajuda-banco'
+import { acessoDeTeste } from '../../modules/plataforma/__tests__/acesso-de-teste'
+import type { AcessoComNivel } from '../../modules/plataforma/assinatura/direito'
 
 /**
  * PERFIL · IDENTIDADE (spec 12/09, §4.3, Task 4).
@@ -36,10 +38,7 @@ vi.mock('../../modules/plataforma/auth/cookies', () => ({
 // Mesmo arranjo de `dispositivoAtualNoTeste`: o direito de acesso é mutável
 // para o teste do plano vencido (Task 6) trocá-lo antes de renderizar. O
 // padrão é o de sempre — acesso vigente, sem data de fim.
-let acessoNoTeste: { permitido: boolean; validoAte?: Date | null } = {
-  permitido: true,
-  validoAte: null,
-}
+let acessoNoTeste: AcessoComNivel = acessoDeTeste('MVP')
 vi.mock('../../modules/plataforma/assinatura/direito', () => ({
   avaliarAcesso: async () => acessoNoTeste,
 }))
@@ -191,6 +190,15 @@ describe('perfil — quatro blocos, assinatura e o desktop em duas colunas (spec
     return html.slice(inicio, fim)
   }
 
+  /** O bloco de alertas recortado do HTML: do título dele até o título do bloco seguinte. */
+  function blocoDeAlertas(html: string): string {
+    const inicio = html.indexOf('>ALERTAS<')
+    const fim = html.indexOf('>DISPOSITIVOS<')
+    expect(inicio).toBeGreaterThanOrEqual(0)
+    expect(fim).toBeGreaterThan(inicio)
+    return html.slice(inicio, fim)
+  }
+
   it('sem plano não parece erro: é uma chamada com o botão de assinar, não quatro traços', async () => {
     const { default: Pagina } = await import('../(app)/conta/page')
     const html = renderToStaticMarkup(await Pagina({ searchParams: Promise.resolve({}) }))
@@ -217,11 +225,55 @@ describe('perfil — quatro blocos, assinatura e o desktop em duas colunas (spec
     expect(html).toContain('class="grade-conta"')
   })
 
+  // Achado da revisão final (16/09): o grátis via "Ativar alertas", o
+  // navegador pedia a permissão de notificação — que só se pede UMA VEZ por
+  // origem — e só depois a API respondia 403. `AtivarAlertas` é componente
+  // de cliente que nasce em `estado: 'carregando'` e não renderiza nada no
+  // servidor (o efeito que o tira desse estado nunca roda em SSR); por isso
+  // a prova de que o botão sumiu não está no texto dele — nunca apareceria
+  // de qualquer forma —, e sim na ausência do painel de preferências que o
+  // acompanha (`PainelExperiencia`, que renderiza de verdade no servidor) e
+  // na presença do convite no lugar dos dois.
+  it('GRATIS vê o convite no lugar do botão — mas NÃO perde as preferências', async () => {
+    // O botão é o que importa esconder: ativar alertas faz o NAVEGADOR pedir a
+    // permissão de notificação, uma vez só por origem, e o grátis receberia 403
+    // da API logo depois — queimando uma permissão que ele não poderá conceder
+    // quando assinar.
+    //
+    // As preferências FICAM nos dois níveis: jogadores acompanhados e
+    // intensidade do ao vivo são dado DELE. Tirá-las contrariaria a regra que a
+    // gestão segue (spec, decisão 8) — quem deixa de pagar não perde o que é seu.
+    acessoNoTeste = acessoDeTeste('GRATIS')
+    try {
+      const { default: Pagina } = await import('../(app)/conta/page')
+      const bloco = blocoDeAlertas(
+        renderToStaticMarkup(await Pagina({ searchParams: Promise.resolve({}) })),
+      )
+      expect(bloco).toContain('Os alertas de apito')
+      expect(bloco).toContain('começa no')
+      expect(bloco).toMatch(/href="\/assinar\?nivel=MVP&(amp;)?voltar=%2Fconta"/)
+      // O que é dele continua lá.
+      expect(bloco).toContain('Movimento no Ao Vivo')
+      expect(bloco).toContain('Jogadores acompanhados')
+    } finally {
+      acessoNoTeste = acessoDeTeste('MVP')
+    }
+
+    const { default: Pagina } = await import('../(app)/conta/page')
+    const bloco = blocoDeAlertas(
+      renderToStaticMarkup(await Pagina({ searchParams: Promise.resolve({}) })),
+    )
+    expect(bloco).toContain('Movimento no Ao Vivo')
+    expect(bloco).not.toContain('começa no')
+  })
+
   it('com plano vigente, a contagem regressiva para a próxima cobrança está escrita em dias', async () => {
     const { assinaturas } = await import('../../modules/dominio/db/schema')
     await banco.db.insert(assinaturas).values({
       usuarioId: USUARIO_DEMO,
       plano: 'MENSAL',
+      nivelDoPlano: 'MVP',
+      modalidade: 'MENSAL',
       status: 'ATIVA',
       proximaCobranca: new Date(AGORA.getTime() + 5 * 86_400_000),
       atualizadoEm: AGORA,
@@ -242,11 +294,13 @@ describe('perfil — quatro blocos, assinatura e o desktop em duas colunas (spec
     await banco.db.insert(assinaturas).values({
       usuarioId: USUARIO_DEMO,
       plano: 'MENSAL',
+      nivelDoPlano: 'MVP',
+      modalidade: 'MENSAL',
       status: 'CANCELADA',
       proximaCobranca: null,
       atualizadoEm: AGORA,
     })
-    acessoNoTeste = { permitido: false }
+    acessoNoTeste = acessoDeTeste('GRATIS')
     try {
       const { default: Pagina } = await import('../(app)/conta/page')
       const html = renderToStaticMarkup(await Pagina({ searchParams: Promise.resolve({}) }))
@@ -262,7 +316,7 @@ describe('perfil — quatro blocos, assinatura e o desktop em duas colunas (spec
         '<span aria-hidden="true">—</span>MENSAL',
       )
     } finally {
-      acessoNoTeste = { permitido: true, validoAte: null }
+      acessoNoTeste = acessoDeTeste('MVP')
       await banco.db.delete(assinaturas).where(eq(assinaturas.usuarioId, USUARIO_DEMO))
     }
   })
@@ -277,6 +331,8 @@ describe('perfil — quatro blocos, assinatura e o desktop em duas colunas (spec
       usuarioId: USUARIO_DEMO,
       mercadopagoId: 'mp-contrato-sem-nome-de-plano',
       plano: null,
+      nivelDoPlano: 'MVP',
+      modalidade: 'MENSAL',
       status: 'ATIVA',
       atualizadoEm: AGORA,
     })
@@ -307,11 +363,13 @@ describe('perfil — quatro blocos, assinatura e o desktop em duas colunas (spec
     await banco.db.insert(assinaturas).values({
       usuarioId: USUARIO_DEMO,
       plano: null,
+      nivelDoPlano: 'MVP',
+      modalidade: 'MENSAL',
       status: 'CANCELADA',
       canceladaEm: AGORA,
       atualizadoEm: AGORA,
     })
-    acessoNoTeste = { permitido: false }
+    acessoNoTeste = acessoDeTeste('GRATIS')
     try {
       const { default: Pagina } = await import('../(app)/conta/page')
       const html = renderToStaticMarkup(await Pagina({ searchParams: Promise.resolve({}) }))
@@ -325,7 +383,7 @@ describe('perfil — quatro blocos, assinatura e o desktop em duas colunas (spec
       expect(bloco.toLowerCase()).toContain('acesso inativo')
       expect(bloco).not.toContain('Sem plano ativo')
     } finally {
-      acessoNoTeste = { permitido: true, validoAte: null }
+      acessoNoTeste = acessoDeTeste('MVP')
       await banco.db.delete(assinaturas).where(eq(assinaturas.usuarioId, USUARIO_DEMO))
     }
   })

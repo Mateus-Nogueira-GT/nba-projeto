@@ -47,13 +47,14 @@ import {
 import { CabecalhoJogo, CardEntrada, SeloContexto } from '@/design-system/componentes'
 import { semantico } from '@/design-system/tokens/semantico'
 import { AtivarAlertas, PainelPwa } from '@/components/pwa'
-import { sessaoAtual } from '@/modules/plataforma/auth/cookies'
-import { avaliarAcesso } from '@/modules/plataforma/assinatura/direito'
+import { ConviteDoPlano } from '@/components/planos/ConviteDoPlano'
+import { JogosDoDia } from '@/components/planos/JogosDoDia'
+import { atende } from '@/modules/plataforma/assinatura/nivel-do-plano'
+import { exigirNivel } from '@/modules/plataforma/assinatura/guarda'
 import { politicaHomologacaoDoAmbiente } from '@/modules/entrega/push/fanout'
 import { lerConfiguracaoPush } from '@/modules/entrega/push/configuracao'
 import { LENTES, preferenciasDoUsuario, type Lente } from '@/modules/plataforma/preferencias'
 import { definirLente, definirOrdem } from './preferencias/acoes'
-import { redirect } from 'next/navigation'
 import { estadoExperienciaDoUsuario } from '@/modules/plataforma/experiencia/servico'
 import { BotaoAcompanharJogador } from '@/components/preferencias/BotaoAcompanharJogador'
 import '@/design-system/tokens/tokens.css'
@@ -266,10 +267,7 @@ export default async function PaginaListaSecreta({
     )
   }
 
-  const sessao = await sessaoAtual()
-  if (!sessao) redirect('/entrar?destino=/')
-  const acesso = await avaliarAcesso(getDb(), sessao.usuarioId)
-  if (!acesso.permitido) redirect('/assinar')
+  const { sessao, acesso } = await exigirNivel('GRATIS', '/')
 
   const configuracaoPush = lerConfiguracaoPush()
   const pushDisponivel = Boolean(
@@ -298,6 +296,19 @@ export default async function PaginaListaSecreta({
   const ordem = estado.ordem ?? preferencias.ordemLista
   const lente = estado.lente ?? preferencias.lente
 
+  // O GRÁTIS PARA AQUI — antes de qualquer leitura do snapshot pago. Vê a
+  // rodada (siglas, horário, status) e o convite; o sinal é 100% MVP (spec,
+  // decisão 5). Nada do feed entra nesta renderização.
+  if (!atende(acesso.nivel, 'MVP')) {
+    return (
+      <Moldura aba="lista" assistente={atende(acesso.nivel, 'MVP')}>
+        <CabecalhoTela sobrancelha="LISTA SECRETA" titulo="LISTA DO DIA" />
+        <JogosDoDia jogos={jogosDoDia} fuso={fuso} />
+        <ConviteDoPlano minimo="MVP" recurso="A Lista Secreta" voltar="/" />
+      </Moldura>
+    )
+  }
+
   // A tela lê o snapshot MATERIALIZADO. Nunca executa o motor: a avaliação
   // acontece uma vez por evento, não uma vez por usuário. E lê DEPOIS do
   // paywall, sempre — `paywall.test.ts` vigia esta ordem no próprio fonte.
@@ -316,7 +327,7 @@ export default async function PaginaListaSecreta({
               ruleset.publicacao.lista_secreta.antecedencia_minutos * 60_000,
           )
     return (
-      <Moldura aba="lista" largura="dados">
+      <Moldura aba="lista" largura="dados" assistente={atende(acesso.nivel, 'MVP')}>
         <CabecalhoTela
           sobrancelha="LISTA SECRETA"
           titulo="LISTA DO DIA"
@@ -412,7 +423,7 @@ export default async function PaginaListaSecreta({
   const atributosDoDia = ATRIBUTOS.filter((a) => doDia.some((i) => i.atributo === a))
 
   return (
-    <Moldura aba="lista" largura="dados">
+    <Moldura aba="lista" largura="dados" assistente={atende(acesso.nivel, 'MVP')}>
       <CabecalhoTela
         sobrancelha="LISTA SECRETA"
         titulo="LISTA DO DIA"

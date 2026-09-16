@@ -472,7 +472,7 @@ Runbooks correspondentes em `docs/runbooks/`.
 - [ ] Neon via Marketplace, conectado ao projeto → `DATABASE_URL` (endpoint **pooled**) nas env vars
 - [ ] `vercel env pull .env.local` → arquivo existe e nunca entra no git
 - [ ] `npm run db:migrate` → 12 migrations aplicadas; conferir tabelas no `db:studio`
-- [ ] Cadastrar em Preview: `CRON_SECRET` (openssl rand -hex 32) · trio VAPID (`npx web-push generate-vapid-keys`) · e as travas exatamente assim: `PUSH_ENABLED=false`, `NBA_INGESTAO_HABILITADA=false`, `MERCADOPAGO_CHECKOUT_ENABLED=false`, `CADASTRO_PUBLICO_HABILITADO=false`, `MERCADOPAGO_SANDBOX=true`, `ESTATISTICAS_EXIGEM_DIREITO=false`
+- [ ] Cadastrar em Preview: `CRON_SECRET` (openssl rand -hex 32) · trio VAPID (`npx web-push generate-vapid-keys`) · e as travas exatamente assim: `PUSH_ENABLED=false`, `NBA_INGESTAO_HABILITADA=false`, `MERCADOPAGO_CHECKOUT_ENABLED=false`, `CADASTRO_PUBLICO_HABILITADO=true` (decisão do parceiro em 16/09: cadastro público aberto por padrão, sem verificação de e-mail nem recuperação de senha por e-mail — a flag em `false` continua servindo para fechar a porta numa emergência), `MERCADOPAGO_SANDBOX=true`
 
 ### T17: Deploy Preview + smoke fail-closed
 

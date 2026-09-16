@@ -5,6 +5,8 @@ import { z } from 'zod'
 
 import { getDb } from '@/modules/dominio/db/cliente'
 import { sessaoAtual } from '@/modules/plataforma/auth/cookies'
+import { avaliarAcesso } from '@/modules/plataforma/assinatura/direito'
+import { atende } from '@/modules/plataforma/assinatura/nivel-do-plano'
 import { registrarEntradaRealizada } from '@/modules/entrega/gestao-realizadas'
 
 // O que o usuário DIGITOU, não o que a NIP sugeriu: unidades e odd chegam por
@@ -23,6 +25,17 @@ const schema = z.object({
 export async function registrarEntrada(formulario: FormData): Promise<void> {
   const sessao = await sessaoAtual()
   if (!sessao) redirect('/entrar?destino=/gestao')
+
+  // Portão de ESCRITA, no servidor: a tela esconde o formulário do grátis,
+  // mas isso não impede um POST direto neste endpoint — quem confere nível
+  // aqui é a ação, não a marcação que ela nunca vê. Registrar entrada
+  // começa no MVP (spec §5); o `nivel === null` cobre bloqueio administrativo,
+  // que `sessaoAtual` sozinho não enxerga.
+  const acesso = await avaliarAcesso(getDb(), sessao.usuarioId)
+  if (acesso.nivel === null || !atende(acesso.nivel, 'MVP')) {
+    redirect('/assinar?nivel=MVP&voltar=%2Fgestao')
+  }
+
   const dados = schema.safeParse(Object.fromEntries(formulario))
   // Código, não a frase por extenso — a tela (gestao/page.tsx) traduz pelo
   // dicionário; texto cru na URL não vira alerta na própria NIP (achado da

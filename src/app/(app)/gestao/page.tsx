@@ -1,5 +1,4 @@
 import Link from 'next/link'
-import { redirect } from 'next/navigation'
 
 import { horaCurta } from '@/components/formato'
 import { CabecalhoTela, Moldura } from '@/components/navegacao'
@@ -13,8 +12,9 @@ import type { EntradaRealizada } from '@/modules/entrega/gestao-realizadas'
 import { BANCA_PADRAO, planoDoDia } from '@/modules/entrega/gestao'
 import type { EntradaDoPlano } from '@/modules/entrega/gestao'
 import { rulesetAtivo } from '@/modules/entrega/ruleset-ativo'
-import { avaliarAcesso } from '@/modules/plataforma/assinatura/direito'
-import { sessaoAtual } from '@/modules/plataforma/auth/cookies'
+import { exigirNivel } from '@/modules/plataforma/assinatura/guarda'
+import { atende } from '@/modules/plataforma/assinatura/nivel-do-plano'
+import { ConviteDoPlano } from '@/components/planos/ConviteDoPlano'
 import type { Atributo } from '@/modules/motor/tipos'
 import { registrarEntrada } from './acoes'
 import '@/design-system/tokens/tokens.css'
@@ -246,10 +246,11 @@ export default async function PaginaGestao({
     )
   }
 
-  const sessao = await sessaoAtual()
-  if (!sessao) redirect('/entrar?destino=/gestao')
-  const acesso = await avaliarAcesso(getDb(), sessao.usuarioId)
-  if (!acesso.permitido) redirect('/assinar')
+  // GRATIS entra: a gestão vira histórico para ele (decisão 8 — quem
+  // cancelou não perde o que já registrou). `registra` é quem decide, mais
+  // abaixo, entre o formulário "Registrei" e o convite — registrar é MVP.
+  const { sessao, acesso } = await exigirNivel('GRATIS', '/gestao')
+  const registra = atende(acesso.nivel, 'MVP')
 
   const params = await searchParams
   const banca = bancaDe(params.banca)
@@ -278,7 +279,7 @@ export default async function PaginaGestao({
   // dele, então só barra aqui quem está mesmo tentando ver Sugeridas.
   if (!plano.temModelo && ver === 'sugeridas') {
     return (
-      <Moldura aba="gestao" largura="dados">
+      <Moldura aba="gestao" largura="dados" assistente={atende(acesso.nivel, 'MVP')}>
         <CabecalhoTela
           sobrancelha={SOBRANCELHA_GESTAO}
           titulo="PLANO DO DIA"
@@ -311,7 +312,7 @@ export default async function PaginaGestao({
     ver === 'realizadas' ? await entradasRealizadasDoDia(getDb(), sessao.usuarioId, hoje) : []
 
   return (
-    <Moldura aba="gestao" largura="dados">
+    <Moldura aba="gestao" largura="dados" assistente={atende(acesso.nivel, 'MVP')}>
       <CabecalhoTela
         sobrancelha={SOBRANCELHA_GESTAO}
         titulo="PLANO DO DIA"
@@ -322,7 +323,13 @@ export default async function PaginaGestao({
           {mensagemDeErro}
         </p>
       )}
-      {ver === 'sugeridas' && (
+      {/* Registrar entrada é MVP (spec §5): o grátis vê o convite aqui, nunca
+          o formulário — mas o portão de verdade é a AÇÃO (`gestao/acoes.ts`),
+          que recusa mesmo quem chegar sem passar por esta tela. */}
+      {ver === 'sugeridas' && !registra && (
+        <ConviteDoPlano minimo="MVP" recurso="Registrar entradas" voltar="/gestao" />
+      )}
+      {ver === 'sugeridas' && registra && (
         <>
           <p style={{ margin: '0 0 14px', fontSize: 13, color: semantico.textoSecundario }}>
             Quanto entrar em cada apito de hoje, proporcional ao nível do sinal.

@@ -1,6 +1,5 @@
 import { desc, eq, inArray } from 'drizzle-orm'
 import Link from 'next/link'
-import { redirect } from 'next/navigation'
 
 import { CabecalhoTela, Moldura } from '@/components/navegacao'
 import { rulesetAtivo } from '@/modules/entrega/ruleset-ativo'
@@ -9,8 +8,8 @@ import { semantico } from '@/design-system/tokens/semantico'
 import { getDb } from '@/modules/dominio/db/cliente'
 import { assinaturas, times, usuarios } from '@/modules/dominio/db/schema'
 import { dispositivosDoUsuario } from '@/modules/plataforma/admin/usuarios'
-import { avaliarAcesso } from '@/modules/plataforma/assinatura/direito'
-import { sessaoAtual } from '@/modules/plataforma/auth/cookies'
+import { exigirNivel } from '@/modules/plataforma/assinatura/guarda'
+import { atende, ROTULO_DO_NIVEL } from '@/modules/plataforma/assinatura/nivel-do-plano'
 import { MENSAGEM_REGRA_SENHA } from '@/modules/plataforma/auth/senha'
 import { sair } from '../entrar/acoes'
 import { BlocoAlertas, BlocoAssinatura, BlocoConta, BlocoDispositivos } from './blocos'
@@ -60,8 +59,7 @@ export default async function PaginaConta({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>
 }) {
-  const sessao = await sessaoAtual()
-  if (!sessao) redirect('/entrar?destino=/conta')
+  const { sessao, acesso } = await exigirNivel('GRATIS', '/conta')
   const { fuso } = (await rulesetAtivo()).rodada
   const db = getDb()
   const agora = new Date()
@@ -69,8 +67,7 @@ export default async function PaginaConta({
   // MESMA linha e condição de vida que uma consulta separada repetiria — é
   // sempre o dispositivo por trás do cookie desta requisição.
   const esteAparelho = sessao.dispositivoId
-  const [acesso, dispositivos, experiencia, linhas, usuarioLinhas, parametros] = await Promise.all([
-    avaliarAcesso(db, sessao.usuarioId),
+  const [dispositivos, experiencia, linhas, usuarioLinhas, parametros] = await Promise.all([
     dispositivosDoUsuario(db, sessao.usuarioId),
     estadoExperienciaDoUsuario(db, sessao.usuarioId),
     db
@@ -119,7 +116,7 @@ export default async function PaginaConta({
   )
 
   return (
-    <Moldura aba="conta" largura="dados">
+    <Moldura aba="conta" largura="dados" assistente={atende(acesso.nivel, 'MVP')}>
       <CabecalhoTela sobrancelha="SUA CONTA" titulo="PERFIL" />
       <section style={{ display: 'flex', gap: 16, alignItems: 'center', marginBottom: 20 }}>
         <AvatarUsuario
@@ -146,14 +143,17 @@ export default async function PaginaConta({
             {/* Duas perguntas diferentes, duas fontes diferentes. O RÓTULO diz
                 qual é o contrato — `plano` é anulável, então sem nome sobra o
                 status, a mesma palavra que o bloco de Assinatura escreve logo
-                abaixo; "SEM PLANO" é só de quem não tem contrato nenhum. O
-                ÍCONE diz se o acesso vale AGORA: "✓" em cima de "CANCELADA"
-                (ou de "SEM PLANO") seria um confirmado sobre o que não vale —
-                é a contradição que a Task 4 já tinha consertado uma vez.
-                Puramente decorativo (`aria-hidden` no Selo). */}
+                abaixo; e sem contrato nenhum sobra o NÍVEL, porque quem não
+                assina está no Grátis, não num vazio. O ÍCONE diz se há acesso
+                PAGO valendo agora: "✓" em cima de "CANCELADA" (ou do Grátis)
+                seria um confirmado sobre o que não vale — é a contradição que
+                a Task 4 já tinha consertado uma vez. Puramente decorativo
+                (`aria-hidden` no Selo). */}
             <Selo
-              icone={acesso.permitido ? '✓' : '—'}
-              rotulo={assinatura ? (assinatura.plano ?? assinatura.status) : 'SEM PLANO'}
+              icone={acesso.nivel !== 'GRATIS' ? '✓' : '—'}
+              rotulo={
+                assinatura ? (assinatura.plano ?? assinatura.status) : ROTULO_DO_NIVEL[acesso.nivel]
+              }
             />
           </p>
         </div>
@@ -183,6 +183,7 @@ export default async function PaginaConta({
           fuso={fuso}
         />
         <BlocoAlertas
+          recebeAlertas={atende(acesso.nivel, 'MVP')}
           experiencia={experiencia}
           jogadores={idsJogadores.map((id) => ({
             id,

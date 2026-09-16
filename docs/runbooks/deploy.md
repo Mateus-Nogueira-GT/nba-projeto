@@ -70,7 +70,13 @@ migração que apaga coluna/tabela:
 | --- | --- | --- |
 | `OPENROUTER_API_KEY` | ausente | Sem ela, todo o subsistema usa o adapter fake e o app funciona normalmente |
 | `CHAT_HABILITADO` | `false` | Só a string `true` liga o endpoint `/api/chat` |
-| `CHAT_COTA_DIARIA` | `20` | Perguntas por assinante por dia |
+| `CHAT_COTA_DIARIA_MVP` | ausente | Perguntas por dia para assinante MVP |
+| `CHAT_COTA_DIARIA_ALL_STAR` | ausente | Perguntas por dia para assinante All Star |
+
+Grátis não tem assistente (botão oculto, API 403) — spec, decisão 7. As duas
+cotas são **obrigatórias**, sem padrão: falta uma delas (ou `CHAT_HABILITADO`
+não é a string exata `true`) e o chat inteiro conta como desligado — botão
+oculto, API 503 — em vez de chutar um número. Ver §14 da spec de planos.
 
 **Antes de `CHAT_HABILITADO=true` em produção:** configurar o teto de gasto da
 chave no painel do OpenRouter. É o freio que não depende do nosso código.

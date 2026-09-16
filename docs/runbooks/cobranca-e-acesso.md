@@ -1,15 +1,21 @@
 # Cobrança e controle de acesso
 
 Este runbook opera a implementação da Spec 04. Ele não autoriza o rollout
-comercial: preço, cadastro, estatísticas, carência e migração da base precisam
-ser aprovados antes de ativar produção.
+comercial: preço, cadastro, carência e migração da base precisam ser
+aprovados antes de ativar produção. O acesso às estatísticas já é decisão
+tomada (spec de planos, §5): exige sessão como qualquer outra aba, sem flag
+própria.
 
-Dois gates permanecem deliberadamente fechados: o cadastro público não possui
-verificação de e-mail e usuários bloqueados administrativamente não conseguem
-abrir `/conta`. Não habilite o cadastro em produção nem dependa do
-autoatendimento de cancelamento para contas bloqueadas até essas políticas
-serem aprovadas e implementadas; nesses casos, o suporte deve confirmar o
+Um gate permanece deliberadamente fechado: usuários bloqueados
+administrativamente não conseguem abrir `/conta`. Não dependa do
+autoatendimento de cancelamento para essas contas até essa política ser
+aprovada e implementada; nesses casos, o suporte deve confirmar o
 cancelamento diretamente no provedor.
+
+O cadastro público está ABERTO por padrão (`CADASTRO_PUBLICO_HABILITADO=true`)
+— decisão do parceiro em 16/09, ciente de que não há verificação de e-mail
+nem recuperação de senha por e-mail (o projeto não tem provedor de e-mail). A
+flag continua existindo para fechar a porta numa emergência.
 
 ## Estado seguro inicial
 
@@ -17,11 +23,13 @@ cancelamento diretamente no provedor.
 MERCADOPAGO_SANDBOX=true
 MERCADOPAGO_CHECKOUT_ENABLED=false
 CADASTRO_PUBLICO_HABILITADO=false
-ESTATISTICAS_EXIGEM_DIREITO=false
 ```
 
 Com esse estado, webhook e reconciliação podem ser homologados sem criar novos
-checkouts. `/` exige sessão e um registro ativo em `direitos_acesso`.
+checkouts. `/` exige sessão e um registro ativo em `direitos_acesso`. O padrão
+do código para `CADASTRO_PUBLICO_HABILITADO` é `true` (plano grátis é conta —
+spec de planos, §7); nesta fase declare `false` explicitamente, não conte com
+o padrão.
 
 ## Contrato V1 implementado
 

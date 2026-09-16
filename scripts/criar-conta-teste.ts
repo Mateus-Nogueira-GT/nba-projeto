@@ -49,10 +49,16 @@ async function principal() {
     referencia: `cortesia:teste:${email}`,
     inicio: agora,
     fim: null,
+    // Cortesia é para mostrar tudo (spec de planos, decisão 11).
+    nivelDoPlano: 'ALL_STAR',
   })
 
   const acesso = await avaliarAcesso(db, id, agora)
-  if (!acesso.permitido) throw new Error(`conta pronta mas acesso negado: ${acesso.motivo}`)
+  if (acesso.nivel === null || acesso.nivel === 'GRATIS') {
+    throw new Error(
+      `conta pronta mas acesso negado: ${acesso.nivel === null ? acesso.motivo : 'GRATIS'}`,
+    )
+  }
 
   console.log(`${existente ? 'Conta já existia' : 'Conta criada'}: ${email} · acesso ativo por cortesia.`)
 }

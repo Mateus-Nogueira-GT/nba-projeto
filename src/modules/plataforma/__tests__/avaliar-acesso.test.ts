@@ -7,14 +7,17 @@ import { avaliarAcesso, concederCortesia } from '../assinatura/direito'
 import { PRODUTO_PAGO } from '../assinatura/configuracao'
 
 /**
- * REDE DE PROTEÇÃO DA CONSOLIDAÇÃO DE CONSULTAS.
+ * O QUE `avaliarAcesso` RESPONDE — e a ordem entre as respostas.
  *
- * `avaliarAcesso` fazia dois SELECTs em sequência (usuário, depois direito) e
- * passou a fazer um só, com LEFT JOIN. Numa cadeia que atravessa continente,
- * cada ida e volta custa ~150ms (ADR-0008) — mas o motivo de existir deste
- * teste é que o comportamento NÃO pode mudar junto: são quatro respostas
- * distintas, e a ordem entre elas é regra de negócio (bloqueio administrativo
- * prevalece sobre direito ativo, Spec 04, princípio 4).
+ * Não é mais um booleano: é o NÍVEL do plano, ou `nivel: null` com um dos dois
+ * motivos que não são nível nenhum (sem sessão, bloqueio administrativo).
+ * Quem não assinou deixou de ser uma recusa e virou GRATIS — um nível, com
+ * telas próprias.
+ *
+ * O que não mudou é o que este teste trava: a ordem é regra de negócio
+ * (bloqueio administrativo prevalece sobre direito vigente, Spec 04, princípio
+ * 4), usuário inexistente continua sendo sem-sessao e não GRATIS, e a consulta
+ * continua sendo uma só, com LEFT JOIN (ADR-0008).
  */
 const AGORA = new Date('2026-08-25T12:00:00.000Z')
 
@@ -30,48 +33,99 @@ async function criarUsuario(email: string): Promise<string> {
   return u!.id
 }
 
-describe('avaliarAcesso — as quatro respostas', () => {
+describe('avaliarAcesso — o nível, não um booleano', () => {
   it('sem id de usuário: sem-sessao, sem tocar o banco', async () => {
-    expect(await avaliarAcesso(banco.db, null, AGORA)).toEqual({
-      permitido: false,
-      motivo: 'sem-sessao',
-    })
+    expect(await avaliarAcesso(banco.db, null, AGORA)).toEqual({ nivel: null, motivo: 'sem-sessao' })
   })
 
-  it('id que não existe: sem-sessao (nunca "sem direito")', async () => {
-    // Um LEFT JOIN sem linha nenhuma tem que virar sem-sessao, não
-    // sem-direito-ativo: são telas diferentes (entrar × assinar).
+  it('id que não existe: sem-sessao (nunca GRATIS)', async () => {
+    // Um LEFT JOIN sem linha nenhuma tem que virar sem-sessao, não GRATIS:
+    // são telas diferentes (entrar × a home do grátis).
     expect(
       await avaliarAcesso(banco.db, '00000000-0000-4000-8000-00000000dead', AGORA),
-    ).toEqual({ permitido: false, motivo: 'sem-sessao' })
+    ).toEqual({ nivel: null, motivo: 'sem-sessao' })
   })
 
-  it('usuário sem direito: sem-direito-ativo', async () => {
-    const id = await criarUsuario('sem-direito@teste.com')
+  it('usuário sem direito: GRATIS — é um nível, não uma recusa', async () => {
+    const id = await criarUsuario('gratis@teste.com')
     expect(await avaliarAcesso(banco.db, id, AGORA)).toEqual({
-      permitido: false,
-      motivo: 'sem-direito-ativo',
+      nivel: 'GRATIS',
+      direitoId: null,
+      validoAte: null,
+      modalidade: null,
     })
   })
 
-  it('usuário com direito vigente: permitido', async () => {
-    const id = await criarUsuario('com-direito@teste.com')
+  it('usuário com direito MVP vigente: MVP, com o id e a validade do direito', async () => {
+    const id = await criarUsuario('mvp@teste.com')
+    const fim = new Date(AGORA.getTime() + 86_400_000)
+    const [direito] = await banco.db
+      .insert(direitosAcesso)
+      .values({
+        usuarioId: id,
+        produto: PRODUTO_PAGO,
+        origem: 'CORTESIA',
+        referenciaOrigem: 'mvp',
+        inicio: new Date(AGORA.getTime() - 1000),
+        fim,
+        nivelDoPlano: 'MVP',
+        modalidade: 'MENSAL',
+      })
+      .returning({ id: direitosAcesso.id })
+    expect(await avaliarAcesso(banco.db, id, AGORA)).toEqual({
+      nivel: 'MVP',
+      direitoId: direito!.id,
+      validoAte: fim,
+      modalidade: 'MENSAL',
+    })
+  })
+
+  it('dois direitos ativos ao mesmo tempo: vale o MAIOR (spec, decisão 3)', async () => {
+    // É o instante do upgrade: o novo já nasceu e o antigo ainda não foi
+    // revogado. O usuário não pode cair de nível no meio.
+    const id = await criarUsuario('upgrade@teste.com')
+    await banco.db.insert(direitosAcesso).values([
+      {
+        usuarioId: id,
+        produto: PRODUTO_PAGO,
+        origem: 'CORTESIA',
+        referenciaOrigem: 'upgrade-mvp',
+        inicio: new Date(AGORA.getTime() - 2000),
+        fim: null,
+        nivelDoPlano: 'MVP',
+        modalidade: 'MENSAL',
+      },
+      {
+        usuarioId: id,
+        produto: PRODUTO_PAGO,
+        origem: 'CORTESIA',
+        referenciaOrigem: 'upgrade-all-star',
+        inicio: new Date(AGORA.getTime() - 1000),
+        fim: null,
+        nivelDoPlano: 'ALL_STAR',
+        modalidade: 'TEMPORADA',
+      },
+    ])
+    const r = await avaliarAcesso(banco.db, id, AGORA)
+    expect(r.nivel).toBe('ALL_STAR')
+    expect(r.nivel !== null && r.modalidade).toBe('TEMPORADA')
+  })
+
+  it('direito vencido não conta: volta a GRATIS', async () => {
+    const id = await criarUsuario('vencido@teste.com')
     await banco.db.insert(direitosAcesso).values({
       usuarioId: id,
       produto: PRODUTO_PAGO,
       origem: 'CORTESIA',
-      referenciaOrigem: 'com-direito',
-      inicio: new Date(AGORA.getTime() - 1000),
-      fim: null,
+      referenciaOrigem: 'vencido',
+      inicio: new Date(AGORA.getTime() - 2000),
+      fim: new Date(AGORA.getTime() - 1000),
+      nivelDoPlano: 'ALL_STAR',
     })
-    const r = await avaliarAcesso(banco.db, id, AGORA)
-    expect(r.permitido).toBe(true)
+    expect((await avaliarAcesso(banco.db, id, AGORA)).nivel).toBe('GRATIS')
   })
 
   it('BLOQUEADO prevalece sobre direito vigente', async () => {
-    // A ordem importa: com o LEFT JOIN as duas informações chegam juntas, e
-    // quem responde primeiro passa a ser escolha do código, não do número de
-    // consultas. Bloqueio administrativo sempre ganha.
     const id = await criarUsuario('bloqueado@teste.com')
     await banco.db.insert(direitosAcesso).values({
       usuarioId: id,
@@ -80,11 +134,11 @@ describe('avaliarAcesso — as quatro respostas', () => {
       referenciaOrigem: 'bloqueado',
       inicio: new Date(AGORA.getTime() - 1000),
       fim: null,
+      nivelDoPlano: 'ALL_STAR',
     })
     await banco.db.update(usuarios).set({ status: 'BLOQUEADO' }).where(eq(usuarios.id, id))
-
     expect(await avaliarAcesso(banco.db, id, AGORA)).toEqual({
-      permitido: false,
+      nivel: null,
       motivo: 'bloqueio-administrativo',
     })
   })
@@ -105,12 +159,14 @@ describe('concederCortesia — reexecutar não duplica', () => {
       referencia,
       inicio: AGORA,
       fim: null,
+      nivelDoPlano: 'ALL_STAR',
     })
     const segundoId = await concederCortesia(banco.db, {
       usuarioId: id,
       referencia,
       inicio: AGORA,
       fim: null,
+      nivelDoPlano: 'ALL_STAR',
     })
 
     expect(segundoId).toBe(primeiroId)

@@ -79,6 +79,9 @@ describe('a página /como-funciona', () => {
   it('exige sessão, mas NÃO exige assinatura (vitrine para quem ainda não assinou)', () => {
     expect(fonte).toContain('sessaoAtual')
     expect(fonte).not.toContain('avaliarAcesso')
+    // O portão mudou de nome nesta task; sem esta linha a guarda acima vira
+    // letra morta e alguém fecha a vitrine sem que nada apite.
+    expect(fonte).not.toContain('exigirNivel')
   })
 
   it('todo número vem do view-model do ruleset', () => {

@@ -26,8 +26,12 @@ export const RECUSA_FORA_DE_ESCOPO =
  * As proibições e o limite saem de `regras-do-texto.ts`, o MESMO módulo da
  * narrativa (ver o comentário de lá: prompt e validador divergentes viram
  * conta no fim do mês). O ESCOPO é o que este agente acrescenta.
+ *
+ * Sem parâmetro de direito: a rota já barra quem não é MVP+ antes de chegar
+ * aqui (spec §14 — "o ramo `comDireito: false` do prompt do chat morre"), e o
+ * ramo que respondia a quem não assinava não tem mais quem o percorra.
  */
-export function sistema(comDireito: boolean): string {
+export function sistema(): string {
   return [
     'Você é o assistente da NIP, falando com um usuário brasileiro.',
     'Você só ajuda com DOIS assuntos: a temporada da NBA e o funcionamento da plataforma NIP.',
@@ -44,8 +48,6 @@ export function sistema(comDireito: boolean): string {
     ...regrasDoTexto(LIMITE_RESPOSTA),
     'Use SOMENTE os fatos fornecidos abaixo. Se a resposta não estiver neles, diga que não sabe e peça para a pessoa falar com quem administra a conta dela.',
     'NÃO SUGIRA APOSTA: nada de palpite, de valor a apostar, de promessa de resultado ou de dizer se uma entrada vai bater.',
-    comDireito
-      ? 'NUNCA sugira uma entrada que não esteja na lista de hoje fornecida abaixo.'
-      : 'Este usuário NÃO tem assinatura ativa: a lista de hoje não foi fornecida. Não cite entradas, jogadores apitados nem linhas do dia; explique o que a lista é e convide a pessoa a assinar pelo Perfil.',
+    'NUNCA sugira uma entrada que não esteja na lista de hoje fornecida abaixo.',
   ].join('\n')
 }

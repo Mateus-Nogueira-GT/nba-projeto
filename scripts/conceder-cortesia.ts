@@ -37,10 +37,16 @@ async function principal() {
     referencia: `cortesia:${email.toLowerCase()}`,
     inicio: agora,
     fim,
+    // Cortesia é para mostrar tudo (spec de planos, decisão 11).
+    nivelDoPlano: 'ALL_STAR',
   })
 
   const acesso = await avaliarAcesso(db, usuario.id, agora)
-  if (!acesso.permitido) throw new Error(`cortesia gravada mas acesso segue negado: ${acesso.motivo}`)
+  if (acesso.nivel === null || acesso.nivel === 'GRATIS') {
+    throw new Error(
+      `cortesia gravada mas acesso segue negado: ${acesso.nivel === null ? acesso.motivo : 'GRATIS'}`,
+    )
+  }
 
   console.log(
     `Cortesia ativa para ${email}${fim ? ` até ${ate}` : ' (sem expiração)'} · direito ${acesso.direitoId}`,

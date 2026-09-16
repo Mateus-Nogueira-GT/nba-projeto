@@ -3,9 +3,10 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vites
 
 import { bancoDeTeste } from '../../modules/dominio/__tests__/ajuda-banco'
 import { entradasRealizadas, jogadores, usuarios } from '../../modules/dominio/db/schema'
+import type { NivelDoPlano } from '../../modules/plataforma/assinatura/nivel-do-plano'
 
 /**
- * A AÇÃO registrarEntrada (Task 10, fix round 1).
+ * A AÇÃO registrarEntrada (Task 10, fix round 1; Task 8 do plano de níveis).
  *
  * Achado da revisão: nada no diff original chamava a ação pelo caminho de
  * verdade — os dois testes de serviço iam direto a `registrarEntradaRealizada`
@@ -13,6 +14,13 @@ import { entradasRealizadas, jogadores, usuarios } from '../../modules/dominio/d
  * o portão de sessão não tinham trava nenhuma: um input sem `min` (o de odd,
  * antes deste fix) só seria pego DEPOIS do redirect, e nada provava que era
  * pego ali.
+ *
+ * Task 8: a tela de gestão passou a exigir só GRATIS (`exigirNivel('GRATIS',
+ * ...)`) — quem esconde o formulário é o nível, mas um POST direto no
+ * endpoint NUNCA passa pela tela. Por isso a AÇÃO também checa nível, e este
+ * arquivo precisa do mesmo mock de acesso mutável que as suítes de tela usam
+ * (`nivelNoTeste`), para provar que GRATIS é recusado aqui — no servidor, não
+ * só escondido no HTML.
  *
  * Mesmo padrão de `conta-acoes.test.ts`: `redirect()` do Next NUNCA retorna —
  * lança um erro cujo `digest` carrega o destino — então o teste usa o
@@ -24,6 +32,7 @@ let banco: Awaited<ReturnType<typeof bancoDeTeste>>
 let usuarioId: string
 let jogadorId: string
 let sessao: { usuarioId: string; email: string; dispositivoId: string | null } | null = null
+let nivelNoTeste: NivelDoPlano = 'MVP'
 
 vi.mock('../../modules/dominio/db/cliente', () => ({
   getDb: () => banco.db,
@@ -32,6 +41,10 @@ vi.mock('../../modules/dominio/db/cliente', () => ({
 vi.mock('../../modules/plataforma/auth/cookies', () => ({
   sessaoAtual: async () => sessao,
 }))
+vi.mock('../../modules/plataforma/assinatura/direito', async () => {
+  const { acessoDeTeste } = await import('../../modules/plataforma/__tests__/acesso-de-teste')
+  return { avaliarAcesso: async () => acessoDeTeste(nivelNoTeste) }
+})
 
 beforeAll(async () => {
   banco = await bancoDeTeste()
@@ -53,6 +66,9 @@ beforeEach(async () => {
     .returning({ id: jogadores.id })
   jogadorId = j!.id
   sessao = { usuarioId, email: 'gestao-acoes@teste.com', dispositivoId: null }
+  // Todo teste PRÉ-EXISTENTE presume acesso suficiente — só o caso novo de
+  // GRATIS muda isto, e só para si mesmo.
+  nivelNoTeste = 'MVP'
 })
 
 function formularioValido(sobre: Record<string, string> = {}): FormData {
@@ -72,6 +88,18 @@ async function linhasGravadas() {
 }
 
 describe('registrarEntrada — a ação por trás do botão "Registrei"', () => {
+  it('GRATIS não registra: a ação redireciona para os planos e não grava nada', async () => {
+    nivelNoTeste = 'GRATIS'
+    const { registrarEntrada } = await import('../(app)/gestao/acoes')
+
+    // FormData VÁLIDO — o mesmo que a tela enviaria — exatamente o caminho de
+    // um POST direto no endpoint, sem passar pelo formulário escondido.
+    await expect(registrarEntrada(formularioValido())).rejects.toMatchObject({
+      digest: expect.stringContaining('/assinar?nivel=MVP'),
+    })
+    expect(await linhasGravadas()).toHaveLength(0)
+  })
+
   it('sem sessão: manda para /entrar e não grava nada', async () => {
     sessao = null
     const { registrarEntrada } = await import('../(app)/gestao/acoes')

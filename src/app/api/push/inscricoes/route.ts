@@ -5,6 +5,7 @@ import { politicaHomologacaoDoAmbiente } from '@/modules/entrega/push/fanout'
 import { lerConfiguracaoPush } from '@/modules/entrega/push/configuracao'
 import { sessaoAtual } from '@/modules/plataforma/auth/cookies'
 import { avaliarAcesso } from '@/modules/plataforma/assinatura/direito'
+import { atende } from '@/modules/plataforma/assinatura/nivel-do-plano'
 import {
   conteudoJson,
   lerJsonLimitado,
@@ -46,7 +47,7 @@ export async function POST(request: Request): Promise<Response> {
     !politica.permitido({
       id: sessao.usuarioId,
       email: sessao.email,
-      direitoAtivo: acesso?.permitido ?? false,
+      direitoAtivo: acesso?.nivel != null && atende(acesso.nivel, 'MVP'),
     })
   ) {
     return Response.json({ erro: 'Push ainda não liberado para esta conta' }, { status: 403 })

@@ -4,8 +4,6 @@ import { z } from 'zod'
 import { getDb } from '@/modules/dominio/db/cliente'
 import { dataDeReferencia } from '@/modules/dominio/rodada'
 import { calendarioDoRuleset, temporadaDe } from '@/modules/dominio/temporada'
-import { exigirAcessoEstatisticasSeConfigurado } from '@/modules/plataforma/assinatura/guarda'
-import { sessaoAtual } from '@/modules/plataforma/auth/cookies'
 import { estadoExperienciaDoUsuario } from '@/modules/plataforma/experiencia/servico'
 import { telaJogosDoDia } from '@/modules/entrega/estatisticas/jogos-do-dia'
 import { hierarquiaDoTime, telaDoTime } from '@/modules/entrega/estatisticas/time'
@@ -25,6 +23,9 @@ import type { Coluna } from '@/design-system/componentes'
 import { componente } from '@/design-system/tokens/componente'
 import { semantico } from '@/design-system/tokens/semantico'
 import { identidadeDoTime } from '@/design-system/times'
+import { exigirNivel } from '@/modules/plataforma/assinatura/guarda'
+import { atende } from '@/modules/plataforma/assinatura/nivel-do-plano'
+import { ConviteDoPlano } from '@/components/planos/ConviteDoPlano'
 import '@/design-system/tokens/tokens.css'
 import { Secao, SemBanco, SOBRANCELHA_STATS } from '../../moldura'
 
@@ -270,7 +271,6 @@ export default async function PaginaTime({
   params: Promise<{ id: string }>
   searchParams: Promise<Record<string, string | string[] | undefined>>
 }) {
-  await exigirAcessoEstatisticasSeConfigurado()
   const { id } = await params
   if (!z.uuid().safeParse(id).success) notFound()
   const { atributo: atributoBruto } = await searchParams
@@ -284,8 +284,15 @@ export default async function PaginaTime({
   const db = getDb()
   const tela = await telaDoTime(db, id, { temporada })
   if (tela === null) notFound()
-  const sessao = await sessaoAtual()
-  const experiencia = sessao ? await estadoExperienciaDoUsuario(db, sessao.usuarioId) : null
+
+  // R-A3: a tela passa a exigir login — DEPOIS do "não encontrado" (mesma
+  // ordem que `sessaoAtual()` já respeitava aqui): um id que não existe
+  // responde 404 sem tocar sessão nem cookie. Campanha, Hierarquia NIP
+  // (decisão 10b — vitrine da curadoria, fica grátis por decisão do parceiro
+  // em 16/09) e Elenco continuam grátis; só o box score por jogo é MVP
+  // (spec §5).
+  const { sessao, acesso } = await exigirNivel('GRATIS', rotaDoTime(id))
+  const experiencia = await estadoExperienciaDoUsuario(db, sessao.usuarioId)
 
   /*
    * QUAL JOGO MARCA O DESFALQUE.
@@ -303,6 +310,9 @@ export default async function PaginaTime({
   const identidade = identidadeDoTime(time.sigla)
   const porExtenso = ATRIBUTOS_DA_HIERARQUIA.find((a) => a.valor === atributo)!.porExtenso
   const temProrrogacao = tela.jogosDoTime.some((j) => (j.nosso?.prorrogacao ?? 0) > 0)
+  // Só o box score por jogo é MVP; Campanha, Hierarquia NIP e Elenco ficam
+  // abertos para todo mundo.
+  const profundidade = atende(acesso.nivel, 'MVP')
 
   return (
     <Moldura aba={null} largura="dados">
@@ -381,14 +391,21 @@ export default async function PaginaTime({
           identidade 04 mandou para o leitor de tela (`Tabela` clipa o
           `caption`, e o título da seção acima já a nomeia). Ela volta ao texto
           visível pelo auxiliar da seção — nenhuma outra parte da tela dizia. */}
-      <Secao titulo="Box score por jogo" aux="da mais recente para a mais antiga">
-        <Tabela
-          legenda="Pontos por quarto, da partida mais recente para a mais antiga"
-          colunas={colunas(temProrrogacao, fuso)}
-          linhas={tela.jogosDoTime}
-          chaveDaLinha={(l) => l.jogoId}
-          vazio="Nenhuma partida registrada para este time."
-        />
+      <Secao
+        titulo="Box score por jogo"
+        aux={profundidade ? 'da mais recente para a mais antiga' : undefined}
+      >
+        {profundidade ? (
+          <Tabela
+            legenda="Pontos por quarto, da partida mais recente para a mais antiga"
+            colunas={colunas(temProrrogacao, fuso)}
+            linhas={tela.jogosDoTime}
+            chaveDaLinha={(l) => l.jogoId}
+            vazio="Nenhuma partida registrada para este time."
+          />
+        ) : (
+          <ConviteDoPlano minimo="MVP" recurso="O box score por jogo" voltar={rotaDoTime(id)} />
+        )}
       </Secao>
 
       <Secao titulo="Elenco" aux="time atual">

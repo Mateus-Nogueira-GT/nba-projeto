@@ -3,6 +3,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vites
 import { eq } from 'drizzle-orm'
 
 import { bancoDeTeste } from '../../dominio/__tests__/ajuda-banco'
+import { acessoDeTeste } from './acesso-de-teste'
 import {
   assinaturas,
   cobrancas,
@@ -34,7 +35,6 @@ const FIM = '2026-09-21T12:00:00.000Z'
 const config: ConfiguracaoProdutoPago = {
   checkoutHabilitado: true,
   cadastroPublicoHabilitado: true,
-  estatisticasExigemDireito: false,
   nomePlano: 'IA da NBA Mensal',
   valorCentavos: 4990,
   frequencia: 1,
@@ -109,11 +109,14 @@ function evento(
 }
 
 describe('configuração comercial fail-closed', () => {
-  it('mantém checkout e cadastro desligados por padrão', () => {
-    const lida = configuracaoProdutoPago({})
+  it('mantém checkout desligado e cadastro público aberto por padrão', () => {
+    const lida = configuracaoProdutoPago({ APP_PUBLIC_URL: 'https://app.example.com' })
     expect(lida.checkoutHabilitado).toBe(false)
-    expect(lida.cadastroPublicoHabilitado).toBe(false)
-    expect(lida.estatisticasExigemDireito).toBe(false)
+    expect(lida.cadastroPublicoHabilitado).toBe(true)
+  })
+
+  it('cadastro aberto por padrão ainda exige APP_PUBLIC_URL (fail-closed)', () => {
+    expect(() => configuracaoProdutoPago({})).toThrow('cadastro habilitado sem APP_PUBLIC_URL')
   })
 
   it('recusa habilitar checkout sem preço, nome e URL', () => {
@@ -151,10 +154,9 @@ describe('cadastro self-service controlado', () => {
     )
     expect(resultado.ok).toBe(true)
     if (!resultado.ok) throw new Error('cadastro deveria ter sido criado')
-    expect(await avaliarAcesso(banco.db, resultado.usuarioId, AGORA)).toEqual({
-      permitido: false,
-      motivo: 'sem-direito-ativo',
-    })
+    expect(await avaliarAcesso(banco.db, resultado.usuarioId, AGORA)).toEqual(
+      acessoDeTeste('GRATIS'),
+    )
   })
 })
 
@@ -277,10 +279,7 @@ describe('direito de acesso e eventos financeiros', () => {
       }),
       AGORA,
     )
-    expect(await avaliarAcesso(banco.db, usuarioId, AGORA)).toEqual({
-      permitido: false,
-      motivo: 'sem-direito-ativo',
-    })
+    expect(await avaliarAcesso(banco.db, usuarioId, AGORA)).toEqual(acessoDeTeste('GRATIS'))
   })
 
   it('pagamento aprovado concede até a próxima cobrança e duplicata não duplica', async () => {
@@ -291,7 +290,7 @@ describe('direito de acesso e eventos financeiros', () => {
 
     expect(primeira).toMatchObject({ duplicado: false, liberou: true })
     expect(repetida).toEqual({ aceito: true, duplicado: true })
-    expect((await avaliarAcesso(banco.db, usuarioId, AGORA)).permitido).toBe(true)
+    expect((await avaliarAcesso(banco.db, usuarioId, AGORA)).nivel).toBe('MVP')
     expect(await banco.db.select().from(direitosAcesso)).toHaveLength(1)
     expect(await banco.db.select().from(cobrancas)).toHaveLength(1)
   })
@@ -323,7 +322,7 @@ describe('direito de acesso e eventos financeiros', () => {
       }),
       new Date(AGORA.getTime() + 1_000),
     )
-    expect((await avaliarAcesso(banco.db, usuarioId, AGORA)).permitido).toBe(true)
+    expect((await avaliarAcesso(banco.db, usuarioId, AGORA)).nivel).toBe('MVP')
 
     await aplicarEventoPagamento(
       banco.db,
@@ -336,10 +335,9 @@ describe('direito de acesso e eventos financeiros', () => {
       }),
       new Date(AGORA.getTime() + 2_000),
     )
-    expect(await avaliarAcesso(banco.db, usuarioId, new Date(AGORA.getTime() + 3_000))).toEqual({
-      permitido: false,
-      motivo: 'sem-direito-ativo',
-    })
+    expect(await avaliarAcesso(banco.db, usuarioId, new Date(AGORA.getTime() + 3_000))).toEqual(
+      acessoDeTeste('GRATIS'),
+    )
   })
 
   it('pagamento nunca desfaz bloqueio administrativo', async () => {
@@ -347,7 +345,7 @@ describe('direito de acesso e eventos financeiros', () => {
     await bloquearUsuario(banco.db, usuarioId, 'fraude', AGORA)
     await aplicarEventoPagamento(banco.db, 'fake', evento(tentativa.referenciaExterna), AGORA)
     expect(await avaliarAcesso(banco.db, usuarioId, AGORA)).toEqual({
-      permitido: false,
+      nivel: null,
       motivo: 'bloqueio-administrativo',
     })
   })
@@ -371,7 +369,7 @@ describe('direito de acesso e eventos financeiros', () => {
     const [cobranca] = await banco.db.select().from(cobrancas)
     expect(assinatura?.status).toBe('ATIVA')
     expect(cobranca?.status).toBe('approved')
-    expect((await avaliarAcesso(banco.db, usuarioId, AGORA)).permitido).toBe(true)
+    expect((await avaliarAcesso(banco.db, usuarioId, AGORA)).nivel).toBe('MVP')
   })
 })
 
@@ -405,7 +403,7 @@ describe('reconciliação', () => {
       new Date(AGORA.getTime() + 60_000),
     )
     expect(resultado).toMatchObject({ examinadas: 1, encontradas: 1, falhas: 0 })
-    expect((await avaliarAcesso(banco.db, usuarioId, AGORA)).permitido).toBe(true)
+    expect((await avaliarAcesso(banco.db, usuarioId, AGORA)).nivel).toBe('MVP')
   })
 })
 

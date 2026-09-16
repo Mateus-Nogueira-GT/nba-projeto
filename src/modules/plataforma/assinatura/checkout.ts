@@ -10,6 +10,8 @@ import {
 import type { Db } from '../../dominio/db/tipos'
 import type { Sessao } from '../auth/sessao'
 import {
+  MODALIDADE_DO_CHECKOUT_LEGADO,
+  NIVEL_DO_CHECKOUT_LEGADO,
   PRODUTO_PAGO,
   type ConfiguracaoProdutoPago,
   urlDeRetorno,
@@ -95,6 +97,8 @@ async function persistirAssinaturaCriada(
         produto: tentativa.produto,
         status: assinatura.status.toUpperCase(),
         plano: assinatura.nomePlano,
+        nivelDoPlano: NIVEL_DO_CHECKOUT_LEGADO,
+        modalidade: MODALIDADE_DO_CHECKOUT_LEGADO,
         proximaCobranca: assinatura.proximaCobranca
           ? new Date(assinatura.proximaCobranca)
           : null,

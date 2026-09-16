@@ -1,13 +1,14 @@
 import Link from 'next/link'
 
 import { dataHora, diaCompleto } from '@/components/formato'
+import { ConviteDoPlano } from '@/components/planos/ConviteDoPlano'
 import { PainelExperiencia } from '@/components/preferencias/PainelExperiencia'
 import { AtivarAlertas } from '@/components/pwa'
 import { AvatarUsuario, AVATARES_PRONTOS } from '@/design-system/componentes'
 import { componente } from '@/design-system/tokens/componente'
 import { semantico } from '@/design-system/tokens/semantico'
 import type { DispositivoDoUsuario } from '@/modules/plataforma/admin/usuarios'
-import type { ResultadoAcesso } from '@/modules/plataforma/assinatura/direito'
+import type { AcessoComNivel } from '@/modules/plataforma/assinatura/direito'
 import type { EstadoExperiencia } from '@/modules/plataforma/experiencia/contrato'
 
 import {
@@ -296,7 +297,7 @@ export function BlocoAssinatura({
   fuso,
 }: {
   assinatura: { plano: string | null; status: string; proximaCobranca: Date | null } | null
-  acesso: ResultadoAcesso
+  acesso: AcessoComNivel
   podeCancelar: boolean
   estadoCancelamento?: string
   agora: Date
@@ -351,7 +352,7 @@ export function BlocoAssinatura({
             )}
             <dt style={{ color: semantico.textoSecundario }}>Situação</dt>
             <dd style={{ margin: 0 }}>{assinatura.status}</dd>
-            {acesso.permitido && acesso.validoAte && (
+            {acesso.nivel !== 'GRATIS' && acesso.validoAte && (
               <>
                 <dt style={{ color: semantico.textoSecundario }}>Válido até</dt>
                 <dd style={{ margin: 0 }}>{diaCompleto(acesso.validoAte, fuso)}</dd>
@@ -359,7 +360,7 @@ export function BlocoAssinatura({
             )}
           </dl>
           {cobranca && <p style={{ margin: '12px 0 0', fontSize: 14 }}>{cobranca}</p>}
-          {!acesso.permitido && (
+          {acesso.nivel === 'GRATIS' && (
             <p style={{ margin: '12px 0 0', fontSize: 14 }}>
               Acesso inativo. <Link href="/assinar">Renovar acesso</Link>
             </p>
@@ -404,12 +405,24 @@ export function BlocoAssinatura({
   )
 }
 
-/** Push e as preferências de alerta — o que existe hoje; Telegram é da §6. */
+/**
+ * Push e as preferências de alerta — o que existe hoje; Telegram é da §6.
+ *
+ * Push de apito começa no MVP (spec §5, linha "Push de apito": "não; a tela
+ * de alertas explica"). Antes desta correção, o grátis via o botão "Ativar
+ * alertas" — o navegador pede a permissão de notificação, que só se pede UMA
+ * VEZ por origem, e só DEPOIS a API respondia 403. A permissão queimada é
+ * irreversível para aquele usuário; o convite evita que a pergunta do
+ * navegador chegue a acontecer. A API continua sendo o portão de verdade
+ * (ela já barra com 403); isto aqui é a tela concordando com ela.
+ */
 export function BlocoAlertas({
+  recebeAlertas,
   experiencia,
   jogadores,
   times,
 }: {
+  recebeAlertas: boolean
   experiencia: EstadoExperiencia
   jogadores: { id: string; nome: string }[]
   times: { id: string; nome: string }[]
@@ -417,7 +430,22 @@ export function BlocoAlertas({
   return (
     <Bloco titulo="ALERTAS">
       <div style={{ display: 'grid', gap: 14 }}>
-        <AtivarAlertas />
+        {/* O BOTÃO some no grátis, o painel NÃO.
+         *
+         * Ativar alertas faz o NAVEGADOR pedir a permissão de notificação, e
+         * essa pergunta acontece uma vez só por origem: deixar o grátis tocá-la
+         * para depois receber 403 da API queima uma permissão que ele não
+         * poderá conceder no dia em que assinar.
+         *
+         * Já as preferências ficam: jogadores acompanhados e intensidade do ao
+         * vivo são dado DELE, não conteúdo pago. Escondê-las contraria a mesma
+         * regra que a gestão segue (spec, decisão 8) — quem deixa de pagar não
+         * perde o que é seu. */}
+        {recebeAlertas ? (
+          <AtivarAlertas />
+        ) : (
+          <ConviteDoPlano minimo="MVP" recurso="Os alertas de apito" voltar="/conta" />
+        )}
         <PainelExperiencia inicial={experiencia} jogadores={jogadores} times={times} />
       </div>
     </Bloco>

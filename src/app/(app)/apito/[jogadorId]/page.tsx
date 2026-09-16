@@ -1,6 +1,5 @@
 import type { CSSProperties } from 'react'
 import Link from 'next/link'
-import { redirect } from 'next/navigation'
 
 import { dataHora, horaCurta } from '@/components/formato'
 import { BotaoVoltar, CabecalhoTela, Moldura } from '@/components/navegacao'
@@ -29,8 +28,7 @@ import {
 } from '@/design-system/componentes'
 import type { CotacaoDeCasa } from '@/modules/entrega/odds/leitura'
 import { semantico } from '@/design-system/tokens/semantico'
-import { sessaoAtual } from '@/modules/plataforma/auth/cookies'
-import { avaliarAcesso } from '@/modules/plataforma/assinatura/direito'
+import { exigirNivel } from '@/modules/plataforma/assinatura/guarda'
 import '@/design-system/tokens/tokens.css'
 
 export const dynamic = 'force-dynamic'
@@ -224,10 +222,7 @@ export default async function PaginaApito({
     )
   }
 
-  const sessao = await sessaoAtual()
-  if (!sessao) redirect(`/entrar?destino=/apito/${jogadorId}`)
-  const acesso = await avaliarAcesso(getDb(), sessao.usuarioId)
-  if (!acesso.permitido) redirect('/assinar')
+  await exigirNivel('MVP', `/apito/${jogadorId}`)
 
   const ruleset = await rulesetAtivo()
   const hoje = dataDeReferencia(new Date(), ruleset.rodada.fuso)

@@ -126,6 +126,13 @@ export const assinaturas = pgTable(
     produto: text('produto').notNull().default('NBA_PRO'),
     status: text('status').notNull(),
     plano: text('plano'),
+    /**
+     * O que foi COMPRADO. `plano` (acima) é a descrição que o provedor
+     * devolve — texto livre; estas duas são o contrato na linguagem da NIP.
+     * A conta e a reconciliação leem daqui.
+     */
+    nivelDoPlano: text('nivel_do_plano').notNull(),
+    modalidade: text('modalidade').notNull(),
     inicio: timestamp('inicio', { withTimezone: true }),
     fim: timestamp('fim', { withTimezone: true }),
     proximaCobranca: timestamp('proxima_cobranca', { withTimezone: true }),
@@ -134,7 +141,11 @@ export const assinaturas = pgTable(
     canceladaEm: timestamp('cancelada_em', { withTimezone: true }),
     atualizadoEm: timestamp('atualizado_em', { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [index('assinaturas_usuario_produto_idx').on(t.usuarioId, t.produto, t.atualizadoEm)],
+  (t) => [
+    index('assinaturas_usuario_produto_idx').on(t.usuarioId, t.produto, t.atualizadoEm),
+    check('assinaturas_nivel_do_plano_valido', sql`${t.nivelDoPlano} in ('MVP', 'ALL_STAR')`),
+    check('assinaturas_modalidade_valida', sql`${t.modalidade} in ('MENSAL', 'TEMPORADA')`),
+  ],
 )
 
 /** Cada parcela/fatura observada no provedor, separada do contrato recorrente. */
@@ -178,6 +189,18 @@ export const direitosAcesso = pgTable(
     produto: text('produto').notNull(),
     origem: text('origem').notNull(),
     referenciaOrigem: text('referencia_origem').notNull(),
+    /**
+     * Qual plano este direito representa. NOT NULL e sem GRATIS no check: o
+     * grátis nunca tem linha — ele É a ausência de direito ativo. Guardar
+     * "GRATIS" aqui seria criar um segundo jeito de dizer a mesma coisa.
+     */
+    nivelDoPlano: text('nivel_do_plano').notNull(),
+    /**
+     * Anulável: cortesia não tem modalidade. Vive aqui, e não só no
+     * contrato, para `avaliarAcesso` responder com UMA consulta — a mesma
+     * razão do LEFT JOIN que já existe nela.
+     */
+    modalidade: text('modalidade'),
     inicio: timestamp('inicio', { withTimezone: true }).notNull(),
     fim: timestamp('fim', { withTimezone: true }),
     revogadoEm: timestamp('revogado_em', { withTimezone: true }),
@@ -198,6 +221,11 @@ export const direitosAcesso = pgTable(
     check(
       'direitos_acesso_revogacao_tem_motivo',
       sql`${t.revogadoEm} is null or ${t.motivoRevogacao} is not null`,
+    ),
+    check('direitos_acesso_nivel_do_plano_valido', sql`${t.nivelDoPlano} in ('MVP', 'ALL_STAR')`),
+    check(
+      'direitos_acesso_modalidade_valida',
+      sql`${t.modalidade} is null or ${t.modalidade} in ('MENSAL', 'TEMPORADA')`,
     ),
   ],
 )

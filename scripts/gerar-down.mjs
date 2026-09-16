@@ -79,6 +79,14 @@ const INVERSORES = [
     reconhece: /^ALTER TABLE "[a-z_]+" ALTER COLUMN "[a-z_]+" SET NOT NULL/i,
     inverte: () => null,
   },
+  // Mesmo caso do NOT NULL acima: o DEFAULT existe só para preencher as
+  // linhas já existentes no ADD COLUMN NOT NULL; a coluna cai inteira na
+  // descida, default incluso, então desfazer o DROP DEFAULT à parte seria
+  // redundante.
+  {
+    reconhece: /^ALTER TABLE "[a-z_]+" ALTER COLUMN "[a-z_]+" DROP DEFAULT/i,
+    inverte: () => null,
+  },
   // Backfills usam apenas colunas adicionadas pela mesma migration. Ao descer,
   // essas colunas caem; não existe dado anterior a restaurar.
   { reconhece: /^UPDATE "[a-z_]+"/i, inverte: () => null },
