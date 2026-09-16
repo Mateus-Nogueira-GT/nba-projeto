@@ -9,6 +9,7 @@ import { simularAte } from '../../modules/ingestao/demo/temporada'
 import { LLMFake } from '../../modules/ingestao/llm'
 import type { FeedFireLive } from '../../modules/entrega/fire-live/leitura'
 import { identidadeDoTime } from '../../design-system/times'
+import { GRADE_DE_CARDS_CSS, LARGURA_DA_MOLDURA } from '../../components/navegacao'
 
 /**
  * O FIRE LIVE DA IDENTIDADE 04 — a tela ao vivo, quente.
@@ -466,4 +467,17 @@ describe('Fire Live · 04 — por jogo, com os três estados', () => {
       }
     }
   }, 60_000)
+})
+
+describe('Fire Live · desktop — a tela ocupa a largura que tem', () => {
+  it('a moldura é a larga, como a Lista', async () => {
+    const html = await renderizar()
+    expect(html).toContain(`max-width:${LARGURA_DA_MOLDURA.dados}px`)
+    expect(html).not.toContain(`max-width:${LARGURA_DA_MOLDURA.leitura}px`)
+  })
+
+  it('os cards do jogo selecionado entram na mesma grade da Lista', async () => {
+    const html = await renderizar()
+    expect(html).toContain(GRADE_DE_CARDS_CSS)
+  })
 })

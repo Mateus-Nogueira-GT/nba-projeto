@@ -40,6 +40,7 @@ import {
   CabecalhoTela,
   Chip,
   FolhaDeFiltros,
+  GRADE_DE_CARDS,
   Moldura,
   type RecorteAtivo,
 } from '@/components/navegacao'
@@ -255,7 +256,7 @@ export default async function PaginaListaSecreta({
 
   if (!process.env.DATABASE_URL) {
     return (
-      <Moldura aba="lista">
+      <Moldura aba="lista" largura="dados">
         <h1>Lista Secreta</h1>
         <p style={{ color: semantico.textoSecundario }}>
           Banco não configurado. Rode <code>vercel env pull</code> e <code>npm run db:migrate</code>
@@ -315,7 +316,7 @@ export default async function PaginaListaSecreta({
               ruleset.publicacao.lista_secreta.antecedencia_minutos * 60_000,
           )
     return (
-      <Moldura aba="lista">
+      <Moldura aba="lista" largura="dados">
         <CabecalhoTela
           sobrancelha="LISTA SECRETA"
           titulo="LISTA DO DIA"
@@ -411,7 +412,7 @@ export default async function PaginaListaSecreta({
   const atributosDoDia = ATRIBUTOS.filter((a) => doDia.some((i) => i.atributo === a))
 
   return (
-    <Moldura aba="lista">
+    <Moldura aba="lista" largura="dados">
       <CabecalhoTela
         sobrancelha="LISTA SECRETA"
         titulo="LISTA DO DIA"
@@ -599,7 +600,7 @@ export default async function PaginaListaSecreta({
               status={grupo.status}
               quartoAtual={grupo.quartoAtual}
             />
-            <div style={{ display: 'grid', gap: 12 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: GRADE_DE_CARDS, gap: 12 }}>
               {grupo.itens.map((melhor) => {
                 const cartao = porJogadorId.get(melhor.jogadorId)!
                 return (
@@ -623,7 +624,7 @@ export default async function PaginaListaSecreta({
           </section>
         ))
       ) : (
-        <div style={{ display: 'grid', gap: 12 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: GRADE_DE_CARDS, gap: 12 }}>
           {cartoes.map((cartao) => (
             <CartaoDaLista
               key={cartao.principal.jogadorId}

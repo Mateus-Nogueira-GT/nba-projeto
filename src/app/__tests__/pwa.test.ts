@@ -4,6 +4,11 @@ import { describe, expect, it } from 'vitest'
 import { semantico } from '@/design-system/tokens/semantico'
 import manifest from '../manifest'
 
+/** O código sem os comentários — para afirmar sobre o que RODA, não sobre a prosa. */
+function semComentarios(fonte: string): string {
+  return fonte.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '')
+}
+
 function dimensoesPng(caminho: string): { largura: number; altura: number } {
   const arquivo = readFileSync(caminho)
   expect(arquivo.subarray(1, 4).toString('ascii')).toBe('PNG')
@@ -59,6 +64,33 @@ describe('manifest PWA', () => {
 
     const registro = readFileSync('src/components/pwa/RegistrarServiceWorker.tsx', 'utf8')
     expect(registro).toContain("process.env.NODE_ENV !== 'production'")
+  })
+
+  // O convite de instalar saiu da tela (pedido do parceiro, 15/09). O painel
+  // SOBREVIVEU porque ele também é o caminho da ATUALIZAÇÃO: apagar o
+  // componente inteiro levaria junto o aviso de versão nova, e quem instalou o
+  // PWA ficaria preso numa versão velha sem saber.
+  it('não convida mais a instalar — nem por prompt, nem pelo passo a passo do celular', () => {
+    // Sem os comentários: o cabeçalho do módulo CITA o convite removido para
+    // explicar por que ele saiu, e essa explicação é justamente o que impede
+    // alguém de reintroduzir o convite sem querer. O que não pode voltar é o
+    // código que o exibe.
+    const painel = semComentarios(readFileSync('src/components/pwa/PainelPwa.tsx', 'utf8'))
+    for (const convite of [
+      'Instale a NIP',
+      'Instalar app',
+      'Adicionar à Tela de Início',
+      'adicionar à tela inicial',
+      'beforeinstallprompt',
+    ]) {
+      expect(painel, `ainda convida a instalar: ${convite}`).not.toContain(convite)
+    }
+  })
+
+  it('continua sendo o caminho da atualização', () => {
+    const painel = semComentarios(readFileSync('src/components/pwa/PainelPwa.tsx', 'utf8'))
+    expect(painel).toContain('Atualização disponível')
+    expect(painel).toContain('aplicarAtualizacaoPwa')
   })
 
   it('mantém a página offline neutra e sem acesso a sessão ou banco', () => {

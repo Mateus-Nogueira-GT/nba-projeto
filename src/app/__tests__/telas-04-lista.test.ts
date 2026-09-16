@@ -12,6 +12,7 @@ import { simularAte } from '../../modules/ingestao/demo/temporada'
 import { LLMFake } from '../../modules/ingestao/llm'
 import type { ItemFeed } from '../../modules/entrega/lista-secreta'
 import { identidadeDoTime } from '../../design-system/times'
+import { GRADE_DE_CARDS_CSS, LARGURA_DA_MOLDURA } from '../../components/navegacao'
 
 /**
  * A LISTA SECRETA DA IDENTIDADE 04 — varredura por jogo.
@@ -435,4 +436,26 @@ describe('Lista Secreta · 04 — regras de escrita', () => {
       expect(html).not.toMatch(/\.\.\./)
     }
   }, 60_000)
+})
+
+describe('Lista Secreta · desktop — a tela ocupa a largura que tem', () => {
+  it('a moldura é a larga: em 640 sobravam ~400px de cada lado num monitor comum', async () => {
+    const html = await renderizar()
+    expect(html).toContain(`max-width:${LARGURA_DA_MOLDURA.dados}px`)
+    expect(html).not.toContain(`max-width:${LARGURA_DA_MOLDURA.leitura}px`)
+  })
+
+  it('os cards entram em grade de múltiplas colunas, não numa coluna esticada', async () => {
+    // A grade é por `minmax`, não por media query: o card mantém a largura de
+    // leitura que sempre teve e passam a caber dois; no celular a mesma regra
+    // devolve uma coluna sozinha.
+    const html = await renderizar()
+    expect(html).toContain(GRADE_DE_CARDS_CSS)
+  })
+
+  it('a grade também vale no agrupamento por jogo, onde os cards de um mesmo confronto se emparelham', async () => {
+    const html = await renderizar({ por: 'jogo' })
+    const grades = html.split(GRADE_DE_CARDS_CSS).length - 1
+    expect(grades).toBeGreaterThan(0)
+  })
 })
