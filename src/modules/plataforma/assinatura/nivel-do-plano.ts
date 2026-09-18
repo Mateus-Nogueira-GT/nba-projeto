@@ -23,6 +23,12 @@ export const ROTULO_DO_NIVEL: Record<NivelDoPlano, string> = {
   ALL_STAR: 'All Star',
 }
 
+/** Nomes comerciais da modalidade, para a tela. */
+export const ROTULO_DA_MODALIDADE: Record<Modalidade, string> = {
+  MENSAL: 'Mensal',
+  TEMPORADA: 'Temporada',
+}
+
 export function atende(nivelDoPlano: NivelDoPlano, minimo: NivelDoPlano): boolean {
   const atual = ORDEM_DOS_NIVEIS.indexOf(nivelDoPlano)
   const exigido = ORDEM_DOS_NIVEIS.indexOf(minimo)

@@ -63,20 +63,36 @@ export async function listarUsuarios(
       papel: usuarios.papel,
       criadoEm: usuarios.criadoEm,
       ultimoAcesso: usuarios.ultimoAcesso,
+      // MESMA ORDEM DA TELA DA CONTA, pelo mesmo motivo: depois de um upgrade
+      // a última escrita é a do contrato que MORREU (o webhook grava os dois
+      // no mesmo instante e a varredura de cancelamento volta a tocar só o
+      // antigo). Por `atualizado_em desc` sozinho, o painel diria ao suporte
+      // que o assinante está cancelado no plano velho. Não cancelado primeiro;
+      // entre iguais, o mais recente.
+      //
+      // ATENÇÃO, defeito ANTERIOR a esta branch e ainda aberto: estes três
+      // campos (e `direitoAtivo`/`dispositivosAtivos` abaixo) hoje devolvem
+      // sempre nulo/zero. Dentro de um `sql` usado como CAMPO do select, o
+      // drizzle renderiza `${usuarios.id}` sem o prefixo da tabela — vira
+      // `"id"`, que o Postgres resolve no escopo interno, isto é, `a.id`. A
+      // correlação compara a assinatura com ela mesma e nunca casa. O mesmo
+      // `${usuarios.id}` no `where` (o filtro `situacaoAssinatura`) sai
+      // qualificado e funciona. Corrigir isso muda o que o painel mostra e
+      // está fora desta onda de correção.
       assinaturaStatus: sql<string | null>`(
         select a.status from ${assinaturas} a
         where a.usuario_id = ${usuarios.id}
-        order by a.atualizado_em desc limit 1
+        order by (a.cancelada_em is null) desc, a.atualizado_em desc limit 1
       )`,
       assinaturaPlano: sql<string | null>`(
         select a.plano from ${assinaturas} a
         where a.usuario_id = ${usuarios.id}
-        order by a.atualizado_em desc limit 1
+        order by (a.cancelada_em is null) desc, a.atualizado_em desc limit 1
       )`,
       proximaCobranca: sql<Date | null>`(
         select a.proxima_cobranca from ${assinaturas} a
         where a.usuario_id = ${usuarios.id}
-        order by a.atualizado_em desc limit 1
+        order by (a.cancelada_em is null) desc, a.atualizado_em desc limit 1
       )`,
       direitoAtivo: sql<boolean>`exists (
         select 1 from ${direitosAcesso} d

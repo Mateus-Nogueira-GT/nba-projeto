@@ -240,6 +240,18 @@ export const tentativasCheckout = pgTable(
       .references(() => usuarios.id, { onDelete: 'cascade' }),
     produto: text('produto').notNull(),
     provedor: text('provedor').notNull(),
+    /**
+     * O QUE ESTA TENTATIVA ESTÁ COMPRANDO.
+     *
+     * Gravado ANTES da rede, junto da referência opaca, e é daqui que o
+     * webhook lê o nível e a modalidade a conceder — o provedor não tem
+     * conceito de plano da NIP e devolve só a referência. Sem estas duas
+     * colunas, um pagamento aprovado não teria como dizer QUAL plano foi
+     * pago, e o nível viria de uma constante, que é o que o Plano A fazia
+     * enquanto só existia um SKU.
+     */
+    nivelDoPlano: text('nivel_do_plano').notNull(),
+    modalidade: text('modalidade').notNull(),
     referenciaExterna: text('referencia_externa').notNull().unique(),
     chaveIdempotencia: text('chave_idempotencia').notNull().unique(),
     status: text('status').notNull().default('RESERVADA'),
@@ -259,6 +271,11 @@ export const tentativasCheckout = pgTable(
       'tentativas_checkout_status_valido',
       sql`${t.status} in ('RESERVADA', 'CRIANDO', 'AMBIGUA', 'CRIADA', 'FALHA', 'ENCERRADA')`,
     ),
+    check(
+      'tentativas_checkout_nivel_do_plano_valido',
+      sql`${t.nivelDoPlano} in ('MVP', 'ALL_STAR')`,
+    ),
+    check('tentativas_checkout_modalidade_valida', sql`${t.modalidade} in ('MENSAL', 'TEMPORADA')`),
   ],
 )
 

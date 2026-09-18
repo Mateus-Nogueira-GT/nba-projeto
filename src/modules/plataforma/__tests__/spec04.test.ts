@@ -25,6 +25,8 @@ import {
 import { avaliarAcesso } from '../assinatura/direito'
 import { PagamentoFake } from '../assinatura/fake'
 import { PagamentoMercadoPago } from '../assinatura/mercadopago'
+import type { PrecosDosPlanos } from '../assinatura/precos'
+import { NOME_DO_SKU } from '../assinatura/sku'
 import { aplicarEventoPagamento } from '../assinatura/webhook'
 import { reconciliarPagamentos } from '../assinatura/reconciliacao'
 import type { AssinaturaExterna, EventoPagamento } from '../assinatura/porta'
@@ -35,13 +37,21 @@ const FIM = '2026-09-21T12:00:00.000Z'
 const config: ConfiguracaoProdutoPago = {
   checkoutHabilitado: true,
   cadastroPublicoHabilitado: true,
-  nomePlano: 'IA da NBA Mensal',
-  valorCentavos: 4990,
   frequencia: 1,
   tipoFrequencia: 'months',
   moeda: 'BRL',
   urlPublica: 'https://app.example.com',
   hostsPermitidos: new Set(['app.example.com']),
+}
+
+const precos: PrecosDosPlanos = {
+  porSku: {
+    MVP_MENSAL: { centavos: 5990, deCentavos: 7990 },
+    MVP_TEMPORADA: { centavos: 39700, deCentavos: null },
+    ALL_STAR_MENSAL: { centavos: 9990, deCentavos: 14900 },
+    ALL_STAR_TEMPORADA: { centavos: 59700, deCentavos: null },
+  },
+  fimDaTemporada: new Date('2027-07-01T03:00:00.000Z'),
 }
 
 let banco: Awaited<ReturnType<typeof bancoDeTeste>>
@@ -73,8 +83,9 @@ beforeEach(async () => {
 })
 
 async function criarTentativa(porta = new PagamentoFake()) {
-  const resultado = await iniciarCheckout(banco.db, porta, config, {
+  const resultado = await iniciarCheckout(banco.db, porta, config, precos, {
     usuarioId,
+    sku: 'MVP_MENSAL',
     ip: '203.0.113.10',
     agora: AGORA,
   })
@@ -119,9 +130,9 @@ describe('configuração comercial fail-closed', () => {
     expect(() => configuracaoProdutoPago({})).toThrow('cadastro habilitado sem APP_PUBLIC_URL')
   })
 
-  it('recusa habilitar checkout sem preço, nome e URL', () => {
+  it('recusa habilitar checkout sem URL pública', () => {
     expect(() => configuracaoProdutoPago({ MERCADOPAGO_CHECKOUT_ENABLED: 'true' })).toThrow(
-      /configuração incompleta/,
+      /configuração incompleta: APP_PUBLIC_URL/,
     )
   })
 
@@ -171,21 +182,23 @@ describe('coordenação do checkout', () => {
     expect(porta.criacoes[0]).toMatchObject({
       referenciaExterna: tentativa.referenciaExterna,
       emailPagador: 'assinante@exemplo.com',
-      valorCentavos: 4990,
-      nomePlano: 'IA da NBA Mensal',
+      valorCentavos: precos.porSku.MVP_MENSAL.centavos,
+      nomePlano: NOME_DO_SKU.MVP_MENSAL,
       urlRetorno: 'https://app.example.com/retorno/mercadopago',
     })
   })
 
   it('reutiliza a mesma tentativa e não cria uma segunda assinatura', async () => {
     const porta = new PagamentoFake()
-    const primeira = await iniciarCheckout(banco.db, porta, config, {
+    const primeira = await iniciarCheckout(banco.db, porta, config, precos, {
       usuarioId,
+      sku: 'MVP_MENSAL',
       ip: null,
       agora: AGORA,
     })
-    const segunda = await iniciarCheckout(banco.db, porta, config, {
+    const segunda = await iniciarCheckout(banco.db, porta, config, precos, {
       usuarioId,
+      sku: 'MVP_MENSAL',
       ip: null,
       agora: new Date(AGORA.getTime() + 1_000),
     })
@@ -202,15 +215,17 @@ describe('coordenação do checkout', () => {
       liberar = resolve
     })
     const porta = new PagamentoFake(true, async () => resposta)
-    const primeira = iniciarCheckout(banco.db, porta, config, {
+    const primeira = iniciarCheckout(banco.db, porta, config, precos, {
       usuarioId,
+      sku: 'MVP_MENSAL',
       ip: null,
       agora: AGORA,
     })
     await vi.waitFor(() => expect(porta.criacoes).toHaveLength(1))
 
-    const segunda = await iniciarCheckout(banco.db, porta, config, {
+    const segunda = await iniciarCheckout(banco.db, porta, config, precos, {
       usuarioId,
+      sku: 'MVP_MENSAL',
       ip: null,
       agora: new Date(AGORA.getTime() + 1_000),
     })
@@ -251,10 +266,16 @@ describe('coordenação do checkout', () => {
     })
 
     await expect(
-      iniciarCheckout(banco.db, porta, config, { usuarioId, ip: null, agora: AGORA }),
+      iniciarCheckout(banco.db, porta, config, precos, {
+        usuarioId,
+        sku: 'MVP_MENSAL',
+        ip: null,
+        agora: AGORA,
+      }),
     ).rejects.toThrow(/timeout/)
-    const recuperada = await iniciarCheckout(banco.db, porta, config, {
+    const recuperada = await iniciarCheckout(banco.db, porta, config, precos, {
       usuarioId,
+      sku: 'MVP_MENSAL',
       ip: null,
       agora: new Date(AGORA.getTime() + 31_000),
     })
@@ -278,6 +299,7 @@ describe('direito de acesso e eventos financeiros', () => {
         statusExterno: 'authorized',
       }),
       AGORA,
+      null,
     )
     expect(await avaliarAcesso(banco.db, usuarioId, AGORA)).toEqual(acessoDeTeste('GRATIS'))
   })
@@ -285,8 +307,8 @@ describe('direito de acesso e eventos financeiros', () => {
   it('pagamento aprovado concede até a próxima cobrança e duplicata não duplica', async () => {
     const { tentativa } = await criarTentativa()
     const aprovado = evento(tentativa.referenciaExterna)
-    const primeira = await aplicarEventoPagamento(banco.db, 'fake', aprovado, AGORA)
-    const repetida = await aplicarEventoPagamento(banco.db, 'fake', aprovado, AGORA)
+    const primeira = await aplicarEventoPagamento(banco.db, 'fake', aprovado, AGORA, null)
+    const repetida = await aplicarEventoPagamento(banco.db, 'fake', aprovado, AGORA, null)
 
     expect(primeira).toMatchObject({ duplicado: false, liberou: true })
     expect(repetida).toEqual({ aceito: true, duplicado: true })
@@ -302,6 +324,7 @@ describe('direito de acesso e eventos financeiros', () => {
       'fake',
       evento(tentativa.referenciaExterna, { proximaCobranca: null }),
       AGORA,
+      null,
     )
     expect(resultado).toMatchObject({ liberou: false })
     expect(await banco.db.select().from(direitosAcesso)).toHaveLength(0)
@@ -309,7 +332,7 @@ describe('direito de acesso e eventos financeiros', () => {
 
   it('cancelamento preserva o período pago; estorno revoga', async () => {
     const { tentativa } = await criarTentativa()
-    await aplicarEventoPagamento(banco.db, 'fake', evento(tentativa.referenciaExterna), AGORA)
+    await aplicarEventoPagamento(banco.db, 'fake', evento(tentativa.referenciaExterna), AGORA, null)
     await aplicarEventoPagamento(
       banco.db,
       'fake',
@@ -321,6 +344,7 @@ describe('direito de acesso e eventos financeiros', () => {
         ocorridoEm: new Date(AGORA.getTime() + 1_000).toISOString(),
       }),
       new Date(AGORA.getTime() + 1_000),
+      null,
     )
     expect((await avaliarAcesso(banco.db, usuarioId, AGORA)).nivel).toBe('MVP')
 
@@ -334,6 +358,7 @@ describe('direito de acesso e eventos financeiros', () => {
         ocorridoEm: new Date(AGORA.getTime() + 2_000).toISOString(),
       }),
       new Date(AGORA.getTime() + 2_000),
+      null,
     )
     expect(await avaliarAcesso(banco.db, usuarioId, new Date(AGORA.getTime() + 3_000))).toEqual(
       acessoDeTeste('GRATIS'),
@@ -343,7 +368,7 @@ describe('direito de acesso e eventos financeiros', () => {
   it('pagamento nunca desfaz bloqueio administrativo', async () => {
     const { tentativa } = await criarTentativa()
     await bloquearUsuario(banco.db, usuarioId, 'fraude', AGORA)
-    await aplicarEventoPagamento(banco.db, 'fake', evento(tentativa.referenciaExterna), AGORA)
+    await aplicarEventoPagamento(banco.db, 'fake', evento(tentativa.referenciaExterna), AGORA, null)
     expect(await avaliarAcesso(banco.db, usuarioId, AGORA)).toEqual({
       nivel: null,
       motivo: 'bloqueio-administrativo',
@@ -352,7 +377,7 @@ describe('direito de acesso e eventos financeiros', () => {
 
   it('evento atrasado não regride uma cobrança já aprovada', async () => {
     const { tentativa } = await criarTentativa()
-    await aplicarEventoPagamento(banco.db, 'fake', evento(tentativa.referenciaExterna), AGORA)
+    await aplicarEventoPagamento(banco.db, 'fake', evento(tentativa.referenciaExterna), AGORA, null)
     await aplicarEventoPagamento(
       banco.db,
       'fake',
@@ -363,6 +388,7 @@ describe('direito de acesso e eventos financeiros', () => {
         ocorridoEm: new Date(AGORA.getTime() - 60_000).toISOString(),
       }),
       new Date(AGORA.getTime() + 60_000),
+      null,
     )
 
     const [assinatura] = await banco.db.select().from(assinaturas)
@@ -401,6 +427,7 @@ describe('reconciliação', () => {
       banco.db,
       porta,
       new Date(AGORA.getTime() + 60_000),
+      null,
     )
     expect(resultado).toMatchObject({ examinadas: 1, encontradas: 1, falhas: 0 })
     expect((await avaliarAcesso(banco.db, usuarioId, AGORA)).nivel).toBe('MVP')
@@ -469,7 +496,7 @@ describe('adapter Mercado Pago', () => {
         id: 'sub-1',
         status: 'pending',
         external_reference: 'ref-opaca',
-        reason: 'IA da NBA Mensal',
+        reason: 'NIP MVP mensal',
         init_point: 'https://www.mercadopago.com.br/subscriptions/checkout?id=sub-1',
       }),
     )
@@ -481,8 +508,8 @@ describe('adapter Mercado Pago', () => {
       referenciaExterna: 'ref-opaca',
       chaveIdempotencia: 'idem-1',
       emailPagador: 'assinante@exemplo.com',
-      nomePlano: 'IA da NBA Mensal',
-      valorCentavos: 4990,
+      nomePlano: NOME_DO_SKU.MVP_MENSAL,
+      valorCentavos: precos.porSku.MVP_MENSAL.centavos,
       moeda: 'BRL',
       frequencia: 1,
       tipoFrequencia: 'months',
@@ -496,7 +523,7 @@ describe('adapter Mercado Pago', () => {
       status: 'pending',
       external_reference: 'ref-opaca',
       payer_email: 'assinante@exemplo.com',
-      auto_recurring: { transaction_amount: 49.9, currency_id: 'BRL' },
+      auto_recurring: { transaction_amount: 59.9, currency_id: 'BRL' },
       back_url: 'https://app.example.com/retorno/mercadopago',
     })
   })

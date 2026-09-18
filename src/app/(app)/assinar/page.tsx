@@ -2,15 +2,21 @@ import Link from 'next/link'
 
 import { MolduraConta } from '@/components/conta/MolduraConta'
 import { BENEFICIOS_POR_NIVEL } from '@/components/planos/matriz'
+import { precoEmReais } from '@/components/planos/preco'
 import { componente } from '@/design-system/tokens/componente'
 import { semantico } from '@/design-system/tokens/semantico'
+import { rulesetAtivo } from '@/modules/entrega/ruleset-ativo'
 import { configuracaoProdutoPago } from '@/modules/plataforma/assinatura/configuracao'
 import { exigirNivel } from '@/modules/plataforma/assinatura/guarda'
 import {
   ehNivelPago,
   ORDEM_DOS_NIVEIS,
+  ROTULO_DA_MODALIDADE,
   ROTULO_DO_NIVEL,
 } from '@/modules/plataforma/assinatura/nivel-do-plano'
+import { precosDosPlanos } from '@/modules/plataforma/assinatura/precos'
+import { ofertasDisponiveis } from '@/modules/plataforma/assinatura/sku'
+
 import { contratar } from './acoes'
 
 export const dynamic = 'force-dynamic'
@@ -44,12 +50,21 @@ export default async function PaginaAssinar({
   // GRATIS: a comparação é para todo mundo, inclusive quem já paga e quer
   // ver o de cima. Não há mais redirect de quem tem direito.
   const { acesso } = await exigirNivel('GRATIS', '/assinar')
-  const config = configuracaoProdutoPago()
   const parametros = await searchParams
   const pedido = Array.isArray(parametros.nivel) ? parametros.nivel[0] : parametros.nivel
   const destacado = pedido && ehNivelPago(pedido) ? pedido : null
   const voltar = caminhoDeVolta(parametros.voltar)
   const erro = Array.isArray(parametros.erro) ? parametros.erro[0] : parametros.erro
+
+  const config = configuracaoProdutoPago()
+  const { fuso } = (await rulesetAtivo()).rodada
+  const precos = precosDosPlanos(fuso)
+  const agora = new Date()
+  // Sem preço configurado não há o que vender, e a página continua valendo
+  // como comparação — que é o que ela é hoje em produção.
+  const ofertas =
+    config.checkoutHabilitado && precos ? ofertasDisponiveis(acesso, agora, precos.fimDaTemporada) : []
+  const substitui = ofertas.some((oferta) => oferta.substituiPlanoAtual)
 
   return (
     <MolduraConta titulo="Planos" descricao="O que cada nível da NIP entrega." aba="conta">
@@ -86,9 +101,6 @@ export default async function PaginaAssinar({
           ))}
         </div>
 
-        {/* O checkout de UM SKU, como era. Fica atrás da flag até o Plano B
-            trazer os quatro SKUs com preço; em produção a flag está
-            desligada, então este bloco não aparece. */}
         {erro && (
           <p role="alert" style={{ margin: 0, color: semantico.alerta }}>
             {erro === 'limite'
@@ -96,36 +108,69 @@ export default async function PaginaAssinar({
               : 'O checkout está temporariamente indisponível.'}
           </p>
         )}
-        {config.checkoutHabilitado && acesso.nivel === 'GRATIS' ? (
-          <form action={contratar}>
-            <p style={{ margin: '0 0 8px' }}>
-              <strong style={{ fontSize: 24 }}>
-                {(config.valorCentavos / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-              </strong>
-              <span style={{ color: semantico.textoSecundario }}> / mês · {config.nomePlano}</span>
-            </p>
-            <button
-              type="submit"
-              style={{
-                width: '100%',
-                border: 0,
-                borderRadius: 10,
-                padding: 13,
-                background: componente.ctaFundo,
-                color: semantico.textoSobreCor,
-                fontFamily: semantico.fonteTitulo,
-                letterSpacing: 0.5,
-                textTransform: 'uppercase',
-                fontWeight: 700,
-                cursor: 'pointer',
-              }}
-            >
-              Continuar no Mercado Pago
-            </button>
-          </form>
+        {ofertas.length > 0 && precos ? (
+          <section style={{ display: 'grid', gap: 12 }}>
+            {/* O AVISO VEM ANTES DOS BOTÕES, não depois (spec §9). Depois de
+                cobrar, avisar já não é avisar. */}
+            {substitui && (
+              <p role="note" style={{ margin: 0, fontSize: 14, color: semantico.textoSecundario }}>
+                Ao contratar, o seu plano atual é encerrado assim que o pagamento for confirmado,
+                sem devolução do período restante.
+              </p>
+            )}
+            {ofertas.map((oferta) => {
+              const preco = precos.porSku[oferta.sku]
+              return (
+                <form key={oferta.sku} action={contratar}>
+                  <input type="hidden" name="sku" value={oferta.sku} />
+                  <button
+                    type="submit"
+                    style={{
+                      width: '100%',
+                      display: 'grid',
+                      gap: 4,
+                      border: 0,
+                      borderRadius: 10,
+                      padding: 13,
+                      background: componente.ctaFundo,
+                      color: semantico.textoSobreCor,
+                      fontFamily: semantico.fonteTitulo,
+                      cursor: 'pointer',
+                      textAlign: 'left',
+                    }}
+                  >
+                    <span style={{ letterSpacing: 0.5, textTransform: 'uppercase', fontWeight: 700 }}>
+                      {ROTULO_DO_NIVEL[oferta.nivelDoPlano]} ·{' '}
+                      {ROTULO_DA_MODALIDADE[oferta.modalidade]}
+                    </span>
+                    <span style={{ fontSize: 20 }}>
+                      {preco.deCentavos && (
+                        <s style={{ opacity: 0.7, fontSize: 15, marginRight: 8 }}>
+                          {precoEmReais(preco.deCentavos)}
+                        </s>
+                      )}
+                      {precoEmReais(preco.centavos)}
+                      <span style={{ fontSize: 13, opacity: 0.85 }}>
+                        {oferta.modalidade === 'MENSAL'
+                          ? ' / mês'
+                          : ' · até o fim da temporada'}
+                      </span>
+                    </span>
+                  </button>
+                </form>
+              )
+            })}
+          </section>
         ) : (
           <p style={{ margin: 0, color: semantico.textoSecundario }}>
-            A contratação pelo app chega em breve. Enquanto isso, fale com quem administra a sua conta.
+            {/* NUNCA afirmar que a pessoa está "no topo": a lista também fica vazia
+                para quem NÃO está lá — MVP ou All Star temporada depois que a janela de
+                venda fecha, já que "temporada não volta para mensal" (decisão 12) tira
+                o único caminho de baixo. O que se sabe de fato é só que não há oferta
+                para vender agora, nunca a posição da pessoa na hierarquia. */}
+            {config.checkoutHabilitado && precos && acesso.nivel !== 'GRATIS'
+              ? 'Não há plano para contratar acima do seu agora.'
+              : 'A contratação pelo app chega em breve. Enquanto isso, fale com quem administra a sua conta.'}
           </p>
         )}
         <Link href="/conta" style={{ color: semantico.textoSecundario, fontSize: 13 }}>

@@ -1,5 +1,8 @@
 import { configuracaoProdutoPago } from '../src/modules/plataforma/assinatura/configuracao'
 import { configDoAmbiente } from '../src/modules/plataforma/assinatura/mercadopago'
+import { precosDosPlanos } from '../src/modules/plataforma/assinatura/precos'
+import { NOME_DO_SKU, SKUS } from '../src/modules/plataforma/assinatura/sku'
+import { rulesetAtivo } from '../src/modules/entrega/ruleset-ativo'
 
 /**
  * CONFERE a configuração do Mercado Pago sem ligar nada — o espelho do
@@ -51,7 +54,18 @@ async function principal() {
   // --- Metade 2: a configuração do produto --------------------------------
   try {
     const produto = configuracaoProdutoPago()
-    console.log(`\nplano: ${produto.nomePlano} — R$ ${(produto.valorCentavos / 100).toFixed(2)}/mês`)
+    const { fuso } = (await rulesetAtivo()).rodada
+    const precos = precosDosPlanos(fuso)
+    if (precos) {
+      for (const sku of SKUS) {
+        const preco = precos.porSku[sku]
+        const de = preco.deCentavos ? ` (de R$ ${(preco.deCentavos / 100).toFixed(2)})` : ''
+        console.log(`plano ${NOME_DO_SKU[sku]}: R$ ${(preco.centavos / 100).toFixed(2)}${de}`)
+      }
+      console.log(`temporada vendida até: ${precos.fimDaTemporada.toISOString()}`)
+    } else {
+      console.log('! preços dos planos não configurados — o seletor não mostra valor')
+    }
     console.log(`checkout habilitado: ${produto.checkoutHabilitado}`)
     console.log(`cadastro público habilitado: ${produto.cadastroPublicoHabilitado}`)
     console.log(`URL pública: ${produto.urlPublica || '(ausente)'}`)

@@ -48,6 +48,45 @@ export type PedidoCriacaoAssinatura = {
   urlRetorno: string
 }
 
+/**
+ * A COMPRA QUE ACONTECE UMA VEZ — a temporada (spec §9).
+ *
+ * Quase igual ao pedido de assinatura, menos os dois campos que só existem
+ * em recorrência (`frequencia`, `tipoFrequencia`). Separar os tipos em vez de
+ * tornar os dois campos opcionais é o que faz o compilador cobrar a
+ * frequência de quem cria `preapproval` e nunca cobrá-la de quem não tem
+ * recorrência nenhuma.
+ *
+ * Sem `nivelDoPlano` de propósito (ruling R-B1): o provedor não tem conceito
+ * de nível da NIP. O nível viaja em `nomePlano`, que é o que o comprador vê
+ * na fatura, e canonicamente na `tentativas_checkout`, que é de onde o
+ * webhook lê.
+ */
+export type PedidoPagamentoUnico = {
+  referenciaExterna: string
+  chaveIdempotencia: string
+  emailPagador: string
+  nomePlano: string
+  valorCentavos: number
+  moeda: 'BRL'
+  urlRetorno: string
+}
+
+/**
+ * O que volta de criar uma intenção de pagamento único.
+ *
+ * `id` é o da PREFERÊNCIA, não o do pagamento: o pagamento só nasce quando
+ * alguém paga, e o id dele chega pelo webhook. Por isso não há `status` aqui
+ * — preferência não tem estado de cobrança, e um campo `status` convidaria
+ * alguém a liberar acesso pela ida em vez de pela confirmação.
+ */
+export type PagamentoExterno = {
+  id: string
+  referenciaExterna: string | null
+  urlCheckout: string | null
+  ocorridoEm: string | null
+}
+
 export type AssinaturaExterna = {
   id: string
   referenciaExterna: string | null
@@ -81,4 +120,12 @@ export interface PortaCobranca extends PortaPagamento {
   buscarPorReferencia(referenciaExterna: string): Promise<AssinaturaExterna | null>
   cancelarAssinatura(id: string, chaveIdempotencia: string): Promise<AssinaturaExterna>
   listarCobrancasDaAssinatura(id: string): Promise<CobrancaExterna[]>
+  criarPagamentoUnico(pedido: PedidoPagamentoUnico): Promise<PagamentoExterno>
+  /**
+   * A volta do pagamento único. A busca é POR REFERÊNCIA e não por id porque
+   * o id que a NIP guardou é o da preferência — o do pagamento ela só vai
+   * conhecer pelo webhook, e a reconciliação existe justamente para o caso em
+   * que o webhook não chegou.
+   */
+  buscarPagamentoPorReferencia(referenciaExterna: string): Promise<CobrancaExterna | null>
 }

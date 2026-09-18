@@ -3,7 +3,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vites
 import { eq } from 'drizzle-orm'
 
 import { bancoDeTeste } from '../../dominio/__tests__/ajuda-banco'
-import { assinaturas, eventosPagamento, usuarios } from '../../dominio/db/schema'
+import { assinaturas, eventosPagamento, tentativasCheckout, usuarios } from '../../dominio/db/schema'
 import { adicionarUsuario, bloquearUsuario } from '../admin/usuarios'
 import { PagamentoFake } from '../assinatura/fake'
 import { PagamentoMercadoPago } from '../assinatura/mercadopago'
@@ -27,6 +27,7 @@ afterAll(async () => {
 beforeEach(async () => {
   await banco.db.delete(eventosPagamento)
   await banco.db.delete(assinaturas)
+  await banco.db.delete(tentativasCheckout)
   await banco.db.delete(usuarios)
   usuarioId = (
     await adicionarUsuario(banco.db, {
@@ -36,6 +37,25 @@ beforeEach(async () => {
     })
   ).id
 })
+
+async function semear(referencia: string) {
+  // Só UMA tentativa aberta por usuário e produto: as anteriores saem de cena.
+  await banco.db
+    .update(tentativasCheckout)
+    .set({ status: 'ENCERRADA' })
+    .where(eq(tentativasCheckout.usuarioId, usuarioId))
+  await banco.db.insert(tentativasCheckout).values({
+    usuarioId,
+    produto: 'NBA_PRO',
+    provedor: 'fake',
+    referenciaExterna: referencia,
+    chaveIdempotencia: `chave-${referencia}`,
+    nivelDoPlano: 'MVP',
+    modalidade: 'MENSAL',
+    status: 'CRIADA',
+    atualizadoEm: AGORA,
+  })
+}
 
 function avisoAssinado(dataId: string, corpo: object) {
   const ts = '1787313600'
@@ -120,6 +140,7 @@ describe('adapter real do Mercado Pago', () => {
       ...aviso,
       cabecalhos: { ...aviso.cabecalhos, 'x-signature': 'ts=1,v1=invalida' },
       agora: AGORA,
+      fimDaTemporada: null,
     })
 
     expect(resultado).toEqual({ aceito: false, motivo: 'assinatura-invalida' })
@@ -129,11 +150,13 @@ describe('adapter real do Mercado Pago', () => {
 })
 
 describe('atomicidade do webhook', () => {
+  const REFERENCIA = 'ref-estabilizacao'
+
   function notificacao(eventoExternoId: string, proximaCobranca: string) {
     return JSON.stringify({
       eventoExternoId,
       tipo: 'PAGAMENTO_APROVADO',
-      referenciaExterna: usuarioId,
+      referenciaExterna: REFERENCIA,
       assinaturaExternaId: `sub-${eventoExternoId}`,
       plano: 'mensal',
       proximaCobranca,
@@ -141,12 +164,17 @@ describe('atomicidade do webhook', () => {
     })
   }
 
+  beforeEach(async () => {
+    await semear(REFERENCIA)
+  })
+
   it('faz rollback do evento quando o efeito falha e o retry conclui', async () => {
     await expect(
       processarNotificacao(banco.db, new PagamentoFake(), {
         corpoBruto: notificacao('evt-rollback', 'data-invalida'),
         cabecalhos: {},
         agora: AGORA,
+        fimDaTemporada: null,
       }),
     ).rejects.toThrow()
 
@@ -157,6 +185,7 @@ describe('atomicidade do webhook', () => {
       corpoBruto: notificacao('evt-rollback', '2026-09-21T12:00:00.000Z'),
       cabecalhos: {},
       agora: AGORA,
+      fimDaTemporada: null,
     })
 
     expect(retry).toMatchObject({ aceito: true, duplicado: false })
@@ -171,6 +200,7 @@ describe('atomicidade do webhook', () => {
       corpoBruto: notificacao('evt-bloqueio', '2026-09-21T12:00:00.000Z'),
       cabecalhos: {},
       agora: AGORA,
+      fimDaTemporada: null,
     })
 
     const [usuario] = await banco.db.select().from(usuarios).where(eq(usuarios.id, usuarioId))
@@ -187,12 +217,13 @@ describe('atomicidade do webhook', () => {
       corpoBruto: notificacao('evt-aprovado', '2026-09-21T12:00:00.000Z'),
       cabecalhos: {},
       agora: AGORA,
+      fimDaTemporada: null,
     })
 
     const cancelamento = JSON.stringify({
       eventoExternoId: 'evt-cancelado',
       tipo: 'ASSINATURA_CANCELADA',
-      referenciaExterna: usuarioId,
+      referenciaExterna: REFERENCIA,
       assinaturaExternaId: 'sub-evt-aprovado',
       plano: 'mensal',
       proximaCobranca: null,
@@ -202,6 +233,7 @@ describe('atomicidade do webhook', () => {
       corpoBruto: cancelamento,
       cabecalhos: {},
       agora: new Date('2026-08-22T12:00:00.000Z'),
+      fimDaTemporada: null,
     })
 
     const linhas = await banco.db.select().from(assinaturas)

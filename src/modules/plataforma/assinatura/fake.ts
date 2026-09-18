@@ -3,7 +3,9 @@ import type {
   AvisoPagamento,
   CobrancaExterna,
   EventoPagamento,
+  PagamentoExterno,
   PedidoCriacaoAssinatura,
+  PedidoPagamentoUnico,
   PortaCobranca,
 } from './porta'
 
@@ -13,6 +15,12 @@ export class PagamentoFake implements PortaCobranca {
   readonly criacoes: PedidoCriacaoAssinatura[] = []
   readonly assinaturas = new Map<string, AssinaturaExterna>()
   readonly cobrancas = new Map<string, CobrancaExterna[]>()
+  readonly preferencias: PedidoPagamentoUnico[] = []
+  readonly cancelamentos: string[] = []
+  /** A chave de idempotência que cada tentativa de cancelamento recebeu, na ordem em que chegou. */
+  readonly chavesDeCancelamento: string[] = []
+  private readonly pagamentos = new Map<string, CobrancaExterna>()
+  private readonly preferenciasPorChave = new Map<string, PagamentoExterno>()
 
   constructor(
     private readonly assinaturaValida = true,
@@ -61,7 +69,9 @@ export class PagamentoFake implements PortaCobranca {
     )
   }
 
-  async cancelarAssinatura(id: string, _chaveIdempotencia: string): Promise<AssinaturaExterna> {
+  async cancelarAssinatura(id: string, chaveIdempotencia: string): Promise<AssinaturaExterna> {
+    this.cancelamentos.push(id)
+    this.chavesDeCancelamento.push(chaveIdempotencia)
     const atual = await this.consultarAssinatura(id)
     const cancelada = { ...atual, status: 'canceled', ocorridoEm: new Date().toISOString() }
     this.assinaturas.set(id, cancelada)
@@ -70,5 +80,32 @@ export class PagamentoFake implements PortaCobranca {
 
   async listarCobrancasDaAssinatura(id: string): Promise<CobrancaExterna[]> {
     return this.cobrancas.get(id) ?? []
+  }
+
+  async criarPagamentoUnico(pedido: PedidoPagamentoUnico): Promise<PagamentoExterno> {
+    // A chave de idempotência é o contrato do provedor: repetir o POST com a
+    // mesma chave devolve a MESMA preferência. O fake honra isso porque o
+    // checkout conta com ele — é assim que uma tentativa retomada não abre
+    // uma segunda cobrança.
+    const jaCriada = this.preferenciasPorChave.get(pedido.chaveIdempotencia)
+    if (jaCriada) return jaCriada
+    this.preferencias.push(pedido)
+    const preferencia: PagamentoExterno = {
+      id: `fake-pref-${pedido.referenciaExterna}`,
+      referenciaExterna: pedido.referenciaExterna,
+      urlCheckout: `https://www.mercadopago.com.br/checkout/v1/redirect?pref_id=fake-pref-${pedido.referenciaExterna}`,
+      ocorridoEm: null,
+    }
+    this.preferenciasPorChave.set(pedido.chaveIdempotencia, preferencia)
+    return preferencia
+  }
+
+  async buscarPagamentoPorReferencia(referenciaExterna: string): Promise<CobrancaExterna | null> {
+    return this.pagamentos.get(referenciaExterna) ?? null
+  }
+
+  /** Só para teste: diz que ALGUÉM pagou esta referência lá no provedor. */
+  registrarPagamento(cobranca: CobrancaExterna): void {
+    if (cobranca.referenciaExterna) this.pagamentos.set(cobranca.referenciaExterna, cobranca)
   }
 }

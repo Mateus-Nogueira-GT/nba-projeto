@@ -9,6 +9,10 @@ import { componente } from '@/design-system/tokens/componente'
 import { semantico } from '@/design-system/tokens/semantico'
 import type { DispositivoDoUsuario } from '@/modules/plataforma/admin/usuarios'
 import type { AcessoComNivel } from '@/modules/plataforma/assinatura/direito'
+import {
+  ROTULO_DA_MODALIDADE,
+  ROTULO_DO_NIVEL,
+} from '@/modules/plataforma/assinatura/nivel-do-plano'
 import type { EstadoExperiencia } from '@/modules/plataforma/experiencia/contrato'
 
 import {
@@ -344,10 +348,17 @@ export function BlocoAssinatura({
               fontSize: 14,
             }}
           >
-            {assinatura.plano && (
+            {/* O PLANO na linguagem da NIP, não a descrição do provedor.
+                `assinatura.plano` é texto livre que o Mercado Pago devolve e
+                às vezes vem vazio; nível e modalidade são o contrato, e é o
+                que a pessoa reconhece da tela onde comprou. */}
+            {acesso.nivel !== 'GRATIS' && (
               <>
                 <dt style={{ color: semantico.textoSecundario }}>Plano</dt>
-                <dd style={{ margin: 0 }}>{assinatura.plano}</dd>
+                <dd style={{ margin: 0 }}>
+                  {ROTULO_DO_NIVEL[acesso.nivel]}
+                  {acesso.modalidade && ` · ${ROTULO_DA_MODALIDADE[acesso.modalidade]}`}
+                </dd>
               </>
             )}
             <dt style={{ color: semantico.textoSecundario }}>Situação</dt>

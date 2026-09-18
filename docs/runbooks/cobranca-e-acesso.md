@@ -46,7 +46,9 @@ o padrão.
 
 O adapter segue os endpoints oficiais `POST/GET/PUT /preapproval`,
 `GET /preapproval/search`, `GET /authorized_payments/{id}`,
-`GET /authorized_payments/search` e `GET /v1/payments/{id}`.
+`GET /authorized_payments/search`, `GET /v1/payments/{id}`,
+`POST /checkout/preferences` (criação da compra de temporada) e
+`GET /v1/payments/search` (a volta dela, por `external_reference`).
 
 ## Variáveis obrigatórias para sandbox
 
@@ -54,13 +56,38 @@ O adapter segue os endpoints oficiais `POST/GET/PUT /preapproval`,
 MERCADOPAGO_ACCESS_TOKEN=
 MERCADOPAGO_WEBHOOK_SECRET=
 MERCADOPAGO_SANDBOX=true
-MERCADOPAGO_PLANO_NOME=IA da NBA Mensal
-MERCADOPAGO_PLANO_VALOR_CENTAVOS=4990
 MERCADOPAGO_PREAPPROVAL_TYPE=pending
+# Preços dos quatro SKUs, em centavos (spec de planos §10). Obrigatórios quando
+# MERCADOPAGO_CHECKOUT_ENABLED=true: faltando um deles a leitura LANÇA e derruba
+# /assinar e o webhook. Com o checkout desligado, a falta só esconde o preço.
+PLANO_MVP_MENSAL_CENTAVOS=5990
+PLANO_MVP_MENSAL_DE_CENTAVOS=7990
+PLANO_MVP_TEMPORADA_CENTAVOS=39700
+PLANO_ALL_STAR_MENSAL_CENTAVOS=9990
+PLANO_ALL_STAR_MENSAL_DE_CENTAVOS=14900
+PLANO_ALL_STAR_TEMPORADA_CENTAVOS=59700
+# Último dia INCLUSIVE da temporada vendida, no fuso da rodada. Passada a
+# data, o seletor esconde a modalidade temporada sozinho.
+TEMPORADA_FIM=2027-06-30
 APP_PUBLIC_URL=https://preview.example.com
 APP_ALLOWED_HOSTS=preview.example.com
 CRON_SECRET=
 ```
+
+Os quatro preços e `TEMPORADA_FIM` são obrigatórios quando
+`MERCADOPAGO_CHECKOUT_ENABLED=true` — sem qualquer um deles a aplicação recusa o
+checkout na hora de ler a configuração, em vez de vender por um valor que
+ninguém decidiu.
+
+`TEMPORADA_FIM` é o último dia INCLUSIVE da temporada vendida, no fuso da
+rodada. Passada a data, o seletor esconde a modalidade de temporada sozinho e o
+painel de usuários avisa 30 dias antes. **É anual: alguém precisa atualizá-lo
+antes de cada temporada nova** — renovação automática foi descartada na decisão
+4 da spec de planos.
+
+O estorno de temporada é MANUAL: painel do Mercado Pago mais revogação do
+direito pelo admin, com motivo. O upgrade não devolve o período restante, e a
+tela de compra avisa isso antes de cobrar.
 
 Nunca reutilize credenciais de produção no Preview. Configure no Mercado Pago
 os tópicos `subscription_preapproval`, `subscription_authorized_payment` e

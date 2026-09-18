@@ -12,7 +12,9 @@ import {
   jogos,
   locksIngestao,
   niveisVersao,
+  tentativasCheckout,
   times,
+  usuarios,
 } from '../db/schema'
 import { gravarApitos } from '../repositorios/apitos'
 import { ativarVersaoNiveis, versaoAtiva } from '../repositorios/niveis'
@@ -420,5 +422,79 @@ describe('feed_snapshot por jogo (spec 05, fatia 1)', () => {
       .catch((e: unknown) => e)
     expect(cadeiaDeMensagens(erro)).toMatch(/feed_snapshot_unico/)
     await banco.db.delete(feedSnapshot)
+  })
+})
+
+// ---------------------------------------------------------------------------
+
+describe('tentativas_checkout guarda o SKU comprado', () => {
+  it('aceita os quatro pares e recusa nível ou modalidade fora da lista', async () => {
+    // Insert direto, sem `adicionarUsuario`: esta suíte é de `dominio/`, e
+    // nenhum teste desta camada importa de `plataforma/` hoje. O que está
+    // sob prova é o CHECK da coluna, não o cadastro.
+    const [usuario] = await banco.db
+      .insert(usuarios)
+      .values({ email: 'sku@exemplo.com', senhaHash: 'x', nome: 'SKU' })
+      .returning({ id: usuarios.id })
+    const usuarioId = usuario!.id
+
+    const base = {
+      usuarioId,
+      produto: 'NBA_PRO',
+      provedor: 'fake',
+      status: 'CRIANDO' as const,
+      atualizadoEm: new Date('2026-10-01T12:00:00.000Z'),
+    }
+
+    // As colunas são `text` — o que impede lixo é o CHECK, não o TypeScript,
+    // porque o valor chega de formulário e atravessa uma conversão de tipo.
+    await expect(
+      banco.db.insert(tentativasCheckout).values({
+        ...base,
+        referenciaExterna: 'ref-invalida',
+        chaveIdempotencia: 'chave-invalida',
+        nivelDoPlano: 'GRATIS',
+        modalidade: 'MENSAL',
+      }),
+    ).rejects.toThrow()
+
+    await expect(
+      banco.db.insert(tentativasCheckout).values({
+        ...base,
+        referenciaExterna: 'ref-invalida-2',
+        chaveIdempotencia: 'chave-invalida-2',
+        nivelDoPlano: 'MVP',
+        modalidade: 'ANUAL',
+      }),
+    ).rejects.toThrow()
+
+    // Um par válido por vez: o índice único parcial só deixa UMA tentativa
+    // aberta por usuário e produto, então cada inserção encerra a anterior.
+    for (const [indice, par] of (
+      [
+        ['MVP', 'MENSAL'],
+        ['MVP', 'TEMPORADA'],
+        ['ALL_STAR', 'MENSAL'],
+        ['ALL_STAR', 'TEMPORADA'],
+      ] as const
+    ).entries()) {
+      await banco.db
+        .update(tentativasCheckout)
+        .set({ status: 'ENCERRADA' })
+        .where(eq(tentativasCheckout.usuarioId, usuarioId))
+      await banco.db.insert(tentativasCheckout).values({
+        ...base,
+        referenciaExterna: `ref-valida-${indice}`,
+        chaveIdempotencia: `chave-valida-${indice}`,
+        nivelDoPlano: par[0],
+        modalidade: par[1],
+      })
+    }
+
+    const linhas = await banco.db
+      .select()
+      .from(tentativasCheckout)
+      .where(eq(tentativasCheckout.usuarioId, usuarioId))
+    expect(linhas).toHaveLength(4)
   })
 })
