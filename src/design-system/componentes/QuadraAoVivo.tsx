@@ -45,8 +45,11 @@ export function QuadraAoVivo() {
           <path d="M130 124A36 36 0 0 1 130 196M470 124A36 36 0 0 0 470 196" />
           <path d="M18 38H65A132 132 0 0 1 65 282H18M582 38H535A132 132 0 0 0 535 282H582" />
           <path d="M42 146V174M558 146V174" strokeWidth="3" />
-          <circle cx="49" cy="160" r="6" stroke={semantico.acentoClaro} strokeWidth="2" />
-          <circle cx="551" cy="160" r="6" stroke={semantico.acentoClaro} strokeWidth="2" />
+          {/* As cestas: TRAÇO, e traço nunca veste o acento (identidade 05) —
+              o azul do manual tem o matiz do turbo, e um contorno azul aqui
+              seria um sinal de apito desenhado na quadra. */}
+          <circle cx="49" cy="160" r="6" stroke={semantico.texto100} strokeWidth="2" />
+          <circle cx="551" cy="160" r="6" stroke={semantico.texto100} strokeWidth="2" />
           <path d="M49 142A18 18 0 0 1 49 178M551 142A18 18 0 0 0 551 178" />
         </g>
         <g stroke={semantico.texto55} strokeWidth="1.2" strokeDasharray="4 5">

@@ -56,7 +56,7 @@ describe('CabecalhoJogo — a única fronteira de seção da varredura', () => {
     expect(html).not.toContain('19:30')
   })
 
-  it('quente e ao vivo: placar visitante · casa em Anton 30 entre os nomes, no gradiente quente', () => {
+  it('quente e ao vivo: placar visitante · casa na fonte de título 30 entre os nomes, no gradiente quente', () => {
     const html = render({
       ...base,
       status: 'AO_VIVO',
@@ -172,7 +172,7 @@ describe('CabecalhoJogo · a noite encerrada (identidade 04)', () => {
   const corDe = (html: string, numero: number) =>
     html.match(new RegExp(`color:([^"]+)">${numero}<`))?.[1]
 
-  it('placar final: o vencedor em texto100, o perdedor em texto55, em Anton 22', () => {
+  it('placar final: o vencedor em texto100, o perdedor em texto55, na fonte de título 22', () => {
     const html = render(encerrado)
     expect(corDe(html, 117)).toBe(semantico.texto100)
     expect(corDe(html, 93)).toBe(semantico.texto55)
@@ -193,7 +193,8 @@ describe('CabecalhoJogo · a noite encerrada (identidade 04)', () => {
     expect(html).toContain('24 · 22 · 23 · 24')
     expect(html.indexOf('30 · 28 · 29 · 30')).toBeLessThan(html.indexOf('24 · 22 · 23 · 24'))
     expect(html).toContain(semantico.texto40)
-    expect(html).toContain('font-size:10px')
+    // 12 px: o piso do manual (identidade 05). Era 10.
+    expect(html).toContain('font-size:12px')
     // cor não é canal único: o leitor de tela ouve de quem é cada linha
     expect(html).toContain('aria-label="Pontos por quarto')
   })

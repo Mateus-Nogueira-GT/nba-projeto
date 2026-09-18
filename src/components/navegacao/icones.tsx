@@ -1,66 +1,51 @@
 import { semantico } from '@/design-system/tokens/semantico'
 
+import type { Aba } from './abas'
+
 /**
- * ÍCONES DA BARRA — geométricos, em SVG inline, sem emoji.
+ * ÍCONES DA NAVEGAÇÃO — traço de 1,5 px a 20 px, um por aba.
  *
- * Cada aba tem uma forma fixa (quadrado, quadrado vazado, círculo, losango);
- * TODAS preenchem em `semantico.acento` (laranja) quando ativas — cor nunca é
- * canal único, então o preenchimento precisa mudar de estado em toda aba, não
- * só em algumas. `quadrado` e `quadradoVazado` continuam visualmente
- * diferentes mesmo preenchendo as duas: o que as distingue é o RAIO DO CANTO
- * (`rx={4}` contra `rx={1}`), não o preenchimento. Inativo é só contorno em
- * `semantico.textoSecundario`. Isso é redundância deliberada com o peso da
- * fonte do rótulo e o `aria-current` do link.
+ * O manual (p.5) pede ícone de traço consistente entre 20 e 24 px e diz que
+ * ícone INFORMA mas não substitui rótulo — por isso as duas barras sempre
+ * mostram o nome da aba ao lado.
+ *
+ * Substituem as quatro formas geométricas da identidade 02 (quadrado, quadrado
+ * vazado, círculo, losango). Elas nasceram para não usar emoji e resolveram
+ * isso, mas duas abas dividiam a mesma forma com raios de canto diferentes, e
+ * ao lado de uma marca real um vocabulário de formas abstratas vira ruído.
+ *
+ * O estado ativo NÃO é dito pela cor do traço: quem diz é a pílula preenchida
+ * atrás do ícone, o peso do rótulo e o `aria-current` do link. Aqui a cor só
+ * acompanha o texto, para os dois não brigarem dentro da pílula.
  */
-export function IconeAba({
-  forma,
-  ativo,
-}: {
-  forma: 'quadrado' | 'quadradoVazado' | 'circulo' | 'losango'
-  ativo: boolean
-}) {
-  const cor = ativo ? semantico.acento : semantico.textoSecundario
-  const comum = { width: 18, height: 18, viewBox: '0 0 20 20', 'aria-hidden': true } as const
+const CAMINHOS: Record<Aba, string> = {
+  // Lista de entradas: três linhas, a última mais curta.
+  lista: 'M4 6h12M4 10h12M4 14h8',
+  // A chama do Fire Live.
+  'fire-live': 'M10 3c1 3 4 4 4 8a4 4 0 0 1-8 0c0-2 1-3 2-4 0 2 1 3 2 3 0-3-1-5 0-7z',
+  // Barras de estatística, alturas diferentes.
+  stats: 'M4 16V9M10 16V4M16 16v-5',
+  // A carteira da gestão de banca.
+  gestao: 'M3 6h14v9H3zM3 9h14M13 12h2',
+  // A pessoa do perfil.
+  conta: 'M10 10a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM4 17c0-3 3-4 6-4s6 1 6 4',
+}
 
-  if (forma === 'losango')
-    return (
-      <svg {...comum}>
-        <rect
-          x={4.5}
-          y={4.5}
-          width={11}
-          height={11}
-          rx={2}
-          transform="rotate(45 10 10)"
-          fill={ativo ? cor : 'none'}
-          stroke={cor}
-          strokeWidth={1.6}
-        />
-      </svg>
-    )
-
-  if (forma === 'circulo')
-    return (
-      <svg {...comum}>
-        <circle cx={10} cy={10} r={6.5} fill={ativo ? cor : 'none'} stroke={cor} strokeWidth={1.6} />
-      </svg>
-    )
-
-  // 'quadrado' e 'quadradoVazado' compartilham a mesma forma base; a única
-  // diferença entre as duas é o raio do canto — as duas preenchem quando
-  // ativas.
+export function IconeAba({ aba, ativo }: { aba: Aba; ativo: boolean }) {
+  const cor = ativo ? semantico.textoSobreAcento : semantico.textoSecundario
   return (
-    <svg {...comum}>
-      <rect
-        x={3.5}
-        y={3.5}
-        width={13}
-        height={13}
-        rx={forma === 'quadrado' ? 4 : 1}
-        fill={ativo ? cor : 'none'}
-        stroke={cor}
-        strokeWidth={1.6}
-      />
+    <svg
+      width={20}
+      height={20}
+      viewBox="0 0 20 20"
+      aria-hidden
+      fill="none"
+      stroke={cor}
+      strokeWidth={1.5}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d={CAMINHOS[aba]} />
     </svg>
   )
 }

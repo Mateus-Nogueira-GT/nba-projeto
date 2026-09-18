@@ -1,0 +1,88 @@
+/* O EFEITO STATSHUB, sem o dado (identidade 05, §8).
+
+   Formas fixas atrás de um véu, com o convite por cima. A silhueta NÃO é um
+   conteúdo borrado: ela não tem número, nome nem cor de anel, e a quantidade de
+   blocos é a mesma em todo jogo, toda seção e todo usuário — quantos apitos há
+   hoje também é sinal. */
+
+.moldura {
+  position: relative;
+}
+
+.silhueta {
+  display: grid;
+  gap: 12px;
+  filter: blur(6px);
+  /* Ninguém clica nem tabula para dentro de uma forma vazia. */
+  pointer-events: none;
+  user-select: none;
+}
+
+.cards {
+  grid-template-columns: repeat(auto-fill, minmax(min(420px, 100%), 1fr));
+}
+
+.cards .bloco {
+  height: 168px;
+  border: 1px solid var(--divisor);
+  border-radius: 12px;
+  /* A forma do card de entrada, desenhada só com gradiente: o avatar, duas
+     linhas de texto e a fileira das barrinhas. Nenhum número, nenhum nome,
+     nenhuma cor de anel — o desenho é o mesmo em todo jogo. */
+  background:
+    radial-gradient(circle at 44px 44px, var(--superficie-elevada) 20px, transparent 21px),
+    linear-gradient(var(--superficie-elevada), var(--superficie-elevada)) 78px 32px / 180px 14px
+      no-repeat,
+    linear-gradient(var(--superficie-elevada), var(--superficie-elevada)) 78px 54px / 110px 10px
+      no-repeat,
+    linear-gradient(var(--divisor), var(--divisor)) 20px 96px / 60% 10px no-repeat,
+    linear-gradient(var(--divisor), var(--divisor)) 20px 124px / 40% 10px no-repeat,
+    var(--superficie);
+}
+
+.tabela .bloco {
+  height: 36px;
+  border-radius: 6px;
+  background: var(--superficie);
+}
+
+.numeros {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.numeros .bloco {
+  height: 64px;
+  border-radius: 8px;
+  background: var(--superficie);
+}
+
+.formulario .bloco {
+  height: 52px;
+  border-radius: 8px;
+  background: var(--superficie-elevada);
+}
+
+.formulario .bloco:last-child {
+  height: 48px;
+  background: var(--divisor);
+}
+
+.veu {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  border-radius: 12px;
+  background: linear-gradient(180deg, var(--veu-paywall-inicio), var(--veu-paywall-fim));
+  color: var(--texto-secundario);
+}
+
+.convite {
+  position: absolute;
+  right: 0;
+  bottom: 16px;
+  left: 0;
+  display: flex;
+  justify-content: center;
+  padding: 0 16px;
+}

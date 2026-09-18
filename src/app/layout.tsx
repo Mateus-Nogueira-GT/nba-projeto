@@ -1,4 +1,4 @@
-import { Anton, Barlow, Barlow_Condensed } from 'next/font/google'
+import { Bebas_Neue, Montserrat } from 'next/font/google'
 import type { Metadata, Viewport } from 'next'
 import type { ReactNode } from 'react'
 
@@ -10,18 +10,15 @@ import { marcaNip } from '@/design-system/marca'
 import '@/design-system/tokens/tokens.css'
 import './globals.css'
 
-// Fontes da identidade "02 Rota Transmissão" — self-hosted em build pelo
-// next/font/google (zero request ao Google em runtime).
-const anton = Anton({ weight: '400', subsets: ['latin'], variable: '--fonte-anton' })
-const barlow = Barlow({
-  weight: ['400', '600', '700'],
+// Fontes do Manual da Marca (identidade 05) — self-hosted em build pelo
+// next/font/google, como as duas anteriores: zero request ao Google em runtime.
+// A Bebas Neue só existe no peso 400; a Montserrat vem nos quatro pesos que o
+// manual autoriza.
+const bebas = Bebas_Neue({ weight: '400', subsets: ['latin'], variable: '--fonte-bebas' })
+const montserrat = Montserrat({
+  weight: ['400', '500', '600', '700'],
   subsets: ['latin'],
-  variable: '--fonte-barlow',
-})
-const barlowCondensed = Barlow_Condensed({
-  weight: ['500', '600', '700'],
-  subsets: ['latin'],
-  variable: '--fonte-barlow-condensed',
+  variable: '--fonte-montserrat',
 })
 
 export const metadata: Metadata = {
@@ -48,15 +45,14 @@ export const viewport: Viewport = {
   initialScale: 1,
   viewportFit: 'cover',
   colorScheme: 'dark',
-  themeColor: semantico.textoSobreCor,
+  // A cor da barra do sistema é o FUNDO do app, não o `textoSobreCor` — que
+  // por acaso era escuro e servia, mas descreve texto sobre cor, não superfície.
+  themeColor: semantico.fundo,
 }
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html
-      lang="pt-BR"
-      className={`${anton.variable} ${barlow.variable} ${barlowCondensed.variable}`}
-    >
+    <html lang="pt-BR" className={`${bebas.variable} ${montserrat.variable}`}>
       <body>
         <RegistrarServiceWorker />
         <FaixaDemonstracao />

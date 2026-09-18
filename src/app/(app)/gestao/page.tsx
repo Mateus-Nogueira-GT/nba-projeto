@@ -13,11 +13,13 @@ import { BANCA_PADRAO, planoDoDia } from '@/modules/entrega/gestao'
 import type { EntradaDoPlano } from '@/modules/entrega/gestao'
 import { rulesetAtivo } from '@/modules/entrega/ruleset-ativo'
 import { exigirNivel } from '@/modules/plataforma/assinatura/guarda'
+import { lateralPadrao } from '@/app/(app)/lateral/montar'
 import { atende } from '@/modules/plataforma/assinatura/nivel-do-plano'
 import { ConviteDoPlano } from '@/components/planos/ConviteDoPlano'
 import type { Atributo } from '@/modules/motor/tipos'
 import { registrarEntrada } from './acoes'
 import '@/design-system/tokens/tokens.css'
+import { SilhuetaPaga } from '@/components/planos/SilhuetaPaga'
 
 export const dynamic = 'force-dynamic'
 export const metadata = { title: 'Gestão de banca' }
@@ -192,7 +194,7 @@ function LinhaSugerida({ item, entrada, hoje }: EntradaDoPlano & { hoje: string 
               fontSize: 12,
               fontWeight: 700,
               cursor: 'pointer',
-              color: semantico.textoSobreCor,
+              color: semantico.textoSobreAcento,
               background: semantico.textoPrimario,
               border: 'none',
             }}
@@ -239,6 +241,7 @@ export default async function PaginaGestao({
 }) {
   if (!process.env.DATABASE_URL) {
     return (
+      // Sem `conta`: este aviso roda antes do login, e não há sessão a mostrar.
       <Moldura aba="gestao" largura="dados">
         <CabecalhoTela sobrancelha={SOBRANCELHA_GESTAO} titulo="PLANO DO DIA" />
         <p style={{ color: semantico.textoSecundario }}>Banco não configurado.</p>
@@ -279,7 +282,16 @@ export default async function PaginaGestao({
   // dele, então só barra aqui quem está mesmo tentando ver Sugeridas.
   if (!plano.temModelo && ver === 'sugeridas') {
     return (
-      <Moldura aba="gestao" largura="dados" assistente={atende(acesso.nivel, 'MVP')}>
+      <Moldura
+        aba="gestao"
+        conta={{ email: sessao.email }}
+        lateral={await lateralPadrao({
+          assistente: atende(acesso.nivel, 'MVP'),
+          gratis: !atende(acesso.nivel, 'MVP'),
+        })}
+        largura="dados"
+        assistente={atende(acesso.nivel, 'MVP')}
+      >
         <CabecalhoTela
           sobrancelha={SOBRANCELHA_GESTAO}
           titulo="PLANO DO DIA"
@@ -312,7 +324,16 @@ export default async function PaginaGestao({
     ver === 'realizadas' ? await entradasRealizadasDoDia(getDb(), sessao.usuarioId, hoje) : []
 
   return (
-    <Moldura aba="gestao" largura="dados" assistente={atende(acesso.nivel, 'MVP')}>
+    <Moldura
+      aba="gestao"
+      conta={{ email: sessao.email }}
+      lateral={await lateralPadrao({
+        assistente: atende(acesso.nivel, 'MVP'),
+        gratis: !atende(acesso.nivel, 'MVP'),
+      })}
+      largura="dados"
+      assistente={atende(acesso.nivel, 'MVP')}
+    >
       <CabecalhoTela
         sobrancelha={SOBRANCELHA_GESTAO}
         titulo="PLANO DO DIA"
@@ -327,7 +348,9 @@ export default async function PaginaGestao({
           o formulário — mas o portão de verdade é a AÇÃO (`gestao/acoes.ts`),
           que recusa mesmo quem chegar sem passar por esta tela. */}
       {ver === 'sugeridas' && !registra && (
-        <ConviteDoPlano minimo="MVP" recurso="Registrar entradas" voltar="/gestao" />
+        <SilhuetaPaga forma="formulario">
+          <ConviteDoPlano minimo="MVP" recurso="Registrar entradas" voltar="/gestao" />
+        </SilhuetaPaga>
       )}
       {ver === 'sugeridas' && registra && (
         <>
@@ -371,7 +394,7 @@ export default async function PaginaGestao({
                       fontSize: 13,
                       fontWeight: ativo ? 700 : 500,
                       textDecoration: 'none',
-                      color: ativo ? semantico.textoSobreCor : semantico.textoPrimario,
+                      color: ativo ? semantico.textoSobreAcento : semantico.textoPrimario,
                       background: ativo ? semantico.textoPrimario : semantico.superficie,
                       border: `1px solid ${semantico.divisor}`,
                     }}
@@ -410,7 +433,7 @@ export default async function PaginaGestao({
                   fontSize: 13,
                   fontWeight: 700,
                   cursor: 'pointer',
-                  color: semantico.textoSobreCor,
+                  color: semantico.textoSobreAcento,
                   background: semantico.textoPrimario,
                   border: 'none',
                 }}
@@ -494,7 +517,12 @@ export default async function PaginaGestao({
               algo que já aconteceu em outro lugar. */}
           <p
             role="note"
-            style={{ marginTop: 16, fontSize: 12, color: semantico.textoSecundario, lineHeight: 1.6 }}
+            style={{
+              marginTop: 16,
+              fontSize: 12,
+              color: semantico.textoSecundario,
+              lineHeight: 1.6,
+            }}
           >
             Somente leitura: a NIP não envia aposta nem sabe o que você apostou — só o que você
             registra.

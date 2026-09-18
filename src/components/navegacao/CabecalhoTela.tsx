@@ -29,23 +29,24 @@ export type GrupoDeOpcoes = {
 /**
  * CABEÇALHO PADRÃO — sobrancelha + título, usado por todas as telas.
  *
- * "Sobrancelha" é o rótulo pequeno acima do título (ex.: "LISTA SECRETA ·
- * PRÉ-LIVE"). O marcador ao lado dela troca de cor conforme o contexto: laranja
- * (`semantico.acento`) por padrão, vermelho (`semantico.aoVivo`) quando a tela
- * é de transmissão ao vivo — sinal redundante ao texto da própria sobrancelha,
- * nunca o único.
+ * "Sobrancelha" é o rótulo pequeno acima do título (ex.: "LISTA SECRETA").
+ *
+ * Identidade 05: o marcador colorido ao lado dela SAIU. Quem diz o contexto é o
+ * `selo` no canto (PRÉ-LIVE azul, AO VIVO vermelho), e um quadradinho de cor
+ * solto é justamente o vocabulário do anel do apito — repeti-lo no cabeçalho
+ * para dizer outra coisa seria um canal mentindo.
  *
  * `titulo` é OPCIONAL: o perfil do jogador põe o nome no hero, ao lado do
- * rosto (Anton 26, o desenho do artboard), e ali o nome é o `<h1>` da tela —
- * repeti-lo aqui em 30 px seria o mesmo nome duas vezes. Sem `titulo` este
- * cabeçalho é só a sobrancelha.
+ * rosto, e ali o nome é o `<h1>` da tela — repeti-lo aqui em 32 px seria o
+ * mesmo nome duas vezes. Sem `titulo` este cabeçalho é só a sobrancelha.
  *
- * Identidade 04 — quatro slots OPCIONAIS, todos ausentes nas telas que não os
- * pedem (a saída sem eles é a de sempre):
- *   `selo`     o SeloContexto preenchido no canto direito, na altura do título
- *   `seletor`  o segmentado POR JOGO · POR NÍVEL (ou HOJE · RESULTADOS)
- *   `acoes`    o que fica à direita do seletor — o botão FILTRAR da folha
- *   `lentes`   a fileira de lentes que troca a zona 2 de TODOS os cards
+ * Cinco slots OPCIONAIS, todos ausentes nas telas que não os pedem (a saída
+ * sem eles é a de sempre):
+ *   `selo`      o SeloContexto preenchido no canto direito, na altura do título
+ *   `seletor`   o segmentado POR JOGO · POR NÍVEL (ou HOJE · RESULTADOS)
+ *   `acoes`     o que fica à direita do seletor — os filtros
+ *   `lentes`    a fileira de lentes que troca a zona 2 de TODOS os cards
+ *   `contador`  o número da tela ("37 entradas em 7 jogos"), à moda do StatsHub
  *
  * Componente de servidor: sem estado, sem hook. `children` recebe os chips de
  * filtro (ou o subtítulo) que algumas telas colocam sob o título (ver `Chip`).
@@ -53,26 +54,25 @@ export type GrupoDeOpcoes = {
 export function CabecalhoTela({
   sobrancelha,
   titulo,
-  contexto = 'padrao',
   voltarHref,
   selo,
   seletor,
   acoes,
   lentes,
+  contador,
   children,
 }: {
   sobrancelha: string
   titulo?: string
-  contexto?: 'padrao' | 'aoVivo'
   voltarHref?: string
   selo?: ReactNode
   seletor?: GrupoDeOpcoes
   acoes?: ReactNode
   lentes?: GrupoDeOpcoes
+  /** O número da tela e o que ele conta ("37" · "entradas em 7 jogos"). */
+  contador?: { numero: number; rotulo: string }
   children?: ReactNode
 }) {
-  const corMarcador = contexto === 'aoVivo' ? semantico.aoVivo : semantico.acento
-
   return (
     <header style={{ marginBottom: 16 }}>
       <div
@@ -92,26 +92,13 @@ export function CabecalhoTela({
               gap: 8,
               fontFamily: semantico.fonteRotulo,
               fontSize: 12,
-              letterSpacing: 2,
-              // O TEXTO da sobrancelha é cinza (artboard 04, `.sobr`); quem
-              // carrega a cor do contexto é o marcador ao lado.
+              fontWeight: 600,
+              letterSpacing: '0.06em',
               color: semantico.textoSecundario,
               textTransform: 'uppercase',
             }}
           >
-            {voltarHref ? (
-              <BotaoVoltar href={voltarHref} />
-            ) : (
-              <span
-                aria-hidden
-                style={{
-                  width: 8,
-                  height: 8,
-                  background: corMarcador,
-                  transform: contexto === 'aoVivo' ? undefined : 'rotate(45deg)',
-                }}
-              />
-            )}
+            {voltarHref ? <BotaoVoltar href={voltarHref} /> : null}
             {sobrancelha}
           </p>
           {titulo && (
@@ -119,8 +106,8 @@ export function CabecalhoTela({
               style={{
                 margin: '6px 0 0',
                 fontFamily: semantico.fonteTitulo,
-                fontSize: 30,
-                letterSpacing: 0.5,
+                fontSize: 32,
+                letterSpacing: '0.02em',
                 textTransform: 'uppercase',
               }}
             >
@@ -148,6 +135,31 @@ export function CabecalhoTela({
         </div>
       )}
       {lentes && <Lentes {...lentes} />}
+      {contador && (
+        <p style={{ margin: '14px 0 0', display: 'flex', alignItems: 'baseline', gap: 8 }}>
+          <strong
+            style={{
+              fontFamily: semantico.fonteNumero,
+              fontSize: 24,
+              fontVariantNumeric: 'tabular-nums',
+            }}
+          >
+            {contador.numero}
+          </strong>
+          <span
+            style={{
+              fontFamily: semantico.fonteRotulo,
+              fontSize: 12,
+              fontWeight: 600,
+              letterSpacing: '0.06em',
+              textTransform: 'uppercase',
+              color: semantico.textoSecundario,
+            }}
+          >
+            {contador.rotulo}
+          </span>
+        </p>
+      )}
     </header>
   )
 }
@@ -164,15 +176,15 @@ function Seletor({ opcoes, ativa, rotulo = 'Ordenação', acao }: GrupoDeOpcoes)
     overflow: 'hidden',
   }
   const estilo = (ativo: boolean): CSSProperties => ({
-    padding: '6px 14px',
+    padding: '8px 14px',
     fontFamily: semantico.fonteRotulo,
     fontSize: 12,
-    letterSpacing: 1.2,
+    letterSpacing: '0.06em',
     textTransform: 'uppercase',
     textDecoration: 'none',
     whiteSpace: 'nowrap',
     fontWeight: ativo ? 700 : 600,
-    color: ativo ? semantico.textoSobreCor : semantico.textoSecundario,
+    color: ativo ? semantico.textoSobreAcento : semantico.textoSecundario,
     background: ativo ? semantico.acento : 'transparent',
   })
 
@@ -244,11 +256,13 @@ function Opcao({
       name="destino"
       value={opcao.href}
       aria-current={ativo ? 'page' : undefined}
-      // A borda é do ESTILO do grupo, não do botão: zerá-la aqui comia a
-      // borda divisória da lente ativa (e o `1px solid transparent` das
-      // inativas, que segura a fileira no lugar). Só quem não pediu borda
-      // nenhuma cai no `none` que o <button> precisa.
-      style={{ ...estilo, border: estilo.border ?? 'none', cursor: 'pointer' }}
+      // O `border: 'none'` vem ANTES do estilo, não depois. O <button> precisa
+      // dele (senão herda a borda do navegador), mas em CSS-in-JS a ordem das
+      // chaves é a ordem das declarações: depois do estilo, o atalho `border`
+      // zerava o `border-bottom` da lente ativa e o sublinhado sumia — e isso
+      // só aparecia na Lista, onde o grupo GRAVA a escolha e vira <button>,
+      // enquanto no resto do app ele é <a> e ninguém veria.
+      style={{ border: 'none', ...estilo, cursor: 'pointer' }}
     >
       {opcao.rotulo}
     </button>
@@ -260,31 +274,43 @@ function Opcao({
 }
 
 /**
- * LENTES — ÚLT. 5 · MÉDIA × LINHA · ODDS · HIERARQUIA. Pílulas discretas em
- * texto55; a ativa sobe para texto100 sobre a superfície elevada, com
- * `aria-current`. Trocar a lente troca a zona 2 de todos os cards de uma vez.
+ * LENTES — ÚLT. 5 · MÉDIA × LINHA · ODDS · HIERARQUIA.
+ *
+ * Identidade 05: viraram ABAS com sublinhado, como a fileira de mercados do
+ * StatsHub, no lugar das pílulas da identidade 04. Duas fileiras de pílula
+ * (o seletor logo acima e as lentes) diziam ao olho que as duas coisas eram
+ * do mesmo tipo, e não são: uma é a ordem da lista, a outra é o que o card
+ * mostra. A ativa sobe para texto100 com o traço branco embaixo, e o
+ * `aria-current` continua dizendo o estado sem depender da cor.
+ *
+ * Rolam na horizontal no celular — quatro rótulos não cabem em 358 px.
  */
 function Lentes({ opcoes, ativa, rotulo = 'Lente', acao }: GrupoDeOpcoes) {
   const estilo = (ativo: boolean): CSSProperties => ({
-    padding: '4px 10px',
-    borderRadius: 999,
+    padding: '8px 2px',
     fontFamily: semantico.fonteRotulo,
-    fontSize: 11,
-    letterSpacing: 1,
+    fontSize: 12,
+    letterSpacing: '0.06em',
     textTransform: 'uppercase',
     fontWeight: 600,
     whiteSpace: 'nowrap',
     textDecoration: 'none',
-    color: ativo ? semantico.texto100 : semantico.texto55,
-    border: `1px solid ${ativo ? semantico.divisor : 'transparent'}`,
-    background: ativo ? semantico.superficieElevada : 'transparent',
+    background: 'transparent',
+    color: ativo ? semantico.texto100 : semantico.textoSecundario,
+    borderBottom: `2px solid ${ativo ? semantico.texto100 : 'transparent'}`,
   })
 
   return (
     <Grupo
       rotulo={rotulo}
       acao={acao}
-      estiloDoGrupo={{ display: 'flex', gap: 6, marginTop: 10, overflowX: 'auto' }}
+      estiloDoGrupo={{
+        display: 'flex',
+        gap: 18,
+        marginTop: 12,
+        overflowX: 'auto',
+        borderBottom: `1px solid ${semantico.divisor}`,
+      }}
     >
       {opcoes.map((opcao) => (
         <Opcao
@@ -296,43 +322,5 @@ function Lentes({ opcoes, ativa, rotulo = 'Lente', acao }: GrupoDeOpcoes) {
         />
       ))}
     </Grupo>
-  )
-}
-
-/**
- * CHIP — filtro em forma de pílula sob o cabeçalho. Contorno e texto viram
- * `semantico.acento` quando ativo; senão contorno neutro (`semantico.divisor`)
- * e texto secundário. `aria-current="page"` marca o estado para leitor de
- * tela, redundante com a cor.
- */
-export function Chip({
-  href,
-  ativo,
-  children,
-}: {
-  href: string
-  ativo: boolean
-  children: ReactNode
-}) {
-  return (
-    <Link
-      href={href}
-      aria-current={ativo ? 'page' : undefined}
-      style={{
-        padding: '5px 14px',
-        borderRadius: 999,
-        fontFamily: semantico.fonteRotulo,
-        fontSize: 13,
-        letterSpacing: 1,
-        textTransform: 'uppercase',
-        textDecoration: 'none',
-        fontWeight: ativo ? 700 : 600,
-        color: ativo ? semantico.textoSobreCor : semantico.textoSecundario,
-        border: `1.5px solid ${ativo ? semantico.acento : semantico.divisor}`,
-        background: ativo ? semantico.acento : 'transparent',
-      }}
-    >
-      {children}
-    </Link>
   )
 }

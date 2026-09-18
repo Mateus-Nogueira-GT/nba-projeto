@@ -133,7 +133,7 @@ export default async function PaginaAssinar({
                       borderRadius: 10,
                       padding: 13,
                       background: componente.ctaFundo,
-                      color: semantico.textoSobreCor,
+                      color: semantico.textoSobreAcento,
                       fontFamily: semantico.fonteTitulo,
                       cursor: 'pointer',
                       textAlign: 'left',

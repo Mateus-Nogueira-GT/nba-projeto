@@ -26,8 +26,8 @@ describe('manifest PWA', () => {
       start_url: '/',
       scope: '/',
       display: 'standalone',
-      background_color: semantico.textoSobreCor,
-      theme_color: semantico.textoSobreCor,
+      background_color: semantico.fundo,
+      theme_color: semantico.fundo,
     })
   })
 

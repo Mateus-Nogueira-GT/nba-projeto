@@ -48,8 +48,8 @@ export function Barrinhas({ jogos, rotulo, destacarUltima = false }: BarrinhasPr
         <span
           style={{
             fontFamily: semantico.fonteRotulo,
-            fontSize: 10,
-            letterSpacing: 1,
+            fontSize: 12,
+            letterSpacing: '0.06em',
             color: semantico.textoSecundario,
             textTransform: 'uppercase',
             marginRight: 3,
@@ -62,16 +62,18 @@ export function Barrinhas({ jogos, rotulo, destacarUltima = false }: BarrinhasPr
         <span
           key={i}
           style={{
-            width: 18,
-            height: 18,
-            borderRadius: 5,
+            // 24, não 18: o valor dentro sobe para os 12 px do piso do manual
+            // e a caixa precisa acompanhar para o número não encostar na borda.
+            width: 24,
+            height: 24,
+            borderRadius: 6,
             display: 'grid',
             placeItems: 'center',
             background: j.bateu ? semantico.barrinhaBateu : semantico.barrinhaFalhou,
             color: j.bateu ? semantico.textoSobreCor : semantico.textoPrimario,
             fontFamily: semantico.fonteRotulo,
-            fontSize: 10,
-            fontWeight: 800,
+            fontSize: 12,
+            fontWeight: 700,
             fontVariantNumeric: 'tabular-nums',
             outline: i === nova ? `2px solid ${semantico.texto100}` : undefined,
             outlineOffset: i === nova ? 1 : undefined,

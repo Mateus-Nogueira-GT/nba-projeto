@@ -35,7 +35,7 @@ import {
 } from '@/modules/entrega/lista-secreta-rotas'
 import { rulesetAtivo } from '@/modules/entrega/ruleset-ativo'
 import { dataDeReferencia } from '@/modules/dominio/rodada'
-import { dataHora, horaEmTexto } from '@/components/formato'
+import { dataHora, diaDaRodada, horaEmTexto } from '@/components/formato'
 import {
   CabecalhoTela,
   Chip,
@@ -49,6 +49,7 @@ import { semantico } from '@/design-system/tokens/semantico'
 import { AtivarAlertas, PainelPwa } from '@/components/pwa'
 import { ConviteDoPlano } from '@/components/planos/ConviteDoPlano'
 import { JogosDoDia } from '@/components/planos/JogosDoDia'
+import { lateralPadrao } from '@/app/(app)/lateral/montar'
 import { atende } from '@/modules/plataforma/assinatura/nivel-do-plano'
 import { exigirNivel } from '@/modules/plataforma/assinatura/guarda'
 import { politicaHomologacaoDoAmbiente } from '@/modules/entrega/push/fanout'
@@ -90,19 +91,6 @@ function rotuloQuantidade(n: number): string {
   return n === 0 ? 'Lista inteira' : `${n} vítima${n === 1 ? '' : 's'}`
 }
 
-/** "segunda, 7 de setembro" — o "-feira" só rouba espaço no cabeçalho. */
-function diaDaRodada(dataReferencia: string): string {
-  const [ano, mes, dia] = dataReferencia.split('-').map(Number)
-  return new Date(Date.UTC(ano!, mes! - 1, dia!))
-    .toLocaleDateString('pt-BR', {
-      timeZone: 'UTC',
-      weekday: 'long',
-      day: 'numeric',
-      month: 'long',
-    })
-    .replace('-feira', '')
-}
-
 /** O que "Ver todas" e o × do chip apagam: os seis recortes, nada mais. */
 const SEM_RECORTE = {
   quantidade: 0,
@@ -112,32 +100,6 @@ const SEM_RECORTE = {
   posicao: undefined,
   atributo: undefined,
 } as const
-
-/**
- * Um recorte por fileira, DENTRO da folha. `<fieldset>` de verdade, com
- * `<legend>`: é o que ele é — um grupo de opções nomeado — e é por ele que o
- * teste prova que a parede de seis fileiras não abre mais a tela.
- */
-function GrupoFiltro({ titulo, children }: { titulo: string; children: React.ReactNode }) {
-  return (
-    <fieldset style={{ margin: 0, padding: 0, border: 'none' }}>
-      <legend
-        style={{
-          padding: 0,
-          marginBottom: 6,
-          fontFamily: semantico.fonteRotulo,
-          fontSize: 11,
-          letterSpacing: 1.2,
-          textTransform: 'uppercase',
-          color: semantico.textoSecundario,
-        }}
-      >
-        {titulo}
-      </legend>
-      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>{children}</div>
-    </fieldset>
-  )
-}
 
 /**
  * O recorte ativo ao lado do botão FILTRAR: UM chip, sempre (spec 04, §4.1).
@@ -204,47 +166,54 @@ function CartaoDaLista({
       : undefined
 
   return (
-    <div>
-      <CardEntrada
-        nome={item.nome}
-        // Segundo caminho de entrada da aba de estatísticas: o nome do jogador
-        // dentro de qualquer card leva à MESMA tela que a busca do menu — a URL
-        // sai da mesma função nos dois lugares.
-        jogadorHref={rotaDoJogador(item.jogadorId)}
-        detalheHref={`/apito/${item.jogadorId}?atributo=${item.atributo}`}
-        fotoUrl={item.fotoUrl ?? null}
-        timeSigla={item.timeSigla}
-        adversarioSigla={confronto?.adversarioSigla ?? null}
-        emCasa={confronto?.emCasa ?? null}
-        posicao={item.posicao}
-        atributo={item.atributo}
-        nivelJogador={item.nivelJogador}
-        nivelApito={item.nivelApito}
-        linha={item.linha}
-        confianca={item.confianca}
-        // O grau já veio calculado na materialização (uma vez por evento). A
-        // tela lê; não recalcula nem chama o motor.
-        grauConfianca={item.grauConfianca ?? null}
-        turbo={item.turbo}
-        modoFire={item.modoFire}
-        opdOrigemNivel={item.opdOrigemNivel}
-        alvo1Q={item.alvo1Q}
-        // Contexto materializado da identidade 03 — o card mostra barrinhas,
-        // média e odd sem nenhuma consulta da tela.
-        ultimos5={item.ultimos5 ?? []}
-        mediaTemporada={item.mediaTemporada ?? null}
-        oddFaixa={item.oddFaixa ?? null}
-        narrativa={item.narrativa ?? null}
-        atributos={abas}
-        lente={lente}
-        hierarquia={hierarquia}
-        // Sem ciclo, o card não desenha badge — que é o que se quer no pré-live,
-        // onde o "PRÉ" seria idêntico em todos os cards e o selo do cabeçalho já
-        // disse isso. Quando o jogo começa, o card conta onde está.
-        estado={ciclo ?? undefined}
-      />
-      <BotaoAcompanharJogador jogadorId={item.jogadorId} inicial={acompanhado} />
-    </div>
+    <CardEntrada
+      nome={item.nome}
+      // Segundo caminho de entrada da aba de estatísticas: o nome do jogador
+      // dentro de qualquer card leva à MESMA tela que a busca do menu — a URL
+      // sai da mesma função nos dois lugares.
+      jogadorHref={rotaDoJogador(item.jogadorId)}
+      detalheHref={`/apito/${item.jogadorId}?atributo=${item.atributo}`}
+      fotoUrl={item.fotoUrl ?? null}
+      timeSigla={item.timeSigla}
+      adversarioSigla={confronto?.adversarioSigla ?? null}
+      emCasa={confronto?.emCasa ?? null}
+      posicao={item.posicao}
+      atributo={item.atributo}
+      nivelJogador={item.nivelJogador}
+      nivelApito={item.nivelApito}
+      linha={item.linha}
+      confianca={item.confianca}
+      // O grau já veio calculado na materialização (uma vez por evento). A
+      // tela lê; não recalcula nem chama o motor.
+      grauConfianca={item.grauConfianca ?? null}
+      turbo={item.turbo}
+      modoFire={item.modoFire}
+      opdOrigemNivel={item.opdOrigemNivel}
+      alvo1Q={item.alvo1Q}
+      // Contexto materializado da identidade 03 — o card mostra barrinhas,
+      // média e odd sem nenhuma consulta da tela.
+      ultimos5={item.ultimos5 ?? []}
+      mediaTemporada={item.mediaTemporada ?? null}
+      oddFaixa={item.oddFaixa ?? null}
+      narrativa={item.narrativa ?? null}
+      atributos={abas}
+      lente={lente}
+      hierarquia={hierarquia}
+      // Sem ciclo, o card não desenha badge — que é o que se quer no pré-live,
+      // onde o "PRÉ" seria idêntico em todos os cards e o selo do cabeçalho já
+      // disse isso. Quando o jogo começa, o card conta onde está.
+      estado={ciclo ?? undefined}
+      // A estrela vai para o CANTO do card (identidade 05). Solta embaixo
+      // dele, ela deixava cada card terminando numa altura diferente e
+      // quebrava o ritmo da grade de duas colunas.
+      acaoCanto={
+        <BotaoAcompanharJogador
+          jogadorId={item.jogadorId}
+          inicial={acompanhado}
+          variante="estrela"
+        />
+      }
+    />
   )
 }
 
@@ -257,6 +226,7 @@ export default async function PaginaListaSecreta({
 
   if (!process.env.DATABASE_URL) {
     return (
+      // Sem `conta`: este aviso roda antes do login, e não há sessão a mostrar.
       <Moldura aba="lista" largura="dados">
         <h1>Lista Secreta</h1>
         <p style={{ color: semantico.textoSecundario }}>
@@ -301,10 +271,34 @@ export default async function PaginaListaSecreta({
   // decisão 5). Nada do feed entra nesta renderização.
   if (!atende(acesso.nivel, 'MVP')) {
     return (
-      <Moldura aba="lista" assistente={atende(acesso.nivel, 'MVP')}>
-        <CabecalhoTela sobrancelha="LISTA SECRETA" titulo="LISTA DO DIA" />
+      <Moldura
+        aba="lista"
+        conta={{ email: sessao.email }}
+        lateral={await lateralPadrao({
+          assistente: atende(acesso.nivel, 'MVP'),
+          gratis: !atende(acesso.nivel, 'MVP'),
+        })}
+        assistente={atende(acesso.nivel, 'MVP')}
+      >
+        {/* A MOLDURA é a do assinante: mesma sobrancelha, mesmo H1, mesmo
+            selo. O que falta é o conteúdo, e é isso que o convite precisa
+            mostrar — uma tela diferente não diria o que ele está perdendo. Sem
+            contador e sem controles: não há o que contar nem o que filtrar. */}
+        <CabecalhoTela
+          sobrancelha="LISTA SECRETA"
+          titulo="LISTA DO DIA"
+          selo={<SeloContexto contexto="preLive" />}
+        >
+          <p style={{ margin: 0, fontSize: 14, color: semantico.textoSecundario }}>
+            Rodada de {diaDaRodada(hoje)}
+          </p>
+        </CabecalhoTela>
+        {/* A faixa some a partir de 1280: ali ela mora no topo da LATERAL, e
+            duas vezes na mesma tela é uma a mais. */}
+        <div className="so-ate-lateral">
+          <ConviteDoPlano variante="faixa" minimo="MVP" recurso="A Lista Secreta" voltar="/" />
+        </div>
         <JogosDoDia jogos={jogosDoDia} fuso={fuso} />
-        <ConviteDoPlano minimo="MVP" recurso="A Lista Secreta" voltar="/" />
       </Moldura>
     )
   }
@@ -327,7 +321,16 @@ export default async function PaginaListaSecreta({
               ruleset.publicacao.lista_secreta.antecedencia_minutos * 60_000,
           )
     return (
-      <Moldura aba="lista" largura="dados" assistente={atende(acesso.nivel, 'MVP')}>
+      <Moldura
+        aba="lista"
+        conta={{ email: sessao.email }}
+        lateral={await lateralPadrao({
+          assistente: atende(acesso.nivel, 'MVP'),
+          gratis: !atende(acesso.nivel, 'MVP'),
+        })}
+        largura="dados"
+        assistente={atende(acesso.nivel, 'MVP')}
+      >
         <CabecalhoTela
           sobrancelha="LISTA SECRETA"
           titulo="LISTA DO DIA"
@@ -358,7 +361,14 @@ export default async function PaginaListaSecreta({
               : 'Sem rodada hoje. Enquanto isso, a noite passada:'}
           </p>
           <p style={{ margin: '12px 0 0', fontSize: 13 }}>
-            <Link href="/resultados" style={{ color: semantico.acento }}>
+            <Link
+              href="/resultados"
+              style={{
+                color: semantico.textoPrimario,
+                textDecoration: 'underline',
+                textUnderlineOffset: 3,
+              }}
+            >
               Resultados de ontem →
             </Link>
           </p>
@@ -423,7 +433,16 @@ export default async function PaginaListaSecreta({
   const atributosDoDia = ATRIBUTOS.filter((a) => doDia.some((i) => i.atributo === a))
 
   return (
-    <Moldura aba="lista" largura="dados" assistente={atende(acesso.nivel, 'MVP')}>
+    <Moldura
+      aba="lista"
+      conta={{ email: sessao.email }}
+      lateral={await lateralPadrao({
+        assistente: atende(acesso.nivel, 'MVP'),
+        gratis: !atende(acesso.nivel, 'MVP'),
+      })}
+      largura="dados"
+      assistente={atende(acesso.nivel, 'MVP')}
+    >
       <CabecalhoTela
         sobrancelha="LISTA SECRETA"
         titulo="LISTA DO DIA"
@@ -438,100 +457,146 @@ export default async function PaginaListaSecreta({
           ],
         }}
         acoes={
-          <FolhaDeFiltros ativos={recortesAtivos(estado)}>
-            <GrupoFiltro titulo="Quantidade">
-              {QUANTIDADES.map((n) => (
-                // Pelo MESMO montador dos demais chips: quantidade é um
-                // recorte como os outros e não pode varrer o que já foi
-                // escolhido.
-                <Chip key={n} href={comQuantidade(estado, n)} ativo={n === estado.quantidade}>
-                  {rotuloQuantidade(n)}
-                </Chip>
-              ))}
-            </GrupoFiltro>
-
-            {atributosDoDia.length > 1 && (
-              <GrupoFiltro titulo="Atributo">
-                <Chip
-                  href={comFiltro(estado, 'atributo', undefined)}
-                  ativo={estado.atributo === undefined}
-                >
-                  Todos
-                </Chip>
-                {atributosDoDia.map((a) => (
-                  <Chip
-                    key={a}
-                    href={comFiltro(estado, 'atributo', a)}
-                    ativo={estado.atributo === a}
-                  >
-                    {ROTULO_ATRIBUTO[a]}
+          <FolhaDeFiltros
+            ativos={recortesAtivos(estado)}
+            grupos={[
+              {
+                titulo: 'Quantidade',
+                ativo: estado.quantidade !== 0 ? rotuloQuantidade(estado.quantidade) : undefined,
+                chips: QUANTIDADES.map((n) => (
+                  // Pelo MESMO montador dos demais chips: quantidade é um
+                  // recorte como os outros e não pode varrer o que já foi
+                  // escolhido.
+                  <Chip key={n} href={comQuantidade(estado, n)} ativo={n === estado.quantidade}>
+                    {rotuloQuantidade(n)}
                   </Chip>
-                ))}
-              </GrupoFiltro>
-            )}
-
-            <GrupoFiltro titulo="Método">
-              <Chip
-                href={comFiltro(estado, 'metodo', undefined)}
-                ativo={estado.metodo === undefined}
-              >
-                Todos
-              </Chip>
-              {METODOS.map((m) => (
-                <Chip key={m} href={comFiltro(estado, 'metodo', m)} ativo={estado.metodo === m}>
-                  {ROTULO_METODO[m]}
-                </Chip>
-              ))}
-            </GrupoFiltro>
-
-            <GrupoFiltro titulo="Nível do jogador">
-              <Chip href={comFiltro(estado, 'nivel', undefined)} ativo={estado.nivel === undefined}>
-                Todos
-              </Chip>
-              {NIVEIS.map((n) => (
-                <Chip key={n} href={comFiltro(estado, 'nivel', n)} ativo={estado.nivel === n}>
-                  {ROTULO_NIVEL[n]}
-                </Chip>
-              ))}
-            </GrupoFiltro>
-
-            {timesDoDia.length > 1 && (
-              <GrupoFiltro titulo="Time">
-                <Chip href={comFiltro(estado, 'time', undefined)} ativo={estado.time === undefined}>
-                  Todos
-                </Chip>
-                {timesDoDia.map((sigla) => (
-                  <Chip
-                    key={sigla}
-                    href={comFiltro(estado, 'time', sigla)}
-                    ativo={estado.time === sigla}
-                  >
-                    {sigla}
-                  </Chip>
-                ))}
-              </GrupoFiltro>
-            )}
-
-            {posicoesDoDia.length > 1 && (
-              <GrupoFiltro titulo="Posição">
-                <Chip
-                  href={comFiltro(estado, 'posicao', undefined)}
-                  ativo={estado.posicao === undefined}
-                >
-                  Todas
-                </Chip>
-                {posicoesDoDia.map((pos) => (
-                  <Chip
-                    key={pos}
-                    href={comFiltro(estado, 'posicao', pos)}
-                    ativo={estado.posicao === pos}
-                  >
-                    {pos}
-                  </Chip>
-                ))}
-              </GrupoFiltro>
-            )}
-          </FolhaDeFiltros>
+                )),
+              },
+              ...(atributosDoDia.length > 1
+                ? [
+                    {
+                      titulo: 'Atributo',
+                      ativo: estado.atributo ? ROTULO_ATRIBUTO[estado.atributo] : undefined,
+                      chips: (
+                        <>
+                          <Chip
+                            href={comFiltro(estado, 'atributo', undefined)}
+                            ativo={estado.atributo === undefined}
+                          >
+                            Todos
+                          </Chip>
+                          {atributosDoDia.map((a) => (
+                            <Chip
+                              key={a}
+                              href={comFiltro(estado, 'atributo', a)}
+                              ativo={estado.atributo === a}
+                            >
+                              {ROTULO_ATRIBUTO[a]}
+                            </Chip>
+                          ))}
+                        </>
+                      ),
+                    },
+                  ]
+                : []),
+              {
+                titulo: 'Método',
+                ativo: estado.metodo ? ROTULO_METODO[estado.metodo] : undefined,
+                chips: (
+                  <>
+                    <Chip
+                      href={comFiltro(estado, 'metodo', undefined)}
+                      ativo={estado.metodo === undefined}
+                    >
+                      Todos
+                    </Chip>
+                    {METODOS.map((m) => (
+                      <Chip
+                        key={m}
+                        href={comFiltro(estado, 'metodo', m)}
+                        ativo={estado.metodo === m}
+                      >
+                        {ROTULO_METODO[m]}
+                      </Chip>
+                    ))}
+                  </>
+                ),
+              },
+              {
+                titulo: 'Nível do jogador',
+                ativo: estado.nivel ? ROTULO_NIVEL[estado.nivel] : undefined,
+                chips: (
+                  <>
+                    <Chip
+                      href={comFiltro(estado, 'nivel', undefined)}
+                      ativo={estado.nivel === undefined}
+                    >
+                      Todos
+                    </Chip>
+                    {NIVEIS.map((n) => (
+                      <Chip key={n} href={comFiltro(estado, 'nivel', n)} ativo={estado.nivel === n}>
+                        {ROTULO_NIVEL[n]}
+                      </Chip>
+                    ))}
+                  </>
+                ),
+              },
+              ...(timesDoDia.length > 1
+                ? [
+                    {
+                      titulo: 'Time',
+                      ativo: estado.time,
+                      chips: (
+                        <>
+                          <Chip
+                            href={comFiltro(estado, 'time', undefined)}
+                            ativo={estado.time === undefined}
+                          >
+                            Todos
+                          </Chip>
+                          {timesDoDia.map((sigla) => (
+                            <Chip
+                              key={sigla}
+                              href={comFiltro(estado, 'time', sigla)}
+                              ativo={estado.time === sigla}
+                            >
+                              {sigla}
+                            </Chip>
+                          ))}
+                        </>
+                      ),
+                    },
+                  ]
+                : []),
+              ...(posicoesDoDia.length > 1
+                ? [
+                    {
+                      titulo: 'Posição',
+                      ativo: estado.posicao,
+                      chips: (
+                        <>
+                          <Chip
+                            href={comFiltro(estado, 'posicao', undefined)}
+                            ativo={estado.posicao === undefined}
+                          >
+                            Todas
+                          </Chip>
+                          {posicoesDoDia.map((pos) => (
+                            <Chip
+                              key={pos}
+                              href={comFiltro(estado, 'posicao', pos)}
+                              ativo={estado.posicao === pos}
+                            >
+                              {pos}
+                            </Chip>
+                          ))}
+                        </>
+                      ),
+                    },
+                  ]
+                : []),
+            ]}
+          />
         }
         lentes={{
           rotulo: 'Lente do card',
@@ -543,15 +608,20 @@ export default async function PaginaListaSecreta({
             href: comLente(estado, l),
           })),
         }}
+        contador={{
+          numero: entradasPublicadas.length,
+          rotulo: `entrada${entradasPublicadas.length === 1 ? '' : 's'} em ${jogosComApito} jogo${jogosComApito === 1 ? '' : 's'}`,
+        }}
       >
         <div style={{ display: 'grid', gap: 8, flex: 1 }}>
-          <p style={{ margin: 0, fontSize: 13, lineHeight: 1.45, color: semantico.texto55 }}>
+          {/* A contagem saiu daqui e virou o CONTADOR do cabeçalho (o número
+              da tela, à moda do StatsHub) — repeti-la seria o mesmo dado duas
+              vezes na mesma dobra. */}
+          <p
+            style={{ margin: 0, fontSize: 14, lineHeight: 1.45, color: semantico.textoSecundario }}
+          >
             Rodada de {diaDaRodada(feed.conteudo.dataReferencia)} · publicada às{' '}
-            {horaEmTexto(feed.geradoEm, fuso)} ·{' '}
-            <span style={{ color: semantico.texto70 }}>
-              {entradasPublicadas.length} entrada{entradasPublicadas.length === 1 ? '' : 's'} em{' '}
-              {jogosComApito} jogo{jogosComApito === 1 ? '' : 's'}
-            </span>
+            {horaEmTexto(feed.geradoEm, fuso)}
           </p>
           {/* Resumo editorial da rodada, gerado na materialização junto com as
               narrativas dos cards. Ausente é caso NORMAL (sem chave de LLM,
@@ -600,10 +670,14 @@ export default async function PaginaListaSecreta({
 
       {ordem === 'POR_JOGO' ? (
         grupos.map((grupo) => (
-          <section key={grupo.jogoId}>
+          <details key={grupo.jogoId} open>
             {/* A ÚNICA fronteira de seção da tela: sem divisória entre cards,
-                sem título intermediário (spec 04, §4.1). */}
+                sem título intermediário (spec 04, §4.1). Desde a identidade 05
+                ela também FECHA a seção — `<details>` nativo, aberto por
+                padrão e sem persistir: fechar um jogo é gesto da sessão, não
+                preferência da conta como a ordem e a lente. */}
             <CabecalhoJogo
+              raiz="summary"
               casaSigla={grupo.casaSigla}
               visitanteSigla={grupo.visitanteSigla}
               horarioUtc={grupo.dataHoraUtc}
@@ -632,7 +706,7 @@ export default async function PaginaListaSecreta({
                 )
               })}
             </div>
-          </section>
+          </details>
         ))
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: GRADE_DE_CARDS, gap: 12 }}>

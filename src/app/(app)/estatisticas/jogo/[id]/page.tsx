@@ -19,11 +19,13 @@ import type { Coluna } from '@/design-system/componentes'
 import { NIVEL_JOGADOR } from '@/design-system/tokens/css'
 import { semantico } from '@/design-system/tokens/semantico'
 import { exigirNivel } from '@/modules/plataforma/assinatura/guarda'
+import { lateralPadrao } from '@/app/(app)/lateral/montar'
 import { atende } from '@/modules/plataforma/assinatura/nivel-do-plano'
 import { ConviteDoPlano } from '@/components/planos/ConviteDoPlano'
 import '@/design-system/tokens/tokens.css'
 import { Secao, SemBanco, SOBRANCELHA_STATS } from '../../moldura'
 import { AtualizarAoVivo } from '@/components/AtualizarAoVivo'
+import { SilhuetaPaga } from '@/components/planos/SilhuetaPaga'
 
 export const dynamic = 'force-dynamic'
 
@@ -271,7 +273,7 @@ export default async function PaginaDoJogo({
   // não existe responde 404 sem tocar sessão nem cookie. Pontos por quarto,
   // líderes e desfalques continuam grátis; box score e confrontos anteriores
   // são MVP (spec §5).
-  const { acesso } = await exigirNivel('GRATIS', rotaDoJogo(id))
+  const { sessao, acesso } = await exigirNivel('GRATIS', rotaDoJogo(id))
 
   const aoVivo = tela.status === 'AO_VIVO'
   const encerrado = tela.status === 'ENCERRADO'
@@ -280,7 +282,11 @@ export default async function PaginaDoJogo({
   const profundidade = atende(acesso.nivel, 'MVP')
 
   return (
-    <Moldura aba="stats" largura="dados" assistente={atende(acesso.nivel, 'MVP')}>
+    <Moldura aba="stats" largura="dados" conta={{ email: sessao.email }}
+      lateral={await lateralPadrao({
+        assistente: atende(acesso.nivel, 'MVP'),
+        gratis: !atende(acesso.nivel, 'MVP'),
+      })} assistente={atende(acesso.nivel, 'MVP')}>
       <CabecalhoTela
         sobrancelha={SOBRANCELHA_STATS}
         titulo={`${tela.casa.sigla} × ${tela.visitante.sigla}`}
@@ -327,7 +333,9 @@ export default async function PaginaDoJogo({
       {(aoVivo || encerrado) &&
         (!profundidade ? (
           <Secao titulo="Box score">
-            <ConviteDoPlano minimo="MVP" recurso="O box score" voltar={rotaDoJogo(id)} />
+            <SilhuetaPaga forma="tabela">
+              <ConviteDoPlano minimo="MVP" recurso="O box score" voltar={rotaDoJogo(id)} />
+            </SilhuetaPaga>
           </Secao>
         ) : temBox ? (
           [tela.casa, tela.visitante].map((lado) => (
@@ -359,11 +367,13 @@ export default async function PaginaDoJogo({
           MVP também, como o box score. */}
       <Secao titulo="Confrontos anteriores">
         {!profundidade ? (
-          <ConviteDoPlano
-            minimo="MVP"
-            recurso="Os confrontos anteriores"
-            voltar={rotaDoJogo(id)}
-          />
+          <SilhuetaPaga forma="tabela">
+            <ConviteDoPlano
+              minimo="MVP"
+              recurso="Os confrontos anteriores"
+              voltar={rotaDoJogo(id)}
+            />
+          </SilhuetaPaga>
         ) : tela.h2h.length === 0 ? (
           <p style={{ fontSize: 13, color: semantico.textoSecundario }}>
             Primeiro confronto da temporada.

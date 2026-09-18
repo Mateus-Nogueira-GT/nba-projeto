@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import type { ReactNode } from 'react'
 
 import type { EstadoDoCiclo } from '../../modules/entrega/lista-por-jogo'
 import type { Atributo, Nivel, NivelApito } from '../../modules/motor/tipos'
@@ -177,6 +178,20 @@ export type CardEntradaProps = {
    * (`zIndex: 1`) e seguem clicáveis por cima da cobertura.
    */
   detalheHref?: string | null
+  /**
+   * O que fica no CANTO SUPERIOR DIREITO, ao lado do badge de status — hoje a
+   * estrela de acompanhar o jogador (identidade 05).
+   *
+   * Antes esse botão pendia SOLTO abaixo de cada card, e numa grade de duas
+   * colunas ele quebrava o ritmo: cada card terminava numa altura diferente
+   * conforme o botão. Aqui ele entra na moldura do card, no lugar onde o
+   * StatsHub põe o "Save pick".
+   *
+   * Sobe uma camada (`zIndex: 1`) como o nome e as abas: a cobertura do
+   * `detalheHref` passa por cima de tudo, e sem isso a estrela viraria só mais
+   * um lugar que abre a análise.
+   */
+  acaoCanto?: ReactNode
 }
 
 /**
@@ -421,45 +436,54 @@ export function CardEntrada(props: CardEntradaProps) {
               display: 'flex',
               flexDirection: 'column',
               alignItems: 'flex-end',
-              gap: 4,
+              gap: 6,
               flexShrink: 0,
-              // Com badge, a coluna gruda no canto superior (o status fica sempre
-              // no mesmo lugar); sem ele, o % centra com o avatar como antes.
-              alignSelf: rotuloEstado ? 'flex-start' : 'center',
+              // Acima da cobertura do card: a estrela ACOMPANHA o jogador, não
+              // abre a análise.
+              position: 'relative',
+              zIndex: 1,
+              // Com badge ou ação, a coluna gruda no canto superior (o status
+              // fica sempre no mesmo lugar); sem eles, o % centra com o avatar.
+              alignSelf: rotuloEstado || props.acaoCanto ? 'flex-start' : 'center',
             }}
           >
-            {rotuloEstado && (
-              <span
-                style={{
-                  width: componente.statusCiclo.largura,
-                  boxSizing: 'border-box',
-                  textAlign: 'center',
-                  padding: '3px 0',
-                  borderRadius: 6,
-                  fontFamily: semantico.fonteRotulo,
-                  fontSize: 10,
-                  letterSpacing: 1.5,
-                  textTransform: 'uppercase',
-                  fontWeight: 700,
-                  whiteSpace: 'nowrap',
-                  color: badgeAoVivo
-                    ? componente.statusCiclo.textoAoVivo
-                    : componente.statusCiclo.textoNeutro,
-                  background: badgeAoVivo
-                    ? componente.statusCiclo.fundoAoVivo
-                    : componente.statusCiclo.fundoNeutro,
-                  border: `1px solid ${badgeAoVivo ? componente.statusCiclo.bordaAoVivo : componente.statusCiclo.bordaNeutra}`,
-                }}
-              >
-                {rotuloEstado}
-              </span>
+            {(rotuloEstado || props.acaoCanto) && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                {props.acaoCanto}
+                {rotuloEstado && (
+                  <span
+                    style={{
+                      width: componente.statusCiclo.largura,
+                      boxSizing: 'border-box',
+                      textAlign: 'center',
+                      padding: '3px 0',
+                      borderRadius: 6,
+                      fontFamily: semantico.fonteRotulo,
+                      fontSize: 12,
+                      letterSpacing: 1.5,
+                      textTransform: 'uppercase',
+                      fontWeight: 700,
+                      whiteSpace: 'nowrap',
+                      color: badgeAoVivo
+                        ? componente.statusCiclo.textoAoVivo
+                        : componente.statusCiclo.textoNeutro,
+                      background: badgeAoVivo
+                        ? componente.statusCiclo.fundoAoVivo
+                        : componente.statusCiclo.fundoNeutro,
+                      border: `1px solid ${badgeAoVivo ? componente.statusCiclo.bordaAoVivo : componente.statusCiclo.bordaNeutra}`,
+                    }}
+                  >
+                    {rotuloEstado}
+                  </span>
+                )}
+              </div>
             )}
             {mostraPercentual && (
               <span
                 style={{
-                  fontFamily: semantico.fonteTitulo,
-                  fontSize: 30,
-                  letterSpacing: 0.5,
+                  fontFamily: semantico.fonteNumero,
+                  fontSize: 34,
+                  letterSpacing: '0.02em',
                   color: corPercentual,
                   fontVariantNumeric: 'tabular-nums',
                   textShadow: brilhaConfianca ? `0 0 18px ${corGrau}73` : undefined,
@@ -520,7 +544,7 @@ export function CardEntrada(props: CardEntradaProps) {
           >
             <span
               style={{
-                fontSize: 10,
+                fontSize: 12,
                 letterSpacing: 1,
                 fontWeight: 600,
                 color: semantico.textoSecundario,
@@ -562,6 +586,12 @@ export function CardEntrada(props: CardEntradaProps) {
             display: 'flex',
             justifyContent: 'space-between',
             alignItems: 'center',
+            // Quebra quando os dois lados não cabem na mesma linha. Sem isto o
+            // rodapé fixava a largura MÍNIMA do card inteiro: com uma odd em
+            // faixa ("ODD 1,47–1,62") ao lado da linha, o card não descia de
+            // ~335 px e vazava para os lados a 320 — uma das quatro larguras
+            // que o manual manda validar sem rolagem horizontal.
+            flexWrap: 'wrap',
             gap: 12,
             padding: '8px 14px',
             background: contexto.faixaFundo,

@@ -46,7 +46,7 @@ function tabela() {
 describe('Tabela · a vestimenta da identidade 04', () => {
   it('é condensada, e o cabeçalho sai em maiúsculas mesmo escrito em caixa mista', () => {
     const html = tabela()
-    expect(html).toContain('var(--fonte-barlow-condensed)')
+    expect(html).toContain('var(--fonte-montserrat)')
     // O rótulo literal é "Jogo"; quem uppercasa é o estilo, como no artboard.
     expect(html).toContain('>Jogo<')
     expect(html).toMatch(/<th[^>]*text-transform:uppercase/)

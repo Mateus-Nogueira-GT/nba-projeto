@@ -9,6 +9,17 @@ import WebSocket from 'ws'
 // A emulação via CDP fixa o viewport REAL. A largura mínima da janela desktop
 // do Chrome não transforma silenciosamente o teste de 390 px em um de 500 px.
 const altura = Number(process.argv[2] ?? 1800)
+// As QUATRO larguras que o manual manda validar (p.6, "verificação antes de
+// publicar"): 320, 390, 768 e 1440, sem rolagem horizontal em nenhuma.
+// `CAPTURA_LARGURAS=1440` recorta para uma só quando se está conferindo uma
+// tela de cada vez.
+const LARGURAS = (process.env.CAPTURA_LARGURAS ?? '320,390,768,1440')
+  .split(',')
+  .map((n) => Number(n.trim()))
+  .filter((n) => Number.isInteger(n) && n >= 320 && n <= 4000)
+if (LARGURAS.length === 0) throw new Error('CAPTURA_LARGURAS não tem nenhuma largura válida.')
+/** Telas que vazaram para os lados — o manual proíbe, e a captura reprova. */
+const vazamentos = []
 const entrada = resolve(process.env.CONFERENCIA_DIR ?? '.superpowers/conferencia')
 const saida = resolve(process.env.CAPTURA_DIR ?? '.superpowers/capturas')
 const arquivos = (await readdir(entrada)).filter((nome) => nome.endsWith('.html')).sort()
@@ -86,7 +97,7 @@ try {
   await pagina('Page.enable')
   const relatorio = []
   for (const arquivo of arquivos) {
-    for (const largura of [390, 1280]) {
+    for (const largura of LARGURAS) {
       await pagina('Emulation.setDeviceMetricsOverride', {
         width: largura,
         height: altura,
@@ -134,7 +145,12 @@ try {
       const metricas = inspeccao.result.value
       if (metricas.largura !== largura || metricas.texto === 0)
         throw new Error(`${arquivo}: viewport incorreto ou tela vazia.`)
-      const nome = arquivo.replace(/\.html$/, '') + (largura === 390 ? '' : '-desktop')
+      if (metricas.larguraConteudo > largura) {
+        vazamentos.push(
+          `${arquivo} @ ${largura}px: conteúdo com ${metricas.larguraConteudo}px`,
+        )
+      }
+      const nome = `${arquivo.replace(/\.html$/, '')}-${largura}`
       const foto = await pagina('Page.captureScreenshot', {
         format: 'png',
         captureBeyondViewport: false,
@@ -160,6 +176,12 @@ try {
   console.log(
     `Capturas: ${relatorio.length}. Métricas e recursos ausentes: ${join(saida, 'conferencia.json')}`,
   )
+  if (vazamentos.length > 0) {
+    // Não é aviso: o manual pede as quatro larguras SEM rolagem horizontal, e
+    // uma tela que vaza é defeito, não gosto.
+    console.error(`\nROLAGEM HORIZONTAL (o manual proíbe):\n  ${vazamentos.join('\n  ')}`)
+    process.exitCode = 1
+  }
 } finally {
   for (const pedido of pendentes.values()) clearTimeout(pedido.timer)
   socket?.close()

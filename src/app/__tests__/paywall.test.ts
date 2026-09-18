@@ -67,6 +67,54 @@ describe('superfícies da Spec 04', () => {
     }
   })
 
+  it('a silhueta do paywall não recebe dado: a única prop é a forma', () => {
+    // O StatsHub borra as próprias linhas. Aqui isso não pode ser feito assim:
+    // desfoque é CSS, e o conteúdo real estaria no código-fonte de quem não
+    // paga. A silhueta é forma pura, e é este teste que a mantém assim.
+    const fonte = ler('src/components/planos/SilhuetaPaga.tsx')
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .replace(/\/\/[^\n]*/g, '')
+    // A assinatura é o contrato: `forma` diz o DESENHO e `children` é o
+    // convite. Nenhuma prop de dado, e nenhuma forma de receber uma.
+    expect(fonte).toContain(
+      '{ forma, children }: { forma: FormaDaSilhueta; children?: ReactNode }',
+    )
+    // E a quantidade de blocos é FIXA por forma: quantos apitos há hoje
+    // também é sinal, e uma silhueta que variasse com a rodada o contaria.
+    expect(fonte).toContain('const BLOCOS: Record<FormaDaSilhueta, number>')
+  })
+
+  it('a lateral só lê dado grátis, e o cron da rodada revalida a tag dela', () => {
+    // A lateral é cacheada e COMPARTILHADA entre usuários. Isso só é seguro
+    // porque ela lê apenas o que é grátis para todos os níveis (Resultados e
+    // classificação — spec de planos, decisões 9 e 5). Se um dia alguém
+    // acrescentar o feed aqui, o cache passa a servir sinal pago a quem não
+    // paga, sem nada ficar vermelho — e é esta asserção que fecha essa porta.
+    const leitor = ler('src/modules/entrega/lateral.ts')
+    expect(leitor).not.toMatch(/lerFeed|lerFeedFireLive|\bapitos\b|narrativa|confianca/)
+
+    const cache = ler('src/app/(app)/lateral/leitura.ts')
+    expect(cache).toContain('tags: [TAG_LATERAL]')
+
+    // E o dado tem que ENVELHECER quando muda: é o cron da rodada que fecha o
+    // box score da noite e sincroniza a classificação.
+    expect(ler('src/app/api/cron/sincronizar-rodada/route.ts')).toContain(
+      "revalidateTag(TAG_LATERAL, 'max')",
+    )
+  })
+
+  it('a lateral entra DEPOIS do portão de nível, nunca antes', () => {
+    // Ela não lê nada pago, mas montá-la antes do `atende` inverteria a ordem
+    // que esta suíte inteira existe para preservar, e o próximo a mexer aqui
+    // leria isso como permissão.
+    for (const caminho of ['src/app/(app)/page.tsx', 'src/app/(app)/fire-live/page.tsx']) {
+      const fonte = ler(caminho)
+      expect(fonte.indexOf('lateralPadrao({')).toBeGreaterThan(
+        fonte.indexOf("atende(acesso.nivel, 'MVP')"),
+      )
+    }
+  })
+
   it('nenhuma página paga opta por cache compartilhado', () => {
     for (const caminho of [
       'src/app/(app)/page.tsx',

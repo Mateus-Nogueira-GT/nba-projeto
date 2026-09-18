@@ -2,7 +2,7 @@
   min-height: 100dvh;
   background: #f4f7fb;
   color: #172033;
-  font-family: var(--fonte-barlow), sans-serif;
+  font-family: var(--fonte-montserrat), sans-serif;
 }
 .lateral {
   position: fixed;

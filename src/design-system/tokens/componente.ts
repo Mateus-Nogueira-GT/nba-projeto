@@ -25,10 +25,48 @@ export const componente = {
   avatarAnelEspessura: '2px',
   faixaNivelAltura: '3px',
 
-  // Fundo dos botões de CTA em destaque (VER ESTATÍSTICAS, Entrar, Criar
-  // conta, Continuar no Mercado Pago) — mesmo degradê nas quatro telas,
-  // montado aqui a partir de dois semânticos em vez de repetido por tela.
-  ctaFundo: `linear-gradient(90deg, ${s.acento}, ${s.acentoClaro})`,
+  // -- Identidade 05 · o botão primário do manual ---------------------------
+  // CHAPADO, não mais em degradê: o manual pede azul sólido, texto branco,
+  // 48 px de altura mínima e um hover mais claro. O degradê laranja da
+  // identidade 02 saiu junto com o laranja de interface.
+  ctaFundo: s.acento,
+  ctaFundoHover: s.acentoClaro,
+  ctaTexto: s.textoSobreAcento,
+  ctaAltura: '48px',
+  /** Canto de controle (botão, campo, chip). O manual pede 8 px. */
+  raioControle: '8px',
+  /**
+   * O anel de foco, num token só. Ele é BRANCO em todo o app: o acento é o
+   * azul do manual, que tem o matiz do turbo, e um foco azul acenderia um
+   * sinal de apito em volta de um campo de texto.
+   */
+  foco: `2px solid ${s.focoAnel}`,
+  /**
+   * A pílula das duas barras de navegação (topo e inferior). A ativa é
+   * PREENCHIDA no acento com texto branco — o estado do StatsHub e a única
+   * forma que o azul do manual pode ter. A inativa não tem fundo; o hover
+   * ganha a superfície elevada, não uma cor.
+   */
+  pilulaNav: {
+    fundoAtiva: s.acento,
+    textoAtiva: s.textoSobreAcento,
+    textoInativa: s.textoSecundario,
+    fundoHover: s.superficieElevada,
+    raio: '999px',
+  },
+  /**
+   * A MOLDURA em três regiões (identidade 05). As medidas em px vivem aqui; os
+   * pontos de QUEBRA vivem no semântico, porque o CSS precisa repeti-los numa
+   * media query e um teste compara os dois.
+   */
+  moldura: {
+    alturaTopo: '64px',
+    larguraLateral: '320px',
+    /** Conteúdo (1040) + lateral (320) + o vão entre eles (32). */
+    larguraComLateral: '1392px',
+    respiroCelular: '16px',
+    respiroDesktop: '24px',
+  },
 
   // -- Identidade 03 · broadcast -------------------------------------------
   // Fim do fundo chapado: a tela inteira respira num gradiente sutil.
@@ -56,7 +94,8 @@ export const componente = {
   turboBrilho: `0 0 22px ${s.veuTurbo}`,
   // Borda lateral esquerda do card, na cor do grau de confiança.
   cardBordaLateral: '3px',
-  cardRaio: '14px',
+  // 12 px: o canto de CARTÃO do manual (controle é 8, em `raioControle`).
+  cardRaio: '12px',
   // Barra rumo ao alvo (Fire Live)
   barraAlvoFundo: s.superficieQuente1,
   barraAlvoPreenchido: `linear-gradient(90deg, ${s.acento}, ${s.acentoClaro})`,
@@ -75,8 +114,8 @@ export const componente = {
   // vermelho. Pendência anotada desde a 03; aqui vira token para os dois
   // universos vestirem o mesmo componente.
   seloContexto: {
-    preLive: { fundo: s.acento, texto: s.textoSobreCor },
-    aoVivo: { fundo: s.vivoSelo, texto: s.textoSobreCor },
+    preLive: { fundo: s.acento, texto: s.textoSobreAcento },
+    aoVivo: { fundo: s.vivoSelo, texto: s.textoSobreAcento },
   },
   // Cabeçalho de jogo — a ÚNICA fronteira de seção da Lista e do Fire Live.
   // Veste o gradiente do universo da tela; o de dentro é sigla forte, nada de
@@ -91,7 +130,7 @@ export const componente = {
   // largura é FIXA para o card não pular a cada refresh de 30 s — e é isso, não
   // uma animação, que faz o ao vivo parecer estável.
   statusCiclo: {
-    largura: '52px',
+    largura: '60px',
     fundoAoVivo: s.aoVivoTinta,
     bordaAoVivo: s.aoVivoBorda,
     textoAoVivo: s.aoVivoSolido,
@@ -116,11 +155,11 @@ export const componente = {
     ativaTurbo: { borda: s.apitoTurbo, fundo: s.apitoTurboTinta },
     /**
      * Par NEUTRO, para o seletor que não pertence a um apito — o de atributo
-     * na tela do time, por exemplo. Sem nível para vestir, ele usa o laranja de
+     * na tela do time, por exemplo. Sem nível para vestir, ele usa o azul de
      * UI dos outros seletores de tela, e não empresta a cor de um nível que
-     * não existe ali.
+     * não existe ali. PREENCHIDO (identidade 05): o azul não vira contorno.
      */
-    ativaNeutra: { borda: s.acento, fundo: s.acentoVeu },
+    ativaNeutra: { borda: s.acento, fundo: s.acento },
     textoAtiva: s.texto100,
     bordaInativa: s.divisor,
     textoInativa: s.textoSecundario,

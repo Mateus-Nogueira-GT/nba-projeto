@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # Uso: scripts/captura-telas.sh [altura=1800] [padrão de teste=telas-]
-# HTML real dos testes → Chrome a 390 e 1280 px, sem Next/Neon/.env.
+# HTML real dos testes → Chrome nas quatro larguras do manual (320, 390, 768 e
+# 1440), sem Next/Neon/.env. CAPTURA_LARGURAS=1440 recorta para uma só.
+# Sai com código 1 se alguma tela tiver rolagem horizontal.
 # CAPTURA_REUTILIZAR_HTML=1 refaz somente fotos de um HTML já conferido.
 # CHROME, CONFERENCIA_DIR e CAPTURA_DIR podem substituir os caminhos padrão.
 set -euo pipefail

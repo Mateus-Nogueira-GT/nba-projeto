@@ -41,7 +41,7 @@ describe('badge da nota da partida', () => {
   it('no bloco dos quatro números o badge cresce — ali ele é O número do jogador', () => {
     // Duas medidas no artboard: 14px sem largura mínima no hero dos quatro
     // números, 12px com largura mínima na célula da tabela. Uma medida só
-    // fazia o quarto "número grande" sair mais fraco que os três em Anton.
+    // fazia o quarto "número grande" sair mais fraco que os três na fonte de número.
     const naTabela = renderToStaticMarkup(createElement(NotaPartida, { nota: 6.5 }))
     const noDestaque = renderToStaticMarkup(
       createElement(NotaPartida, { nota: 6.5, destaque: true }),

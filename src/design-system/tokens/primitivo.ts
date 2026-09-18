@@ -34,28 +34,14 @@ export const primitivo = {
   bronze: '#C8823C',
   grafite: '#7C8AA3',
 
-  // Apoio
-  vermelho400: '#FF6B6B',
-
-  // Identidade 03 · broadcast — superfícies e estados novos
-  marinho650: '#16213A',
-  marinho750: '#111A2E',
-  marinho850: '#101A2E',
-  roxo700: '#241A2E',
-  roxo800: '#161226',
-  roxoBorda: '#3A2A52',
-  vermelhoVivo: '#E03E3E',
   // Barrinhas de histórico: par PRÓPRIO — o verde categórico do apito nível 3
   // (#3DD37E) não pode dizer também "bateu a linha" no mesmo card.
   verdeBarrinha: '#2FBF71',
   // #E05555 do mockup reprovou em AA com o valor branco dentro (3.75) —
   // escurecido até passar (4.93) sem perder o tom.
   vermelhoBarrinha: '#CC3B3B',
-  // Véus translúcidos (faixas de rodapé e brilhos) — decimais dos hex acima.
-  turquesaVeu: 'rgba(92,224,206,.07)',
-  laranjaVeu: 'rgba(255,122,26,.08)',
+  // Véu translúcido do brilho do turbo — decimal do azul400 acima.
   azulVeuTurbo: 'rgba(77,163,255,.18)',
-  laranjaVeuFire: 'rgba(255,122,26,.22)',
 
   // Fundos alternativos do monograma do Avatar (sem foto) — variação
   // determinística por sigla de time, puramente decorativa, sem significado
@@ -72,12 +58,6 @@ export const primitivo = {
   turquesa500: '#47CBBA',
   turquesa400: '#5CE0CE',
   turquesa300: '#79F2E1',
-  // Acento de INTERFACE (chips, aba ativa, CTA). Não é canal de estratégia —
-  // papel diferente do laranja400 do apito nível 2.
-  laranjaAcento: '#FF7A1A',
-  // Ponta clara do degradê dos botões de CTA (VER ESTATÍSTICAS, Entrar,
-  // Criar conta, Continuar no Mercado Pago) — laranjaAcento é o início.
-  laranjaAcentoClaro: '#FFB25E',
   tinta950: '#05080F',
 
   // Nota da partida — 5 faixas de desempenho (Game Score normalizado, 3-10).
@@ -100,16 +80,6 @@ export const primitivo = {
   notaTextoVermelho: '#F7E9E9',
 
   // -- Identidade 04 · acabamento -------------------------------------------
-  // Texto em opacidades: a MESMA tinta clara (tinta50) em três intensidades
-  // além da cheia. É assim que se separa número de rótulo sem borda nem
-  // segunda cor — densidade por peso e opacidade, não por cromo.
-  tinta50Veu70: 'rgba(245,248,252,.7)',
-  tinta50Veu55: 'rgba(245,248,252,.55)',
-  tinta50Veu40: 'rgba(245,248,252,.4)',
-  // Ao vivo DENTRO do universo quente: tinta e borda do badge de status
-  // (PRÉ · 1º Q · FIM 1º Q · FT), derivadas do vermelho400 do ao vivo.
-  vermelhoVeu14: 'rgba(255,107,107,.14)',
-  vermelhoVeu45: 'rgba(255,107,107,.45)',
   // O divisor (tinta500) a meia força: a linha ENTRE registros de uma tabela
   // densa. A régua cheia por linha vira grade; a meia força separa sem pesar.
   tinta500Veu50: 'rgba(42,56,82,.5)',
@@ -131,10 +101,61 @@ export const primitivo = {
   duracao200: '200ms',
   duracao400: '400ms',
 
+  // -- Identidade 05 · Manual da Marca (v1.0, 16/09/2026) ---------------------
+  // As cinco cores da marca e as quatro superfícies, literais do PDF (p.2 e
+  // p.5). O laranja de interface saiu daqui: o manual o proíbe em negrito. O
+  // `laranja400` acima FICA — ele é o 🟠 do nível 2 do apito, vocabulário
+  // homologado do CJ, e sinal não é decoração.
+  azulNip: '#0057B8',
+  // Hover do botão primário: o azul com 12% de branco. É o mais claro que ainda
+  // deixa o texto branco em cima passar em AA (5,34).
+  azulNipHover: '#1F6BC1',
+  vermelhoNip: '#C8102E',
+  // A tinta CLARA do vermelho, para TEXTO e ponto: o cheio, como texto sobre o
+  // cartão, dá 2,90 e reprova. O cheio veste selo; o claro vira letra.
+  vermelhoNipClaro: '#FF5C70',
+  navy: '#001D3D',
+  cinzaNip: '#A6ABB4',
+  fundoNip: '#071426',
+  cartaoNip: '#101C30',
+  campoNip: '#18243A',
+  // A divisória do manual é #2A3852 — exatamente a tinta500 que já existia.
+  fundoTelaFimNip: '#0B1830',
+  // Os dois universos, RE-DERIVADOS do manual em vez de inventados: o frio é
+  // cartão e campo com 10% de azul; o quente, cartão com 12% e campo com 15% de
+  // vermelho — que dá quase o roxo da identidade 03, agora com origem.
+  cartaoFrio: '#0E223E',
+  campoFrio: '#162947',
+  cartaoQuente: '#221B30',
+  campoQuente: '#2C1A30',
+  bordaQuenteNip: '#3D334E',
+  // Véus: os decimais das cores da marca.
+  azulNipVeu7: 'rgba(0,87,184,.07)',
+  azulNipVeu8: 'rgba(0,87,184,.08)',
+  vermelhoNipVeu8: 'rgba(200,16,46,.08)',
+  vermelhoNipVeu22: 'rgba(200,16,46,.22)',
+  vermelhoClaroVeu14: 'rgba(255,92,112,.14)',
+  vermelhoClaroVeu45: 'rgba(255,92,112,.45)',
+  // Texto em opacidades: a MESMA tinta clara (agora o branco do manual) em três
+  // intensidades além da cheia. É assim que se separa número de rótulo sem
+  // borda nem segunda cor — densidade por peso e opacidade, não por cromo.
+  brancoVeu70: 'rgba(255,255,255,.7)',
+  brancoVeu55: 'rgba(255,255,255,.55)',
+  // O véu do paywall: o fundo do manual em duas opacidades, para o degradê que
+  // cobre a silhueta borrada.
+  fundoNipVeu20: 'rgba(7,20,38,.2)',
+  fundoNipVeu70: 'rgba(7,20,38,.7)',
+  // Pontos de quebra da moldura. Media query não lê variável CSS, então o
+  // número vive aqui e o CSS da Moldura o repete — um teste compara os dois.
+  pontoDeQuebraTopo: 1024,
+  pontoDeQuebraLateral: 1280,
+
   // Fontes — a família vem por variável CSS publicada no layout (next/font).
-  fonteAnton: "var(--fonte-anton), 'Arial Narrow', sans-serif",
-  fonteBarlow: 'var(--fonte-barlow), system-ui, sans-serif',
-  fonteBarlowCondensed: "var(--fonte-barlow-condensed), 'Arial Narrow', sans-serif",
+  // O manual fixa as duas: Bebas Neue em título curto, chamada e número de
+  // impacto (NUNCA em formulário); Montserrat na interface, campo, botão,
+  // explicação e dado.
+  fonteBebas: "var(--fonte-bebas), 'Arial Narrow', sans-serif",
+  fonteMontserrat: 'var(--fonte-montserrat), system-ui, sans-serif',
 } as const
 
 export type Primitivo = typeof primitivo

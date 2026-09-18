@@ -50,6 +50,13 @@ vi.mock('../../modules/plataforma/assinatura/direito', async () => {
   const { acessoDeTeste } = await import('../../modules/plataforma/__tests__/acesso-de-teste')
   return { avaliarAcesso: async () => acessoDeTeste('ALL_STAR') }
 })
+vi.mock('next/cache', () => ({
+  // `unstable_cache` fora do runtime do Next não tem store: no teste ele é a
+  // própria função. `revalidateTag`/`revalidatePath` viram no-op.
+  unstable_cache: (fn: (...args: never[]) => unknown) => fn,
+  revalidateTag: () => {},
+  revalidatePath: () => {},
+}))
 vi.mock('../../modules/dominio/db/cliente', () => ({
   getDb: () => banco.db,
   fecharDb: async () => {},
@@ -154,7 +161,11 @@ describe('Fire Live · 04 — regras de escrita da TELA', () => {
       }
       // Nota de confiança: número puro, sem "%" e sem casa decimal. (No Fire
       // Live ela é nula por regra do produto e sai como "—".)
-      expect(html).not.toMatch(/>\d{1,3}%</)
+      // A LATERAL fica de fora: ela escreve a taxa da noite e da temporada,
+      // percentuais legítimos de resultado observado (docs/04, vocabulário
+      // numérico). O que se cobra aqui é a escrita do PAINEL, onde um "%" seria
+      // lido como probabilidade do apito.
+      expect(html.replace(/<aside[\s\S]*?<\/aside>/g, '')).not.toMatch(/>\d{1,3}%</)
       expect(html).not.toMatch(/>\d+,\d+</)
       expect(html).not.toContain('ALTÍSSIMO VALOR')
       expect(html).not.toContain('…')
@@ -240,8 +251,9 @@ describe('Fire Live · 04 — por jogo, com os três estados', () => {
   it('mantém um único jogo no painel e deixa a rodada navegável no seletor', async () => {
     const html = semScript(await renderizar())
     expect(html).toContain('aria-label="Escolher jogo do Fire Live"')
-    expect(ocorrencias(html, 'aria-current="page"')).toBe(2)
-    // Um aria-current pertence ao jogo e o outro à aba fixa Ao Vivo.
+    // Três agora: o jogo, a aba AO VIVO da barra inferior e a mesma aba na
+    // barra do topo — as duas barras saem no HTML e o CSS esconde uma.
+    expect(ocorrencias(html, 'aria-current="page"')).toBe(3)
     expect(ocorrencias(html, 'class="jogo-placar-quente"')).toBe(1)
     expect(ocorrencias(html, 'class="quadra-ao-vivo"')).toBe(1)
     expect(ocorrencias(html, 'href="/fire-live?jogo=')).toBeGreaterThan(1)
@@ -473,8 +485,8 @@ describe('Fire Live · 04 — por jogo, com os três estados', () => {
 describe('Fire Live · desktop — a tela ocupa a largura que tem', () => {
   it('a moldura é a larga, como a Lista', async () => {
     const html = await renderizar()
-    expect(html).toContain(`max-width:${LARGURA_DA_MOLDURA.dados}px`)
-    expect(html).not.toContain(`max-width:${LARGURA_DA_MOLDURA.leitura}px`)
+    expect(html).toContain(`--largura-coluna:${LARGURA_DA_MOLDURA.dados}px`)
+    expect(html).not.toContain(`--largura-coluna:${LARGURA_DA_MOLDURA.leitura}px`)
   })
 
   it('os cards do jogo selecionado entram na mesma grade da Lista', async () => {

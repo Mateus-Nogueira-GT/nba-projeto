@@ -20,7 +20,7 @@
   width: 42px;
   height: 42px;
   place-items: center;
-  color: var(--texto-sobre-cor);
+  color: var(--texto-sobre-acento);
   background: var(--apito-nivel1);
   border-radius: 12px;
   font-size: 22px;
@@ -54,7 +54,7 @@
 .botao {
   min-height: 44px;
   padding: 9px 14px;
-  color: var(--texto-sobre-cor);
+  color: var(--texto-sobre-acento);
   background: var(--apito-nivel3);
   border: 1px solid var(--apito-nivel3);
   border-radius: 10px;

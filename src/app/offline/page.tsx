@@ -59,7 +59,7 @@ export default function PaginaOffline() {
             padding: '0 18px',
             borderRadius: 10,
             background: semantico.apitoNivel3,
-            color: semantico.textoSobreCor,
+            color: semantico.textoSobreAcento,
             fontWeight: 750,
             textDecoration: 'none',
           }}

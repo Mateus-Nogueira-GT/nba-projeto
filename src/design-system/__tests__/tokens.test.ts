@@ -53,7 +53,10 @@ describe('camadas de token', () => {
   })
 
   it('todo token semântico aponta para um valor da paleta primitiva', () => {
-    const paleta = new Set<string>(Object.values(primitivo))
+    // `string | number`: os pontos de quebra da moldura (identidade 05) são
+    // números — media query não lê variável CSS, então o número precisa existir
+    // no TypeScript para o teste do CSS da Moldura comparar os dois.
+    const paleta = new Set<string | number>(Object.values(primitivo))
     for (const [nome, valor] of Object.entries(semantico)) {
       expect(paleta.has(valor), `semantico.${nome} = ${valor} não está no primitivo`).toBe(true)
     }
@@ -223,9 +226,15 @@ describe('rampa de confiança (identidade 02)', () => {
     }
   })
 
-  it('o acento laranja é legível sobre superfície e o texto sobre o acento também', () => {
-    expect(razaoDeContraste(semantico.acento, semantico.superficie)).toBeGreaterThanOrEqual(3)
-    expect(razaoDeContraste(semantico.textoSobreCor, semantico.acento)).toBeGreaterThanOrEqual(4.5)
+  it('o acento é PREENCHIMENTO: o texto branco em cima dele passa em AA', () => {
+    // Identidade 05: o acento deixou de ser legível COMO TINTA de propósito —
+    // o azul do manual tem o matiz do azul do turbo, e um azul claro o bastante
+    // para ser texto seria o 🔵 do CJ. O que se cobra dele agora é o contrário:
+    // ser escuro o bastante para o branco em cima passar. Ver o describe
+    // 'identidade 05'.
+    expect(
+      razaoDeContraste(semantico.textoSobreAcento, semantico.acento),
+    ).toBeGreaterThanOrEqual(4.5)
   })
 
   it('CONFIANCA_GRAU espelha exatamente os 5 degraus semânticos', () => {
@@ -244,7 +253,7 @@ describe('rampa de confiança (identidade 02)', () => {
 // ===========================================================================
 
 describe('identidade 03 — broadcast', () => {
-  it('temperatura por contexto: frio e quente não compartilham gradiente, e o quente é o único com o veu laranja', () => {
+  it('temperatura por contexto: frio e quente não compartilham gradiente, e o quente é o único com o véu vermelho', () => {
     expect(componente.contextoFrio.cardGradiente).not.toBe(componente.contextoQuente.cardGradiente)
     expect(componente.contextoQuente.destaque).toBe(semantico.acento)
     // O universo frio nunca usa o acento quente em nenhuma das suas partes.
@@ -292,14 +301,14 @@ describe('identidade 04 — acabamento', () => {
   it('texto em cinco opacidades, todas derivadas da mesma tinta clara', () => {
     // É assim que o Sofascore obtém densidade sem borda: número em texto100,
     // rótulo em texto55, apoio em texto40 — uma cor, várias intensidades.
-    expect(semantico.texto100).toBe(primitivo.tinta50)
+    expect(semantico.texto100).toBe(primitivo.branco)
     for (const [nome, esperado] of [
       ['texto70', '.7'],
       ['texto55', '.55'],
       ['texto40', '.55'], // piso de contraste AA para o nome legado
     ] as const) {
       const valor = semantico[nome]
-      expect(valor, nome).toMatch(/^rgba\(245,248,252,\.\d+\)$/)
+      expect(valor, nome).toMatch(/^rgba\(255,255,255,\.\d+\)$/)
       expect(valor.endsWith(`${esperado})`), `${nome} termina em ${esperado}`).toBe(true)
     }
   })
@@ -309,8 +318,8 @@ describe('identidade 04 — acabamento', () => {
     // quente, não do frio. Sólido para o ponto e o texto, tinta para o fundo
     // do badge de status e borda para o contorno.
     expect(semantico.aoVivoSolido).toBe(semantico.aoVivo)
-    expect(semantico.aoVivoTinta).toMatch(/^rgba\(255,107,107,\.\d+\)$/)
-    expect(semantico.aoVivoBorda).toMatch(/^rgba\(255,107,107,\.\d+\)$/)
+    expect(semantico.aoVivoTinta).toMatch(/^rgba\(255,92,112,\.\d+\)$/)
+    expect(semantico.aoVivoBorda).toMatch(/^rgba\(255,92,112,\.\d+\)$/)
     expect(razaoDeContraste(semantico.aoVivoSolido, semantico.superficieQuente1)).toBeGreaterThanOrEqual(AA.grafico)
     // nunca colide com o amarelo do nível 1 nem com o laranja do nível 2
     expect([semantico.apitoNivel1, semantico.apitoNivel2, semantico.apitoNivel3]).not.toContain(semantico.aoVivoSolido)
@@ -340,13 +349,15 @@ describe('identidade 04 — acabamento', () => {
 
   it('componentes novos: selo de contexto, cabeçalho de jogo e status do ciclo', () => {
     expect(componente.seloContexto.preLive.fundo).toBe(semantico.acento)
-    expect(componente.seloContexto.preLive.texto).toBe(semantico.textoSobreCor)
+    expect(componente.seloContexto.preLive.texto).toBe(semantico.textoSobreAcento)
     expect(componente.seloContexto.aoVivo.fundo).toBe(semantico.vivoSelo)
-    expect(componente.seloContexto.aoVivo.texto).toBe(semantico.textoSobreCor)
+    expect(componente.seloContexto.aoVivo.texto).toBe(semantico.textoSobreAcento)
     expect(componente.cabecalhoJogo.fundoFrio).toBe(componente.contextoFrio.cardGradiente)
     expect(componente.cabecalhoJogo.fundoQuente).toBe(componente.contextoQuente.cardGradiente)
-    // largura FIXA: o badge PRÉ · 1º Q · FIM 1º Q · FT nunca faz o card pular a cada refresh
-    expect(componente.statusCiclo.largura).toBe('52px')
+    // largura FIXA: o badge PRÉ · 1º Q · FIM 1º Q · FT nunca faz o card pular
+    // a cada refresh. 60 desde a identidade 05: o texto subiu para os 12 px do
+    // piso do manual e "FIM 1º Q" não cabia mais em 52.
+    expect(componente.statusCiclo.largura).toBe('60px')
   })
 
   it('os tokens novos chegam ao CSS gerado', () => {
@@ -354,5 +365,145 @@ describe('identidade 04 — acabamento', () => {
     for (const nome of ['--texto70', '--texto55', '--texto40', '--ao-vivo-tinta', '--duracao-estado', '--turbo-claro']) {
       expect(css, nome).toContain(nome)
     }
+  })
+})
+
+// ===========================================================================
+// IDENTIDADE 05 — MANUAL DA MARCA
+// ===========================================================================
+
+/** Tira comentário: a regra vale para o CÓDIGO, não para o aviso sobre ele. */
+function semComentarios(fonte: string): string {
+  return fonte.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '')
+}
+
+/** Toda fonte de UI sob as raízes dadas — tsx, ts e css, sem os testes. */
+function arquivosDeUi(raizes: readonly string[]): { arquivo: string; conteudo: string }[] {
+  const saida: { arquivo: string; conteudo: string }[] = []
+  const visitar = (dir: string) => {
+    for (const entrada of readdirSync(dir, { withFileTypes: true })) {
+      const caminho = join(dir, entrada.name)
+      if (entrada.isDirectory()) {
+        if (entrada.name !== '__tests__' && entrada.name !== 'node_modules') visitar(caminho)
+      } else if (/\.(tsx?|css)$/.test(entrada.name)) {
+        saida.push({ arquivo: caminho, conteudo: readFileSync(caminho, 'utf8') })
+      }
+    }
+  }
+  for (const raiz of raizes) visitar(raiz)
+  return saida
+}
+
+describe('identidade 05 — manual da marca', () => {
+  it('as cores do manual estão no primitivo, literalmente', () => {
+    expect(primitivo.azulNip).toBe('#0057B8')
+    expect(primitivo.vermelhoNip).toBe('#C8102E')
+    expect(primitivo.navy).toBe('#001D3D')
+    expect(primitivo.cinzaNip).toBe('#A6ABB4')
+    expect([primitivo.fundoNip, primitivo.cartaoNip, primitivo.campoNip, primitivo.tinta500]).toEqual([
+      '#071426',
+      '#101C30',
+      '#18243A',
+      '#2A3852',
+    ])
+    // A divisória do manual É a tinta500 que o projeto já usava.
+    expect(semantico.divisor).toBe('#2A3852')
+  })
+
+  it('o manual manda nas superfícies e no texto de apoio', () => {
+    expect(semantico.fundo).toBe(primitivo.fundoNip)
+    expect(semantico.superficie).toBe(primitivo.cartaoNip)
+    expect(semantico.superficieElevada).toBe(primitivo.campoNip)
+    expect(semantico.textoSecundario).toBe(primitivo.cinzaNip)
+    expect(semantico.cromo).toBe(primitivo.navy)
+  })
+
+  it('o texto sobre cor virou DOIS tokens: escuro no anel do apito, branco sobre azul e vermelho', () => {
+    // O anel continua exigindo texto ESCURO (ver 'texto BRANCO dentro do anel
+    // reprovaria'); quem senta sobre o azul ou o vermelho do manual precisa do
+    // branco. Um token só não serviria aos dois.
+    expect(componente.anelTexto).toBe(semantico.textoSobreCor)
+    expect(semantico.textoSobreAcento).toBe(primitivo.branco)
+    for (const fundo of [semantico.acento, semantico.acentoClaro, semantico.vivoSelo]) {
+      expect(razaoDeContraste(semantico.textoSobreAcento, fundo)).toBeGreaterThanOrEqual(AA.texto)
+    }
+  })
+
+  it('o único azul CLARO do sistema é o turbo: o de interface é escuro o bastante para ser preenchimento', () => {
+    // O azul do manual tem o matiz do azul do turbo (212° contra 211°). Se um
+    // dia alguém o clarear para usá-lo como texto, ele vira o 🔵 do CJ na tela.
+    // O que impede isso é ele ser escuro: branco em cima passa, texto dele
+    // sobre o cartão não passaria.
+    expect(razaoDeContraste(semantico.acento, primitivo.branco)).toBeGreaterThanOrEqual(AA.texto)
+    expect(razaoDeContraste(semantico.acentoClaro, primitivo.branco)).toBeGreaterThanOrEqual(AA.texto)
+    expect(razaoDeContraste(semantico.acento, semantico.superficie)).toBeLessThan(AA.texto)
+  })
+
+  it('azul nunca é tinta: o acento só aparece em preenchimento, em toda a UI', () => {
+    const ACENTO = /semantico\.acento(?:Claro)?\b|\bs\.acento(?:Claro)?\b|var\(--acento(?:-claro)?\)/g
+    /** Onde o acento PODE estar: preenchimento, gradiente, brilho. Nunca tinta. */
+    const PREENCHIMENTO =
+      /^(background|backgroundColor|background-color|backgroundImage|background-image|fill|.*[Ff]undo|.*[Gg]radiente|.*[Bb]rilho|.*[Pp]reenchido)$/
+
+    /**
+     * A propriedade que recebe o valor, lida para trás. O `(?<![.\w])` joga
+     * fora `l.estado ===` e `semantico.aoVivo :` — condição e ramo de ternário
+     * ficam ENTRE a propriedade e o acento, e sem ele um `background:` com
+     * ternário dentro seria acusado de tinta. O `(?!=)` joga fora `===`.
+     */
+    const PROPRIEDADE = /(?<![.\w])([A-Za-z-]+)\s*[:=](?!=)/g
+
+    const infratores: string[] = []
+    for (const { arquivo, conteudo } of arquivosDeUi([
+      'src/design-system/componentes',
+      'src/components',
+      'src/app',
+    ])) {
+      const fonte = semComentarios(conteudo)
+      for (const achado of fonte.matchAll(ACENTO)) {
+        const antes = fonte.slice(Math.max(0, achado.index - 220), achado.index)
+        const alvo = [...antes.matchAll(PROPRIEDADE)].at(-1)?.[1] ?? '(nenhum)'
+        if (!PREENCHIMENTO.test(alvo)) infratores.push(`${arquivo}: ${alvo} ← ${achado[0]}`)
+      }
+    }
+    expect(infratores).toEqual([])
+  })
+
+  it('o vermelho é cheio no selo e claro na tinta', () => {
+    expect(semantico.vivoSelo).toBe(primitivo.vermelhoNip)
+    expect(semantico.aoVivo).toBe(primitivo.vermelhoNipClaro)
+    expect(semantico.alerta).toBe(primitivo.vermelhoNipClaro)
+    // O cheio não serve de texto no cartão; a tinta clara serve. É a divisão.
+    expect(razaoDeContraste(semantico.vivoSelo, semantico.superficie)).toBeLessThan(AA.texto)
+    expect(razaoDeContraste(semantico.aoVivo, semantico.superficie)).toBeGreaterThanOrEqual(AA.texto)
+  })
+
+  it('tipografia do manual: Bebas nos títulos e números, Montserrat no resto', () => {
+    expect(semantico.fonteTitulo).toContain('--fonte-bebas')
+    expect(semantico.fonteCorpo).toContain('--fonte-montserrat')
+    // O manual PROÍBE a Bebas em formulário; o rótulo veste formulário.
+    expect(semantico.fonteRotulo).toContain('--fonte-montserrat')
+    // A Bebas foi medida (scripts/medir-digitos.mjs): dígitos de largura fixa,
+    // então ela pode vestir número que muda a cada refresh sem o card pular.
+    expect(semantico.fonteNumero).toContain('--fonte-bebas')
+  })
+
+  it('o botão primário do manual: chapado, 48 px, canto de 8, texto branco', () => {
+    expect(componente.ctaFundo).toBe(semantico.acento)
+    expect(componente.ctaFundoHover).toBe(semantico.acentoClaro)
+    expect(componente.ctaTexto).toBe(semantico.textoSobreAcento)
+    expect(componente.ctaAltura).toBe('48px')
+    expect(componente.raioControle).toBe('8px')
+    expect(componente.cardRaio).toBe('12px')
+  })
+
+  it('o foco é branco — o anel de foco nunca pode ser o azul que vira turbo', () => {
+    expect(semantico.focoAnel).toBe(primitivo.branco)
+    expect(componente.foco).toContain(semantico.focoAnel)
+  })
+
+  it('os pontos de quebra da moldura são tokens, não números soltos', () => {
+    expect(semantico.larguraTopo).toBe(1024)
+    expect(semantico.larguraLateral).toBe(1280)
   })
 })

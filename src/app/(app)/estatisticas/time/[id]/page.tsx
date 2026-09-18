@@ -28,6 +28,7 @@ import { atende } from '@/modules/plataforma/assinatura/nivel-do-plano'
 import { ConviteDoPlano } from '@/components/planos/ConviteDoPlano'
 import '@/design-system/tokens/tokens.css'
 import { Secao, SemBanco, SOBRANCELHA_STATS } from '../../moldura'
+import { SilhuetaPaga } from '@/components/planos/SilhuetaPaga'
 
 /**
  * OS TRÊS ATRIBUTOS DA HIERARQUIA, na forma curta do rodapé do card (PTS ·
@@ -189,7 +190,7 @@ function colunas(temProrrogacao: boolean, fuso: string): Coluna<BoxScoreDoJogo>[
 }
 
 /**
- * UM NÚMERO DA CAMPANHA — rótulo condensado por cima, número em Anton por
+ * UM NÚMERO DA CAMPANHA — rótulo condensado por cima, número na fonte de número por
  * baixo. Era uma caixinha com borda e fundo próprios; a identidade 04 obtém
  * densidade REMOVENDO cromo (spec §2), então a moldura sai e ficam a
  * tipografia e o espaço.
@@ -404,7 +405,9 @@ export default async function PaginaTime({
             vazio="Nenhuma partida registrada para este time."
           />
         ) : (
-          <ConviteDoPlano minimo="MVP" recurso="O box score por jogo" voltar={rotaDoTime(id)} />
+          <SilhuetaPaga forma="tabela">
+            <ConviteDoPlano minimo="MVP" recurso="O box score por jogo" voltar={rotaDoTime(id)} />
+          </SilhuetaPaga>
         )}
       </Secao>
 

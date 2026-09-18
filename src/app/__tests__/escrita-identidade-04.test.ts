@@ -20,7 +20,18 @@ vi.mock('../../modules/plataforma/assinatura/direito', async () => {
   const { acessoDeTeste } = await import('../../modules/plataforma/__tests__/acesso-de-teste')
   return { avaliarAcesso: async () => acessoDeTeste('ALL_STAR') }
 })
+vi.mock('next/cache', () => ({
+  // `unstable_cache` fora do runtime do Next não tem store: no teste ele é a
+  // própria função. `revalidateTag`/`revalidatePath` viram no-op.
+  unstable_cache: (fn: (...args: never[]) => unknown) => fn,
+  revalidateTag: () => {},
+  revalidatePath: () => {},
+}))
 vi.mock('../../modules/dominio/db/cliente', () => ({ getDb: () => ({}) }))
+// Esta suíte cobra a ESCRITA da tela e usa um banco de mentira (`{}`). A
+// lateral direita lê o recap e a classificação de verdade, então aqui ela sai
+// de cena — o que está sob teste é a frase, não a coluna.
+vi.mock('../(app)/lateral/montar', () => ({ lateralPadrao: async () => null }))
 vi.mock('../../modules/entrega/gestao', () => ({
   BANCA_PADRAO: 1000,
   planoDoDia: async () => plano,

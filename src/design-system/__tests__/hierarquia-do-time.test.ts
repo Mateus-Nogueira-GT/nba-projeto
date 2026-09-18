@@ -51,9 +51,9 @@ describe('HierarquiaDoTime — o depth chart do CJ', () => {
     ])
   })
 
-  it('o número da posição sai em Anton, com tabular-nums', () => {
+  it('o número da posição sai na fonte de número, com tabular-nums', () => {
     const html = render({ linhas: [linha(1, 'Primeiro', 'MVP')] })
-    expect(html).toContain('var(--fonte-anton)')
+    expect(html).toContain('var(--fonte-bebas)')
     expect(html).toContain('tabular-nums')
   })
 

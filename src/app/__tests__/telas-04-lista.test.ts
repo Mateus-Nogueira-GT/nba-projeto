@@ -42,6 +42,13 @@ vi.mock('../../modules/plataforma/assinatura/direito', async () => {
   const { acessoDeTeste } = await import('../../modules/plataforma/__tests__/acesso-de-teste')
   return { avaliarAcesso: async () => acessoDeTeste('ALL_STAR') }
 })
+vi.mock('next/cache', () => ({
+  // `unstable_cache` fora do runtime do Next não tem store: no teste ele é a
+  // própria função. `revalidateTag`/`revalidatePath` viram no-op.
+  unstable_cache: (fn: (...args: never[]) => unknown) => fn,
+  revalidateTag: () => {},
+  revalidatePath: () => {},
+}))
 vi.mock('../../modules/dominio/db/cliente', () => ({
   getDb: () => banco.db,
   fecharDb: async () => {},
@@ -375,7 +382,10 @@ describe('Lista Secreta · 04 — a varredura por jogo', () => {
     // fica no cabeçalho do jogo, onde a hora é dado.
     expect(html).toContain(`publicada às ${horaEmTexto(feed!.geradoEm, FUSO)}`)
     expect(html).not.toContain(`publicada às ${horaCurta(feed!.geradoEm, FUSO)}`)
-    expect(html).toMatch(/\d+ entradas em \d+ jogos/)
+    // Identidade 05: a contagem saiu da frase e virou o CONTADOR do cabeçalho
+    // — o número num <strong> e o que ele conta ao lado.
+    expect(html).toMatch(/<strong[^>]*>\d+<\/strong>/)
+    expect(html).toMatch(/entradas em \d+ jogos/)
   }, 60_000)
 
   it('o card inteiro leva ao apito; o nome, às estatísticas', async () => {
@@ -409,7 +419,14 @@ describe('Lista Secreta · 04 — regras de escrita', () => {
 
     for (const bruto of telas) {
       // O replay de formulário que o React injeta é script, não texto de tela.
-      const html = bruto.replace(/<script[\s\S]*?<\/script>/g, '')
+      // E a LATERAL fica de fora: ela mostra a taxa da noite e da temporada, que
+      // são percentuais legítimos de resultado observado (docs/04, vocabulário
+      // numérico). O que esta suíte cobra é a escrita da LISTA — onde um "%"
+      // seria lido como probabilidade do apito, que é o erro que a regra 
+      // existe para impedir.
+      const html = bruto
+        .replace(/<script[\s\S]*?<\/script>/g, '')
+        .replace(/<aside[\s\S]*?<\/aside>/g, '')
 
       expect(html.toLowerCase()).not.toContain('probabilidade')
       // A nota da partida é "nota" e não aparece aqui; "nível" é do jogador e
@@ -442,8 +459,11 @@ describe('Lista Secreta · 04 — regras de escrita', () => {
 describe('Lista Secreta · desktop — a tela ocupa a largura que tem', () => {
   it('a moldura é a larga: em 640 sobravam ~400px de cada lado num monitor comum', async () => {
     const html = await renderizar()
-    expect(html).toContain(`max-width:${LARGURA_DA_MOLDURA.dados}px`)
-    expect(html).not.toContain(`max-width:${LARGURA_DA_MOLDURA.leitura}px`)
+    // A largura viaja por variável CSS desde a identidade 05: o `max-width`
+    // mora no CSS da Moldura, porque a partir de 1280 ele muda junto com a
+    // lateral e uma media query não alcança um estilo embutido.
+    expect(html).toContain(`--largura-coluna:${LARGURA_DA_MOLDURA.dados}px`)
+    expect(html).not.toContain(`--largura-coluna:${LARGURA_DA_MOLDURA.leitura}px`)
   })
 
   it('os cards entram em grade de múltiplas colunas, não numa coluna esticada', async () => {
@@ -459,4 +479,50 @@ describe('Lista Secreta · desktop — a tela ocupa a largura que tem', () => {
     const grades = html.split(GRADE_DE_CARDS_CSS).length - 1
     expect(grades).toBeGreaterThan(0)
   })
+})
+
+// ===========================================================================
+// IDENTIDADE 05 — A LISTA NA ANATOMIA DO STATSHUB
+// ===========================================================================
+
+describe('Lista Secreta · 05 — a moldura do StatsHub', () => {
+  it('cada jogo com apito é um <details open> cujo summary é o cabeçalho do jogo', async () => {
+    const html = await renderizar()
+    const secoes = (html.match(/<summary class="jogo-frio"/g) ?? []).length
+    expect(secoes).toBeGreaterThan(0)
+    expect((html.match(/<details open/g) ?? []).length).toBe(secoes)
+  }, 60_000)
+
+  it('o contador escreve o total de entradas, e a descrição não repete o número', async () => {
+    const html = await renderizar()
+    const { lerFeed, agruparPorJogador } = await import('../../modules/entrega/lista-secreta')
+    const feed = await lerFeed(banco.db, HOJE)
+    // O contador conta CARDS (um por jogador, com as abas de atributo dentro),
+    // não itens do feed: é o que a tela mostra.
+    const cards = agruparPorJogador(feed!.conteudo.itens).length
+    const jogos = new Set(feed!.conteudo.itens.map((i) => i.jogoId)).size
+    expect(html).toContain(`>${cards}</strong>`)
+    expect(html).toContain(`entradas em ${jogos} jogos`)
+    // e a frase de cima não repete o número
+    expect(html).not.toContain(`${cards} entrada`)
+  }, 60_000)
+
+  it('acompanhar é a estrela no canto do card; o botão solto sob o card sumiu', async () => {
+    const html = await renderizar()
+    expect(html).toContain('aria-label="Acompanhar jogador"')
+    expect(html).not.toContain('+ Acompanhar jogador')
+  }, 60_000)
+
+  it('nenhum texto do card fica abaixo do piso de 12 px do manual', async () => {
+    const html = await renderizar()
+    expect(html).not.toMatch(/font-size:(9|10|11)px/)
+  }, 60_000)
+
+  it('os filtros saem nas duas formas: folha no celular, chips com menu no desktop', async () => {
+    const html = await renderizar()
+    // a folha continua lá (fieldset por grupo) e a fileira de chips também
+    expect(html).toContain('<legend')
+    expect(html).toContain('role="group"')
+    expect(html).toContain('FILTRAR')
+  }, 60_000)
 })

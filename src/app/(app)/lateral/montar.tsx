@@ -1,0 +1,35 @@
+import type { ReactNode } from 'react'
+
+import { Lateral } from '@/components/lateral'
+import { dataDeReferencia } from '@/modules/dominio/rodada'
+import { calendarioDoRuleset, temporadaDe } from '@/modules/dominio/temporada'
+import { rulesetAtivo } from '@/modules/entrega/ruleset-ativo'
+
+import { lerLateralCacheada } from './leitura'
+
+/**
+ * A LATERAL PADRÃO das telas de aba — um lugar só onde ela é montada.
+ *
+ * As oito telas de aba passariam a mesma sequência (ler o ruleset, achar o
+ * "hoje" no fuso da rodada, derivar a temporada, ler a lateral cacheada); aqui
+ * ela existe uma vez. A tela só diz o que ela sabe e a lateral não: se este
+ * nível tem direito ao assistente e se é o grátis.
+ *
+ * Chamar isto DEPOIS do portão de nível da tela é o que mantém a ordem que o
+ * `paywall.test.ts` vigia — e, ainda assim, nada aqui lê dado pago.
+ */
+export async function lateralPadrao({
+  assistente,
+  gratis,
+}: {
+  assistente: boolean
+  gratis: boolean
+}): Promise<ReactNode> {
+  const ruleset = await rulesetAtivo()
+  const config = calendarioDoRuleset(ruleset)
+  const agora = new Date()
+  const hoje = dataDeReferencia(agora, ruleset.rodada.fuso)
+  const dados = await lerLateralCacheada(hoje, temporadaDe(agora, config), config)
+
+  return <Lateral dados={dados} assistente={assistente} gratis={gratis} />
+}

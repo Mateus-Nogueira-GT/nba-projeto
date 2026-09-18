@@ -13,8 +13,10 @@ export default function manifest(): MetadataRoute.Manifest {
     start_url: '/',
     scope: '/',
     display: 'standalone',
-    background_color: semantico.textoSobreCor,
-    theme_color: semantico.textoSobreCor,
+    // A splash e a barra do sistema vestem o FUNDO do app (o `textoSobreCor`
+    // era escuro e servia por acaso, mas descreve texto sobre cor).
+    background_color: semantico.fundo,
+    theme_color: semantico.fundo,
     orientation: 'portrait-primary',
     icons: [
       { src: '/icons/app-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },

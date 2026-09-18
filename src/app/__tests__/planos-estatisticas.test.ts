@@ -40,6 +40,13 @@ vi.mock('../../modules/plataforma/assinatura/direito', async () => {
   const { acessoDeTeste } = await import('../../modules/plataforma/__tests__/acesso-de-teste')
   return { avaliarAcesso: async () => acessoDeTeste(nivelNoTeste) }
 })
+vi.mock('next/cache', () => ({
+  // `unstable_cache` fora do runtime do Next não tem store: no teste ele é a
+  // própria função. `revalidateTag`/`revalidatePath` viram no-op.
+  unstable_cache: (fn: (...args: never[]) => unknown) => fn,
+  revalidateTag: () => {},
+  revalidatePath: () => {},
+}))
 vi.mock('../../modules/dominio/db/cliente', () => ({
   getDb: () => banco.db,
   fecharDb: async () => {},
@@ -148,6 +155,11 @@ async function renderizarClassificacao(): Promise<string> {
   return renderToStaticMarkup(await Pagina({ searchParams: Promise.resolve({}) }))
 }
 
+/** O HTML sem a coluna da direita. */
+function semLateral(html: string): string {
+  return html.replace(/<aside[\s\S]*?<\/aside>/g, '')
+}
+
 describe('estatísticas por nível (spec §5, linhas 5-6)', () => {
   it('GRATIS: o jogador tem o resumo, e as três seções fundas viram convite', async () => {
     nivelNoTeste = 'GRATIS'
@@ -174,7 +186,10 @@ describe('estatísticas por nível (spec §5, linhas 5-6)', () => {
     const html = await renderizarJogador(jogadorId)
 
     expect(trecho(html, 'Jogo a jogo', 'Números completos')).toContain('<table')
-    expect(html).not.toContain('começa no')
+    // A LATERAL fica de fora: o banner de plano mora nela para o grátis
+    // (identidade 05, §8) e não bloqueia nada — o que esta asserção prova é
+    // que o CONTEÚDO da tela vem inteiro, sem convite no lugar dele.
+    expect(semLateral(html)).not.toContain('começa no')
   })
 
   it('GRATIS: o jogo tem líderes e desfalques; box score e confrontos viram convite', async () => {
@@ -194,7 +209,10 @@ describe('estatísticas por nível (spec §5, linhas 5-6)', () => {
     const html = await renderizarJogo(jogoId)
 
     expect(trecho(html, 'Box score', 'Confrontos anteriores')).toContain('<table')
-    expect(html).not.toContain('começa no')
+    // A LATERAL fica de fora: o banner de plano mora nela para o grátis
+    // (identidade 05, §8) e não bloqueia nada — o que esta asserção prova é
+    // que o CONTEÚDO da tela vem inteiro, sem convite no lugar dele.
+    expect(semLateral(html)).not.toContain('começa no')
   })
 
   it('GRATIS: o time tem campanha e elenco; box score por jogo vira convite', async () => {
@@ -237,6 +255,22 @@ describe('estatísticas por nível (spec §5, linhas 5-6)', () => {
     const html = await renderizarClassificacao()
 
     expect(html).toContain('<table')
-    expect(html).not.toContain('começa no')
+    // A LATERAL fica de fora: o banner de plano mora nela para o grátis
+    // (identidade 05, §8) e não bloqueia nada — o que esta asserção prova é
+    // que o CONTEÚDO da tela vem inteiro, sem convite no lugar dele.
+    expect(semLateral(html)).not.toContain('começa no')
+  })
+})
+
+describe('identidade 05 · as seções pagas viram silhueta', () => {
+  it('as três seções fundas do jogador mostram título, silhueta e convite compacto', async () => {
+    nivelNoTeste = 'GRATIS'
+    const html = await renderizarJogador(jogadorId)
+    // Três seções pagas (apitos, jogo a jogo, números completos), três
+    // silhuetas — e nenhuma tabela de verdade.
+    expect((html.match(/_silhueta_/g) ?? []).length).toBe(3)
+    expect(semLateral(html)).not.toContain('<table')
+    // O convite continua sendo o nome acessível do conjunto.
+    expect(html).toContain('começa no')
   })
 })

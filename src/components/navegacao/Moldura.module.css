@@ -1,0 +1,103 @@
+/* A MOLDURA DA IDENTIDADE 05 — três regiões: cromo, conteúdo e lateral.
+
+   Os números 1024 e 1280 repetem `semantico.larguraTopo` e
+   `semantico.larguraLateral`. A repetição é inevitável: media query não lê
+   variável CSS. O teste "os pontos de quebra do CSS da moldura são os dos
+   tokens" compara os dois, então mudar o token sem mudar aqui fica vermelho. */
+
+.raiz {
+  min-height: 100vh;
+}
+
+/* As duas barras saem no HTML; a media query escolhe uma. Até 1024 o cromo é a
+   barra inferior, que a própria BarraInferior posiciona como fixa.
+
+   O `display` da barra inferior mora AQUI, e não no estilo embutido dela: uma
+   declaração embutida vence qualquer media query, e com ela lá a barra do
+   celular continuava acesa no desktop, embaixo da barra do topo. */
+.topo {
+  display: none;
+}
+
+:global(.barra-inferior) {
+  display: flex;
+}
+
+/* Até 1280 o corpo é só o fluxo normal; a partir dali vira a grade de duas
+   colunas (conteúdo + lateral). */
+.corpo {
+  display: block;
+}
+
+.conteudo {
+  padding: 24px 16px 96px;
+}
+
+/* Tela sem aba (detalhe do apito, teoria): não há barra inferior reservando
+   altura, então o rodapé encolhe. */
+.semAba .conteudo {
+  padding-bottom: 64px;
+}
+
+.coluna {
+  max-width: var(--largura-coluna);
+  margin: 0 auto;
+}
+
+.lateral {
+  display: none;
+}
+
+@media (min-width: 1024px) {
+  .topo {
+    position: sticky;
+    top: 0;
+    z-index: 30;
+    display: flex;
+    height: 64px;
+  }
+
+  /* A barra inferior sai de cena: no desktop a navegação é a do topo. */
+  .raiz :global(.barra-inferior) {
+    display: none;
+  }
+
+  .conteudo {
+    padding: 24px 24px 48px;
+  }
+}
+
+@media (min-width: 1280px) {
+  /* Conteúdo fluido até 1040 + lateral de 320, com 32 de vão. A lateral só
+     existe quando a tela passa uma (`.comLateral`). */
+  .comLateral .corpo {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 320px;
+    gap: 32px;
+    max-width: 1392px;
+    margin: 0 auto;
+    padding: 0 24px;
+  }
+
+  .comLateral .conteudo {
+    padding-left: 0;
+    padding-right: 0;
+  }
+
+  .comLateral .coluna {
+    max-width: 1040px;
+    margin: 0;
+  }
+
+  /* Rolagem própria, presa abaixo da barra do topo: os blocos de cima rolam
+     para fora e a doca do assistente fica no rodapé da coluna. */
+  .lateral {
+    position: sticky;
+    top: 64px;
+    display: flex;
+    flex-direction: column;
+    height: calc(100vh - 64px);
+    overflow-y: auto;
+    padding: 24px 0;
+  }
+}

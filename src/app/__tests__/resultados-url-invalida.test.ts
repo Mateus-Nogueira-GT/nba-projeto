@@ -3,6 +3,13 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { bancoDeTeste } from '../../modules/dominio/__tests__/ajuda-banco'
 
 let banco: Awaited<ReturnType<typeof bancoDeTeste>>
+vi.mock('next/cache', () => ({
+  // `unstable_cache` fora do runtime do Next não tem store: no teste ele é a
+  // própria função. `revalidateTag`/`revalidatePath` viram no-op.
+  unstable_cache: (fn: (...args: never[]) => unknown) => fn,
+  revalidateTag: () => {},
+  revalidatePath: () => {},
+}))
 vi.mock('../../modules/dominio/db/cliente', () => ({ getDb: () => banco.db }))
 vi.mock('../../modules/plataforma/auth/cookies', () => ({
   sessaoAtual: async () => ({

@@ -24,9 +24,9 @@
 }
 
 .jogoAtivo {
-  border-color: var(--acento);
-  background: var(--acento-veu);
-  color: var(--texto-primario);
+  border-color: transparent;
+  background: var(--acento);
+  color: var(--texto-sobre-acento);
 }
 
 .time {
@@ -63,7 +63,7 @@
 }
 
 .jogo:focus-visible {
-  outline: 2px solid var(--acento);
+  outline: var(--foco);
   outline-offset: 2px;
 }
 

@@ -51,6 +51,13 @@ vi.mock('../../modules/plataforma/assinatura/direito', async () => {
   const { acessoDeTeste } = await import('../../modules/plataforma/__tests__/acesso-de-teste')
   return { avaliarAcesso: async () => acessoDeTeste('ALL_STAR') }
 })
+vi.mock('next/cache', () => ({
+  // `unstable_cache` fora do runtime do Next não tem store: no teste ele é a
+  // própria função. `revalidateTag`/`revalidatePath` viram no-op.
+  unstable_cache: (fn: (...args: never[]) => unknown) => fn,
+  revalidateTag: () => {},
+  revalidatePath: () => {},
+}))
 vi.mock('../../modules/dominio/db/cliente', () => ({
   getDb: () => banco.db,
   fecharDb: async () => {},
@@ -157,9 +164,11 @@ describe('a classificação sai por conferência', () => {
     const html = await renderizarIndice()
     await gravarConferencia('classificacao', html)
 
-    // Uma tabela por conferência e mais nenhuma: a tabela única da liga era o
-    // erro factual do print.
-    expect(html.match(/<table/g)).toHaveLength(conferencias.length)
+    // Uma tabela por conferência NO CONTEÚDO e mais nenhuma: a tabela única da
+    // liga era o erro factual do print. A lateral tem a sua, compacta, que é
+    // outra coisa — por isso ela sai da conta.
+    const conteudo = html.replace(/<aside[\s\S]*?<\/aside>/g, '')
+    expect(conteudo.match(/<table/g)).toHaveLength(conferencias.length)
 
     expect(dados.linhas).toHaveLength(FRANQUIAS.naLiga)
 

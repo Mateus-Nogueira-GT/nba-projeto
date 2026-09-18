@@ -1,6 +1,7 @@
 import { identidadesDeApresentacao } from '../dominio/identidade-apresentacao'
 import { and, asc, desc, eq, gte, inArray, lte, sql } from 'drizzle-orm'
 import { z } from 'zod'
+import { temporadaDe, type ConfigTemporada } from '../dominio/temporada'
 
 import {
   apitos,
@@ -639,6 +640,36 @@ export type TaxaDaTemporada = { conferidos: number; acertos: number; rodadas: nu
  * Regra de escrita: ele nunca fica no mesmo elemento que um % de confiança —
  * são coisas diferentes, e a spec da identidade 04 é explícita sobre isso.
  */
+/**
+ * A JANELA DA TEMPORADA — da abertura até a rodada em tela.
+ *
+ * O contador não é "os últimos N dias": é a temporada corrente, que começa no
+ * mês declarado no ruleset (`temporada.mes_inicio`). Somar dias fixos faria a
+ * taxa arrastar jogos da temporada passada em outubro, e é ela que o produto
+ * usa como argumento de venda. `taxaDaTemporada` recebe a janela em dias
+ * porque a consulta é uma só; a regra de onde ela começa é daqui.
+ *
+ * Mora na ENTREGA, e não na tela de Resultados, desde a identidade 05: a
+ * lateral usa a mesma janela para escrever a taxa da temporada, e duas cópias
+ * divergiriam na primeira mudança do calendário.
+ */
+export function diasDaTemporada(data: string, config: ConfigTemporada): number {
+  const meioDia = `${data}T12:00:00.000Z`
+  const anoBase = temporadaDe(new Date(meioDia), config).slice(0, 4)
+  const abertura = `${anoBase}-${String(config.mesInicio).padStart(2, '0')}-01T12:00:00.000Z`
+  const dias = Math.round((Date.parse(meioDia) - Date.parse(abertura)) / 86_400_000)
+  // Defesa em profundidade: com o ano preenchido isto não dispara, mas uma
+  // abertura ilegível não pode virar NaN dentro de `somarDias`.
+  if (!Number.isFinite(dias)) return 1
+  // NÃO HÁ ANO 0 no calendário do Postgres: a temporada de 0001-01-01 abriria
+  // em 0000-10-01 e a consulta da taxa morreria convertendo o parâmetro
+  // (diagnóstico de 13/09). A janela para na primeira data que existe — isto
+  // não é limite de calendário da liga, é o alcance do tipo `date`.
+  const ateAPrimeiraData =
+    Math.round((Date.parse(meioDia) - Date.parse('0001-01-01T12:00:00.000Z')) / 86_400_000) + 1
+  return Math.max(1, Math.min(dias + 1, ateAPrimeiraData))
+}
+
 export async function taxaDaTemporada(db: Db, ate: string, dias: number): Promise<TaxaDaTemporada> {
   const deRef = somarDias(ate, -dias)
   const ateRef = somarDias(ate, -1)

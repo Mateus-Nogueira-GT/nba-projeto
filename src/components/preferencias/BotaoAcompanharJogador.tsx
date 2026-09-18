@@ -17,10 +17,18 @@ function BotaoAcompanhar({
   tipo,
   id,
   inicial,
+  variante = 'texto',
 }: {
   tipo: TipoAcompanhamento
   id: string
   inicial: boolean
+  /**
+   * `texto` é o botão de sempre, com o rótulo escrito. `estrela` é a forma
+   * compacta que entra no CANTO do card da Lista (identidade 05): o mesmo
+   * gesto, sem a linha solta embaixo do card que quebrava o ritmo da grade.
+   * O nome acessível é escrito nos dois — o ícone nunca fica sozinho.
+   */
+  variante?: 'texto' | 'estrela'
 }) {
   const [acompanhado, setAcompanhado] = useState(inicial)
   const [salvando, setSalvando] = useState(false)
@@ -67,6 +75,37 @@ function BotaoAcompanhar({
     }
   }
 
+  const alvo = tipo === 'JOGADOR' ? 'jogador' : 'time'
+
+  if (variante === 'estrela') {
+    return (
+      <button
+        type="button"
+        className={`${estilos.estrela} ${acompanhado ? estilos.estrelaAtiva : ''}`}
+        aria-label={`Acompanhar ${alvo}`}
+        aria-pressed={acompanhado}
+        disabled={salvando}
+        // O erro vira `title` aqui: no canto do card não há linha para escrever
+        // uma frase, e some-la de vez deixaria a falha invisível.
+        title={erro || undefined}
+        onClick={() => void alternar()}
+      >
+        <svg
+          width="16"
+          height="16"
+          viewBox="0 0 16 16"
+          aria-hidden
+          fill={acompanhado ? 'currentColor' : 'none'}
+          stroke="currentColor"
+          strokeWidth="1.5"
+          strokeLinejoin="round"
+        >
+          <path d="M8 1.5l2 4.2 4.5.6-3.3 3.2.8 4.5L8 11.8 4 14l.8-4.5L1.5 6.3 6 5.7z" />
+        </svg>
+      </button>
+    )
+  }
+
   return (
     <div className={estilos.grupo}>
       {erro && (
@@ -81,11 +120,7 @@ function BotaoAcompanhar({
         disabled={salvando}
         onClick={() => void alternar()}
       >
-        {salvando
-          ? 'Salvando…'
-          : acompanhado
-            ? `✓ Acompanhando ${tipo === 'JOGADOR' ? 'jogador' : 'time'}`
-            : `+ Acompanhar ${tipo === 'JOGADOR' ? 'jogador' : 'time'}`}
+        {salvando ? 'Salvando…' : acompanhado ? `✓ Acompanhando ${alvo}` : `+ Acompanhar ${alvo}`}
       </button>
     </div>
   )
@@ -94,11 +129,13 @@ function BotaoAcompanhar({
 export function BotaoAcompanharJogador({
   jogadorId,
   inicial,
+  variante,
 }: {
   jogadorId: string
   inicial: boolean
+  variante?: 'texto' | 'estrela'
 }) {
-  return <BotaoAcompanhar tipo="JOGADOR" id={jogadorId} inicial={inicial} />
+  return <BotaoAcompanhar tipo="JOGADOR" id={jogadorId} inicial={inicial} variante={variante} />
 }
 
 export function BotaoAcompanharTime({ timeId, inicial }: { timeId: string; inicial: boolean }) {

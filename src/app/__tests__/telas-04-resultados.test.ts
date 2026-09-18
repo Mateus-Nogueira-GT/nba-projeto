@@ -48,6 +48,13 @@ vi.mock('../../modules/plataforma/assinatura/direito', async () => {
   const { acessoDeTeste } = await import('../../modules/plataforma/__tests__/acesso-de-teste')
   return { avaliarAcesso: async () => acessoDeTeste('ALL_STAR') }
 })
+vi.mock('next/cache', () => ({
+  // `unstable_cache` fora do runtime do Next não tem store: no teste ele é a
+  // própria função. `revalidateTag`/`revalidatePath` viram no-op.
+  unstable_cache: (fn: (...args: never[]) => unknown) => fn,
+  revalidateTag: () => {},
+  revalidatePath: () => {},
+}))
 vi.mock('../../modules/dominio/db/cliente', () => ({
   getDb: () => banco.db,
   fecharDb: async () => {},
@@ -178,10 +185,11 @@ describe('Resultados · o índice da rodada', () => {
     const html = await renderizar(ONTEM)
     await gravarConferencia('identidade-04-resultados', html)
     const [ano, mes, dia] = ONTEM.split('-').map(Number)
-    const semana = new Date(Date.UTC(ano!, mes! - 1, dia!)).toLocaleDateString('pt-BR', {
-      timeZone: 'UTC',
-      weekday: 'long',
-    })
+    const semana = new Date(Date.UTC(ano!, mes! - 1, dia!))
+      .toLocaleDateString('pt-BR', { timeZone: 'UTC', weekday: 'long' })
+      // Sem o "-feira" desde a identidade 05: a Lista já o removia numa cópia
+      // local de `diaDaRodada`, e agora a regra vive na função compartilhada.
+      .replace('-feira', '')
     expect(html).toContain(`${semana[0]!.toUpperCase()}${semana.slice(1)}, ${dia}/${mes}`)
     expect(html).toContain('RESULTADOS · RODADA')
     // A anterior sempre existe; a próxima também, porque ONTEM não é hoje.
@@ -554,11 +562,11 @@ describe('Resultados · o estado vem do jogo, não do que a tela não achou', ()
     const cards = cardsDaTela(html)
     expect(cards.length).toBeGreaterThan(0)
 
-    // A nota é o número grande do card (Anton 30) — o mesmo elemento nos cinco
-    // artboards. Casar por ele evita confundir a nota com a média ou a odd, que
+    // A nota é o número grande do card — 34px na identidade 05 (era 30 na
+    // Anton, antes da identidade 05). Casar por ele evita confundir a nota com a média ou a odd, que
     // são decimais legítimos no rodapé.
     const notas = cards.flatMap((card) => [
-      ...card.matchAll(/font-size:30px[^"]*"[^>]*>([\d,.]+)</g),
+      ...card.matchAll(/font-size:34px[^"]*"[^>]*>([\d,.]+)</g),
     ])
     expect(notas.length).toBeGreaterThan(0)
     for (const [, nota] of notas) expect(nota).toMatch(/^\d+$/)

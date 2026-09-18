@@ -22,7 +22,7 @@ export type NotaPartidaProps = {
    * O badge no DESTAQUE dos quatro números do perfil, onde a nota é "o
    * número" do jogador: maior e sem largura mínima. Sem isso ele saía do
    * mesmo tamanho da célula de tabela e perdia a hierarquia ao lado dos três
-   * números em Anton (duas medidas no artboard, `.nota` e `.n`).
+   * números na fonte de título (duas medidas no artboard, `.nota` e `.n`).
    */
   destaque?: boolean
 }

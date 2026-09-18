@@ -1,8 +1,8 @@
 import { componente } from '@/design-system/tokens/componente'
 import { semantico } from '@/design-system/tokens/semantico'
 
-import { BarraInferior, type Aba } from './BarraInferior'
-import { LARGURA_DA_MOLDURA, type LarguraDaMoldura } from './Moldura'
+import type { Aba } from './abas'
+import { Moldura, type LarguraDaMoldura } from './Moldura'
 
 /**
  * O QUE A TELA MOSTRA ENQUANTO O SERVIDOR RESPONDE.
@@ -13,9 +13,13 @@ import { LARGURA_DA_MOLDURA, type LarguraDaMoldura } from './Moldura'
  * muda. Silêncio não se lê como "carregando", se lê como "travou", e leva a
  * um segundo toque que não acelera nada.
  *
- * A BARRA DE ABAS FICA. Ela já sabe para onde o usuário vai, então continua
- * desenhada e com o destino aceso: o que troca é só o conteúdo, e a moldura
- * não pisca entre uma tela e outra.
+ * A MOLDURA INTEIRA FICA — não só a barra de abas. Ela veste a `Moldura` de
+ * verdade (identidade 05), então o cromo, a coluna e o destino aceso continuam
+ * desenhados: o que troca é só o conteúdo, e nada pisca entre uma tela e outra.
+ *
+ * Sem `assistente` e sem `lateral` de propósito: o esqueleto não tem o que
+ * perguntar nem o que mostrar na coluna da direita, e desenhar uma lateral
+ * falsa que some quando o conteúdo chega é pior que não tê-la.
  */
 function Barra({ largura, altura = 14 }: { largura: string | number; altura?: number }) {
   return (
@@ -41,50 +45,30 @@ export function Esqueleto({
   linhas?: number
 }) {
   return (
-    <>
-      <main
-        aria-busy="true"
-        aria-label="Carregando"
-        style={{
-          background: componente.fundoTela,
-          color: semantico.textoPrimario,
-          minHeight: '100vh',
-          padding: aba === null ? '24px 16px 64px' : '24px 16px 96px',
-          fontFamily: semantico.fonteCorpo,
-        }}
-      >
-        <div
-          style={{
-            maxWidth: LARGURA_DA_MOLDURA[largura],
-            margin: '0 auto',
-            display: 'grid',
-            gap: 18,
-          }}
-        >
-          <div style={{ display: 'grid', gap: 8 }}>
-            <Barra largura={140} altura={10} />
-            <Barra largura={220} altura={26} />
-          </div>
-          <div style={{ display: 'grid', gap: 10 }}>
-            {Array.from({ length: linhas }, (_, i) => (
-              // Altura de card, não de linha de texto: o esqueleto precisa
-              // ocupar o espaço que o conteúdo vai ocupar, senão a tela pula
-              // quando ele chega.
-              <div
-                key={i}
-                className="esqueleto"
-                style={{
-                  height: 92,
-                  borderRadius: 14,
-                  background: semantico.superficie,
-                  border: `1px solid ${semantico.divisor}`,
-                }}
-              />
-            ))}
-          </div>
+    <Moldura aba={aba} largura={largura}>
+      <div aria-busy="true" aria-label="Carregando" style={{ display: 'grid', gap: 18 }}>
+        <div style={{ display: 'grid', gap: 8 }}>
+          <Barra largura={140} altura={10} />
+          <Barra largura={220} altura={26} />
         </div>
-      </main>
-      {aba !== null && <BarraInferior atual={aba} />}
-    </>
+        <div style={{ display: 'grid', gap: 10 }}>
+          {Array.from({ length: linhas }, (_, i) => (
+            // Altura de card, não de linha de texto: o esqueleto precisa
+            // ocupar o espaço que o conteúdo vai ocupar, senão a tela pula
+            // quando ele chega.
+            <div
+              key={i}
+              className="esqueleto"
+              style={{
+                height: 92,
+                borderRadius: componente.cardRaio,
+                background: semantico.superficie,
+                border: `1px solid ${semantico.divisor}`,
+              }}
+            />
+          ))}
+        </div>
+      </div>
+    </Moldura>
   )
 }

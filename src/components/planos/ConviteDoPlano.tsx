@@ -7,47 +7,109 @@ import { type NivelPago, ROTULO_DO_NIVEL } from '@/modules/plataforma/assinatura
 /**
  * O CONVITE — o que o grátis vê no lugar do que não tem.
  *
- * Nunca uma tela vazia, nunca só um redirecionamento (spec §6): o convite
- * diz o que existe ali e qual nível libera, e leva para /assinar sabendo
- * de onde veio — é o `voltar` que faz o botão de retorno funcionar.
+ * Nunca uma tela vazia, nunca só um redirecionamento (spec de planos, §6): o
+ * convite diz o que existe ali e qual nível libera, e leva para /assinar
+ * sabendo de onde veio — é o `voltar` que faz o botão de retorno funcionar.
  *
- * `semantico.borda` não existe no design system (conferido em semantico.ts);
- * o card da Lista Secreta usa `semantico.divisor` para a mesma borda, e é o
- * que este card veste também.
+ * DUAS VARIANTES desde a identidade 05:
+ *
+ *   `compacto` (padrão) é o cartão de sempre, revestido. Ele entra POR CIMA de
+ *   uma silhueta nas seções pagas das Estatísticas e da Gestão, onde três
+ *   convites podem aparecer em sequência na mesma página — três faixas azuis
+ *   ali seriam um muro.
+ *
+ *   `faixa` é o banner azul do manual, para o topo das telas onde o grátis não
+ *   tem nada: a Lista, o Fire Live e o topo da lateral. É o lugar onde o
+ *   StatsHub põe a promo dele.
  */
 export function ConviteDoPlano({
   minimo,
   recurso,
   voltar,
+  variante = 'compacto',
 }: {
   minimo: NivelPago
   recurso: string
   voltar: string
+  variante?: 'compacto' | 'faixa'
 }) {
   const href = `/assinar?nivel=${minimo}&voltar=${encodeURIComponent(voltar)}`
+  const rotulo = `${recurso} começa no plano ${ROTULO_DO_NIVEL[minimo]}`
+
+  if (variante === 'faixa') {
+    return (
+      <section
+        aria-label={rotulo}
+        style={{
+          padding: '20px 20px 18px',
+          borderRadius: componente.cardRaio,
+          background: semantico.acento,
+          color: semantico.textoSobreAcento,
+        }}
+      >
+        {/* Em caixa-alta no TEXTO, não só no CSS: é o que o leitor de tela
+            recebe, e é o que a asserção do teste lê. */}
+        <p
+          style={{
+            margin: 0,
+            fontFamily: semantico.fonteTitulo,
+            fontSize: 24,
+            letterSpacing: '0.02em',
+            lineHeight: 1.1,
+          }}
+        >
+          {`${recurso} começa no ${ROTULO_DO_NIVEL[minimo]}`.toUpperCase()}
+        </p>
+        <p style={{ margin: '8px 0 14px', fontSize: 14, opacity: 0.9 }}>
+          Os apitos do dia, o Fire Live e o assistente, com a metodologia NIP.
+        </p>
+        {/* Botão BRANCO com texto no navy: sobre o azul do manual, o branco é o
+            único preenchimento que se destaca sem inventar uma terceira cor. */}
+        <Link
+          href={href}
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            minHeight: componente.ctaAltura,
+            padding: '0 18px',
+            borderRadius: componente.raioControle,
+            background: semantico.textoSobreAcento,
+            color: semantico.cromo,
+            fontWeight: 700,
+            textDecoration: 'none',
+          }}
+        >
+          Ver planos
+        </Link>
+      </section>
+    )
+  }
+
   return (
     <section
-      aria-label={`${recurso} começa no plano ${ROTULO_DO_NIVEL[minimo]}`}
+      aria-label={rotulo}
       style={{
         marginTop: 18,
         padding: 18,
-        borderRadius: 12,
+        borderRadius: componente.cardRaio,
         background: componente.cardFundo,
         border: `1px solid ${semantico.divisor}`,
       }}
     >
-      <p style={{ margin: 0, fontFamily: semantico.fonteRotulo, letterSpacing: 0.5 }}>
+      <p style={{ margin: 0, fontFamily: semantico.fonteRotulo, letterSpacing: '0.02em' }}>
         {recurso} começa no <strong>{ROTULO_DO_NIVEL[minimo]}</strong>
       </p>
       <Link
         href={href}
         style={{
-          display: 'inline-block',
+          display: 'inline-flex',
+          alignItems: 'center',
           marginTop: 12,
-          padding: '10px 16px',
-          borderRadius: 10,
+          minHeight: componente.ctaAltura,
+          padding: '0 16px',
+          borderRadius: componente.raioControle,
           background: componente.ctaFundo,
-          color: semantico.textoSobreCor,
+          color: componente.ctaTexto,
           fontWeight: 700,
           textDecoration: 'none',
         }}

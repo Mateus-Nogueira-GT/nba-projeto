@@ -1,0 +1,191 @@
+/* A LATERAL DIREITA (identidade 05, §7) — só a partir de 1280 px, e quem
+   decide isso é o CSS da Moldura. Aqui mora só o que há dentro da coluna. */
+
+.lateral {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  /* A coluna inteira: os blocos rolam e a doca fica presa no rodapé. */
+  min-height: 100%;
+}
+
+.bloco {
+  padding: 16px;
+  border: 1px solid var(--divisor);
+  border-radius: 12px;
+  background: var(--superficie);
+}
+
+.titulo {
+  margin: 0 0 10px;
+  font-family: var(--fonte-rotulo);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--texto-secundario);
+}
+
+.numeros {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.numero {
+  margin: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.numero strong {
+  font-family: var(--fonte-numero);
+  font-size: 24px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+.numero span {
+  font-family: var(--fonte-rotulo);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--texto-secundario);
+}
+
+.apoio {
+  margin: 10px 0 0;
+  font-size: 12px;
+  color: var(--texto-secundario);
+}
+
+/* Link é BRANCO sublinhado: o azul do manual tem o matiz do turbo e não pode
+   virar tinta de texto (identidade 05). */
+.link {
+  display: inline-block;
+  margin-top: 10px;
+  color: var(--texto-primario);
+  font-size: 13px;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.link:focus-visible {
+  outline: var(--foco);
+  outline-offset: 2px;
+}
+
+/* Abas por conferência — o mesmo sublinhado das lentes do cabeçalho. */
+.abas {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 8px;
+  border-bottom: 1px solid var(--divisor);
+}
+
+.aba {
+  padding: 6px 2px;
+  border: none;
+  border-bottom: 2px solid transparent;
+  background: none;
+  color: var(--texto-secundario);
+  font-family: var(--fonte-rotulo);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.abaAtiva {
+  color: var(--texto100);
+  border-bottom-color: var(--texto100);
+}
+
+.aba:focus-visible {
+  outline: var(--foco);
+  outline-offset: 2px;
+}
+
+.tabela {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.tabela th {
+  padding: 4px 0;
+  font-family: var(--fonte-rotulo);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-align: left;
+  color: var(--texto-secundario);
+}
+
+.tabela td {
+  padding: 6px 0;
+  border-top: 1px solid var(--divisor-suave);
+  font-variant-numeric: tabular-nums;
+}
+
+.tabela td:first-child,
+.tabela th:first-child {
+  width: 28px;
+  color: var(--texto-secundario);
+}
+
+.tabela td:last-child,
+.tabela th:last-child,
+.tabela td:nth-last-child(2),
+.tabela th:nth-last-child(2) {
+  text-align: right;
+  white-space: nowrap;
+}
+
+/* A DOCA do assistente fica no rodapé da coluna, e os blocos de cima rolam
+   para fora dela. */
+.doca {
+  margin-top: auto;
+  padding-top: 16px;
+}
+
+.docaRecolhida {
+  display: grid;
+  gap: 6px;
+}
+
+.campo {
+  width: 100%;
+  min-height: 48px;
+  padding: 0 14px;
+  border: 1px solid var(--divisor);
+  border-radius: 8px;
+  background: var(--superficie-elevada);
+  color: var(--texto-primario);
+  font-family: var(--fonte-corpo);
+  font-size: 14px;
+}
+
+.campo::placeholder {
+  color: var(--texto-secundario);
+}
+
+.campo:focus-visible {
+  outline: var(--foco);
+  outline-offset: 2px;
+}
+
+/* Texto só para leitor de tela — a legenda da tabela. */
+.soLeitor {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}

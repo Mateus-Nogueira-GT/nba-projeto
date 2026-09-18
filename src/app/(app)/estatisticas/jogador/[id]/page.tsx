@@ -6,6 +6,7 @@ import { getDb } from '@/modules/dominio/db/cliente'
 import { calendarioDoRuleset, temporadaDe } from '@/modules/dominio/temporada'
 import { estadoExperienciaDoUsuario } from '@/modules/plataforma/experiencia/servico'
 import { exigirNivel } from '@/modules/plataforma/assinatura/guarda'
+import { lateralPadrao } from '@/app/(app)/lateral/montar'
 import { atende } from '@/modules/plataforma/assinatura/nivel-do-plano'
 import { ConviteDoPlano } from '@/components/planos/ConviteDoPlano'
 import { apitosDoJogador, telaDoJogador } from '@/modules/entrega/estatisticas/jogador'
@@ -46,6 +47,7 @@ import {
   SemBanco,
   SOBRANCELHA_STATS,
 } from '../../moldura'
+import { SilhuetaPaga } from '@/components/planos/SilhuetaPaga'
 
 export const dynamic = 'force-dynamic'
 
@@ -430,7 +432,7 @@ function LinkDeTime({ href, children }: { href: string; children: React.ReactNod
       href={href}
       style={{
         fontWeight: 700,
-        color: semantico.acento,
+        color: semantico.textoPrimario,
         textDecoration: 'underline',
         textUnderlineOffset: 3,
       }}
@@ -494,7 +496,11 @@ export default async function PaginaJogador({
   const profundidade = atende(acesso.nivel, 'MVP')
 
   return (
-    <Moldura aba="stats" largura="dados" assistente={atende(acesso.nivel, 'MVP')}>
+    <Moldura aba="stats" largura="dados" conta={{ email: sessao.email }}
+      lateral={await lateralPadrao({
+        assistente: atende(acesso.nivel, 'MVP'),
+        gratis: !atende(acesso.nivel, 'MVP'),
+      })} assistente={atende(acesso.nivel, 'MVP')}>
       {/* Cabeçalho SEM título: o nome do jogador é o <h1> do hero, ao lado do
           rosto, como no artboard. Repeti-lo aqui em 30 px seria o mesmo nome
           duas vezes, e deixava o hero com um rosto de 72 px ao lado de duas
@@ -611,8 +617,12 @@ export default async function PaginaJogador({
             style={{
               padding: '10px 12px',
               borderRadius: 10,
-              border: `1px solid ${contexto.periodo === periodo ? semantico.acento : semantico.divisor}`,
-              color: contexto.periodo === periodo ? semantico.acento : semantico.textoPrimario,
+              border: `1px solid ${contexto.periodo === periodo ? 'transparent' : semantico.divisor}`,
+              background: contexto.periodo === periodo ? semantico.acento : 'transparent',
+              color:
+                contexto.periodo === periodo
+                  ? semantico.textoSobreAcento
+                  : semantico.textoPrimario,
             }}
           >
             {periodo === 'temporada' ? 'Temporada' : `Últimos ${periodo}`}
@@ -641,7 +651,7 @@ export default async function PaginaJogador({
         <Numero rotulo="AST">
           <ValorGrande>{num(tela.perfilNumeros.ataque.assistencias)}</ValorGrande>
         </Numero>
-        {/* A nota tem paleta PRÓPRIA e não vira número em Anton: ela mede
+        {/* A nota tem paleta PRÓPRIA e não vira número de impacto: ela mede
             desempenho já acontecido, não a força de um sinal. */}
         <Numero rotulo="NOTA · RECORTE">
           <div style={{ marginTop: 4 }}>
@@ -708,8 +718,12 @@ export default async function PaginaJogador({
               style={{
                 padding: '8px 10px',
                 borderRadius: 8,
-                border: `1px solid ${contexto.atributo === atributo ? semantico.acento : semantico.divisor}`,
-                color: contexto.atributo === atributo ? semantico.acento : semantico.textoPrimario,
+                border: `1px solid ${contexto.atributo === atributo ? 'transparent' : semantico.divisor}`,
+                background: contexto.atributo === atributo ? semantico.acento : 'transparent',
+                color:
+                  contexto.atributo === atributo
+                    ? semantico.textoSobreAcento
+                    : semantico.textoPrimario,
               }}
             >
               {ROTULO_ATRIBUTO[atributo]}
@@ -734,11 +748,13 @@ export default async function PaginaJogador({
         aux={profundidade ? resumoDosApitos(apitos, truncado) : undefined}
       >
         {!profundidade ? (
-          <ConviteDoPlano
-            minimo="MVP"
-            recurso="O histórico de apitos"
-            voltar={`/estatisticas/jogador/${id}`}
-          />
+          <SilhuetaPaga forma="cards">
+            <ConviteDoPlano
+              minimo="MVP"
+              recurso="O histórico de apitos"
+              voltar={`/estatisticas/jogador/${id}`}
+            />
+          </SilhuetaPaga>
         ) : apitos.length === 0 ? (
           <p style={{ margin: 0, fontSize: 13, color: semantico.textoSecundario }}>
             A Lista Secreta ainda não apitou este jogador.
@@ -770,11 +786,13 @@ export default async function PaginaJogador({
             vazio="Nenhuma partida registrada para este jogador."
           />
         ) : (
-          <ConviteDoPlano
-            minimo="MVP"
-            recurso="O jogo a jogo"
-            voltar={`/estatisticas/jogador/${id}`}
-          />
+          <SilhuetaPaga forma="tabela">
+            <ConviteDoPlano
+              minimo="MVP"
+              recurso="O jogo a jogo"
+              voltar={`/estatisticas/jogador/${id}`}
+            />
+          </SilhuetaPaga>
         )}
       </Secao>
 
@@ -787,11 +805,13 @@ export default async function PaginaJogador({
         {profundidade ? (
           <NumerosCompletos n={tela.perfilNumeros} />
         ) : (
-          <ConviteDoPlano
-            minimo="MVP"
-            recurso="Os números completos"
-            voltar={`/estatisticas/jogador/${id}`}
-          />
+          <SilhuetaPaga forma="numeros">
+            <ConviteDoPlano
+              minimo="MVP"
+              recurso="Os números completos"
+              voltar={`/estatisticas/jogador/${id}`}
+            />
+          </SilhuetaPaga>
         )}
       </Secao>
 
