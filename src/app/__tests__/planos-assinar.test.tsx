@@ -1,17 +1,20 @@
 import { renderToStaticMarkup } from 'react-dom/server'
-import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { ConviteDoPlano } from '../../components/planos/ConviteDoPlano'
 import { JogosDoDia } from '../../components/planos/JogosDoDia'
 import { BENEFICIOS_POR_NIVEL } from '../../components/planos/matriz'
 
 let nivelNoTeste: 'GRATIS' | 'MVP' | 'ALL_STAR' = 'GRATIS'
+let modalidadeNoTeste: 'MENSAL' | 'TEMPORADA' | null = null
 vi.mock('../../modules/plataforma/auth/cookies', () => ({
   sessaoAtual: async () => ({ usuarioId: '00000000-0000-4000-8000-000000000001', email: 'x@teste.com' }),
 }))
 vi.mock('../../modules/plataforma/assinatura/direito', async () => {
   const { acessoDeTeste } = await import('../../modules/plataforma/__tests__/acesso-de-teste')
-  return { avaliarAcesso: async () => acessoDeTeste(nivelNoTeste) }
+  return {
+    avaliarAcesso: async () => ({ ...acessoDeTeste(nivelNoTeste), modalidade: modalidadeNoTeste }),
+  }
 })
 vi.mock('../../modules/dominio/db/cliente', () => ({ getDb: () => ({}) }))
 
@@ -154,5 +157,159 @@ describe('BENEFICIOS_POR_NIVEL — a vitrine não promete o que a plataforma nã
         }
       }
     }
+  })
+})
+
+/**
+ * O SELETOR (spec §9).
+ *
+ * `nivelNoTeste` e o mock de `avaliarAcesso` já existem no topo deste
+ * arquivo; aqui o acesso também precisa de MODALIDADE, porque é ela que
+ * decide se a oferta de temporada aparece. O mock do topo passa a devolver
+ * `acessoDeTeste(nivelNoTeste)` com a modalidade sobrescrita por
+ * `modalidadeNoTeste`.
+ */
+describe('o seletor dos quatro SKUs', () => {
+  const ENV_DE_VENDA = {
+    MERCADOPAGO_CHECKOUT_ENABLED: 'true',
+    PLANO_MVP_MENSAL_CENTAVOS: '5990',
+    PLANO_MVP_MENSAL_DE_CENTAVOS: '7990',
+    PLANO_MVP_TEMPORADA_CENTAVOS: '39700',
+    PLANO_ALL_STAR_MENSAL_CENTAVOS: '9990',
+    PLANO_ALL_STAR_MENSAL_DE_CENTAVOS: '14900',
+    PLANO_ALL_STAR_TEMPORADA_CENTAVOS: '59700',
+    TEMPORADA_FIM: '2099-06-30',
+  }
+
+  beforeEach(() => {
+    for (const [chave, valor] of Object.entries(ENV_DE_VENDA)) vi.stubEnv(chave, valor)
+    nivelNoTeste = 'GRATIS'
+    modalidadeNoTeste = null
+  })
+  afterEach(() => {
+    vi.unstubAllEnvs()
+    vi.stubEnv('APP_PUBLIC_URL', 'https://app.example.com')
+  })
+
+  async function renderizar(parametros: Record<string, string> = {}) {
+    const { default: Pagina } = await import('../(app)/assinar/page')
+    return renderToStaticMarkup(await Pagina({ searchParams: Promise.resolve(parametros) }))
+  }
+
+  /** Os SKUs que a página oferece, lidos do campo escondido de cada formulário. */
+  function skusOferecidos(html: string): string[] {
+    return [...html.matchAll(/name="sku" value="([A-Z_]+)"/g)].map((casamento) => casamento[1]!)
+  }
+
+  it('o grátis vê os quatro, com preço, e cada botão carrega o seu SKU', async () => {
+    const html = await renderizar()
+
+    expect(skusOferecidos(html).sort()).toEqual(
+      ['ALL_STAR_MENSAL', 'ALL_STAR_TEMPORADA', 'MVP_MENSAL', 'MVP_TEMPORADA'].sort(),
+    )
+    // Os valores são escritos À MÃO aqui: derivá-los do env faria o teste
+    // repetir a mesma conta que a página faz, e uma divisão trocada por
+    // multiplicação passaria batida.
+    expect(html).toContain('R$ 59,90')
+    expect(html).toContain('R$ 397,00')
+    expect(html).toContain('R$ 99,90')
+    expect(html).toContain('R$ 597,00')
+    expect(html.toLowerCase()).not.toContain('probabilidade')
+  })
+
+  it('o preço "de" aparece só onde foi configurado', async () => {
+    const html = await renderizar()
+    expect(html).toContain('R$ 79,90')
+    expect(html).toContain('R$ 149,00')
+    // Temporada não tem "de": nada de riscar um preço que ninguém definiu.
+    expect(html).not.toContain('R$ 497,00')
+    // A asserção acima não basta: um componente que SEMPRE renderiza o `<s>` (por
+    // exemplo com `preco.deCentavos ?? preco.centavos`) passaria batido, porque
+    // riscaria as ofertas de temporada com o próprio preço cheio — nada de "R$ 497,00"
+    // apareceria, mas um risco sem desconto real (anunciando promoção que não existe)
+    // sobreviveria verde. Por isso conta-se quantos `<s>` existem no total: só
+    // MVP_MENSAL e ALL_STAR_MENSAL têm "de" configurado no `ENV_DE_VENDA` desta suíte —
+    // as duas ofertas de temporada não podem contribuir nenhum.
+    const riscados = html.match(/<s /g) ?? []
+    expect(riscados.length).toBe(2)
+  })
+
+  it('passada a data da temporada, só os mensais são oferecidos', async () => {
+    vi.stubEnv('TEMPORADA_FIM', '2020-06-30')
+    const html = await renderizar()
+    expect(skusOferecidos(html).sort()).toEqual(['ALL_STAR_MENSAL', 'MVP_MENSAL'].sort())
+  })
+
+  it('quem é MVP mensal não vê o próprio plano à venda', async () => {
+    nivelNoTeste = 'MVP'
+    modalidadeNoTeste = 'MENSAL'
+    const html = await renderizar()
+    expect(skusOferecidos(html)).not.toContain('MVP_MENSAL')
+    expect(skusOferecidos(html).sort()).toEqual(
+      ['ALL_STAR_MENSAL', 'ALL_STAR_TEMPORADA', 'MVP_TEMPORADA'].sort(),
+    )
+  })
+
+  it('para quem já paga, a tela avisa ANTES de cobrar que o plano atual acaba sem devolução', async () => {
+    nivelNoTeste = 'MVP'
+    modalidadeNoTeste = 'MENSAL'
+    const html = await renderizar()
+    expect(html).toMatch(/encerrad|substitu/i)
+    expect(html).toMatch(/sem devolu/i)
+    // A presença sozinha não prova a regra da spec §9 ("depois de cobrar, avisar já não
+    // é avisar"): mover o bloco do aviso para depois dos botões deixaria as duas
+    // asserções acima igualmente verdes, porque elas só checam que o texto existe em
+    // algum lugar do HTML, não ONDE. A ordem é o que importa — por isso comparamos a
+    // posição do aviso com a do primeiro campo de SKU (o primeiro botão de compra).
+    // Primeiro confirma-se que as duas substrings realmente existem: um `indexOf` que
+    // devolvesse -1 (não encontrado) passaria a comparação `-1 < posSku` por acidente,
+    // sem provar nada sobre ordem.
+    const posAviso = html.indexOf('sem devolu')
+    const posSku = html.indexOf('name="sku"')
+    expect(posAviso).toBeGreaterThanOrEqual(0)
+    expect(posSku).toBeGreaterThanOrEqual(0)
+    expect(posAviso).toBeLessThan(posSku)
+  })
+
+  it('para o grátis não há aviso de substituição — não há o que substituir', async () => {
+    const html = await renderizar()
+    expect(html).not.toMatch(/sem devolu/i)
+  })
+
+  it('quem já está no topo não vê botão nenhum, e a tela explica', async () => {
+    nivelNoTeste = 'ALL_STAR'
+    modalidadeNoTeste = 'TEMPORADA'
+    const html = await renderizar()
+    expect(skusOferecidos(html)).toEqual([])
+    // O texto não pode afirmar "você está no topo": a mesma tela vazia também aparece
+    // para quem NÃO está no topo (MVP/All Star temporada depois que a janela fecha —
+    // "temporada não volta para mensal" bloqueia o único caminho de baixo, e a
+    // temporada some do cardápio). A explicação certa é sobre o que se SABE (não há o
+    // que vender agora), não sobre uma posição que não foi verificada.
+    expect(html).toMatch(/n[ãa]o h[áa] plano.*acima/i)
+  })
+
+  it('com o checkout desligado, a comparação continua e ninguém compra', async () => {
+    vi.stubEnv('MERCADOPAGO_CHECKOUT_ENABLED', 'false')
+    const html = await renderizar()
+    expect(skusOferecidos(html)).toEqual([])
+    expect(html).toContain('em breve')
+    // A comparação é o valor da página mesmo sem venda.
+    expect(html).toContain('All Star')
+  })
+
+  it('o erro devolvido pela ação vira mensagem, e só os códigos conhecidos', async () => {
+    expect(await renderizar({ erro: 'limite' })).toContain('Muitas tentativas')
+    // Um link forjado com `?erro=<qualquer coisa>` não pode virar texto dentro da
+    // página — só os códigos conhecidos ('limite') viram mensagem; qualquer outro cai
+    // no "checkout indisponível" fixo. Num app que leva a uma casa de apostas, texto de
+    // atacante aparecendo dentro de um alerta da própria NIP é o vetor.
+    // O marcador precisa ser uma string que não exista em NENHUM lugar do repositório —
+    // 'alerta' colidia com a copy legítima "Dois filtros de alerta no Telegram" em
+    // matriz.ts (mesma armadilha de um teste anterior que usou 'live' e bateu em "Fire
+    // Live"), então o teste falhava por um motivo que nada tinha a ver com o que estava
+    // sob prova. 'xyzzy-forjado' foi conferida com `grep -rn` antes de usar.
+    const forjado = await renderizar({ erro: '<script>xyzzy-forjado</script>' })
+    expect(forjado).not.toContain('xyzzy-forjado')
   })
 })

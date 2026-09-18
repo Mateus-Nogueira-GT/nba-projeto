@@ -61,6 +61,21 @@ afterAll(async () => {
   await banco.fechar()
 })
 
+/**
+ * O bloco de assinatura recortado do HTML: do título dele até o título do
+ * bloco seguinte. Escopo de módulo (não só da suíte do Task 6) porque a
+ * suíte de Task 10 (§5) também precisa isolar a asserção ao bloco — sem
+ * isso, "MVP"/"All Star" e "Mensal"/"Temporada" poderiam colidir com texto
+ * de outros blocos da mesma página.
+ */
+function blocoDeAssinatura(html: string): string {
+  const inicio = html.indexOf('>ASSINATURA<')
+  const fim = html.indexOf('>ALERTAS<')
+  expect(inicio).toBeGreaterThanOrEqual(0)
+  expect(fim).toBeGreaterThan(inicio)
+  return html.slice(inicio, fim)
+}
+
 describe('perfil — a conta da pessoa, não um relatório sobre ela (spec 12/09, §4.3)', () => {
   it('o topo tem foto ou iniciais, nome e e-mail', async () => {
     const { default: Pagina } = await import('../(app)/conta/page')
@@ -181,15 +196,6 @@ describe('perfil — quatro blocos, assinatura e o desktop em duas colunas (spec
   // parte de agora: uma data fixa no passado daria uma contagem negativa.
   const AGORA = new Date()
 
-  /** O bloco de assinatura recortado do HTML: do título dele até o título do bloco seguinte. */
-  function blocoDeAssinatura(html: string): string {
-    const inicio = html.indexOf('>ASSINATURA<')
-    const fim = html.indexOf('>ALERTAS<')
-    expect(inicio).toBeGreaterThanOrEqual(0)
-    expect(fim).toBeGreaterThan(inicio)
-    return html.slice(inicio, fim)
-  }
-
   /** O bloco de alertas recortado do HTML: do título dele até o título do bloco seguinte. */
   function blocoDeAlertas(html: string): string {
     const inicio = html.indexOf('>ALERTAS<')
@@ -305,7 +311,26 @@ describe('perfil — quatro blocos, assinatura e o desktop em duas colunas (spec
       const { default: Pagina } = await import('../(app)/conta/page')
       const html = renderToStaticMarkup(await Pagina({ searchParams: Promise.resolve({}) }))
       const bloco = blocoDeAssinatura(html)
-      expect(bloco).toContain('MENSAL')
+      // Task 10: a linha "Plano" passou a falar a língua da NIP (nível ·
+      // modalidade de `acesso`), não o texto livre do provedor — e só
+      // aparece com `acesso.nivel !== 'GRATIS'`. Com o acesso já caído para
+      // GRATIS (este teste), a linha some; o que sobra do plano expirado é
+      // "Situação" e o aviso de acesso inativo, abaixo.
+      //
+      // Rodada de correção 1: esta fixture já diverge sozinha — o CONTRATO
+      // diz `nivelDoPlano: 'MVP'`, mas o ACESSO caiu para GRATIS. Duas
+      // asserções, duas metades da prova: a linha inteira (`<dt>Plano</dt>`)
+      // some — prova a GUARDA (`acesso.nivel !== 'GRATIS'`) sozinha, mesmo
+      // que a fonte permaneça correta e só escreva "Grátis"; e o texto
+      // "MVP" não aparece — prova a FONTE, mesmo se algum dia a guarda for
+      // removida (aí a linha voltaria a aparecer, só que lendo do ACESSO,
+      // "Grátis", não do CONTRATO, "MVP"). Uma sem a outra deixa passar
+      // metade da regressão: só "MVP" não pega a guarda quebrada sozinha
+      // (a fonte, intacta, escreveria "Grátis"); só a ausência de
+      // "<dt>Plano</dt>" não pegaria a guarda quebrada JUNTO com a fonte
+      // trocada para o contrato (aí a linha voltaria a aparecer com "MVP").
+      expect(bloco).not.toContain('>Plano<')
+      expect(bloco).not.toContain('MVP')
       expect(bloco.toLowerCase()).toContain('acesso inativo')
       expect(bloco).toContain('href="/assinar"')
       // Quem já assinou não recebe a chamada de quem nunca assinou.
@@ -451,5 +476,157 @@ describe('perfil — quatro blocos, assinatura e o desktop em duas colunas (spec
       await Pagina({ searchParams: Promise.resolve({ erro: fraseDoAtacante }) }),
     )
     expect(comTextoForjado).not.toContain(fraseDoAtacante)
+  })
+})
+
+describe('a conta diz o plano na linguagem da NIP (spec de planos, §5)', () => {
+  it('mensal: nível, modalidade e a próxima cobrança', async () => {
+    acessoNoTeste = {
+      nivel: 'MVP',
+      direitoId: 'direito-1',
+      validoAte: new Date('2026-11-01T12:00:00.000Z'),
+      modalidade: 'MENSAL',
+    }
+    const { assinaturas } = await import('../../modules/dominio/db/schema')
+    await banco.db.delete(assinaturas)
+    await banco.db.insert(assinaturas).values({
+      usuarioId: USUARIO_DEMO,
+      mercadopagoId: 'sub-mvp',
+      referenciaExterna: 'ref-mvp',
+      status: 'ATIVA',
+      plano: 'NIP MVP mensal',
+      // Divergência PROPOSITAL do `acessoNoTeste` acima (MVP · Mensal): o
+      // CONTRATO grava All Star · Temporada. Em produção as duas fontes
+      // quase sempre concordam — é exatamente por isso que testá-las iguais
+      // não provaria nada (trocar a leitura do DIREITO pelo CONTRATO não
+      // mudaria uma letra do HTML). Só divergindo dá para dizer QUAL das
+      // duas a linha "Plano" lê de verdade.
+      nivelDoPlano: 'ALL_STAR',
+      modalidade: 'TEMPORADA',
+      proximaCobranca: new Date('2026-11-01T12:00:00.000Z'),
+      atualizadoEm: new Date('2026-10-01T12:00:00.000Z'),
+    })
+
+    const { default: Pagina } = await import('../(app)/conta/page')
+    const html = renderToStaticMarkup(await Pagina({ searchParams: Promise.resolve({}) }))
+    const bloco = blocoDeAssinatura(html)
+
+    // A linha "Plano" fala o ACESSO (MVP · Mensal) — nunca o CONTRATO (All
+    // Star · Temporada), que é o que a fixture acima propositalmente diverge.
+    expect(bloco).toContain('MVP')
+    expect(bloco).toContain('Mensal')
+    expect(bloco).not.toContain('All Star')
+    expect(bloco).not.toContain('Temporada')
+    expect(bloco).toContain('Próxima cobrança')
+    expect(bloco).toContain('Cancelar assinatura')
+  })
+
+  it('temporada: acesso até a data, sem próxima cobrança e sem botão de cancelar', async () => {
+    acessoNoTeste = {
+      nivel: 'ALL_STAR',
+      direitoId: 'direito-2',
+      validoAte: new Date('2027-07-01T03:00:00.000Z'),
+      modalidade: 'TEMPORADA',
+    }
+    const { assinaturas } = await import('../../modules/dominio/db/schema')
+    await banco.db.delete(assinaturas)
+    await banco.db.insert(assinaturas).values({
+      usuarioId: USUARIO_DEMO,
+      // Temporada não tem `preapproval`: não há o que cancelar no provedor,
+      // e é esse NULO que faz o botão sumir sem nenhum `if` novo na tela.
+      mercadopagoId: null,
+      referenciaExterna: 'ref-temporada',
+      status: 'ATIVA',
+      plano: 'NIP All Star temporada',
+      // Divergência PROPOSITAL, espelhando o teste mensal acima: o ACESSO diz
+      // All Star · Temporada, mas o CONTRATO grava MVP · Mensal. É a mesma
+      // separação artificial de duas fontes que costumam concordar — só
+      // assim o teste prova qual delas a tela lê.
+      nivelDoPlano: 'MVP',
+      modalidade: 'MENSAL',
+      proximaCobranca: null,
+      atualizadoEm: new Date('2026-10-01T12:00:00.000Z'),
+    })
+
+    const { default: Pagina } = await import('../(app)/conta/page')
+    const html = renderToStaticMarkup(await Pagina({ searchParams: Promise.resolve({}) }))
+    const bloco = blocoDeAssinatura(html)
+
+    // A linha "Plano" fala o ACESSO (All Star · Temporada) — nunca o
+    // CONTRATO (MVP · Mensal), que é o que a fixture acima propositalmente
+    // diverge.
+    expect(bloco).toContain('All Star')
+    expect(bloco).toContain('Temporada')
+    expect(bloco).not.toContain('MVP')
+    expect(bloco).not.toContain('Mensal')
+    expect(bloco).toContain('Válido até')
+    expect(bloco).not.toContain('Próxima cobrança')
+    expect(bloco).not.toContain('Cancelar assinatura')
+  })
+
+  it('depois do upgrade, a conta mostra o contrato VIGENTE — não o escrito por último', async () => {
+    acessoNoTeste = {
+      nivel: 'ALL_STAR',
+      direitoId: 'direito-do-upgrade',
+      validoAte: new Date('2026-11-05T12:00:00.000Z'),
+      modalidade: 'MENSAL',
+    }
+    const { assinaturas } = await import('../../modules/dominio/db/schema')
+    await banco.db.delete(assinaturas)
+    await banco.db.insert(assinaturas).values([
+      {
+        // O contrato SUBSTITUÍDO. Ele tem o `atualizadoEm` MAIS RECENTE dos
+        // dois porque a varredura de cancelamento o tocou depois do webhook —
+        // é exatamente a sequência que o upgrade produz em produção.
+        usuarioId: USUARIO_DEMO,
+        mercadopagoId: 'sub-mvp-substituido',
+        referenciaExterna: 'ref-mvp-substituido',
+        status: 'CANCELADA',
+        plano: 'NIP MVP mensal',
+        nivelDoPlano: 'MVP',
+        modalidade: 'MENSAL',
+        proximaCobranca: null,
+        canceladaEm: new Date('2026-10-05T12:05:00.000Z'),
+        atualizadoEm: new Date('2026-10-05T12:05:00.000Z'),
+      },
+      {
+        // O contrato que a pessoa acabou de PAGAR: ativo, e mais antigo.
+        usuarioId: USUARIO_DEMO,
+        mercadopagoId: 'sub-all-star-novo',
+        referenciaExterna: 'ref-all-star-novo',
+        status: 'ATIVA',
+        plano: 'NIP All Star mensal',
+        nivelDoPlano: 'ALL_STAR',
+        modalidade: 'MENSAL',
+        proximaCobranca: new Date('2026-11-05T12:00:00.000Z'),
+        atualizadoEm: new Date('2026-10-05T12:00:00.000Z'),
+      },
+    ])
+
+    try {
+      const { default: Pagina } = await import('../(app)/conta/page')
+      const html = renderToStaticMarkup(await Pagina({ searchParams: Promise.resolve({}) }))
+      const bloco = blocoDeAssinatura(html)
+
+      expect(bloco).toContain('ATIVA')
+      expect(bloco).not.toContain('CANCELADA')
+      // O pior dos dois lados do defeito: uma assinatura recorrente ATIVA que
+      // o assinante não consegue parar pelo app.
+      expect(bloco).toContain('Cancelar assinatura')
+    } finally {
+      await banco.db.delete(assinaturas)
+    }
+  })
+
+  it('o grátis continua vendo o convite, não um relatório', async () => {
+    acessoNoTeste = acessoDeTeste('GRATIS')
+    const { assinaturas } = await import('../../modules/dominio/db/schema')
+    await banco.db.delete(assinaturas)
+
+    const { default: Pagina } = await import('../(app)/conta/page')
+    const html = renderToStaticMarkup(await Pagina({ searchParams: Promise.resolve({}) }))
+
+    expect(html).toContain('Sem plano ativo')
+    expect(html).not.toContain('Próxima cobrança')
   })
 })

@@ -1,7 +1,9 @@
 import { cookies } from 'next/headers'
 import { getDb } from '@/modules/dominio/db/cliente'
+import { rulesetAtivo } from '@/modules/entrega/ruleset-ativo'
 import { exigirAdmin } from '@/modules/plataforma/auth/cookies'
 import { dispositivosDoUsuario, listarUsuarios } from '@/modules/plataforma/admin/usuarios'
+import { avisoDaTemporada, precosDosPlanos } from '@/modules/plataforma/assinatura/precos'
 import {
   acaoAdicionar,
   acaoBloquear,
@@ -51,6 +53,18 @@ export default async function PaginaUsuarios({
   // e esta é a única tela que o lê.
   const linkRedefinicao = (await cookies()).get(NOME_COOKIE_LINK_REDEFINICAO)?.value
 
+  // Spec §14: "Ninguém vai lembrar de mudar em junho." Então o painel lembra.
+  // A leitura não pode derrubar a tela de usuários se o env estiver
+  // incompleto — quem falha alto por preço é o seletor de planos, que é onde
+  // a falha importa.
+  let avisoTemporada: string | null = null
+  try {
+    const { fuso } = (await rulesetAtivo()).rodada
+    avisoTemporada = avisoDaTemporada(precosDosPlanos(fuso)?.fimDaTemporada ?? null, new Date())
+  } catch {
+    avisoTemporada = null
+  }
+
   const db = getDb()
   const linhas = await listarUsuarios(db, {
     busca: busca || undefined,
@@ -66,6 +80,11 @@ export default async function PaginaUsuarios({
   return (
     <main style={{ padding: 24, fontFamily: 'system-ui', maxWidth: 1100, lineHeight: 1.5 }}>
       <h1 style={{ marginBottom: 4 }}>Usuários</h1>
+      {avisoTemporada && (
+        <p role="status" style={{ fontSize: 13, padding: 8, background: '#fff0cc' }}>
+          {avisoTemporada}
+        </p>
+      )}
       {linkRedefinicao && (
         <p role="status" style={{ fontSize: 13, padding: 8, background: '#fffbcc' }}>
           Link de redefinição (válido por 1 hora, uso único): <code>{linkRedefinicao}</code>

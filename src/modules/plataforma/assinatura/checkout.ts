@@ -9,15 +9,12 @@ import {
 } from '../../dominio/db/schema'
 import type { Db } from '../../dominio/db/tipos'
 import type { Sessao } from '../auth/sessao'
-import {
-  MODALIDADE_DO_CHECKOUT_LEGADO,
-  NIVEL_DO_CHECKOUT_LEGADO,
-  PRODUTO_PAGO,
-  type ConfiguracaoProdutoPago,
-  urlDeRetorno,
-} from './configuracao'
+import { PRODUTO_PAGO, type ConfiguracaoProdutoPago, urlDeRetorno } from './configuracao'
+import { avaliarAcesso } from './direito'
 import { excedeuOperacoes, registrarOperacao } from './operacoes'
-import type { AssinaturaExterna, PortaCobranca } from './porta'
+import type { PrecosDosPlanos } from './precos'
+import { composicaoDoSku, NOME_DO_SKU, ofertasDisponiveis, type Sku } from './sku'
+import type { AssinaturaExterna, PagamentoExterno, PortaCobranca } from './porta'
 
 const STATUS_ABERTOS = ['RESERVADA', 'CRIANDO', 'AMBIGUA', 'CRIADA'] as const
 const LEASE_CHECKOUT_MS = 30_000
@@ -97,8 +94,8 @@ async function persistirAssinaturaCriada(
         produto: tentativa.produto,
         status: assinatura.status.toUpperCase(),
         plano: assinatura.nomePlano,
-        nivelDoPlano: NIVEL_DO_CHECKOUT_LEGADO,
-        modalidade: MODALIDADE_DO_CHECKOUT_LEGADO,
+        nivelDoPlano: tentativa.nivelDoPlano,
+        modalidade: tentativa.modalidade,
         proximaCobranca: assinatura.proximaCobranca
           ? new Date(assinatura.proximaCobranca)
           : null,
@@ -111,6 +108,8 @@ async function persistirAssinaturaCriada(
           mercadopagoId: assinatura.id,
           status: assinatura.status.toUpperCase(),
           plano: assinatura.nomePlano,
+          nivelDoPlano: tentativa.nivelDoPlano,
+          modalidade: tentativa.modalidade,
           proximaCobranca: assinatura.proximaCobranca
             ? new Date(assinatura.proximaCobranca)
             : null,
@@ -122,11 +121,45 @@ async function persistirAssinaturaCriada(
   return url
 }
 
+/**
+ * A TEMPORADA NÃO ESPELHA CONTRATO AQUI.
+ *
+ * Preferência não é contrato: ninguém pagou. Uma linha em `assinaturas` neste
+ * ponto faria a tela da conta anunciar assinatura para quem só abriu a página
+ * do Mercado Pago e fechou. O contrato da temporada nasce no webhook, na
+ * aprovação — e nasce com `mercadopago_id` nulo, porque não existe
+ * `preapproval` correspondente (ruling R-B4).
+ */
+async function persistirPreferenciaCriada(
+  db: Db,
+  tentativa: typeof tentativasCheckout.$inferSelect,
+  preferencia: PagamentoExterno,
+  agora: Date,
+): Promise<string> {
+  if (preferencia.referenciaExterna !== tentativa.referenciaExterna) {
+    throw new Error('preferência retornou referência divergente')
+  }
+  const url = urlCheckoutSegura(preferencia.urlCheckout)
+  await db
+    .update(tentativasCheckout)
+    .set({
+      status: 'CRIADA',
+      assinaturaExternaId: preferencia.id,
+      urlCheckout: url,
+      leaseExpiraEm: null,
+      erroCodigo: null,
+      atualizadoEm: agora,
+    })
+    .where(eq(tentativasCheckout.id, tentativa.id))
+  return url
+}
+
 export async function iniciarCheckout(
   db: Db,
   porta: PortaCobranca,
   config: ConfiguracaoProdutoPago,
-  entrada: { usuarioId: string; ip: string | null; agora: Date },
+  precos: PrecosDosPlanos,
+  entrada: { usuarioId: string; sku: Sku; ip: string | null; agora: Date },
 ): Promise<ResultadoCheckout> {
   if (!config.checkoutHabilitado) throw new CheckoutIndisponivelError()
   if (
@@ -140,6 +173,21 @@ export async function iniciarCheckout(
     )
   ) {
     throw new LimiteOperacaoError()
+  }
+
+  // A TELA É CONVENIÊNCIA; O PORTÃO É AQUI.
+  //
+  // "Não se compra abaixo do que já se tem" (decisão 12) morava só em
+  // `/assinar`, que decide o que mostrar. Uma aba aberta quando a pessoa ainda
+  // era GRATIS, ou um POST montado à mão, chegava neste ponto com um SKU que o
+  // seletor nunca teria oferecido — e comprava o downgrade que a spec diz não
+  // existir. A mesma função que monta o seletor decide aqui, então fecha para
+  // QUALQUER chamador, hoje e amanhã.
+  const acesso = await avaliarAcesso(db, entrada.usuarioId, entrada.agora)
+  if (acesso.nivel === null) throw new CheckoutIndisponivelError()
+  const ofertas = ofertasDisponiveis(acesso, entrada.agora, precos.fimDaTemporada)
+  if (!ofertas.some((oferta) => oferta.sku === entrada.sku)) {
+    throw new CheckoutIndisponivelError('plano indisponível para o acesso atual')
   }
 
   const reserva = await db.transaction(async (tx) => {
@@ -164,9 +212,13 @@ export async function iniciarCheckout(
       .orderBy(desc(tentativasCheckout.criadoEm))
       .limit(1)
 
-    if (existente?.status === 'CRIADA' && existente.urlCheckout) {
-      return { tentativa: existente, email: usuario.email, pronta: true as const }
-    }
+    const { nivelDoPlano, modalidade } = composicaoDoSku(entrada.sku)
+
+    // Uma criação EM VOO não é interrompida nem quando a pessoa muda de
+    // ideia: o POST que está na rede vai voltar e gravar a URL. Encerrar a
+    // tentativa agora deixaria duas abertas quando ele voltasse, e o índice
+    // único parcial (uma tentativa aberta por usuário e produto) recusaria a
+    // segunda. Trinta segundos e ela tenta de novo.
     if (
       existente?.status === 'CRIANDO' &&
       existente.leaseExpiraEm &&
@@ -175,7 +227,26 @@ export async function iniciarCheckout(
       return { tentativa: existente, email: usuario.email, processando: true as const }
     }
 
-    if (existente) {
+    const mesmoSku =
+      existente !== undefined &&
+      existente.nivelDoPlano === nivelDoPlano &&
+      existente.modalidade === modalidade
+
+    // Trocar de SKU não reaproveita nada: a referência antiga já está no
+    // provedor amarrada ao plano antigo, e devolver aquela URL cobraria o
+    // plano que a pessoa acabou de descartar.
+    if (existente && !mesmoSku) {
+      await tx
+        .update(tentativasCheckout)
+        .set({ status: 'ENCERRADA', leaseExpiraEm: null, atualizadoEm: entrada.agora })
+        .where(eq(tentativasCheckout.id, existente.id))
+    }
+
+    if (mesmoSku && existente!.status === 'CRIADA' && existente!.urlCheckout) {
+      return { tentativa: existente!, email: usuario.email, pronta: true as const }
+    }
+
+    if (mesmoSku) {
       const [reservada] = await tx
         .update(tentativasCheckout)
         .set({
@@ -184,7 +255,7 @@ export async function iniciarCheckout(
           erroCodigo: null,
           atualizadoEm: entrada.agora,
         })
-        .where(eq(tentativasCheckout.id, existente.id))
+        .where(eq(tentativasCheckout.id, existente!.id))
         .returning()
       return { tentativa: reservada!, email: usuario.email, reconciliar: true as const }
     }
@@ -198,6 +269,8 @@ export async function iniciarCheckout(
         provedor: porta.nome,
         referenciaExterna: referencia,
         chaveIdempotencia: randomUUID(),
+        nivelDoPlano,
+        modalidade,
         status: 'CRIANDO',
         leaseExpiraEm: new Date(entrada.agora.getTime() + LEASE_CHECKOUT_MS),
         atualizadoEm: entrada.agora,
@@ -227,23 +300,42 @@ export async function iniciarCheckout(
   }
 
   try {
-    let assinatura = reserva.reconciliar
-      ? await porta.buscarPorReferencia(reserva.tentativa.referenciaExterna)
-      : null
-    if (!assinatura) {
-      assinatura = await porta.criarAssinatura({
+    const preco = precos.porSku[entrada.sku]
+    let url: string
+    if (reserva.tentativa.modalidade === 'TEMPORADA') {
+      // A chave de idempotência da tentativa É a retomada: repetir o POST com
+      // ela devolve a preferência que já existe, em vez de abrir uma segunda
+      // cobrança. Por isso a temporada não precisa de um `buscarPorReferencia`
+      // como o `preapproval` precisa.
+      const preferencia = await porta.criarPagamentoUnico({
         referenciaExterna: reserva.tentativa.referenciaExterna,
         chaveIdempotencia: reserva.tentativa.chaveIdempotencia,
         emailPagador: reserva.email,
-        nomePlano: config.nomePlano,
-        valorCentavos: config.valorCentavos,
+        nomePlano: NOME_DO_SKU[entrada.sku],
+        valorCentavos: preco.centavos,
         moeda: config.moeda,
-        frequencia: config.frequencia,
-        tipoFrequencia: config.tipoFrequencia,
         urlRetorno: urlDeRetorno(config),
       })
+      url = await persistirPreferenciaCriada(db, reserva.tentativa, preferencia, entrada.agora)
+    } else {
+      let assinatura = reserva.reconciliar
+        ? await porta.buscarPorReferencia(reserva.tentativa.referenciaExterna)
+        : null
+      if (!assinatura) {
+        assinatura = await porta.criarAssinatura({
+          referenciaExterna: reserva.tentativa.referenciaExterna,
+          chaveIdempotencia: reserva.tentativa.chaveIdempotencia,
+          emailPagador: reserva.email,
+          nomePlano: NOME_DO_SKU[entrada.sku],
+          valorCentavos: preco.centavos,
+          moeda: config.moeda,
+          frequencia: config.frequencia,
+          tipoFrequencia: config.tipoFrequencia,
+          urlRetorno: urlDeRetorno(config),
+        })
+      }
+      url = await persistirAssinaturaCriada(db, reserva.tentativa, assinatura, entrada.agora)
     }
-    const url = await persistirAssinaturaCriada(db, reserva.tentativa, assinatura, entrada.agora)
     await registrarOperacao(db, {
       operacao: 'CHECKOUT',
       identificador: entrada.usuarioId,

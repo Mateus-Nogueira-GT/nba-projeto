@@ -11,6 +11,7 @@ import {
   eventosPagamento,
   logFalhas,
   sessoes,
+  tentativasCheckout,
   tentativasLogin,
   usuarios,
 } from '../../dominio/db/schema'
@@ -66,6 +67,7 @@ beforeEach(async () => {
   await banco.db.delete(eventosConta)
   await banco.db.delete(tentativasLogin)
   await banco.db.delete(assinaturas)
+  await banco.db.delete(tentativasCheckout)
   await banco.db.delete(sessoes)
   await banco.db.delete(dispositivos)
   await banco.db.delete(usuarios)
@@ -408,12 +410,31 @@ describe('detecção de uso simultâneo', () => {
 
 describe('webhook de pagamento', () => {
   const porta = new PagamentoFake()
+  // Referência opaca: `compraDoEvento` lê o usuário, o nível e a modalidade
+  // da `tentativas_checkout` pela referência, nunca mais pelo UUID do usuário
+  // (Task 6). A tentativa é semeada abaixo, para cada teste, apontando para
+  // o `usuarioId` fresco que o `beforeEach` de fora acabou de criar.
+  const REFERENCIA = 'ref-webhook-idempotente'
+
+  beforeEach(async () => {
+    await banco.db.insert(tentativasCheckout).values({
+      usuarioId,
+      produto: 'NBA_PRO',
+      provedor: 'fake',
+      referenciaExterna: REFERENCIA,
+      chaveIdempotencia: `chave-${REFERENCIA}`,
+      nivelDoPlano: 'MVP',
+      modalidade: 'MENSAL',
+      status: 'CRIADA',
+      atualizadoEm: T0,
+    })
+  })
 
   function notificacao(eventoId: string, tipo = 'PAGAMENTO_APROVADO') {
     return JSON.stringify({
       eventoExternoId: eventoId,
       tipo,
-      referenciaExterna: usuarioId,
+      referenciaExterna: REFERENCIA,
       assinaturaExternaId: `pre-${eventoId}`,
       plano: 'mensal',
       proximaCobranca: '2026-09-19T00:00:00.000Z',
@@ -422,7 +443,7 @@ describe('webhook de pagamento', () => {
   }
 
   it('o MESMO evento entregue 2× libera UMA vez só', async () => {
-    const entrada = { corpoBruto: notificacao('evt-1'), cabecalhos: {}, agora: T0 }
+    const entrada = { corpoBruto: notificacao('evt-1'), cabecalhos: {}, agora: T0, fimDaTemporada: null }
 
     const primeira = await processarNotificacao(banco.db, porta, entrada)
     const segunda = await processarNotificacao(banco.db, porta, entrada)
@@ -448,6 +469,7 @@ describe('webhook de pagamento', () => {
       corpoBruto: notificacao('evt-2'),
       cabecalhos: {},
       agora: T0,
+      fimDaTemporada: null,
     })
 
     expect(r).toMatchObject({ aceito: true, duplicado: false, liberou: true })
@@ -460,6 +482,7 @@ describe('webhook de pagamento', () => {
       corpoBruto: notificacao('evt-3'),
       cabecalhos: {},
       agora: T0,
+      fimDaTemporada: null,
     })
 
     expect(r).toEqual({ aceito: false, motivo: 'assinatura-invalida' })
@@ -471,6 +494,7 @@ describe('webhook de pagamento', () => {
       corpoBruto: '{ isso não é json',
       cabecalhos: {},
       agora: T0,
+      fimDaTemporada: null,
     })
     expect(r).toEqual({ aceito: false, motivo: 'ilegivel' })
   })

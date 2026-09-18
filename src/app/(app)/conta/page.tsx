@@ -1,4 +1,4 @@
-import { desc, eq, inArray } from 'drizzle-orm'
+import { desc, eq, inArray, sql } from 'drizzle-orm'
 import Link from 'next/link'
 
 import { CabecalhoTela, Moldura } from '@/components/navegacao'
@@ -74,7 +74,15 @@ export default async function PaginaConta({
       .select()
       .from(assinaturas)
       .where(eq(assinaturas.usuarioId, sessao.usuarioId))
-      .orderBy(desc(assinaturas.atualizadoEm))
+      // O CONTRATO DO ACESSO VIGENTE — não o que foi escrito por último.
+      // Depois de um upgrade, a última escrita é a do contrato que MORREU: o
+      // webhook fecha a transação com os dois no mesmo instante e, mais tarde,
+      // a varredura de cancelamento toca SÓ o antigo de novo. Ordenar apenas
+      // por `atualizado_em desc` mostraria a quem acabou de pagar mais o plano
+      // velho, o status cancelado e uma próxima cobrança que não existe — e
+      // tiraria o botão "Cancelar assinatura" de um contrato recorrente ATIVO.
+      // Não cancelado primeiro; entre iguais, o mais recente.
+      .orderBy(sql`${assinaturas.canceladaEm} is null desc`, desc(assinaturas.atualizadoEm))
       .limit(1),
     db
       .select({ nome: usuarios.nome, email: usuarios.email, fotoUrl: usuarios.fotoUrl })

@@ -1,26 +1,10 @@
 import { z } from 'zod'
 
-import type { Modalidade, NivelPago } from './nivel-do-plano'
-
 export const PRODUTO_PAGO = 'NBA_PRO'
-
-/**
- * O QUE O CHECKOUT DE UM SKU SÓ GRAVA — provisório, até o Plano B.
- *
- * Hoje existe um plano, com nome e valor em `MERCADOPAGO_PLANO_*`. Ele
- * continua funcionando atrás da flag enquanto os níveis chegam às telas; e
- * como a coluna do nível é NOT NULL, ele precisa gravar ALGUM. É o plano pago
- * de entrada. Quando o Plano B trouxer os quatro SKUs, estas duas constantes
- * somem junto com o checkout de um SKU só.
- */
-export const NIVEL_DO_CHECKOUT_LEGADO: NivelPago = 'MVP'
-export const MODALIDADE_DO_CHECKOUT_LEGADO: Modalidade = 'MENSAL'
 
 export type ConfiguracaoProdutoPago = {
   checkoutHabilitado: boolean
   cadastroPublicoHabilitado: boolean
-  nomePlano: string
-  valorCentavos: number
   frequencia: 1
   tipoFrequencia: 'months'
   moeda: 'BRL'
@@ -63,8 +47,6 @@ export function configuracaoProdutoPago(
     ambiente.CADASTRO_PUBLICO_HABILITADO,
     true,
   )
-  const nomePlano = (ambiente.MERCADOPAGO_PLANO_NOME ?? '').trim()
-  const valorCentavos = Number(ambiente.MERCADOPAGO_PLANO_VALOR_CENTAVOS)
   const urlPublicaBruta = (ambiente.APP_PUBLIC_URL ?? '').trim()
   const hosts = (ambiente.APP_ALLOWED_HOSTS ?? '')
     .split(',')
@@ -81,12 +63,11 @@ export function configuracaoProdutoPago(
   }
 
   const faltantes: string[] = []
-  if (!nomePlano) faltantes.push('MERCADOPAGO_PLANO_NOME')
-  if (!Number.isSafeInteger(valorCentavos) || valorCentavos < 100 || valorCentavos > 10_000_000) {
-    faltantes.push('MERCADOPAGO_PLANO_VALOR_CENTAVOS')
-  }
   if (!urlPublicaBruta) faltantes.push('APP_PUBLIC_URL')
 
+  // Os PREÇOS saíram daqui: `precosDosPlanos` (precos.ts) valida os quatro
+  // SKUs e a data da temporada, com a mesma regra de falhar alto quando o
+  // checkout está ligado. Um preço só vivia aqui quando havia um plano só.
   if (checkoutHabilitado && faltantes.length > 0) {
     throw new Error(`checkout habilitado com configuração incompleta: ${faltantes.join(', ')}`)
   }
@@ -100,8 +81,6 @@ export function configuracaoProdutoPago(
   return {
     checkoutHabilitado,
     cadastroPublicoHabilitado,
-    nomePlano: nomePlano || 'Plano não configurado',
-    valorCentavos: Number.isSafeInteger(valorCentavos) ? valorCentavos : 0,
     frequencia: 1,
     tipoFrequencia: 'months',
     moeda: 'BRL',

@@ -76,6 +76,46 @@ function eventoDaCobranca(
   }
 }
 
+/**
+ * O evento que a temporada produz na reconciliação.
+ *
+ * Sem `assinaturaExternaId` e sem `proximaCobranca`: não há contrato
+ * recorrente e não há próxima cobrança. É o webhook dizendo a mesma coisa que
+ * o tópico `payment` diria, só que descoberto por varredura em vez de aviso.
+ */
+export function eventoDoPagamentoUnico(
+  tentativa: typeof tentativasCheckout.$inferSelect,
+  cobranca: CobrancaExterna,
+): EventoPagamento {
+  const tipo =
+    cobranca.status === 'approved'
+      ? 'PAGAMENTO_APROVADO'
+      : cobranca.status === 'refunded'
+        ? 'PAGAMENTO_ESTORNADO'
+        : cobranca.status === 'charged_back'
+          ? 'PAGAMENTO_CONTESTADO'
+          : cobranca.status === 'rejected' ||
+              cobranca.status === 'cancelled' ||
+              cobranca.status === 'canceled'
+            ? 'PAGAMENTO_RECUSADO'
+            : 'OUTRO'
+  return {
+    eventoExternoId: chaveEvento(['pagamento-unico', cobranca.id, cobranca.status, cobranca.ocorridoEm]),
+    tipo,
+    referenciaExterna: tentativa.referenciaExterna,
+    assinaturaExternaId: null,
+    cobrancaExternaId: cobranca.id,
+    recursoTipo: 'COBRANCA',
+    plano: null,
+    proximaCobranca: null,
+    ocorridoEm: cobranca.ocorridoEm,
+    valorCentavos: cobranca.valorCentavos,
+    moeda: cobranca.moeda,
+    statusExterno: cobranca.status,
+    bruto: { origem: 'RECONCILIACAO' },
+  }
+}
+
 async function reservarTentativa(
   db: Db,
   id: string,
@@ -107,6 +147,7 @@ export async function reconciliarPagamentos(
   db: Db,
   porta: PortaCobranca,
   agora = new Date(),
+  fimDaTemporada: Date | null,
   limite = 50,
 ): Promise<{ examinadas: number; encontradas: number; eventos: number; falhas: number }> {
   const candidatas = await db
@@ -128,6 +169,34 @@ export async function reconciliarPagamentos(
     resultado.examinadas += 1
 
     try {
+      if (tentativa.modalidade === 'TEMPORADA') {
+        // Pagamento único não tem `preapproval`: perguntar por ele em
+        // `/preapproval/{id}` com o id da PREFERÊNCIA daria 404 a cada
+        // rodada do cron. A busca é pela referência.
+        const cobranca = await porta.buscarPagamentoPorReferencia(tentativa.referenciaExterna)
+        if (!cobranca) {
+          await db
+            .update(tentativasCheckout)
+            .set({ status: 'AMBIGUA', leaseExpiraEm: null, atualizadoEm: agora })
+            .where(eq(tentativasCheckout.id, tentativa.id))
+          continue
+        }
+        resultado.encontradas += 1
+        const efeito = await aplicarEventoPagamento(
+          db,
+          porta.nome,
+          eventoDoPagamentoUnico(tentativa, cobranca),
+          agora,
+          fimDaTemporada,
+        )
+        if (efeito.aceito && !efeito.duplicado) resultado.eventos += 1
+        await db
+          .update(tentativasCheckout)
+          .set({ status: 'CRIADA', leaseExpiraEm: null, erroCodigo: null, atualizadoEm: agora })
+          .where(eq(tentativasCheckout.id, tentativa.id))
+        continue
+      }
+
       const assinatura = tentativa.assinaturaExternaId
         ? await porta.consultarAssinatura(tentativa.assinaturaExternaId)
         : await porta.buscarPorReferencia(tentativa.referenciaExterna)
@@ -141,7 +210,13 @@ export async function reconciliarPagamentos(
 
       resultado.encontradas += 1
       const eventoAssinatura = eventoDaAssinatura(tentativa, assinatura)
-      const aplicado = await aplicarEventoPagamento(db, porta.nome, eventoAssinatura, agora)
+      const aplicado = await aplicarEventoPagamento(
+        db,
+        porta.nome,
+        eventoAssinatura,
+        agora,
+        fimDaTemporada,
+      )
       if (aplicado.aceito && !aplicado.duplicado) resultado.eventos += 1
 
       for (const cobranca of await porta.listarCobrancasDaAssinatura(assinatura.id)) {
@@ -150,6 +225,7 @@ export async function reconciliarPagamentos(
           porta.nome,
           eventoDaCobranca(tentativa, assinatura, cobranca),
           agora,
+          fimDaTemporada,
         )
         if (efeito.aceito && !efeito.duplicado) resultado.eventos += 1
       }

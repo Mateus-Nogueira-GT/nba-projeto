@@ -6,7 +6,9 @@ import type {
   AvisoPagamento,
   CobrancaExterna,
   EventoPagamento,
+  PagamentoExterno,
   PedidoCriacaoAssinatura,
+  PedidoPagamentoUnico,
   PortaCobranca,
   TipoEventoPagamento,
 } from './porta'
@@ -92,6 +94,18 @@ const faturaSchema = z
   })
   .passthrough()
 
+const preferenciaSchema = z
+  .object({
+    id: idSchema,
+    external_reference: idSchema.nullish(),
+    init_point: z.string().url().nullish(),
+    sandbox_init_point: z.string().url().nullish(),
+    date_created: dataIso,
+  })
+  .passthrough()
+
+const buscaPagamentosSchema = z.object({ results: z.array(pagamentoSchema) }).passthrough()
+
 const buscaAssinaturasSchema = z.object({ results: z.array(assinaturaSchema) }).passthrough()
 const buscaFaturasSchema = z.object({ results: z.array(faturaSchema) }).passthrough()
 
@@ -114,8 +128,17 @@ function assinaturaCanonica(bruto: unknown): AssinaturaExterna {
   }
 }
 
-function faturaCanonica(bruto: unknown, proximaCobranca: string | null = null): CobrancaExterna {
-  const recurso = faturaSchema.parse(bruto)
+/**
+ * Recebe o item JÁ analisado por `faturaSchema`, nunca `unknown`. `bruto`
+ * já roda `dinheiroSchema`, que multiplica o valor por 100; parsear de novo
+ * aqui multiplicaria por 100 uma segunda vez — era o defeito que fazia
+ * `listarCobrancasDaAssinatura` gravar `valorCentavos` 100× maior, porque ela
+ * já parseia a lista inteira antes de mapear cada item por aqui.
+ */
+function faturaCanonica(
+  recurso: z.infer<typeof faturaSchema>,
+  proximaCobranca: string | null = null,
+): CobrancaExterna {
   return {
     id: recurso.payment?.id ?? recurso.id,
     assinaturaExternaId: textoOuNulo(recurso.preapproval_id),
@@ -125,6 +148,33 @@ function faturaCanonica(bruto: unknown, proximaCobranca: string | null = null): 
     moeda: recurso.currency_id ?? null,
     ocorridoEm: recurso.last_modified ?? recurso.debit_date ?? recurso.date_created ?? null,
     proximaCobranca,
+  }
+}
+
+function preferenciaCanonica(bruto: unknown, sandbox: boolean): PagamentoExterno {
+  const recurso = preferenciaSchema.parse(bruto)
+  return {
+    id: recurso.id,
+    referenciaExterna: textoOuNulo(recurso.external_reference),
+    // Em sandbox, `init_point` aponta para a PRODUÇÃO e cobra de verdade —
+    // mandar o testador para lá é cobrar cartão real num teste.
+    urlCheckout: (sandbox ? recurso.sandbox_init_point : recurso.init_point) ?? null,
+    ocorridoEm: recurso.date_created ?? null,
+  }
+}
+
+function pagamentoCanonico(recurso: z.infer<typeof pagamentoSchema>): CobrancaExterna {
+  return {
+    id: recurso.id,
+    assinaturaExternaId: textoOuNulo(recurso.preapproval_id),
+    referenciaExterna: textoOuNulo(recurso.external_reference),
+    status: recurso.status,
+    valorCentavos: recurso.transaction_amount ?? null,
+    moeda: recurso.currency_id ?? null,
+    ocorridoEm: recurso.date_last_updated ?? recurso.date_approved ?? recurso.date_created ?? null,
+    // Pagamento único não tem próxima: é o que diz ao webhook que a validade
+    // vem de TEMPORADA_FIM, e não do provedor.
+    proximaCobranca: null,
   }
 }
 
@@ -245,6 +295,52 @@ export class PagamentoMercadoPago implements PortaCobranca {
     return buscaFaturasSchema.parse(bruto).results.map((item) => faturaCanonica(item))
   }
 
+  async criarPagamentoUnico(pedido: PedidoPagamentoUnico): Promise<PagamentoExterno> {
+    const bruto = await this.requisitar('/checkout/preferences', {
+      method: 'POST',
+      headers: { 'X-Idempotency-Key': pedido.chaveIdempotencia },
+      body: JSON.stringify({
+        external_reference: pedido.referenciaExterna,
+        payer: { email: pedido.emailPagador },
+        items: [
+          {
+            id: pedido.referenciaExterna,
+            title: pedido.nomePlano,
+            quantity: 1,
+            currency_id: pedido.moeda,
+            unit_price: pedido.valorCentavos / 100,
+          },
+        ],
+        // Os três destinos são a MESMA tela: ela não concede nada, só explica
+        // que a confirmação vem do servidor (princípio da Spec 04). Mandar
+        // sucesso e falha para telas diferentes seria decidir pelo navegador
+        // o que só o webhook decide.
+        back_urls: {
+          success: pedido.urlRetorno,
+          pending: pedido.urlRetorno,
+          failure: pedido.urlRetorno,
+        },
+        auto_return: 'approved',
+      }),
+    })
+    return preferenciaCanonica(bruto, this.config.sandbox)
+  }
+
+  async buscarPagamentoPorReferencia(referenciaExterna: string): Promise<CobrancaExterna | null> {
+    const bruto = await this.requisitar(
+      `/v1/payments/search?external_reference=${encodeURIComponent(referenciaExterna)}&limit=50`,
+    )
+    const resultados = buscaPagamentosSchema
+      .parse(bruto)
+      .results.filter((item) => textoOuNulo(item.external_reference) === referenciaExterna)
+    // Uma referência pode ter VÁRIOS pagamentos: o cartão recusa, a pessoa
+    // tenta de novo. Vale o aprovado; sem nenhum aprovado, o primeiro, que é
+    // o que a tela precisa para explicar a recusa.
+    const aprovado = resultados.find((item) => item.status === 'approved')
+    const escolhido = aprovado ?? resultados[0]
+    return escolhido ? pagamentoCanonico(escolhido) : null
+  }
+
   async interpretarNotificacao(
     corpo: unknown,
     aviso: AvisoPagamento,
@@ -281,7 +377,7 @@ export class PagamentoMercadoPago implements PortaCobranca {
 
     if (topico === 'subscription_authorized_payment') {
       const bruto = await this.requisitar(`/authorized_payments/${encodeURIComponent(recursoId)}`)
-      const fatura = faturaCanonica(bruto)
+      const fatura = faturaCanonica(faturaSchema.parse(bruto))
       const assinatura = fatura.assinaturaExternaId
         ? await this.consultarAssinatura(fatura.assinaturaExternaId)
         : null
