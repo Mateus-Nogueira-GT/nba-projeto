@@ -1,4 +1,4 @@
-import { and, desc, eq, gt, ilike, isNull, or, sql } from 'drizzle-orm'
+import { and, desc, eq, getTableName, gt, ilike, isNull, or, sql } from 'drizzle-orm'
 
 import {
   assinaturas,
@@ -33,6 +33,25 @@ export type LinhaAdmin = {
   dispositivosAtivos: number
 }
 
+/**
+ * O `id` DO USUÁRIO DE FORA, qualificado à mão — e não `${usuarios.id}`.
+ *
+ * Dentro de um `sql` usado como CAMPO do select, o drizzle renderiza uma
+ * coluna SEM o prefixo da tabela: `${usuarios.id}` vira `"id"`. Numa
+ * subconsulta correlacionada isso é silenciosamente fatal — o Postgres
+ * resolve `"id"` no escopo MAIS INTERNO, então `where a.usuario_id = "id"`
+ * compara a assinatura com ela mesma e nunca casa. Não dá erro: devolve nulo.
+ *
+ * Num `where` de topo o drizzle qualifica sozinho, e era por isso que o
+ * defeito passava despercebido: o filtro `situacaoAssinatura` funcionava
+ * enquanto as colunas ao lado dele mentiam. Agora os dois usam esta mesma
+ * referência — um jeito só de apontar para o usuário de fora.
+ *
+ * Tabela e coluna vêm do schema, não de string literal, para um rename ser
+ * acompanhado em vez de quebrar em silêncio outra vez.
+ */
+const ID_DO_USUARIO = sql`${sql.identifier(getTableName(usuarios))}.${sql.identifier(usuarios.id.name)}`
+
 export async function listarUsuarios(
   db: Db,
   filtro: FiltroUsuarios = {},
@@ -49,7 +68,7 @@ export async function listarUsuarios(
     condicoes.push(
       sql`exists (
         select 1 from ${assinaturas} a
-        where a.usuario_id = ${usuarios.id} and a.status = ${filtro.situacaoAssinatura}
+        where a.usuario_id = ${ID_DO_USUARIO} and a.status = ${filtro.situacaoAssinatura}
       )`,
     )
   }
@@ -69,34 +88,30 @@ export async function listarUsuarios(
       // antigo). Por `atualizado_em desc` sozinho, o painel diria ao suporte
       // que o assinante está cancelado no plano velho. Não cancelado primeiro;
       // entre iguais, o mais recente.
-      //
-      // ATENÇÃO, defeito ANTERIOR a esta branch e ainda aberto: estes três
-      // campos (e `direitoAtivo`/`dispositivosAtivos` abaixo) hoje devolvem
-      // sempre nulo/zero. Dentro de um `sql` usado como CAMPO do select, o
-      // drizzle renderiza `${usuarios.id}` sem o prefixo da tabela — vira
-      // `"id"`, que o Postgres resolve no escopo interno, isto é, `a.id`. A
-      // correlação compara a assinatura com ela mesma e nunca casa. O mesmo
-      // `${usuarios.id}` no `where` (o filtro `situacaoAssinatura`) sai
-      // qualificado e funciona. Corrigir isso muda o que o painel mostra e
-      // está fora desta onda de correção.
       assinaturaStatus: sql<string | null>`(
         select a.status from ${assinaturas} a
-        where a.usuario_id = ${usuarios.id}
+        where a.usuario_id = ${ID_DO_USUARIO}
         order by (a.cancelada_em is null) desc, a.atualizado_em desc limit 1
       )`,
       assinaturaPlano: sql<string | null>`(
         select a.plano from ${assinaturas} a
-        where a.usuario_id = ${usuarios.id}
+        where a.usuario_id = ${ID_DO_USUARIO}
         order by (a.cancelada_em is null) desc, a.atualizado_em desc limit 1
       )`,
+      // `.mapWith` não é enfeite: um campo `sql` cru NÃO passa pelo decodificador
+      // do drizzle, e o timestamp volta como STRING do driver. O tipo dizia
+      // `Date` e a tela chama `diaCompleto(...)`, que faz `.toLocaleDateString()`
+      // — com a correlação consertada e sem esta linha, o painel deixaria de
+      // mentir e passaria a QUEBRAR para todo assinante com cobrança marcada.
+      // Reusar o decodificador da própria coluna mantém tipo e valor de acordo.
       proximaCobranca: sql<Date | null>`(
         select a.proxima_cobranca from ${assinaturas} a
-        where a.usuario_id = ${usuarios.id}
+        where a.usuario_id = ${ID_DO_USUARIO}
         order by (a.cancelada_em is null) desc, a.atualizado_em desc limit 1
-      )`,
+      )`.mapWith(assinaturas.proximaCobranca),
       direitoAtivo: sql<boolean>`exists (
         select 1 from ${direitosAcesso} d
-        where d.usuario_id = ${usuarios.id}
+        where d.usuario_id = ${ID_DO_USUARIO}
           and d.produto = 'NBA_PRO'
           and d.revogado_em is null
           and d.inicio <= ${agora}
@@ -105,7 +120,7 @@ export async function listarUsuarios(
       dispositivosAtivos: sql<number>`(
         SELECT count(DISTINCT ${sessoes.dispositivoId})::int
         FROM ${sessoes}
-        WHERE ${sessoes.usuarioId} = ${usuarios.id}
+        WHERE ${sessoes.usuarioId} = ${ID_DO_USUARIO}
           AND ${sessoes.encerradaEm} IS NULL
           AND ${sessoes.expiraEm} > ${agora}
       )`,
