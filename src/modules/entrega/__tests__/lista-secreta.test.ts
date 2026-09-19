@@ -337,7 +337,61 @@ describe('o card carrega contexto materializado (identidade 03)', () => {
     expect(item.oddFaixa).toBeNull() // o semear deste harness não coleta odds
   })
 
-  it('com odd_media agregada, o item leva a média — e o card escreve ODD MÉDIA', async () => {
+  /**
+   * A FORMA DA ODD ATRAVESSA A CADEIA: agregada → materialização → card.
+   *
+   * Quem escolhe é `odds.exibicao` no YAML (regra 1). Desde 19/09 o produto
+   * trabalha com UMA casa e a forma é `casa_unica`; os testes abaixo cobrem as
+   * três saídas possíveis a partir da MESMA linha agregada.
+   */
+  const publicarECarregar = async (chave: string, rulesetUsado = ruleset) => {
+    await publicarListaSecreta(banco.db, rulesetUsado, {
+      dataReferencia: HOJE,
+      agora: new Date(`${HOJE}T22:40:00.000Z`),
+    })
+    const depois = await lerFeed(banco.db, HOJE)
+    return depois!.conteudo.itens.find((i) => i.chave === chave)!
+  }
+
+  const cardDoItem = (item: { oddFaixa?: unknown } & Record<string, unknown>) =>
+    renderToStaticMarkup(
+      createElement(CardEntrada, {
+        nome: item.nome, timeSigla: item.timeSigla, posicao: item.posicao,
+        atributo: item.atributo, nivelJogador: item.nivelJogador,
+        nivelApito: item.nivelApito, confianca: item.confianca,
+        grauConfianca: item.grauConfianca, linha: item.linha,
+        oddFaixa: item.oddFaixa,
+      } as Parameters<typeof CardEntrada>[0]),
+    )
+
+  it('com UMA casa, o item leva a odd sozinha — e o card escreve ODD 1,85', async () => {
+    const feed = await lerFeed(banco.db, HOJE)
+    const item = feed!.conteudo.itens.find((i) => i.linha !== null)!
+
+    await banco.db.insert(oddsAgregada).values({
+      jogoId: item.jogoId,
+      jogadorId: item.jogadorId,
+      atributo: item.atributo,
+      linha: item.linha!.toFixed(1),
+      // Uma casa: min, max e mediana são o mesmo número.
+      oddMin: '1.850',
+      oddMax: '1.850',
+      oddMediana: '1.850',
+      oddMedia: '1.850',
+      qtdCasas: 1,
+      origem: 'CASAS',
+    })
+
+    const comOdd = await publicarECarregar(item.chave)
+    expect(comOdd.oddFaixa).toEqual({ min: 1.85, max: 1.85, qtdCasas: 1, unica: 1.85 })
+    const html = cardDoItem(comOdd)
+    expect(html).toContain('ODD 1,85')
+    // Nem "MÉDIA" (não há o que promediar) nem "1,85–1,85".
+    expect(html).not.toContain('ODD MÉDIA')
+    expect(html).not.toContain('1,85–1,85')
+  })
+
+  it('com VÁRIAS casas sob casa_unica, a faixa volta: escolher um número seria inventar a casa', async () => {
     const feed = await lerFeed(banco.db, HOJE)
     const item = feed!.conteudo.itens.find((i) => i.linha !== null)!
 
@@ -353,25 +407,34 @@ describe('o card carrega contexto materializado (identidade 03)', () => {
       qtdCasas: 8,
       origem: 'CASAS',
     })
-    await publicarListaSecreta(banco.db, ruleset, {
-      dataReferencia: HOJE,
-      agora: new Date(`${HOJE}T22:40:00.000Z`),
+
+    const comFaixa = await publicarECarregar(item.chave)
+    expect(comFaixa.oddFaixa).toEqual({ min: 1.47, max: 1.62, qtdCasas: 8 })
+    expect(cardDoItem(comFaixa)).toContain('ODD 1,47–1,62')
+  })
+
+  it('trocar odds.exibicao no YAML muda a forma sem tocar código (regra 1)', async () => {
+    const feed = await lerFeed(banco.db, HOJE)
+    const item = feed!.conteudo.itens.find((i) => i.linha !== null)!
+
+    await banco.db.insert(oddsAgregada).values({
+      jogoId: item.jogoId,
+      jogadorId: item.jogadorId,
+      atributo: item.atributo,
+      linha: item.linha!.toFixed(1),
+      oddMin: '1.470',
+      oddMax: '1.620',
+      oddMediana: '1.540',
+      oddMedia: '1.550',
+      qtdCasas: 8,
+      origem: 'CASAS',
     })
 
-    const depois = await lerFeed(banco.db, HOJE)
-    const comMedia = depois!.conteudo.itens.find((i) => i.chave === item.chave)!
-    expect(comMedia.oddFaixa).toEqual({ min: 1.47, max: 1.62, qtdCasas: 8, media: 1.55 })
-
-    const html = renderToStaticMarkup(
-      createElement(CardEntrada, {
-        nome: comMedia.nome, timeSigla: comMedia.timeSigla, posicao: comMedia.posicao,
-        atributo: comMedia.atributo, nivelJogador: comMedia.nivelJogador,
-        nivelApito: comMedia.nivelApito, confianca: comMedia.confianca,
-        grauConfianca: comMedia.grauConfianca, linha: comMedia.linha,
-        oddFaixa: comMedia.oddFaixa,
-      }),
-    )
-    expect(html).toContain('ODD MÉDIA 1,55')
+    const comMedia = structuredClone(ruleset)
+    comMedia.odds.exibicao = 'media'
+    const item06 = await publicarECarregar(item.chave, comMedia)
+    expect(item06.oddFaixa).toEqual({ min: 1.47, max: 1.62, qtdCasas: 8, media: 1.55 })
+    expect(cardDoItem(item06)).toContain('ODD MÉDIA 1,55')
   })
 
   it('a janela da média vem do RULESET, não de um literal (regra 1)', async () => {

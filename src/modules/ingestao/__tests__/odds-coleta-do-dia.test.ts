@@ -139,7 +139,7 @@ describe('uma fonte fora do ar', () => {
   }, 120_000)
   afterAll(async () => banco.fechar())
 
-  it('é REPORTADA (erro, contador e falhas_fontes → PARCIAL) e não derruba a boa; com uma casa só, nada agrega', async () => {
+  it('é REPORTADA (erro, contador e falhas_fontes → PARCIAL) e não derruba a boa — que agrega sozinha', async () => {
     const r = await coletarOddsDoDia(banco.db, ruleset, DIA, AGORA, [ALTENAR, BETMGM], {
       transportes: { altenar: transporteAltenar, betmgm: transporteQuebrado },
     })
@@ -148,10 +148,12 @@ describe('uma fonte fora do ar', () => {
       odds_altenar_cotacoes: 1,
       odds_betmgm_erro: 1,
       falhas_fontes: 1,
-      odds_agregadas: 0, // casas_minimas = 2 e só uma casa respondeu
-      odds_abaixo_do_minimo: 1,
+      // Desde 19/09 `casas_minimas` é 1: a casa que respondeu vira cotação, em
+      // vez de o dia cair na tabela estática por causa da que caiu.
+      odds_agregadas: 1,
+      odds_abaixo_do_minimo: 0,
     })
-    expect(await banco.db.select().from(oddsAgregada)).toHaveLength(0)
+    expect(await banco.db.select().from(oddsAgregada)).toHaveLength(1)
   })
 })
 

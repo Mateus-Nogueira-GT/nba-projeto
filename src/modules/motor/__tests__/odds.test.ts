@@ -30,15 +30,33 @@ describe('agregação de odds', () => {
     expect(faixa?.mediana).toBe(2.0)
   })
 
-  it('uma casa só cai para a tabela estática do ruleset', () => {
+  it('uma casa só JÁ agrega — o produto passou a trabalhar com uma casa (parceiro, 19/09)', () => {
+    // Era o contrário até 19/09 (`casas_minimas: 2`): uma casa caía na tabela
+    // estática. Com o produto apontando para UMA casa, esse piso deixaria o
+    // assinante sem odd real para sempre.
     const faixa = agregar([casa('a', 1.5)], 'MVP', 'PONTOS', 25, ruleset)
+    expect(faixa).toEqual({ min: 1.5, max: 1.5, mediana: 1.5, qtdCasas: 1, origem: 'CASAS' })
+  })
+
+  it('sem NENHUMA casa válida, cai para a tabela estática do ruleset', () => {
+    // O piso continua existindo — só desceu para 1. Abaixo dele, fallback.
+    const faixa = agregar([casa('a', null)], 'MVP', 'PONTOS', 25, ruleset)
     // ruleset: MVP { 25: [1.30, 1.70] }
-    expect(faixa).toEqual({ min: 1.3, max: 1.7, mediana: 1.5, qtdCasas: 0, origem: 'TABELA_ESTATICA' })
+    expect(faixa).toEqual({
+      min: 1.3,
+      max: 1.7,
+      mediana: 1.5,
+      qtdCasas: 0,
+      origem: 'TABELA_ESTATICA',
+    })
   })
 
   it('cotação sem odd de over não conta como casa', () => {
+    // Duas cotações, uma sem over: UMA casa, não duas. É isto que o teste
+    // protege — e agora ele o prova pela contagem, já que uma casa agrega.
     const faixa = agregar([casa('a', 1.5), casa('b', null)], 'MVP', 'PONTOS', 25, ruleset)
-    expect(faixa?.origem).toBe('TABELA_ESTATICA')
+    expect(faixa?.qtdCasas).toBe(1)
+    expect(faixa?.origem).toBe('CASAS')
   })
 
   it('linha sem entrada na tabela estática devolve null', () => {

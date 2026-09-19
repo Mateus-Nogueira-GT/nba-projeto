@@ -108,8 +108,20 @@ export type CardEntradaProps = {
   ultimos5?: { valor: number; bateu: boolean }[]
   /** Média da temporada, do item do feed — o rodapé mostra sem chamar o motor. */
   mediaTemporada?: number | null
-  /** Faixa de odds entre casas; com `media`, o rodapé escreve ODD MÉDIA. */
-  oddFaixa?: { min: number; max: number; qtdCasas: number; media?: number } | null
+  /**
+   * A odd na tela. A FORMA vem pronta da materialização, que a lê do ruleset
+   * (`odds.exibicao`) — o card só escreve o que recebeu:
+   *   `unica` → ODD 1,85          (uma casa só)
+   *   `media` → ODD MÉDIA 1,55    (média entre casas)
+   *   nenhuma → ODD 1,47–1,62     (a faixa)
+   */
+  oddFaixa?: {
+    min: number
+    max: number
+    qtdCasas: number
+    media?: number
+    unica?: number
+  } | null
   /**
    * Temperatura do contexto. O Fire Live INTEIRO é quente — não só o modo
    * fire: urgência é da tela ao vivo, não do estado do jogador. Pré-live
@@ -269,17 +281,17 @@ export function CardEntrada(props: CardEntradaProps) {
       : null
     : [
         props.mediaTemporada != null ? `MÉDIA ${decimalPtBr(props.mediaTemporada, 1)}` : null,
-        // QUEM DECIDE MÉDIA OU FAIXA É O RULESET, não o card. `odds.exibicao`
-        // (decisão do parceiro, 25/08) é aplicada na materialização, que
-        // suprime `media` do item quando a chave é 'faixa' — ver
-        // lista-secreta.ts, "a tela não decide". Escolher a forma aqui faria
-        // virar a chave no YAML deixar de mudar o produto: é a regra 1 do
-        // CLAUDE.md. A pergunta "média ou faixa" está reaberta com o CJ; ela se
-        // responde no ruleset, não neste arquivo.
+        // QUEM DECIDE A FORMA DA ODD É O RULESET, não o card. `odds.exibicao`
+        // é aplicada na materialização, que manda `unica`, `media` ou nenhuma
+        // das duas — ver lista-secreta.ts, "a tela não decide". Escolher a
+        // forma aqui faria virar a chave no YAML deixar de mudar o produto: é
+        // a regra 1 do CLAUDE.md.
         props.oddFaixa != null
-          ? props.oddFaixa.media != null
-            ? `ODD MÉDIA ${decimalPtBr(props.oddFaixa.media, 2)}`
-            : `ODD ${decimalPtBr(props.oddFaixa.min, 2)}–${decimalPtBr(props.oddFaixa.max, 2)}`
+          ? props.oddFaixa.unica != null
+            ? `ODD ${decimalPtBr(props.oddFaixa.unica, 2)}`
+            : props.oddFaixa.media != null
+              ? `ODD MÉDIA ${decimalPtBr(props.oddFaixa.media, 2)}`
+              : `ODD ${decimalPtBr(props.oddFaixa.min, 2)}–${decimalPtBr(props.oddFaixa.max, 2)}`
           : null,
       ]
         .filter(Boolean)
@@ -714,6 +726,11 @@ function lenteEmTexto(
       const o = props.oddFaixa
       if (!o) return { rotulo: 'ODD', valor: '—' }
       const casas = `${o.qtdCasas} ${o.qtdCasas === 1 ? 'CASA' : 'CASAS'}`
+      // Com uma casa só, a faixa seria "1,85–1,85": a lente escreve a odd
+      // sozinha, e a contagem de casas fica — é ela que diz de onde veio.
+      if (o.unica != null) {
+        return { rotulo: 'ODD', valor: `${decimalPtBr(o.unica, 2)} · ${casas}` }
+      }
       return {
         rotulo: 'ODD',
         valor: `${decimalPtBr(o.min, 2)}–${decimalPtBr(o.max, 2)} · ${casas}`,

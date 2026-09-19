@@ -225,12 +225,21 @@ confianca_exibicao:
 odds:
   fonte: casas
   agregacao: mediana # mediana resiste a outlier de uma casa
-  casas_minimas: 2 # abaixo disso, cai no fallback
-  # Decisão do parceiro (25/08/2026): o card e o detalhe mostram a MÉDIA
-  # entre casas. A redação homologada dizia 'sempre faixa, nunca odd única' —
-  # pergunta reaberta ao CJ (docs/specs/README). Voltar a 'faixa' aqui religa
-  # o comportamento antigo sem tocar código.
-  exibicao: media
+  # UMA casa basta para a linha ser cotada (decisão do parceiro, 19/09/2026).
+  # Era 2: com uma casa só, NENHUMA linha virava cotação e tudo caía na
+  # tabela_estatica — o assinante nunca veria a odd real.
+  casas_minimas: 1
+  # Decisão do parceiro (19/09/2026): o produto passa a trabalhar com UMA casa,
+  # então o card escreve a odd sozinha ("ODD 1,85"), sem o rótulo MÉDIA — não
+  # há o que promediar — e sem a faixa, que com uma casa viraria "1,85–1,85".
+  # QUEM É A CASA aparece no detalhe do apito, na tabela "Odds por casa" que
+  # já existe lá. O aviso do ADR-0004 continua em toda tela com odd.
+  #
+  # Histórico: 'media' entrou em 25/08 (card ODD MÉDIA); a redação homologada
+  # original dizia 'sempre faixa, nunca odd única'. As três formas convivem no
+  # enum — voltar a 'media' ou 'faixa' aqui religa o comportamento anterior sem
+  # tocar código.
+  exibicao: casa_unica
   fallback: tabela_estatica
 
   tabela_estatica: # usada quando não há cobertura das casas

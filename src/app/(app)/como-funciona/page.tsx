@@ -327,10 +327,12 @@ export default async function PaginaComoFunciona() {
         <Secao titulo="As odds">
           <p style={{ margin: 0 }}>
             As odds variam entre casas e ao longo do dia. Com cobertura de no mínimo{' '}
-            {t.odds.casasMinimas} casas, o card mostra{' '}
+            {t.odds.casasMinimas} {t.odds.casasMinimas === 1 ? 'casa' : 'casas'}, o card mostra{' '}
             {ruleset.odds.exibicao === 'media'
               ? 'a média das odds'
-              : 'a faixa entre a menor e a maior odd'}{' '}
+              : ruleset.odds.exibicao === 'casa_unica'
+                ? 'a odd cotada'
+                : 'a faixa entre a menor e a maior odd'}{' '}
             da última coleta. O detalhe reúne as cotações por casa disponíveis.
           </p>
           <p style={{ margin: '8px 0 0' }}>
@@ -435,12 +437,19 @@ export default async function PaginaComoFunciona() {
               { valor: 18, bateu: true },
             ]}
             mediaTemporada={19.4}
-            oddFaixa={{
-              min: 1.47,
-              max: 1.62,
-              qtdCasas: 3,
-              ...(ruleset.odds.exibicao === 'media' ? { media: 1.55 } : {}),
-            }}
+            // O card ILUSTRATIVO veste a mesma forma que o ruleset manda nos
+            // cards de verdade — senão o exemplo mostraria faixa enquanto a
+            // Lista mostra odd sozinha, a dois parágrafos de distância.
+            oddFaixa={
+              ruleset.odds.exibicao === 'casa_unica'
+                ? { min: 1.85, max: 1.85, qtdCasas: 1, unica: 1.85 }
+                : {
+                    min: 1.47,
+                    max: 1.62,
+                    qtdCasas: 3,
+                    ...(ruleset.odds.exibicao === 'media' ? { media: 1.55 } : {}),
+                  }
+            }
           />
           <p style={{ margin: '8px 0 0', fontSize: 13, color: semantico.textoSecundario }}>
             Números ilustrativos. Nível do jogador na faixa metálica, força do apito na borda do

@@ -192,9 +192,13 @@ export const rulesetSchema = z.object({
     fonte: z.literal('casas'),
     agregacao: z.enum(['mediana', 'media']),
     casas_minimas: z.number().int().positive(),
-    // 'media' entrou em 25/08 por decisão do parceiro (card ODD MÉDIA);
-    // a redação homologada era 'faixa' — pergunta aberta ao CJ.
-    exibicao: z.enum(['faixa', 'media']),
+    // Três formas de escrever a odd na tela, e o YAML escolhe uma:
+    //   faixa       'ODD 1,47–1,62'  (redação homologada original)
+    //   media       'ODD MÉDIA 1,55' (parceiro, 25/08)
+    //   casa_unica  'ODD 1,85'       (parceiro, 19/09 — o produto passou a
+    //                                 trabalhar com UMA casa, e tanto a média
+    //                                 quanto a faixa mentem com uma cotação só)
+    exibicao: z.enum(['faixa', 'media', 'casa_unica']),
     fallback: z.literal('tabela_estatica'),
     tabela_estatica: porNivel(porLinhaFaixa),
   }),

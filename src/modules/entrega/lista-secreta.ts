@@ -342,11 +342,20 @@ async function enriquecer(db: Db, ruleset: Ruleset, apitos: Apito[]): Promise<It
               min: Number(oddRow.oddMin),
               max: Number(oddRow.oddMax),
               qtdCasas: oddRow.qtdCasas,
-              // A média entre casas — SÓ quando o ruleset manda exibi-la
-              // (odds.exibicao). A tela não decide; a materialização decide
-              // pelo ruleset, e voltar a 'faixa' no yaml religa o antigo.
+              // A FORMA da odd na tela sai daqui, do ruleset — a tela não
+              // decide. Trocar `odds.exibicao` no yaml religa qualquer uma
+              // das três sem tocar componente.
+              //
+              // `media` entre casas, quando o ruleset pede média.
               ...(ruleset.odds.exibicao === 'media' && oddRow.oddMedia !== null
                 ? { media: Number(oddRow.oddMedia) }
+                : {}),
+              // `unica`: a odd sozinha, quando o produto trabalha com UMA casa
+              // (parceiro, 19/09). Só quando há mesmo UMA: se a coleta trouxer
+              // duas, min e max divergem e a faixa volta a ser a verdade —
+              // escolher um dos dois números seria inventar qual casa manda.
+              ...(ruleset.odds.exibicao === 'casa_unica' && oddRow.qtdCasas === 1
+                ? { unica: Number(oddRow.oddMin) }
                 : {}),
             }
           : null,
