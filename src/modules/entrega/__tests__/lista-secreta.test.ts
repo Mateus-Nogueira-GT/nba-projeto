@@ -366,12 +366,13 @@ describe('o card carrega contexto materializado (identidade 03)', () => {
       createElement(CardEntrada, {
         nome: comMedia.nome, timeSigla: comMedia.timeSigla, posicao: comMedia.posicao,
         atributo: comMedia.atributo, nivelJogador: comMedia.nivelJogador,
-        nivelApito: comMedia.nivelApito, confianca: comMedia.confianca,
-        grauConfianca: comMedia.grauConfianca, linha: comMedia.linha,
+        nivelApito: comMedia.nivelApito, linha: comMedia.linha,
         oddFaixa: comMedia.oddFaixa,
       }),
     )
-    expect(html).toContain('ODD MÉDIA 1,55')
+    // No TEXTO: na identidade 06 a odd subiu para o canto do card e virou
+    // rótulo pequeno + número grande, dois elementos irmãos.
+    expect(html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ')).toContain('ODD MÉDIA 1,55')
   })
 
   it('a janela da média vem do RULESET, não de um literal (regra 1)', async () => {
@@ -566,8 +567,6 @@ describe('a tela consome o feed materializado', () => {
         atributo: item.atributo,
         nivelJogador: item.nivelJogador,
         nivelApito: item.nivelApito,
-        confianca: item.confianca,
-        grauConfianca: null,
         turbo: item.turbo,
         modoFire: item.modoFire,
         opdOrigemNivel: item.opdOrigemNivel,

@@ -5,7 +5,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 
 import { CardEntrada, type CardEntradaProps } from '../componentes/CardEntrada'
 import { componente } from '../tokens/componente'
-import { MODO_FIRE } from '../tokens/css'
+import { APITO, CONFIANCA_GRAU, MODO_FIRE, NIVEL_JOGADOR, TURBO } from '../tokens/css'
 
 const base = {
   nome: 'D. Malloy',
@@ -14,8 +14,6 @@ const base = {
   atributo: 'PONTOS' as const,
   nivelJogador: 'MVP' as const,
   nivelApito: 3 as const,
-  confianca: 92,
-  grauConfianca: 4 as const,
   fotoUrl: null,
 }
 
@@ -36,7 +34,8 @@ const estiloDoCard = (html: string) => /<article style="([^"]*)"/.exec(html)?.[1
 describe('CardEntrada — contratos de conteúdo (desde a identidade 02)', () => {
   it('linha inteira com sufixo +, nunca meio ponto', () => {
     const html = render({ ...base, linha: 20 })
-    expect(html).toContain('PONTOS 20+')
+    // No texto: a meta é rótulo pequeno + número grande desde a identidade 06.
+    expect(texto(html)).toContain('PONTOS 20+')
     expect(html).not.toContain('20,5')
     expect(html).not.toContain('19,5')
   })
@@ -84,17 +83,52 @@ describe('CardEntrada — contratos de conteúdo (desde a identidade 02)', () =>
     )
   })
 
-  it('a nota de confiança é número puro — o artboard 04 tirou o "%" do card', () => {
-    // docs/04-design-system.md: "Probabilidade: 92%" ❌ contra "Confiança: 92" ✅.
-    const html = render({ ...base, linha: 20 })
-    expect(html).toContain('>92<')
-    expect(html).not.toContain('92%')
+  it('o card não escreve a nota de confiança em estado nenhum', () => {
+    // Identidade 06: a confiança saiu do card — o número, a borda lateral na
+    // cor do grau e o brilho do grau 5. Ela continua existindo no dado, no
+    // push e na ordenação da Lista; quem a DESENHA é a análise do apito.
+    // Este é o par do teste "nunca escreve probabilidade".
+    const estados: CardEntradaProps[] = [
+      { ...base, linha: 20 },
+      { ...base, linha: 20, turbo: true },
+      { ...base, temperatura: 'quente', alvo1Q: 10, progresso1Q: { observado: 4, alvo: 10 } },
+      { ...base, linha: 20, estado: 'CONFERIDO', fez: 27, bateu: true },
+      { ...base, linha: 20, lente: 'ODDS', oddFaixa: { min: 1.4, max: 1.6, qtdCasas: 3 } },
+    ]
+    for (const props of estados) {
+      const html = render(props)
+      expect(html.toLowerCase(), 'a palavra voltou ao card').not.toContain('confian')
+      for (const grau of Object.values(CONFIANCA_GRAU))
+        expect(html, `a rampa turquesa (${grau}) voltou ao card`).not.toContain(grau)
+    }
+    const fonte = readFileSync('src/design-system/componentes/CardEntrada.tsx', 'utf8')
+    expect(fonte).not.toContain('CONFIANCA_GRAU')
+    expect(fonte).not.toContain('grauConfianca')
   })
 
-  it('a faixa metálica do nível fica recuada, alinhada com o avatar', () => {
-    // `.faixa-nivel{margin:0 0 4px 14px}` do artboard — encostada na borda
-    // esquerda ela brigava com a borda lateral do grau.
-    expect(render({ ...base, linha: 20 })).toContain('margin-left:14px')
+  it('a moldura veste o metálico do nível — e o tracinho de 56×3 morreu', () => {
+    // O canal 1 saiu do tracinho recuado do artboard da 03 e passou a vestir a
+    // moldura inteira: é a resposta ao "a cor precisa ter mais presença em toda
+    // a aba do jogador".
+    for (const nivel of ['MVP', 'ALL_STAR', 'SUPORTE', 'RANDOLA'] as const) {
+      const html = render({ ...base, nivelJogador: nivel, linha: 20 })
+      const { borda, veu } = NIVEL_JOGADOR[nivel]
+      expect(estiloDoCard(html), nivel).toContain(`border-left:6px solid ${borda}`)
+      expect(estiloDoCard(html), nivel).toContain(`border:1px solid ${borda}`)
+      expect(html, `${nivel} sem véu no cabeçalho e no rodapé`).toContain(veu)
+    }
+    expect(render({ ...base, linha: 20 })).not.toContain('margin-left:14px')
+  })
+
+  it('o rótulo do nível sai grande na cor metálica, e o numeral na cor do apito', () => {
+    const html = render({ ...base, nivelJogador: 'SUPORTE', nivelApito: 2, linha: 20 })
+    expect(html).toContain(`font-size:${componente.nivelRotuloTamanho}`)
+    expect(html).toContain(NIVEL_JOGADOR.SUPORTE.cor)
+    expect(html).toContain(APITO[2].cor)
+    expect(texto(html)).toContain('Suporte')
+    expect(texto(html)).toContain('N2')
+    // No turbo o numeral veste o azul do turbo, como o anel do avatar já faz.
+    expect(render({ ...base, turbo: true, linha: 20 })).toContain(TURBO.cor)
   })
 
   it('os links do card são <Link>: tocar num card não recarrega a Lista nem volta ao topo', async () => {
@@ -109,7 +143,7 @@ describe('CardEntrada — contratos de conteúdo (desde a identidade 02)', () =>
 
   it('toda prop obrigatória do card aparece na saída renderizada', () => {
     const html = render({ ...base, linha: 20, adversarioSigla: 'DEN' })
-    for (const valor of ['D. Malloy', 'Los Angeles Lakers', 'G', '20', 'MVP', '92'])
+    for (const valor of ['D. Malloy', 'Los Angeles Lakers', 'G', '20', 'MVP'])
       expect(texto(html), `prop com valor ${valor} não chegou à tela`).toContain(valor)
   })
 
@@ -154,48 +188,102 @@ describe('CardEntrada — identidade 03 (3 zonas)', () => {
     expect(html).not.toContain('ÚLT. 5 NA LINHA')
   })
 
-  it('rodapé: quem decide média ou faixa é o RULESET, pela presença de `media` no item', () => {
+  it('a odd ocupa o canto de destaque, e quem decide média ou faixa é o RULESET', () => {
     // `odds.exibicao` (config/ruleset.v1.yaml) é decisão homologada do parceiro
     // em 25/08, e a MATERIALIZAÇÃO é que a aplica: com `exibicao: faixa` ela
     // suprime `oddFaixa.media` do item (lista-secreta.ts, "a tela não decide").
     // O card só desenha o que recebe — se ele escolhesse a forma, virar a chave
     // no ruleset deixaria de mudar o produto, e isso é a regra 1 do CLAUDE.md.
-    const faixa = render({
-      ...base,
-      linha: 25,
-      mediaTemporada: 25.7,
-      oddFaixa: { min: 1.47, max: 1.62, qtdCasas: 3 },
-    })
-    expect(faixa).toContain('ODD 1,47–1,62')
-
+    // O que a identidade 06 mudou foi o LUGAR: a odd saiu do rodapé em 12 px e
+    // ocupou o canto que era da nota de confiança.
     const comMedia = render({
       ...base,
       linha: 25,
       mediaTemporada: 25.7,
       oddFaixa: { min: 1.47, max: 1.62, qtdCasas: 3, media: 1.55 },
     })
-    expect(comMedia).toContain('ODD MÉDIA 1,55')
+    expect(texto(comMedia)).toContain('ODD MÉDIA 1,55')
+    expect(comMedia).toContain(`font-size:${componente.odd.valorMedia}`)
     // e a faixa NÃO aparece junto: com `exibicao: media` o card diz um número
     // só, que é o que o parceiro pediu ver.
     expect(comMedia).not.toContain('1,47–1,62')
+    // no rodapé sobrou a média da temporada, sozinha
+    expect(texto(comMedia)).toContain('MÉDIA 25,7')
 
-    const semOdd = render({ ...base, linha: 25, mediaTemporada: 25.7, oddFaixa: null })
-    expect(semOdd).toContain('MÉDIA 25,7')
-    expect(semOdd).not.toContain('ODD')
+    const faixa = render({
+      ...base,
+      linha: 25,
+      mediaTemporada: 25.7,
+      oddFaixa: { min: 1.47, max: 1.62, qtdCasas: 3 },
+    })
+    expect(texto(faixa)).toContain('ODD 1,47–1,62')
+    // a faixa tem o dobro de caracteres da média e desce de corpo para caber
+    expect(faixa).toContain(`font-size:${componente.odd.valorFaixa}`)
   })
 
-  it('borda lateral na cor do grau; os três brilhos têm cada um seu dono', () => {
-    // dono 1 — confiança: só o grau máximo brilha
+  it('sem odd o canto não desenha nada — nem "—", nem zero', () => {
+    const semOdd = render({ ...base, linha: 25, mediaTemporada: 25.7, oddFaixa: null })
+    expect(semOdd).not.toContain('ODD')
+    expect(semOdd).not.toContain(`font-size:${componente.odd.valorMedia}`)
+    expect(texto(semOdd)).toContain('MÉDIA 25,7')
+    // Todo card do Fire Live cai aqui: a materialização grava `oddFaixa: null`
+    // por decisão de produto, e o card não inventa odd nenhuma.
+    const quente = render({ ...base, temperatura: 'quente', alvo1Q: 11, oddFaixa: null })
+    expect(quente).not.toContain('ODD')
+  })
+
+  it('a meta sai com o número maior que o rótulo que o nomeia', () => {
+    const html = render({ ...base, atributo: 'REBOTES', linha: 4 })
+    expect(texto(html)).toContain('REBOTES 4+')
+    expect(html).toContain(`font-size:${componente.meta.valor}`)
+    expect(html).toContain(`font-size:${componente.meta.rotulo}`)
+
+    const comAbas = render({
+      ...base,
+      linha: 20,
+      atributos: [
+        { atributo: 'PONTOS', linha: 20, ativo: true, href: '/a' },
+        { atributo: 'REBOTES', linha: 6, ativo: false, href: '/b' },
+      ],
+    })
+    expect(comAbas).toContain(`font-size:${componente.meta.abaValor}`)
+    expect(texto(comAbas)).toContain('PTS 20+')
+
+    // O rodapé QUENTE é uma frase só ("ALVO 1º Q · 11 PTS") e não se parte: o
+    // número ali não é meta de aposta, é régua do quarto.
+    const quente = render({ ...base, temperatura: 'quente', alvo1Q: 11 })
+    expect(texto(quente)).toContain('ALVO 1º Q · 11 PTS')
+  })
+
+  it('os três brilhos viraram dois: turbo e modo fire, cada um com seu dono', () => {
+    // O terceiro dono era a confiança de grau 5, e saiu com ela na 06.
     expect(render({ ...base, linha: 20 })).not.toContain('box-shadow')
-    expect(render({ ...base, grauConfianca: 5, linha: 20 })).toContain('box-shadow')
-    // dono 2 — turbo
+    // dono 1 — turbo
     expect(render({ ...base, turbo: true, linha: 20 })).toContain(componente.turboBrilho)
-    // dono 3 — modo fire (na tela quente)
+    // dono 2 — modo fire (na tela quente)
     expect(render({ ...base, temperatura: 'quente', modoFire: true, alvo1Q: 10 })).toContain(
       componente.contextoQuente.brilho,
     )
-    // e a borda lateral existe sempre que há grau
-    expect(render({ ...base, linha: 20 })).toContain('border-left:3px solid')
+    // e a borda lateral existe sempre, agora na cor do metálico do nível
+    expect(render({ ...base, linha: 20 })).toContain('border-left:6px solid')
+  })
+
+  it('a coluna do canto não sobe de camada; só o invólucro da ação sobe', () => {
+    // Regressão da Identidade 05: para a estrela ficar clicável, a coluna
+    // INTEIRA ganhou z-index e passou a cobrir a cobertura do card — antes por
+    // cima da confiança, agora por cima da odd, que é o que abre a análise.
+    const html = render({
+      ...base,
+      linha: 20,
+      detalheHref: '/apito/1',
+      acaoCanto: createElement('button', null, '★'),
+    })
+    expect(html).toContain('<span style="position:relative;z-index:1"><button')
+    const coluna =
+      /<div style="display:flex;flex-direction:column;align-items:flex-end;[^"]*"/.exec(html)?.[0] ??
+      ''
+    expect(coluna, 'a coluna do canto foi encontrada').not.toBe('')
+    expect(coluna).not.toContain('z-index')
   })
 
   it('SÓ a temperatura veste o universo quente — modoFire sozinho não muda a pele', () => {
@@ -348,7 +436,7 @@ describe('CardEntrada — identidade 04: abas de atributo e lente da zona 2', ()
 
   it('três atributos viram três abas no rodapé, uma ativa com aria-current, no lugar do rótulo longo', () => {
     const html = render({ ...base, linha: 10, atributos: abas })
-    for (const rotulo of ['PTS 10+', 'REB 3+', 'AST 4+']) expect(html).toContain(rotulo)
+    for (const rotulo of ['PTS 10+', 'REB 3+', 'AST 4+']) expect(texto(html)).toContain(rotulo)
     expect(html.match(/aria-current="true"/g)).toHaveLength(1)
     expect(html).toContain('href="/?atributo=REBOTES"')
     expect(html).toContain(componente.abaAtributo.ativaPorNivel[3].borda)
@@ -388,7 +476,7 @@ describe('CardEntrada — identidade 04: abas de atributo e lente da zona 2', ()
         { atributo: 'REBOTES' as const, linha: null, ativo: false, href: '/?a=REB' },
       ],
     })
-    expect(html).toContain('PTS 10+')
+    expect(texto(html)).toContain('PTS 10+')
     expect(html).toContain('>REB<')
     expect(html).not.toContain('REB 0+')
   })
@@ -570,8 +658,6 @@ describe('CardEntrada — regras de escrita (docs/04-design-system.md)', () => {
     render({ ...base, linha: 24, estado: 'CONFERIDO', fez: 27, bateu: true }),
     render({
       ...base,
-      confianca: null,
-      grauConfianca: null,
       temperatura: 'quente',
       alvo1Q: 11,
       progresso1Q: { observado: 9, alvo: 11 },
@@ -591,15 +677,10 @@ describe('CardEntrada — regras de escrita (docs/04-design-system.md)', () => {
     expect(telas.toLowerCase()).not.toContain('nível da partida')
   })
 
-  it('a nota de confiança não tem casa decimal', () => {
-    const html = render({ ...base, confianca: 92.4, linha: 24 })
-    expect(html).toContain('>92<')
-    expect(html).not.toContain('92,4')
-    expect(html).not.toContain('92.4')
-  })
-
   it('linha sempre INTEIRA com "+", nunca meio ponto', () => {
-    expect(telas).toContain('PONTOS 24+')
+    // No texto, e não no HTML cru: a identidade 06 partiu a meta em duas peças
+    // ("PONTOS" pequeno, "24+" grande) e elas são dois elementos irmãos.
+    expect(texto(telas)).toContain('PONTOS 24+')
     expect(telas.toLowerCase()).not.toContain('meio ponto')
     expect(telas).not.toMatch(/\d+,5\+/)
   })

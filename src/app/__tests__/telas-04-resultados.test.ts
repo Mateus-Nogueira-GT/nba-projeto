@@ -1,4 +1,5 @@
 import { gravarConferencia, prepararFotosConferencia } from './conferencia'
+import { componente } from '../../design-system/tokens/componente'
 import { and, eq, inArray } from 'drizzle-orm'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
@@ -476,9 +477,11 @@ describe('Resultados · regras de escrita', () => {
     // casas, ou é a MÉDIA entre casas, escrita com o rótulo. A rodada em
     // curso entra na conta porque é lá que o rodapé ainda mostra odd — no
     // conferido o veredito toma o lugar dela.
+    // `\\s+`, e não um espaço: desde a identidade 06 o rótulo e o valor da odd
+    // são dois elementos irmãos, e `textoSeparado` põe um espaço por tag.
     const comOdd = `${textoSeparado(html)}\n${textoSeparado(await renderizar(HOJE))}`
-    expect(comOdd).toMatch(/ODD (MÉDIA \d+,\d\d|\d+,\d\d–\d+,\d\d)/)
-    expect(comOdd).not.toMatch(/ODD (?!MÉDIA)\d+,\d\d(?!–)/)
+    expect(comOdd).toMatch(/ODD\s+(MÉDIA\s+\d+,\d\d|\d+,\d\d–\d+,\d\d)/)
+    expect(comOdd).not.toMatch(/ODD\s+(?!MÉDIA)\d+,\d\d(?!–)/)
     expect(texto).not.toContain('ALTÍSSIMO VALOR')
     expect(texto).not.toContain('...')
     expect(texto).not.toContain('…')
@@ -553,24 +556,25 @@ describe('Resultados · o estado vem do jogo, não do que a tela não achou', ()
     expect(html).not.toContain('APITO DA NOITE')
   }, 60_000)
 
-  it('a nota de confiança é inteira e SEM "%" — na rodada em curso, que é onde ela aparece', async () => {
-    // A identidade 04 tirou o "%" do card (o número puro é o que os cinco
-    // artboards desenham; o "%" sobrou só para TAXA, no cabeçalho da noite e na
-    // faixa da temporada). O que continua valendo é a regra antiga: a nota
-    // nunca tem casa decimal.
+  it('o número grande do card é a ODD, e não sobrou percentual nenhum', async () => {
+    // A nota de confiança saiu do card na identidade 06 e levou o número de
+    // 34 px junto. Quem ocupa o canto agora é a odd, com duas casas e o
+    // rótulo em cima — e nenhum número do card é porcentagem.
     const html = await renderizar(HOJE)
     const cards = cardsDaTela(html)
     expect(cards.length).toBeGreaterThan(0)
 
-    // A nota é o número grande do card — 34px na identidade 05 (era 30 na
-    // Anton, antes da identidade 05). Casar por ele evita confundir a nota com a média ou a odd, que
-    // são decimais legítimos no rodapé.
-    const notas = cards.flatMap((card) => [
-      ...card.matchAll(/font-size:34px[^"]*"[^>]*>([\d,.]+)</g),
+    const odds = cards.flatMap((card) => [
+      ...card.matchAll(
+        new RegExp(`font-size:${componente.odd.valorMedia}[^"]*"[^>]*>([\\d,]+)<`, 'g'),
+      ),
     ])
-    expect(notas.length).toBeGreaterThan(0)
-    for (const [, nota] of notas) expect(nota).toMatch(/^\d+$/)
-    for (const card of cards) expect(textoDaTela(card)).not.toContain('%')
+    expect(odds.length, 'nenhum card da rodada em curso trouxe odd').toBeGreaterThan(0)
+    for (const [, odd] of odds) expect(odd).toMatch(/^\d+,\d{2}$/)
+    for (const card of cards) {
+      expect(card).not.toContain('font-size:34px')
+      expect(textoDaTela(card)).not.toContain('%')
+    }
   }, 60_000)
 
   it('box do jogo chegou e o apitado não jogou: DNP, não "aguardando dado oficial"', async () => {
@@ -753,8 +757,8 @@ describe('Resultados · o estado vem do jogo, não do que a tela não achou', ()
     const texto = textoSeparado(await renderizar(HOJE))
 
     expect(texto).toContain('MÉDIA')
-    expect(texto).toMatch(/ODD (MÉDIA \d+,\d\d|\d+,\d\d–\d+,\d\d)/)
-    expect(texto).not.toMatch(/ODD (?!MÉDIA)\d+,\d\d(?!–)/)
+    expect(texto).toMatch(/ODD\s+(MÉDIA\s+\d+,\d\d|\d+,\d\d–\d+,\d\d)/)
+    expect(texto).not.toMatch(/ODD\s+(?!MÉDIA)\d+,\d\d(?!–)/)
   }, 60_000)
 
   it('sem o box do time o cabeçalho diz ENCERRADO por escrito, sem inventar quartos', async () => {

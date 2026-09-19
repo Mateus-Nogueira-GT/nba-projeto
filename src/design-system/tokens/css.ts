@@ -8,11 +8,21 @@ import { semantico } from './semantico'
  * O componente NUNCA faz `if (nivel === 'MVP') cor = ouro`. Ele consulta estes
  * mapas, que só conhecem tokens. É o que mantém o hex confinado ao primitivo.
  */
-export const NIVEL_JOGADOR: Record<Nivel, { cor: string; rotulo: string }> = {
-  MVP: { cor: semantico.nivelMvp, rotulo: 'MVP' },
-  ALL_STAR: { cor: semantico.nivelAllStar, rotulo: 'All Star' },
-  SUPORTE: { cor: semantico.nivelSuporte, rotulo: 'Suporte' },
-  RANDOLA: { cor: semantico.nivelRandola, rotulo: 'Randola' },
+export const NIVEL_JOGADOR: Record<
+  Nivel,
+  { cor: string; rotulo: string; borda: string; veu: string }
+> = {
+  // `cor` é a TINTA do nível — o rótulo escrito. `borda` e `veu` são a MOLDURA
+  // do card (identidade 06). No Randola os dois se separam: tinta branca cheia,
+  // moldura a 55%.
+  MVP: { cor: semantico.nivelMvp, rotulo: 'MVP', ...componente.molduraNivel.MVP },
+  ALL_STAR: {
+    cor: semantico.nivelAllStar,
+    rotulo: 'All Star',
+    ...componente.molduraNivel.ALL_STAR,
+  },
+  SUPORTE: { cor: semantico.nivelSuporte, rotulo: 'Suporte', ...componente.molduraNivel.SUPORTE },
+  RANDOLA: { cor: semantico.nivelRandola, rotulo: 'Randola', ...componente.molduraNivel.RANDOLA },
 }
 
 export const APITO: Record<NivelApito, { cor: string; rotulo: string }> = {

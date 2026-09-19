@@ -6,7 +6,7 @@ import type { Atributo, Nivel, NivelApito } from '../../modules/motor/tipos'
 import type { Lente } from '../../modules/plataforma/preferencias'
 import { decimalPtBr } from '../formato'
 import { componente } from '../tokens/componente'
-import { CONFIANCA_GRAU, MODO_FIRE, NIVEL_JOGADOR, TURBO } from '../tokens/css'
+import { APITO, MODO_FIRE, NIVEL_JOGADOR, TURBO } from '../tokens/css'
 import { semantico } from '../tokens/semantico'
 import { Avatar } from './Avatar'
 import { IdentidadeTime } from './IdentidadeTime'
@@ -71,10 +71,6 @@ export type CardEntradaProps = {
   atributo: Atributo
   nivelJogador: Nivel
   nivelApito: NivelApito
-  /** Nota de confiança. Nunca "probabilidade". */
-  confianca: number | null
-  /** Grau visual (1..5), materializado no item do feed. */
-  grauConfianca: 1 | 2 | 3 | 4 | 5 | null
   turbo?: boolean
   modoFire?: boolean
   /** Nível de origem quando o jogador já vinha apitado em OPD pré-live. */
@@ -108,7 +104,11 @@ export type CardEntradaProps = {
   ultimos5?: { valor: number; bateu: boolean }[]
   /** Média da temporada, do item do feed — o rodapé mostra sem chamar o motor. */
   mediaTemporada?: number | null
-  /** Faixa de odds entre casas; com `media`, o rodapé escreve ODD MÉDIA. */
+  /**
+   * Faixa de odds entre casas. Com `media`, o canto do card escreve
+   * ODD MÉDIA; sem ela, a faixa. Ausente, o canto fica vazio — e é assim que
+   * todo card do Fire Live sai, porque a materialização de lá grava `null`.
+   */
   oddFaixa?: { min: number; max: number; qtdCasas: number; media?: number } | null
   /**
    * Temperatura do contexto. O Fire Live INTEIRO é quente — não só o modo
@@ -196,17 +196,27 @@ export type CardEntradaProps = {
 
 /**
  * Card de entrada — identidade 03 "broadcast", em TRÊS zonas:
- *   1 · cabeçalho — avatar (anel = nível do APITO), nome, apoio, % grande
+ *   1 · cabeçalho — avatar (anel = nível do APITO), nome, nível grande, ODD
  *   2 · contexto  — barrinhas (pré-live) OU barra rumo ao alvo (fire live)
- *   3 · rodapé    — faixa translúcida com linha · média · odd
+ *   3 · rodapé    — faixa translúcida com a meta · média
  *
- * Os canais da identidade continuam os de sempre:
- *   faixa metálica curta = nível do JOGADOR (+ rótulo escrito)
- *   anel do avatar       = nível do APITO   (+ numeral N{n}/T)
- *   borda lateral 3px    = grau de CONFIANÇA (+ % escrito na mesma cor)
+ * Os canais, depois da identidade 06 (ADR-0011) — dois, como sempre, só que
+ * em outras superfícies:
+ *   MOLDURA do card = nível do JOGADOR (borda, lateral de 6 px, véu a 12%,
+ *                     + o rótulo escrito em Bebas 20 na cor)
+ *   anel do avatar  = nível do APITO   (+ o numeral N{n} ao lado do nome,
+ *                     na mesma cor, e o selo N{n}/T no próprio anel)
  *
- * Três brilhos, três donos, nunca o único sinal:
- *   grau 5 de confiança → brilho do card na cor do grau
+ * A CONFIANÇA saiu do card na 06: o número grande, a borda lateral na cor do
+ * grau e o brilho do grau 5. Ela continua no dado, no push e na ordenação da
+ * Lista — quem a desenha é a tela de análise do apito.
+ *
+ * AVISO PARA QUEM FOR TRAZER O NÚMERO DE VOLTA: aquele número é score de
+ * CONFIANÇA, nunca probabilidade. Escrever "probabilidade" na interface é
+ * proibido e tem teste varrendo a UI inteira atrás da palavra
+ * (docs/04-design-system.md > Escrita da interface).
+ *
+ * Dois brilhos, dois donos, nunca o único sinal:
  *   turbo               → turboBrilho (+ selo ⚡ TURBO escrito)
  *   modo fire           → brilho do universo quente (+ selo 🔥 MODO FIRE)
  *
@@ -219,9 +229,9 @@ export type CardEntradaProps = {
  */
 export function CardEntrada(props: CardEntradaProps) {
   const nivel = NIVEL_JOGADOR[props.nivelJogador]
-  const grau = props.grauConfianca
-  const corGrau = grau === null ? semantico.divisor : CONFIANCA_GRAU[grau]
-  const brilhaConfianca = grau === 5 // regra da identidade: só o máximo brilha
+  // O numeral do apito ao lado do nome veste a cor do anel — inclusive no
+  // turbo, que tem par próprio.
+  const corDoApito = props.turbo ? TURBO.cor : APITO[props.nivelApito].cor
   // A pele vem SÓ da temperatura (da TELA). modoFire é estado do jogador:
   // rende selo e brilho, nunca troca a pele — um item pré-live em modo fire
   // continua mostrando barrinhas, média e odd (errata 25/08).
@@ -230,14 +240,11 @@ export function CardEntrada(props: CardEntradaProps) {
   // E o brilho quente vem SÓ do modo fire, não da tela: no artboard do Fire
   // Live o card sem a pílula leva `box-shadow:none`. Brilhar todo card quente
   // seria um quarto canal de cor — e o brilho deixaria de dizer "modo fire".
-  const brilhoDoCard = brilhaConfianca
-    ? `0 0 16px 1px ${corGrau}55`
-    : props.turbo
-      ? componente.turboBrilho
-      : props.modoFire
-        ? componente.contextoQuente.brilho
-        : undefined
-  const corPercentual = props.turbo ? TURBO.cor : corGrau
+  const brilhoDoCard = props.turbo
+    ? componente.turboBrilho
+    : props.modoFire
+      ? componente.contextoQuente.brilho
+      : undefined
 
   // Na tela ao vivo o assunto é o ALVO do 1º quarto (artboard, `.rodape` do
   // card quente): a linha é do jogo inteiro e volta a mandar no pré-live.
@@ -267,23 +274,48 @@ export function CardEntrada(props: CardEntradaProps) {
         ? 'ALVO BATIDO'
         : `FALTA ${faltam} ${ATRIBUTO_CURTO[props.atributo]}`
       : null
-    : [
-        props.mediaTemporada != null ? `MÉDIA ${decimalPtBr(props.mediaTemporada, 1)}` : null,
-        // QUEM DECIDE MÉDIA OU FAIXA É O RULESET, não o card. `odds.exibicao`
-        // (decisão do parceiro, 25/08) é aplicada na materialização, que
-        // suprime `media` do item quando a chave é 'faixa' — ver
-        // lista-secreta.ts, "a tela não decide". Escolher a forma aqui faria
-        // virar a chave no YAML deixar de mudar o produto: é a regra 1 do
-        // CLAUDE.md. A pergunta "média ou faixa" está reaberta com o CJ; ela se
-        // responde no ruleset, não neste arquivo.
-        props.oddFaixa != null
-          ? props.oddFaixa.media != null
-            ? `ODD MÉDIA ${decimalPtBr(props.oddFaixa.media, 2)}`
-            : `ODD ${decimalPtBr(props.oddFaixa.min, 2)}–${decimalPtBr(props.oddFaixa.max, 2)}`
-          : null,
-      ]
-        .filter(Boolean)
-        .join(' · ') || null
+    : // A odd subiu para o canto do card na identidade 06; aqui sobrou a média
+      // da temporada, sozinha.
+      props.mediaTemporada != null
+      ? `MÉDIA ${decimalPtBr(props.mediaTemporada, 1)}`
+      : null
+
+  // A ODD é o elemento de maior destaque do card (feedback 02): ela ocupa o
+  // canto que era da nota de confiança, porque é ela que faz o assinante montar
+  // a múltipla.
+  //
+  // QUEM DECIDE MÉDIA OU FAIXA É O RULESET, não o card. `odds.exibicao`
+  // (decisão do parceiro, 25/08) é aplicada na materialização, que suprime
+  // `media` do item quando a chave é 'faixa' — ver lista-secreta.ts, "a tela
+  // não decide". Escolher a forma aqui faria virar a chave no YAML deixar de
+  // mudar o produto: é a regra 1 do CLAUDE.md.
+  //
+  // O terceiro estado é NENHUMA odd, e ele desenha NADA: "—" grande no lugar
+  // de maior destaque anunciaria defeito, e um número de tabela apresentado
+  // como odd de casa seria mentira.
+  const oddDestaque =
+    props.oddFaixa == null
+      ? null
+      : props.oddFaixa.media != null
+        ? {
+            rotulo: 'ODD MÉDIA',
+            valor: decimalPtBr(props.oddFaixa.media, 2),
+            tamanho: componente.odd.valorMedia,
+          }
+        : {
+            rotulo: 'ODD',
+            valor: `${decimalPtBr(props.oddFaixa.min, 2)}–${decimalPtBr(props.oddFaixa.max, 2)}`,
+            tamanho: componente.odd.valorFaixa,
+          }
+
+  // A META em duas peças — o rótulo pequeno e o número grande — porque é o
+  // número que diz o que o jogador precisa fazer. SÓ no pré-live: o rodapé
+  // quente ("ALVO 1º Q · 11 PTS") é uma frase só e não se parte, já que o
+  // número ali é régua do quarto, não meta de aposta.
+  const meta =
+    (quente && rotuloAlvo1Q != null) || props.linha == null
+      ? { rotulo: rotuloLinha, valor: null }
+      : { rotulo: ATRIBUTO_ROTULO[props.atributo], valor: `${props.linha}+` }
 
   // A aba ativa herda a cor do nível do apito DESTE card (o anel do avatar diz
   // a mesma coisa); turbo tem par próprio.
@@ -302,9 +334,6 @@ export function CardEntrada(props: CardEntradaProps) {
   // Só o quarto em andamento veste a tinta do ao vivo. FIM 1º Q congela no
   // estado final — o apito não some, mas também não pisca (spec §4.2).
   const badgeAoVivo = props.estado === 'Q1'
-  // Com badge no canto e confiança nula (Fire Live), o "—" do % seria ruído
-  // embaixo do status; sem badge, o "—" segue como sempre.
-  const mostraPercentual = props.confianca !== null || rotuloEstado === null
   const veredito = conferido
     ? naoJogou
       ? { texto: 'não jogou · neutro', cor: componente.conferido.neutro, icone: null }
@@ -331,35 +360,35 @@ export function CardEntrada(props: CardEntradaProps) {
       className={props.modoFire ? 'card-modo-fire' : undefined}
       style={{ position: props.detalheHref ? 'relative' : undefined }}
     >
-      {/* faixa metálica CURTA = nível do jogador */}
-      <div
-        aria-hidden
-        style={{
-          width: 56,
-          height: componente.faixaNivelAltura,
-          borderRadius: 2,
-          background: nivel.cor,
-          marginBottom: 4,
-          // Recuada 14px: alinha com o avatar em vez de encostar na borda
-          // lateral do grau (artboard, `.faixa-nivel`). Forma LONGA de
-          // propósito: é assim que o teste afirma o recuo.
-          marginLeft: 14,
-        }}
-      />
+      {/* A faixa metálica CURTA de 56×3 px morreu na identidade 06: o nível do
+          jogador passou a vestir a moldura INTEIRA do card, logo abaixo. */}
       <article
         style={{
           borderRadius: componente.cardRaio,
           background: contexto.cardGradiente,
           color: componente.cardTexto,
-          border: `1px solid ${contexto.borda}`,
-          borderLeft: `${componente.cardBordaLateral} solid ${corGrau}`,
+          // A MOLDURA é o canal do nível do JOGADOR (identidade 06). Era
+          // `contexto.borda` + a lateral na cor do grau de confiança.
+          border: `1px solid ${nivel.borda}`,
+          borderLeft: `${componente.cardBordaLateral} solid ${nivel.borda}`,
           boxShadow: brilhoDoCard,
           overflow: 'hidden',
           // DNP usa o veredito neutro. Opacidade no card apagaria também o texto.
         }}
       >
         {/* zona 1 · cabeçalho */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '13px 14px 8px' }}>
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 12,
+            padding: '13px 14px 8px',
+            // O véu do metálico: é ele que dá ÁREA à cor do nível. Sem ele a
+            // moldura seria um contorno, e contorno de 1 px não tira o card do
+            // "morto" que o parceiro apontou.
+            background: nivel.veu,
+          }}
+        >
           <Avatar
             nome={props.nome}
             fotoUrl={props.fotoUrl ?? null}
@@ -372,7 +401,11 @@ export function CardEntrada(props: CardEntradaProps) {
               <strong
                 style={{
                   fontFamily: semantico.fonteTitulo,
-                  fontSize: 17,
+                  // 22 e não 17: com o rótulo do nível em 20 (identidade 06), o
+                  // nome do jogador passaria a ser MENOR que a classificação
+                  // dele. Quem é o jogador vem primeiro na lista do parceiro —
+                  // o nível vem em seguida.
+                  fontSize: 22,
                   letterSpacing: 0.6,
                   textTransform: 'uppercase',
                 }}
@@ -395,18 +428,53 @@ export function CardEntrada(props: CardEntradaProps) {
               </strong>
               {props.vivo && <Pilula texto="VIVO" cor={semantico.vivoSelo} />}
             </div>
+            {/* O NÍVEL grande, na cor do metálico — o pedido central do
+                feedback 03. O numeral do apito ao lado, na cor do apito: as
+                duas cores do card, lado a lado e as duas escritas. */}
             <div
               style={{
-                fontFamily: semantico.fonteRotulo,
-                fontSize: 12,
-                letterSpacing: 1.2,
-                color: componente.cardTextoApoio,
-                textTransform: 'uppercase',
+                display: 'flex',
+                alignItems: 'baseline',
+                gap: 6,
                 marginTop: 2,
+                flexWrap: 'wrap',
               }}
             >
-              {nivel.rotulo} · N{props.nivelApito}
-              {props.posicao ? ` · ${props.posicao}` : ''}
+              <span
+                style={{
+                  fontFamily: semantico.fonteTitulo,
+                  fontSize: componente.nivelRotuloTamanho,
+                  lineHeight: 1,
+                  letterSpacing: 1,
+                  color: nivel.cor,
+                  textTransform: 'uppercase',
+                }}
+              >
+                {nivel.rotulo}
+              </span>
+              <span
+                style={{
+                  fontFamily: semantico.fonteRotulo,
+                  fontSize: 12,
+                  fontWeight: 700,
+                  letterSpacing: 1.2,
+                  color: corDoApito,
+                }}
+              >
+                N{props.nivelApito}
+              </span>
+              {props.posicao && (
+                <span
+                  style={{
+                    fontFamily: semantico.fonteRotulo,
+                    fontSize: 12,
+                    letterSpacing: 1.2,
+                    color: semantico.texto55,
+                  }}
+                >
+                  {props.posicao}
+                </span>
+              )}
             </div>
             <div className="card-confronto">
               <IdentidadeTime sigla={props.timeSigla} tamanhoLogo={20} />
@@ -438,18 +506,22 @@ export function CardEntrada(props: CardEntradaProps) {
               alignItems: 'flex-end',
               gap: 6,
               flexShrink: 0,
-              // Acima da cobertura do card: a estrela ACOMPANHA o jogador, não
-              // abre a análise.
-              position: 'relative',
-              zIndex: 1,
+              // A coluna NÃO sobe de camada: se subisse, cobriria a cobertura
+              // do card e a odd deixaria de abrir a análise. Quem sobe é o
+              // invólucro da ação, logo abaixo.
               // Com badge ou ação, a coluna gruda no canto superior (o status
-              // fica sempre no mesmo lugar); sem eles, o % centra com o avatar.
-              alignSelf: rotuloEstado || props.acaoCanto ? 'flex-start' : 'center',
+              // fica sempre no mesmo lugar); sem eles, ela centra com o avatar.
+              alignSelf:
+                rotuloEstado || props.acaoCanto || oddDestaque ? 'flex-start' : 'center',
             }}
           >
             {(rotuloEstado || props.acaoCanto) && (
               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                {props.acaoCanto}
+                {/* O invólucro da ação — e só ele — sobe acima da cobertura do
+                    card: a estrela ACOMPANHA o jogador, não abre a análise. */}
+                {props.acaoCanto && (
+                  <span style={{ position: 'relative', zIndex: 1 }}>{props.acaoCanto}</span>
+                )}
                 {rotuloEstado && (
                   <span
                     style={{
@@ -478,21 +550,31 @@ export function CardEntrada(props: CardEntradaProps) {
                 )}
               </div>
             )}
-            {mostraPercentual && (
-              <span
-                style={{
-                  fontFamily: semantico.fonteNumero,
-                  fontSize: 34,
-                  letterSpacing: '0.02em',
-                  color: corPercentual,
-                  fontVariantNumeric: 'tabular-nums',
-                  textShadow: brilhaConfianca ? `0 0 18px ${corGrau}73` : undefined,
-                }}
-              >
-                {/* Número puro: "Probabilidade: 92%" ❌ · "Confiança: 92" ✅
-                    (docs/04-design-system.md, artboard da identidade 04). */}
-                {props.confianca === null ? '—' : Math.round(props.confianca)}
-              </span>
+            {oddDestaque && (
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
+                <span
+                  style={{
+                    fontFamily: semantico.fonteRotulo,
+                    fontSize: componente.odd.rotulo,
+                    letterSpacing: 1.2,
+                    color: semantico.texto55,
+                    textTransform: 'uppercase',
+                  }}
+                >
+                  {oddDestaque.rotulo}
+                </span>
+                <span
+                  style={{
+                    fontFamily: semantico.fonteNumero,
+                    fontSize: oddDestaque.tamanho,
+                    lineHeight: 1,
+                    color: semantico.texto100,
+                    fontVariantNumeric: 'tabular-nums',
+                  }}
+                >
+                  {oddDestaque.valor}
+                </span>
+              </div>
             )}
           </div>
         </div>
@@ -594,7 +676,9 @@ export function CardEntrada(props: CardEntradaProps) {
             flexWrap: 'wrap',
             gap: 12,
             padding: '8px 14px',
-            background: contexto.faixaFundo,
+            // O outro lado do véu do metálico. A régua interna continua neutra:
+            // a moldura é que é metálica, não toda linha do card.
+            background: nivel.veu,
             borderTop: `1px solid ${contexto.borda}`,
             fontFamily: semantico.fonteRotulo,
             letterSpacing: 1.2,
@@ -630,13 +714,54 @@ export function CardEntrada(props: CardEntradaProps) {
                 >
                   {/* Sem linha, só o atributo: "REB 0+" seria número inventado,
                       e esconder a aba apagaria o apito da tela inteira. */}
-                  {aba.linha === null
-                    ? ATRIBUTO_CURTO[aba.atributo]
-                    : `${ATRIBUTO_CURTO[aba.atributo]} ${aba.linha}+`}
+                  {aba.linha === null ? (
+                    ATRIBUTO_CURTO[aba.atributo]
+                  ) : (
+                    <span
+                      style={{ display: 'inline-flex', alignItems: 'baseline', gap: 4 }}
+                    >
+                      <span style={{ fontSize: componente.meta.abaRotulo }}>
+                        {ATRIBUTO_CURTO[aba.atributo]}
+                      </span>
+                      <span style={{ fontSize: componente.meta.abaValor, fontWeight: 700 }}>
+                        {aba.linha}+
+                      </span>
+                    </span>
+                  )}
                 </Link>
               ))}
             </div>
+          ) : meta.valor ? (
+            /* A META partida: o rótulo pequeno, o número grande. É o número que
+               diz o que o jogador precisa fazer. */
+            <span style={{ display: 'inline-flex', alignItems: 'baseline', gap: 6 }}>
+              <span
+                style={{
+                  fontSize: componente.meta.rotulo,
+                  fontWeight: 600,
+                  letterSpacing: 1.2,
+                  color: semantico.texto55,
+                }}
+              >
+                {meta.rotulo}
+              </span>
+              <span
+                style={{
+                  fontFamily: semantico.fonteNumero,
+                  fontSize: componente.meta.valor,
+                  lineHeight: 1,
+                  color: componente.cardTexto,
+                  fontVariantNumeric: 'tabular-nums',
+                }}
+              >
+                {meta.valor}
+              </span>
+            </span>
           ) : (
+            /* Sem meta para destacar — o rodapé quente ("ALVO 1º Q · 11 PTS") e
+               o card sem linha. Continua a frase única de sempre, com dígito de
+               largura fixa: o alvo muda a cada refresh de 30 s e o rodapé não
+               pode pular. */
             <span
               style={{
                 fontSize: 13,
@@ -645,7 +770,7 @@ export function CardEntrada(props: CardEntradaProps) {
                 fontVariantNumeric: 'tabular-nums',
               }}
             >
-              {rotuloLinha}
+              {meta.rotulo}
             </span>
           )}
           {veredito ? (

@@ -184,11 +184,6 @@ function CartaoAoVivo({
       atributo={item.atributo}
       nivelJogador={item.nivelJogador}
       nivelApito={item.nivelApito}
-      // Confiança é conceito PRÉ-LIVE (docs/02-motor-regras.md): o item
-      // do Fire Live traz `confianca: null` e a pílula sai neutra, sem
-      // brilho — não é dado faltando, é a regra do produto.
-      confianca={item.confianca}
-      grauConfianca={null}
       turbo={item.turbo}
       modoFire={item.modoFire}
       opdOrigemNivel={item.opdOrigemNivel}

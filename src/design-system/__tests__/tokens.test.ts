@@ -185,7 +185,16 @@ describe('escrita da interface', () => {
   })
 
   it('a palavra usada é "confiança"', () => {
-    expect(/confian[çc]a/i.test(fontes)).toBe(true)
+    // A palavra saiu do design system na identidade 06 junto com o número: o
+    // card não desenha mais a nota, e quem a desenha é a tela de ANÁLISE do
+    // apito. O guarda continua existindo — só mudou de arquivo, porque é lá
+    // que a interface nomeia o conceito hoje.
+    // Lá a palavra aparece nas duas formas, e as duas estão certas: a nota é
+    // "confiança", e a tela DIZ ao assinante que ela "não é uma probabilidade".
+    // Por isso aqui só se cobra a presença da palavra certa — a proibição da
+    // errada é do teste acima, que varre o design system.
+    const analise = readFileSync('src/app/(app)/apito/[jogadorId]/page.tsx', 'utf8')
+    expect(/confian[çc]a/i.test(semComentarios(analise))).toBe(true)
   })
 
   it('o aviso permanece nos comentários do código', () => {
@@ -281,9 +290,13 @@ describe('identidade 03 — broadcast', () => {
     expect(razaoDeContraste(primitivo.branco, semantico.barrinhaFalhou)).toBeGreaterThanOrEqual(4.5)
   })
 
-  it('o fundo de tela é gradiente e a borda lateral do card tem 3px', () => {
+  it('o fundo de tela é gradiente e o card tem borda lateral', () => {
+    // A LARGURA saiu daqui na identidade 06 (3 px → 6 px, e de "cor do grau de
+    // confiança" para "cor do metálico do nível"): ela é afirmada no describe
+    // daquela identidade, junto do motivo. Aqui fica só o que a 03 decidiu —
+    // que a borda lateral existe e que o fundo da tela é gradiente.
     expect(componente.fundoTela).toContain('linear-gradient')
-    expect(componente.cardBordaLateral).toBe('3px')
+    expect(componente.cardBordaLateral).toMatch(/^\d+px$/)
   })
 })
 
@@ -505,5 +518,98 @@ describe('identidade 05 — manual da marca', () => {
   it('os pontos de quebra da moldura são tokens, não números soltos', () => {
     expect(semantico.larguraTopo).toBe(1024)
     expect(semantico.larguraLateral).toBe(1280)
+  })
+})
+
+// ===========================================================================
+// IDENTIDADE 06 — CORES VIVAS
+// ===========================================================================
+
+describe('identidade 06 — cores vivas', () => {
+  /**
+   * As CINCO superfícies onde uma cor de card pode pousar. Medir só contra
+   * `superficie` (o que os testes de contraste acima fazem) não basta a partir
+   * daqui: o metálico virou tipo grande dentro de um card cujo gradiente vai de
+   * `campoFrio` a `cartaoFrio`, e no Fire Live de `campoQuente` a `cartaoQuente`.
+   * O pior dos cinco é o número que precisa passar.
+   */
+  const SUPERFICIES = [
+    semantico.superficie,
+    semantico.superficieFria2,
+    semantico.superficieFria1,
+    semantico.superficieQuente1,
+    semantico.superficieQuente2,
+  ]
+  const pior = (cor: string) => Math.min(...SUPERFICIES.map((s) => razaoDeContraste(cor, s)))
+
+  /** Saturação HSL — "mais vivo" medido, não opinado. */
+  const sat = (hex: string) => {
+    const n = parseInt(hex.slice(1), 16)
+    const [r, g, b] = [(n >> 16) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255]
+    const mx = Math.max(r, g, b)
+    const mn = Math.min(r, g, b)
+    const l = (mx + mn) / 2
+    // Arredondado: dois cromáticos de saturação 100% divergem na 16ª casa
+    // decimal e reprovariam a comparação por um erro de ponto flutuante.
+    return mx === mn ? 0 : Number((((mx - mn) / (1 - Math.abs(2 * l - 1))) * 100).toFixed(2))
+  }
+
+  it('os hexes novos estão no primitivo, literalmente', () => {
+    expect(primitivo.ouro).toBe('#F2AE1C')
+    expect(primitivo.prata).toBe('#A9B6C9')
+    expect(primitivo.bronze).toBe('#F08040')
+    expect(primitivo.ambar400).toBe('#FFDD00')
+    expect(primitivo.laranja400).toBe('#FFA31F')
+    expect(primitivo.verde400).toBe('#2BE884')
+    expect(semantico.nivelRandola).toBe(primitivo.branco)
+  })
+
+  it('grafite não existe mais — o Randola virou branco', () => {
+    expect('grafite' in primitivo).toBe(false)
+  })
+
+  it('as cinco cores que sobem ganham saturação E contraste', () => {
+    // Prata e Randola são as DUAS exceções declaradas na spec §4: a prata desce
+    // nos dois de propósito, para abrir distância do branco do Randola; e o
+    // branco não tem saturação para comparar.
+    const antes = {
+      ouro: '#E0B24A',
+      bronze: '#C8823C',
+      ambar400: '#FFC93D',
+      laranja400: '#FF9838',
+      verde400: '#3DD37E',
+    } as const
+    for (const [chave, velho] of Object.entries(antes)) {
+      const novo = primitivo[chave as keyof typeof antes]
+      expect(sat(novo), `${chave} saturação`).toBeGreaterThanOrEqual(sat(velho))
+      expect(pior(novo), `${chave} contraste`).toBeGreaterThanOrEqual(pior(velho))
+    }
+  })
+
+  it('o rótulo do nível passa em AA para texto nas CINCO superfícies', () => {
+    for (const [nivel, { cor }] of Object.entries(NIVEL_JOGADOR))
+      expect(pior(cor), `${nivel}: ${pior(cor).toFixed(2)}`).toBeGreaterThanOrEqual(AA.texto)
+  })
+
+  it('a moldura do Randola é o branco a 55%, não o branco cheio', () => {
+    // Branco puro é a maior luminância do sistema: uma moldura branca faria o
+    // card do jogador MENOS importante gritar mais que o do MVP. O TEXTO do
+    // nível continua branco cheio — é o que o feedback pediu.
+    expect(NIVEL_JOGADOR.RANDOLA.cor).toBe('#FFFFFF')
+    expect(NIVEL_JOGADOR.RANDOLA.borda).toBe(primitivo.brancoVeu55)
+    expect(NIVEL_JOGADOR.MVP.borda).toBe(semantico.nivelMvp)
+  })
+
+  it('cada véu da moldura é o decimal exato do seu metálico', () => {
+    const rgb = (h: string) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16)).join(',')
+    for (const [nivel, { cor, veu }] of Object.entries(NIVEL_JOGADOR)) {
+      const base = nivel === 'RANDOLA' ? '#FFFFFF' : cor
+      expect(veu, nivel).toBe(`rgba(${rgb(base)},.12)`)
+    }
+  })
+
+  it('a moldura ficou mais larga e o anel do avatar mais grosso', () => {
+    expect(componente.cardBordaLateral).toBe('6px')
+    expect(componente.avatarAnelEspessura).toBe('3px')
   })
 })
