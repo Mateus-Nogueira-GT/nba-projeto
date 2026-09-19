@@ -278,7 +278,9 @@ describe('CardEntrada — identidade 03 (3 zonas)', () => {
       detalheHref: '/apito/1',
       acaoCanto: createElement('button', null, '★'),
     })
-    expect(html).toContain('<span style="position:relative;z-index:1"><button')
+    expect(html).toMatch(
+      /<span style="position:relative;z-index:1;display:inline-flex"><button[^>]*>★<\/button><\/span>/,
+    )
     const coluna =
       /<div style="display:flex;flex-direction:column;align-items:flex-end;[^"]*"/.exec(html)?.[0] ??
       ''

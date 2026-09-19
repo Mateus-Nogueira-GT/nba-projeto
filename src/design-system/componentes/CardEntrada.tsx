@@ -187,9 +187,10 @@ export type CardEntradaProps = {
    * conforme o botão. Aqui ele entra na moldura do card, no lugar onde o
    * StatsHub põe o "Save pick".
    *
-   * Sobe uma camada (`zIndex: 1`) como o nome e as abas: a cobertura do
-   * `detalheHref` passa por cima de tudo, e sem isso a estrela viraria só mais
-   * um lugar que abre a análise.
+   * Sobe uma camada (`zIndex: 1`) SOZINHA, num `<span>` só dela: a cobertura
+   * do `detalheHref` passa por cima de tudo, e sem isso a estrela viraria só
+   * mais um lugar que abre a análise. Subir a COLUNA inteira foi a regressão
+   * da Identidade 05 — ela cobria o número do canto e matava o clique.
    */
   acaoCanto?: ReactNode
 }
@@ -517,10 +518,14 @@ export function CardEntrada(props: CardEntradaProps) {
           >
             {(rotuloEstado || props.acaoCanto) && (
               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                {/* O invólucro da ação — e só ele — sobe acima da cobertura do
-                    card: a estrela ACOMPANHA o jogador, não abre a análise. */}
                 {props.acaoCanto && (
-                  <span style={{ position: 'relative', zIndex: 1 }}>{props.acaoCanto}</span>
+                  // SÓ a ação sobe acima da cobertura do card: a estrela
+                  // ACOMPANHA o jogador, não abre a análise. A odd, logo
+                  // abaixo, continua SOB a cobertura — e clicar nela abre o
+                  // detalhe, que é o clique mais natural do card.
+                  <span style={{ position: 'relative', zIndex: 1, display: 'inline-flex' }}>
+                    {props.acaoCanto}
+                  </span>
                 )}
                 {rotuloEstado && (
                   <span

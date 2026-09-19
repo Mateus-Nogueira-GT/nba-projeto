@@ -37,9 +37,11 @@ export function ClassificacaoCompacta({
           {conferencias.map((grupo, i) => (
             <button
               key={grupo.conferencia}
+              id={`conferencia-${i}`}
               type="button"
               role="tab"
               aria-selected={i === ativa}
+              aria-controls="painel-conferencia"
               className={`${estilos.aba} ${i === ativa ? estilos.abaAtiva : ''}`}
               onClick={() => setAtiva(i)}
             >
@@ -50,44 +52,50 @@ export function ClassificacaoCompacta({
       )}
 
       {atual ? (
-        <table className={estilos.tabela} role="tabpanel">
-          {/* Legenda clipada, como em toda tabela do app: nome acessível sem
+        // O painel é um <div> EM VOLTA da tabela: `role="tabpanel"` na própria
+        // <table> apagava o papel de tabela para o leitor de tela.
+        <div
+          id="painel-conferencia"
+          role="tabpanel"
+          aria-labelledby={conferencias.length > 1 ? `conferencia-${ativa}` : undefined}
+        >
+          <table className={estilos.tabela}>
+            {/* Legenda clipada, como em toda tabela do app: nome acessível sem
               repetir na tela o que o título do bloco já diz. */}
-          <caption className={estilos.soLeitor}>
-            Classificação da {atual.conferencia}, da primeira posição para a última
-          </caption>
-          <thead>
-            <tr>
-              <th scope="col">Pos</th>
-              <th scope="col">Time</th>
-              <th scope="col">V–D</th>
-              <th scope="col">%</th>
-            </tr>
-          </thead>
-          <tbody>
-            {atual.linhas.map((linha) => (
-              <tr key={linha.timeId}>
-                <td>{linha.posicao ?? '—'}</td>
-                <td>
-                  <IdentidadeTime sigla={linha.sigla} tamanhoLogo={18} />
-                </td>
-                <td>
-                  {linha.vitorias}–{linha.derrotas}
-                </td>
-                <td>
-                  {linha.aproveitamento === null
-                    ? '—'
-                    : Math.round(linha.aproveitamento * 100)}
-                </td>
+            <caption className={estilos.soLeitor}>
+              Classificação da {atual.conferencia}, da primeira posição para a última
+            </caption>
+            <thead>
+              <tr>
+                <th scope="col">Pos</th>
+                <th scope="col">Time</th>
+                <th scope="col">V–D</th>
+                <th scope="col">%</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {atual.linhas.map((linha) => (
+                <tr key={linha.timeId}>
+                  <td>{linha.posicao ?? '—'}</td>
+                  <td>
+                    <IdentidadeTime sigla={linha.sigla} tamanhoLogo={18} />
+                  </td>
+                  <td>
+                    {linha.vitorias}–{linha.derrotas}
+                  </td>
+                  <td>
+                    {linha.aproveitamento === null ? '—' : Math.round(linha.aproveitamento * 100)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       ) : (
         <p className={estilos.apoio}>Sem classificação registrada para {temporada}.</p>
       )}
 
-      <Link className={estilos.link} href="/estatisticas">
+      <Link className={estilos.link} href="/estatisticas#classificacao">
         Ver completa
       </Link>
     </Bloco>

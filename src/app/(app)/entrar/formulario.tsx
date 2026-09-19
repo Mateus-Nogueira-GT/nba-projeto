@@ -1,7 +1,6 @@
 'use client'
 
 import { useActionState } from 'react'
-import { componente } from '@/design-system/tokens/componente'
 import { semantico } from '@/design-system/tokens/semantico'
 import { entrar } from './acoes'
 
@@ -46,6 +45,11 @@ export function FormularioLogin({ destino }: { destino: string }) {
     fontSize: 15,
   } as const
 
+  // A geometria do campo, sem as cores: o botão primário veste
+  // `.botao-primario` (globals.css) e estilo embutido venceria a classe — o
+  // hover do manual nunca apareceria.
+  const { border: _borda, background: _fundo, color: _cor, ...geometriaDoCampo } = campo
+
   return (
     <form action={acao} style={{ display: 'grid', gap: 12 }}>
       <input type="hidden" name="destino" value={destino} />
@@ -69,16 +73,14 @@ export function FormularioLogin({ destino }: { destino: string }) {
       <button
         type="submit"
         disabled={enviando}
+        className="botao-primario"
         style={{
-          ...campo,
-          background: componente.ctaFundo,
-          color: semantico.textoSobreAcento,
+          ...geometriaDoCampo,
           fontFamily: semantico.fonteTitulo,
           letterSpacing: 0.5,
           textTransform: 'uppercase',
           fontWeight: 700,
           cursor: 'pointer',
-          border: 'none',
         }}
       >
         {enviando ? 'Entrando…' : 'Entrar'}

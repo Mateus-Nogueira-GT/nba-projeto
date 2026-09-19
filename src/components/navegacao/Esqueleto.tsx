@@ -17,9 +17,11 @@ import { Moldura, type LarguraDaMoldura } from './Moldura'
  * verdade (identidade 05), então o cromo, a coluna e o destino aceso continuam
  * desenhados: o que troca é só o conteúdo, e nada pisca entre uma tela e outra.
  *
- * Sem `assistente` e sem `lateral` de propósito: o esqueleto não tem o que
- * perguntar nem o que mostrar na coluna da direita, e desenhar uma lateral
- * falsa que some quando o conteúdo chega é pior que não tê-la.
+ * Sem `assistente`: o esqueleto não tem o que perguntar. COM lateral nas telas
+ * de aba (correções UX 19/09): a coluna de 320 é reservada por dois blocos
+ * cinzas nas alturas dos blocos reais, senão a coluna do conteúdo encolhe de
+ * 1120 para 1040 no instante em que a lateral chega — a tela pula a cada
+ * navegação a partir de 1280.
  */
 function Barra({ largura, altura = 14 }: { largura: string | number; altura?: number }) {
   return (
@@ -35,6 +37,26 @@ function Barra({ largura, altura = 14 }: { largura: string | number; altura?: nu
   )
 }
 
+/** Dois blocos nas alturas aproximadas de "Última noite" e "Classificação". */
+function LateralDeEsqueleto() {
+  return (
+    <div style={{ display: 'grid', gap: 16, alignContent: 'start' }}>
+      {[132, 300].map((altura) => (
+        <div
+          key={altura}
+          className="esqueleto"
+          style={{
+            height: altura,
+            borderRadius: componente.cardRaio,
+            background: semantico.superficie,
+            border: `1px solid ${semantico.divisor}`,
+          }}
+        />
+      ))}
+    </div>
+  )
+}
+
 export function Esqueleto({
   aba,
   largura = 'leitura',
@@ -45,7 +67,11 @@ export function Esqueleto({
   linhas?: number
 }) {
   return (
-    <Moldura aba={aba} largura={largura}>
+    <Moldura
+      aba={aba}
+      largura={largura}
+      lateral={aba !== null ? <LateralDeEsqueleto /> : undefined}
+    >
       <div aria-busy="true" aria-label="Carregando" style={{ display: 'grid', gap: 18 }}>
         <div style={{ display: 'grid', gap: 8 }}>
           <Barra largura={140} altura={10} />

@@ -482,6 +482,55 @@ describe('identidade 05 — manual da marca', () => {
     expect(infratores).toEqual([])
   })
 
+  it('texto branco só senta em fundo que o justifica: acento, selo vivo ou CTA (correções UX 19/09)', () => {
+    // A Identidade 05 trocou `textoSobreCor` por `textoSobreAcento` em lote
+    // assumindo fundo azul. Cinco botões tinham fundo BRANCO (`textoPrimario`)
+    // ou verde — texto invisível. Este é o par do teste acima: lá, o azul não
+    // pode ser tinta; aqui, a tinta branca não pode sentar num fundo claro.
+    const TINTA_BRANCA = /color:\s*(semantico\.textoSobreAcento|componente\.ctaTexto)\b/g
+    const FUNDO_QUE_JUSTIFICA =
+      /background:[^,\n]*(semantico\.acento(?:Claro)?|semantico\.vivoSelo|componente\.ctaFundo|componente\.pilulaNav\.fundoAtiva|componente\.contextoQuente|componente\.statusCiclo)/
+
+    /** O objeto de estilo em volta de um índice: do `{` aberto mais próximo ao `}` que o fecha. */
+    const blocoEmVolta = (fonte: string, indice: number): string => {
+      let profundidade = 0
+      let inicio = indice
+      for (; inicio >= 0; inicio--) {
+        const c = fonte[inicio]
+        if (c === '}') profundidade++
+        else if (c === '{') {
+          if (profundidade === 0) break
+          profundidade--
+        }
+      }
+      profundidade = 0
+      let fim = indice
+      for (; fim < fonte.length; fim++) {
+        const c = fonte[fim]
+        if (c === '{') profundidade++
+        else if (c === '}') {
+          if (profundidade === 0) break
+          profundidade--
+        }
+      }
+      return fonte.slice(Math.max(0, inicio), fim + 1)
+    }
+
+    const infratores: string[] = []
+    for (const { arquivo, conteudo } of arquivosDeUi([
+      'src/design-system/componentes',
+      'src/components',
+      'src/app',
+    ])) {
+      const fonte = semComentarios(conteudo)
+      for (const achado of fonte.matchAll(TINTA_BRANCA)) {
+        const bloco = blocoEmVolta(fonte, achado.index)
+        if (!FUNDO_QUE_JUSTIFICA.test(bloco)) infratores.push(`${arquivo}: ${achado[0]}`)
+      }
+    }
+    expect(infratores).toEqual([])
+  })
+
   it('o vermelho é cheio no selo e claro na tinta', () => {
     expect(semantico.vivoSelo).toBe(primitivo.vermelhoNip)
     expect(semantico.aoVivo).toBe(primitivo.vermelhoNipClaro)

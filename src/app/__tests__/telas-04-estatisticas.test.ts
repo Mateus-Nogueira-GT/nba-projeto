@@ -187,6 +187,17 @@ async function renderizarJogador(id: string, busca: Record<string, string> = {})
 }
 
 describe('Stats · períodos e contexto', () => {
+  it('as pílulas de período e atributo não são sublinhadas (correções UX 19/09)', async () => {
+    // Pré-existente (links sem `textDecoration`), mas dentro da pílula azul
+    // cheia da Identidade 05 ficou pior.
+    const html = await renderizarJogador(alvo)
+    const periodo = /<nav aria-label="Período das estatísticas"[\s\S]*?<\/nav>/.exec(html)?.[0] ?? ''
+    expect(periodo.match(/text-decoration:none/g)?.length).toBe(3)
+    const atributo =
+      /<nav aria-label="Atributo das estatísticas"[\s\S]*?<\/nav>/.exec(html)?.[0] ?? ''
+    expect(atributo.match(/text-decoration:none/g)?.length).toBe(3)
+  }, 60_000)
+
   it('abre últimos 10 e mantém atributo/período no caminho para a partida', async () => {
     const inicial = await renderizarJogador(alvo)
     expect(inicial).toMatch(/<a[^>]*aria-current="page"[^>]*>Últimos 10<\/a>/)

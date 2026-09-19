@@ -151,4 +151,11 @@ describe('o grátis na identidade 05', () => {
     expect(html).not.toContain('Pergunte sobre a lista de hoje')
     expect(html).not.toContain('Abrir o assistente')
   }, 60_000)
+
+  it('a faixa da lateral concorda: "começam", porque são três recursos (correções UX 19/09)', async () => {
+    const html = await renderizarLista()
+    const aside = /<aside[\s\S]*?<\/aside>/.exec(html)?.[0] ?? ''
+    expect(aside).toContain('LISTA, FIRE LIVE E ASSISTENTE COMEÇAM NO MVP')
+    expect(aside).not.toContain('ASSISTENTE COMEÇA NO')
+  }, 60_000)
 })

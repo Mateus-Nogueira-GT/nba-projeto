@@ -73,7 +73,10 @@ export function Moldura({
   lateral,
   children,
 }: {
-  /** `null` nas telas que não são abas (detalhe, teoria): sem barra, sem lateral. */
+  /**
+   * `null` nas telas que não são abas (detalhe, teoria): sem barra inferior,
+   * sem lateral, sem pílula acesa no topo. A barra do TOPO continua.
+   */
   aba: Aba | null
   largura?: LarguraDaMoldura
   /**
@@ -100,7 +103,10 @@ export function Moldura({
   const classes = [
     estilos.raiz,
     aba === null ? estilos.semAba : '',
-    lateral ? estilos.comLateral : '',
+    // A classe GLOBAL existe para o CSS de tela (globals.css) saber que há
+    // lateral: o módulo é privado, e as conferências de Estatísticas precisam
+    // empilhar quando sobram só 1040 px.
+    lateral ? `${estilos.comLateral} moldura-com-lateral` : '',
   ]
     .filter(Boolean)
     .join(' ')
@@ -115,11 +121,13 @@ export function Moldura({
         fontFamily: semantico.fonteCorpo,
       }}
     >
-      {aba !== null && (
-        <div className={estilos.topo}>
-          <BarraTopo atual={aba} conta={conta} />
-        </div>
-      )}
+      {/* A barra do topo existe em TODA tela a partir de 1024 (correções UX
+          19/09): sem ela, o detalhe do apito ficava sem marca nem navegação —
+          sobrava o chevron de voltar. A barra INFERIOR segue só nas abas, como
+          a identidade 04 decidiu para o celular. */}
+      <div className={estilos.topo}>
+        <BarraTopo atual={aba} conta={conta} />
+      </div>
 
       <div className={estilos.corpo}>
         <main className={estilos.conteudo}>

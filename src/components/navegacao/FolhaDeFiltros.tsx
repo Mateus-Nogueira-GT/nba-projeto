@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { useRef, type KeyboardEvent, type MouseEvent, type ReactNode } from 'react'
+import { useEffect, useRef, type KeyboardEvent, type MouseEvent, type ReactNode } from 'react'
 
 import { semantico } from '@/design-system/tokens/semantico'
 
@@ -21,6 +21,37 @@ export type GrupoDeFiltro = {
   ativo?: string
   /** Os `Chip` daquele grupo, montados pela tela com os href da URL. */
   chips: ReactNode
+}
+
+/**
+ * O recorte ativo, com o × para limpar. Sai nos DOIS invólucros — na folha do
+ * celular ao lado do FILTRAR, e na fileira do desktop antes dos menus — porque
+ * é o único jeito de tirar três filtros de uma vez sem abrir três menus.
+ */
+function ChipDeRecorte({ ativo }: { ativo: RecorteAtivo }) {
+  return (
+    <Link
+      href={ativo.limparHref}
+      aria-label={`Limpar filtro ${ativo.rotulo}`}
+      className="chip-filtro chip-filtro-ativo"
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 6,
+        padding: '5px 10px',
+        borderRadius: 999,
+        fontFamily: semantico.fonteRotulo,
+        fontSize: 12,
+        letterSpacing: '0.06em',
+        textTransform: 'uppercase',
+        fontWeight: 700,
+        textDecoration: 'none',
+        whiteSpace: 'nowrap',
+      }}
+    >
+      {ativo.rotulo} <span aria-hidden>×</span>
+    </Link>
+  )
 }
 
 /**
@@ -84,10 +115,27 @@ export function FolhaDeFiltros({
     }
   }
 
+  // Clicar em qualquer lugar fora da fileira fecha o menu aberto. `<details>`
+  // nativo não faz isso sozinho, e um menu que fica aberto sobre os cards
+  // depois de a pessoa clicar num deles é o que a auditoria de 19/09 viu.
+  // `pointerdown`, não `click`: fecha antes de o clique de destino disparar,
+  // e cobre mouse, caneta e toque de uma vez.
+  useEffect(() => {
+    const aoApontarFora = (e: PointerEvent) => {
+      if (!fileira.current?.contains(e.target as Node)) fecharMenus()
+    }
+    document.addEventListener('pointerdown', aoApontarFora)
+    return () => document.removeEventListener('pointerdown', aoApontarFora)
+    // `fecharMenus` só lê o ref, que é estável — não precisa entrar nas deps.
+  }, [])
+
   return (
     <div className={estilos.raiz} onKeyDown={aoTeclar}>
       {/* ≥ larguraTopo: um chip com menu por grupo. */}
       <div ref={fileira} className={estilos.chips} onClick={aoEscolher}>
+        {ativos.map((ativo) => (
+          <ChipDeRecorte key={ativo.rotulo} ativo={ativo} />
+        ))}
         {grupos.map((grupo) => (
           <details
             key={grupo.titulo}
@@ -97,7 +145,7 @@ export function FolhaDeFiltros({
             }}
           >
             <summary aria-label={grupo.ativo ? `${grupo.titulo}: ${grupo.ativo}` : grupo.titulo}>
-              {grupo.ativo ?? grupo.titulo}
+              {grupo.ativo ? `${grupo.titulo}: ${grupo.ativo}` : grupo.titulo}
               <svg
                 aria-hidden
                 className={estilos.seta}
@@ -121,33 +169,7 @@ export function FolhaDeFiltros({
       {/* < larguraTopo: o recorte ativo, o botão FILTRAR e a folha inferior. */}
       <div className={estilos.folha}>
         {ativos.map((ativo) => (
-          <Link
-            key={ativo.rotulo}
-            href={ativo.limparHref}
-            aria-label={`Limpar filtro ${ativo.rotulo}`}
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 6,
-              padding: '5px 10px',
-              borderRadius: 999,
-              // O recorte ativo é PREENCHIDO no acento, com texto branco: o azul
-              // do manual nunca é contorno nem tinta (identidade 05). A borda
-              // transparente segura a altura da pílula ao lado das inativas.
-              border: '1.5px solid transparent',
-              background: semantico.acento,
-              color: semantico.textoSobreAcento,
-              fontFamily: semantico.fonteRotulo,
-              fontSize: 12,
-              letterSpacing: '0.06em',
-              textTransform: 'uppercase',
-              fontWeight: 700,
-              textDecoration: 'none',
-              whiteSpace: 'nowrap',
-            }}
-          >
-            {ativo.rotulo} <span aria-hidden>×</span>
-          </Link>
+          <ChipDeRecorte key={ativo.rotulo} ativo={ativo} />
         ))}
 
         <details ref={folha}>

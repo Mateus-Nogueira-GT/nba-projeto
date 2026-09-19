@@ -27,14 +27,22 @@ export function ConviteDoPlano({
   recurso,
   voltar,
   variante = 'compacto',
+  titulo,
 }: {
   minimo: NivelPago
   recurso: string
   voltar: string
   variante?: 'compacto' | 'faixa'
+  /**
+   * A frase inteira da faixa, quando a montada não concorda ("Lista, Fire Live
+   * e assistente COMEÇA no MVP"). Ausente, a faixa monta
+   * `${recurso} começa no ${nível}`. O nome acessível segue o mesmo texto.
+   */
+  titulo?: string
 }) {
   const href = `/assinar?nivel=${minimo}&voltar=${encodeURIComponent(voltar)}`
-  const rotulo = `${recurso} começa no plano ${ROTULO_DO_NIVEL[minimo]}`
+  const frase = titulo ?? `${recurso} começa no ${ROTULO_DO_NIVEL[minimo]}`
+  const rotulo = titulo ?? `${recurso} começa no plano ${ROTULO_DO_NIVEL[minimo]}`
 
   if (variante === 'faixa') {
     return (
@@ -58,7 +66,7 @@ export function ConviteDoPlano({
             lineHeight: 1.1,
           }}
         >
-          {`${recurso} começa no ${ROTULO_DO_NIVEL[minimo]}`.toUpperCase()}
+          {frase.toUpperCase()}
         </p>
         <p style={{ margin: '8px 0 14px', fontSize: 14, opacity: 0.9 }}>
           Os apitos do dia, o Fire Live e o assistente, com a metodologia NIP.
@@ -101,6 +109,7 @@ export function ConviteDoPlano({
       </p>
       <Link
         href={href}
+        className="botao-primario"
         style={{
           display: 'inline-flex',
           alignItems: 'center',
@@ -108,8 +117,6 @@ export function ConviteDoPlano({
           minHeight: componente.ctaAltura,
           padding: '0 16px',
           borderRadius: componente.raioControle,
-          background: componente.ctaFundo,
-          color: componente.ctaTexto,
           fontWeight: 700,
           textDecoration: 'none',
         }}

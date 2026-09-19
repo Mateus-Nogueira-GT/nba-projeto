@@ -32,3 +32,12 @@
     }
   }
 }
+
+/* A partir de 1024 a barra inferior some (Moldura.module.css) e os 96 px
+   reservados viravam um botão flutuando no meio do nada. O 1024 repete
+   `semantico.larguraTopo`. */
+@media (min-width: 1024px) {
+  .botao {
+    bottom: 24px;
+  }
+}

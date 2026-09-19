@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -57,5 +58,10 @@ describe('o botão do assistente na Moldura', () => {
     vi.stubEnv('CHAT_COTA_DIARIA_MVP', '')
     const html = renderToStaticMarkup(Moldura({ aba: 'lista', assistente: true, children: null }))
     expect(html).not.toContain('Abrir o assistente')
+  })
+
+  it('a partir de 1024 o botão desce para 24 px: não há barra inferior a reservar (correções UX 19/09)', () => {
+    const css = readFileSync('src/components/chat/BotaoChat.module.css', 'utf8')
+    expect(css).toMatch(/@media \(min-width: 1024px\)\s*\{\s*\.botao\s*\{[^}]*bottom:\s*24px/)
   })
 })

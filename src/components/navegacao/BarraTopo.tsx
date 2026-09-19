@@ -26,7 +26,18 @@ export type ContaNaBarra = { email: string; nome?: string | null; fotoUrl?: stri
  * duas barras saem no HTML e a media query esconde uma. Assim a moldura segue
  * sendo componente de servidor, sem `usePathname` nem medição de janela.
  */
-export function BarraTopo({ atual, conta }: { atual: Aba; conta?: ContaNaBarra }) {
+export function BarraTopo({
+  atual,
+  conta,
+}: {
+  /**
+   * A aba acesa. `null` nas telas que não são abas (detalhe do apito, time,
+   * teoria): a barra EXISTE — o desktop tem navegação sempre —, nenhuma
+   * pílula acende.
+   */
+  atual: Aba | null
+  conta?: ContaNaBarra
+}) {
   return (
     <nav
       aria-label="Seções do app (topo)"
@@ -57,6 +68,7 @@ export function BarraTopo({ atual, conta }: { atual: Aba; conta?: ContaNaBarra }
             <Link
               key={aba.id}
               href={aba.href}
+              className={`pilula-nav${ativo ? ' pilula-nav-ativa' : ''}`}
               aria-current={ativo ? 'page' : undefined}
               style={{
                 display: 'inline-flex',
@@ -71,8 +83,8 @@ export function BarraTopo({ atual, conta }: { atual: Aba; conta?: ContaNaBarra }
                 letterSpacing: '0.06em',
                 textTransform: 'uppercase',
                 fontWeight: 600,
-                background: ativo ? componente.pilulaNav.fundoAtiva : 'transparent',
-                color: ativo ? componente.pilulaNav.textoAtiva : componente.pilulaNav.textoInativa,
+                // A cor mora na classe `.pilula-nav` (globals.css): é o que dá
+                // hover e foco à pílula. Aqui fica só a geometria.
               }}
             >
               <IconeAba aba={aba.id} ativo={ativo} />

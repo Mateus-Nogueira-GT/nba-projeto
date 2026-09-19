@@ -148,10 +148,13 @@ function CartaoAoVivo({
   item,
   grupo,
   quartoFireLive,
+  acaoCanto,
 }: {
   item: ItemFireLiveNaTela
   grupo: GrupoFireLive
   quartoFireLive: number
+  /** A estrela de acompanhar, no canto do card — a mesma peça da Lista. */
+  acaoCanto?: React.ReactNode
 }) {
   // O estado do card sai do JOGO, nunca do `encerrado` gravado no snapshot: o
   // quarto vira entre um ciclo e outro, e o badge tem que virar com ele. Sem
@@ -170,6 +173,7 @@ function CartaoAoVivo({
 
   return (
     <CardEntrada
+      acaoCanto={acaoCanto}
       nome={item.nome}
       jogadorHref={rotaDoJogador(item.jogadorId)}
       detalheHref={`/apito/${item.jogadorId}?atributo=${item.atributo}`}
@@ -495,10 +499,13 @@ export default async function PaginaFireLive({
                     item={item}
                     grupo={grupoSelecionado}
                     quartoFireLive={quartoFireLive}
-                  />
-                  <BotaoAcompanharJogador
-                    jogadorId={item.jogadorId}
-                    inicial={experiencia.jogadoresAcompanhados.includes(item.jogadorId)}
+                    acaoCanto={
+                      <BotaoAcompanharJogador
+                        variante="estrela"
+                        jogadorId={item.jogadorId}
+                        inicial={experiencia.jogadoresAcompanhados.includes(item.jogadorId)}
+                      />
+                    }
                   />
                 </div>
               ))}
