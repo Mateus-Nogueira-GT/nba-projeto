@@ -565,4 +565,27 @@ describe('Lista Secreta · 05 — a moldura do StatsHub', () => {
     expect(html).toContain('role="group"')
     expect(html).toContain('FILTRAR')
   }, 60_000)
+
+  it('a maior parte do que se clica responde ao mouse (auditoria de UX para web)', async () => {
+    // A auditoria de 19/09 mediu 520 de 794 elementos interativos sem classe —
+    // logo sem :hover e sem o anel de foco do app. `<summary>` de <details>
+    // nativo é a exceção aceita: ele É o controle do disclosure e o browser o
+    // marca sozinho.
+    const html = await renderizar()
+    const corpo = html.replace(/<nav aria-label="Seções do app[\s\S]*?<\/nav>/g, '')
+    const tags = corpo.match(/<(?:a|button|summary)\b[^>]*>/g) ?? []
+    // A COBERTURA do card (`position:absolute;inset:0`) fica de fora: ela não
+    // tem classe porque quem responde é o invólucro `.card-alvo` em volta dela
+    // — dar estado à cobertura desenharia o realce por cima do card, não nele.
+    const sem = tags.filter(
+      (t) =>
+        !t.includes('class=') &&
+        !t.startsWith('<summary') &&
+        !t.includes('position:absolute;inset:0'),
+    )
+    expect(
+      sem.length / tags.length,
+      `${sem.length} de ${tags.length} sem estado:\n${sem.slice(0, 8).join('\n')}`,
+    ).toBeLessThan(0.12)
+  }, 60_000)
 })

@@ -229,7 +229,10 @@ describe('Detalhe do apito — o esqueleto fixo da análise (identidade 04)', ()
     expect(posicoes).toEqual([...posicoes].sort((a, b) => a - b))
 
     // O fato gerador vem ANTES de tudo: é a frase que explica a entrada.
-    expect(html).toContain('ÚLTIMOS 10')
+    // O número do título é o que o DADO tem, não um 10 fixo — quem tem menos
+    // de dez jogos conferidos lia um título que mentia (auditoria de UX para
+    // web, §4.3), enquanto a legenda ao lado já dizia "bateu 7 de 9".
+    expect(html).toMatch(/FORMA NO ATRIBUTO · ÚLTIMOS? \d+/)
     // E o CTA fecha a página, depois da última seção.
     expect(html.indexOf('VER ESTATÍSTICAS')).toBeGreaterThan(posicoes.at(-1)!)
   }, 60_000)
@@ -762,5 +765,17 @@ describe('Detalhe do apito — o esqueleto fixo da análise (identidade 04)', ()
         .set({ conteudoJson: original })
         .where(eq(feedSnapshot.id, linha!.feed_snapshot.id))
     }
+  }, 60_000)
+
+  it('o título da forma diz quantos jogos o gráfico tem, e a análise usa a coluna de DADO', async () => {
+    // 640 num monitor de 1440 é 37% da largura, e o que está espremido ali é
+    // tabela: dez jogos em barras, três linhas com odd, três casas.
+    const item = await sujeito()
+    const detalhe = await detalheDoApito(banco.db, await rulesetAtivo(), item, { blocos: 10 })
+    const html = await renderizar(item)
+    const esperado = Math.min(detalhe.blocos.length, 10)
+    expect(html).toContain(`ÚLTIMOS ${esperado}`)
+    if (esperado < 10) expect(html).not.toContain('ÚLTIMOS 10')
+    expect(html).toContain('--largura-coluna:1120px')
   }, 60_000)
 })

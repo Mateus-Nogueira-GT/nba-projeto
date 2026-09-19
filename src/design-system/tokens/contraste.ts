@@ -7,6 +7,38 @@
 
 export type Rgb = { r: number; g: number; b: number }
 
+/**
+ * Aceita `#RGB`, `#RRGGBB` e `rgba(r,g,b,a)`.
+ *
+ * A tinta translúcida entrou no sistema com o texto em opacidades da
+ * identidade 04 e virou COR DE CANAL na 06 (o rótulo do Randola). Medir
+ * contraste de uma tinta com alfa exige compor sobre o fundo antes — sem
+ * isso, `parseInt` devolve NaN e o teste passa a afirmar nada.
+ */
+export function corParaRgba(cor: string): Rgb & { a: number } {
+  const funcional = /rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*(?:,\s*([\d.]+)\s*)?\)/.exec(cor)
+  if (funcional) {
+    return {
+      r: Number(funcional[1]),
+      g: Number(funcional[2]),
+      b: Number(funcional[3]),
+      a: funcional[4] === undefined ? 1 : Number(funcional[4]),
+    }
+  }
+  return { ...hexParaRgb(cor), a: 1 }
+}
+
+/** A tinta `frente` composta sobre `fundo` — o que o olho vê de verdade. */
+export function sobrepor(frente: string, fundo: string): Rgb {
+  const f = corParaRgba(frente)
+  const t = corParaRgba(fundo)
+  return {
+    r: f.r * f.a + t.r * (1 - f.a),
+    g: f.g * f.a + t.g * (1 - f.a),
+    b: f.b * f.a + t.b * (1 - f.a),
+  }
+}
+
 export function hexParaRgb(hex: string): Rgb {
   const limpo = hex.replace('#', '')
   const completo =
@@ -26,7 +58,7 @@ export function hexParaRgb(hex: string): Rgb {
 
 /** Luminância relativa — WCAG 2.1, 1.4.3. */
 export function luminancia(hex: string): number {
-  const { r, g, b } = hexParaRgb(hex)
+  const { r, g, b } = corParaRgba(hex)
 
   const linear = (canal: number): number => {
     const c = canal / 255
@@ -36,8 +68,15 @@ export function luminancia(hex: string): number {
   return 0.2126 * linear(r) + 0.7152 * linear(g) + 0.0722 * linear(b)
 }
 
+function rgbParaHex({ r, g, b }: Rgb): string {
+  const par = (n: number) => Math.round(n).toString(16).padStart(2, '0')
+  return `#${par(r)}${par(g)}${par(b)}`
+}
+
 export function razaoDeContraste(corA: string, corB: string): number {
-  const a = luminancia(corA)
+  // Tinta com alfa é COMPOSTA sobre a outra antes de medir: "branco a 70% sobre
+  // o cartão" é um cinza claro concreto, e é ele que o olho lê.
+  const a = luminancia(rgbParaHex(sobrepor(corA, corB)))
   const b = luminancia(corB)
   const claro = Math.max(a, b)
   const escuro = Math.min(a, b)

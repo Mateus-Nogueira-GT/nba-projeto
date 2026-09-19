@@ -767,4 +767,31 @@ describe('CardEntrada — mando e fileira, identidade 04', () => {
     expect(html.indexOf('>25<')).toBeGreaterThan(html.indexOf('outline:2px'))
     expect(html).toContain('a última é a desta rodada')
   })
+
+describe('CardEntrada — estado no desktop (auditoria de UX para web)', () => {
+  it('o card com destino responde ao mouse e ao teclado', () => {
+    // O maior alvo de clique do produto não tinha estado nenhum: só o card em
+    // MODO FIRE reagia, porque `.card-modo-fire` existe desde a identidade 03.
+    const com = render({ ...base, linha: 20, detalheHref: '/apito/x' })
+    expect(com).toMatch(/<div class="[^"]*card-alvo/)
+    const sem = render({ ...base, linha: 20 })
+    expect(sem).not.toContain('card-alvo')
+  })
+
+  it('modo fire e alvo convivem no mesmo invólucro', () => {
+    const html = render({ ...base, linha: 20, modoFire: true, detalheHref: '/apito/x' })
+    expect(html).toContain('card-modo-fire')
+    expect(html).toContain('card-alvo')
+  })
+
+  it('o nome e as abas também respondem', () => {
+    expect(render({ ...base, linha: 20, jogadorHref: '/j/1' })).toContain('link-texto')
+    const comAbas = render({
+      ...base,
+      linha: 20,
+      atributos: [{ atributo: 'PONTOS', linha: 20, ativo: true, href: '/a' }],
+    })
+    expect(comAbas).toContain('aba-atributo')
+  })
+})
 })

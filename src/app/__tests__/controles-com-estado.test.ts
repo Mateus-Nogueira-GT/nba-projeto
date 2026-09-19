@@ -77,3 +77,43 @@ describe('hover nos módulos', () => {
     expect(estrela).toMatch(/\.estrela:not\(:disabled\):hover/)
   })
 })
+
+const CLASSES_DE_ESTADO = [
+  'card-alvo',
+  'linha-alvo',
+  'link-texto',
+  'aba-atributo',
+  'opcao-segmentada',
+] as const
+
+describe('estado no desktop (auditoria de UX para web, 19/09)', () => {
+  it.each(CLASSES_DE_ESTADO)('.%s tem hover atrás de (hover: hover)', (classe) => {
+    const blocos = css.match(/@media \(hover: hover\)\s*\{[\s\S]*?\n\}/g) ?? []
+    expect(
+      blocos.some((b) => b.includes(`.${classe}`)),
+      classe,
+    ).toBe(true)
+  })
+
+  it('as quatro NÃO escrevem cor de base — só estado', () => {
+    // O card e a aba carregam a cor do NÍVEL embutida; uma classe que
+    // escrevesse background/color/border fora de :hover apagaria o sinal.
+    const inicio = css.indexOf('/* ===== ESTADO NO DESKTOP')
+    expect(inicio).toBeGreaterThan(-1)
+    const trecho = css.slice(inicio, css.indexOf('/* ===== FIM ESTADO NO DESKTOP'))
+    for (const regra of trecho.matchAll(
+      /\.(card-alvo|linha-alvo|link-texto|aba-atributo|opcao-segmentada)([^{]*)\{([^}]*)\}/g,
+    )) {
+      const seletor = regra[2] ?? ''
+      const corpo = regra[3] ?? ''
+      const eEstado = /:hover|:focus-visible|:focus-within/.test(seletor)
+      if (!eEstado)
+        expect(corpo, `${regra[1]}${seletor}`).not.toMatch(/background:|color:|border:/)
+    }
+  })
+
+  it('o card e os links ganham foco visível pelo anel do app', () => {
+    expect(css).toMatch(/\.card-alvo:focus-within > article,[\s\S]{0,60}outline:\s*var\(--foco\)/)
+    expect(css).toMatch(/\.link-texto:focus-visible[\s\S]{0,140}outline:\s*var\(--foco\)/)
+  })
+})

@@ -67,13 +67,18 @@ export default async function PaginaAssinar({
   const substitui = ofertas.some((oferta) => oferta.substituiPlanoAtual)
 
   return (
-    <MolduraConta titulo="Planos" descricao="O que cada nível da NIP entrega." aba="conta">
+    <MolduraConta
+      titulo="Planos"
+      descricao="O que cada nível da NIP entrega."
+      aba="conta"
+      largura={1120}
+    >
       <div style={{ display: 'grid', gap: 18 }}>
         <p style={{ margin: 0, color: semantico.textoSecundario }}>
           Você está no plano <strong>{ROTULO_DO_NIVEL[acesso.nivel]}</strong>.{' '}
           <Link href={voltar}>Voltar</Link>
         </p>
-        <div style={{ display: 'grid', gap: 14 }}>
+        <div className="grade-planos" style={{ display: 'grid', gap: 14 }}>
           {ORDEM_DOS_NIVEIS.map((nivelDoPlano) => (
             <section
               key={nivelDoPlano}

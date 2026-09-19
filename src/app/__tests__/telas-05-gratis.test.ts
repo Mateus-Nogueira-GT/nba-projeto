@@ -158,4 +158,19 @@ describe('o grátis na identidade 05', () => {
     expect(aside).toContain('LISTA, FIRE LIVE E ASSISTENTE COMEÇAM NO MVP')
     expect(aside).not.toContain('ASSISTENTE COMEÇA NO')
   }, 60_000)
+
+  it('a chamada para assinar volta no meio da rolagem (auditoria de UX para web)', async () => {
+    // Oito pares de silhueta idênticos e nenhuma chamada à vista: a faixa do
+    // topo sai da tela e a da lateral vai junto, porque a coluna é mais alta
+    // que a viewport. UMA repetição, depois do terceiro jogo.
+    const html = await renderizarLista()
+    const corpo = html.replace(/<aside[\s\S]*?<\/aside>/g, '')
+    const faixas = [...corpo.matchAll(/A LISTA SECRETA COMEÇA NO MVP/g)]
+    expect(faixas.length).toBe(2)
+    const terceiroJogo = corpo.split('jogo-times-frio')[3]
+    expect(terceiroJogo, 'a semente precisa de pelo menos três jogos').toBeDefined()
+    expect(corpo.lastIndexOf('A LISTA SECRETA COMEÇA NO MVP')).toBeGreaterThan(
+      corpo.indexOf('jogo-times-frio'),
+    )
+  }, 60_000)
 })

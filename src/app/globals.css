@@ -436,3 +436,63 @@ details:not([open]) > summary .jogo-chevron {
   }
 }
 /* ===== FIM CONTROLES COM ESTADO ===== */
+
+/* ===== ESTADO NO DESKTOP (auditoria de UX para web, 19/09) =====
+
+   A auditoria mediu 520 de 794 elementos interativos sem :hover e sem o anel
+   de foco do app — estilo embutido não tem estado, e é assim que quase toda a
+   UI foi escrita. No celular não faz falta; no desktop é a diferença entre uma
+   tela viva e uma imagem.
+
+   DIFERENÇA para o bloco de cima: aquelas quatro classes assumiram a COR dos
+   controles neutros. Estas quatro não podem — o card carrega o metálico do
+   nível do jogador e a aba carrega o cromático do apito, e as duas cores são
+   DADO. Aqui só existe estado.
+
+   Por isso o realce do card é `outline`, e não `border` nem `box-shadow`: a
+   borda é o nível e o box-shadow é o brilho do turbo e do modo fire.
+
+   `.linha-alvo` é a irmã do card para LINHA clicável (as 37 da Gestão): lá o
+   link cobre a linha inteira, e `.link-texto` sublinharia todo o conteúdo
+   dela. Mesmo realce, alvo diferente. */
+
+.card-alvo:focus-within > article,
+.linha-alvo:focus-within {
+  outline: var(--foco);
+  outline-offset: -2px;
+}
+.link-texto:focus-visible,
+.aba-atributo:focus-visible,
+.opcao-segmentada:focus-visible {
+  outline: var(--foco);
+  outline-offset: 2px;
+}
+
+@media (hover: hover) {
+  .card-alvo:hover > article,
+  .linha-alvo:hover {
+    outline: 1px solid var(--texto55);
+    outline-offset: -1px;
+  }
+  .link-texto:hover {
+    color: var(--texto100);
+    text-decoration: underline;
+  }
+  .aba-atributo:hover {
+    background: var(--superficie-elevada);
+  }
+  .opcao-segmentada:not([aria-current]):hover {
+    background: var(--superficie-elevada);
+    color: var(--texto100);
+  }
+}
+/* ===== FIM ESTADO NO DESKTOP ===== */
+
+/* Os três planos lado a lado quando há largura; empilhados abaixo de 900, que
+   é onde a comparação deixa de caber e vira lista. */
+@media (min-width: 900px) {
+  .grade-planos {
+    grid-template-columns: repeat(3, 1fr);
+    align-items: start;
+  }
+}

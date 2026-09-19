@@ -262,6 +262,7 @@ function Opcao({
       type="submit"
       name="destino"
       value={opcao.href}
+      className="opcao-segmentada"
       aria-current={ativo ? 'page' : undefined}
       // O `border: 'none'` vem ANTES do estilo, não depois. O <button> precisa
       // dele (senão herda a borda do navegador), mas em CSS-in-JS a ordem das
@@ -274,7 +275,12 @@ function Opcao({
       {opcao.rotulo}
     </button>
   ) : (
-    <Link href={opcao.href} aria-current={ativo ? 'page' : undefined} style={estilo}>
+    <Link
+      href={opcao.href}
+      className="opcao-segmentada"
+      aria-current={ativo ? 'page' : undefined}
+      style={estilo}
+    >
       {opcao.rotulo}
     </Link>
   )
