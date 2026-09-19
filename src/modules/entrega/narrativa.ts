@@ -20,7 +20,8 @@ import type { ConteudoFeed, ItemFeed } from './tipos-feed'
  * texto teria virado regra, e regra é do CJ (regra 3 do projeto).
  */
 
-export const LIMITE_NARRATIVA = 280
+/** Teto do parceiro para a narrativa do card (19/09): 300, nem um a mais. */
+export const LIMITE_NARRATIVA = 300
 export const LIMITE_RESUMO = 400
 
 /**
@@ -30,8 +31,36 @@ export const LIMITE_RESUMO = 400
  * validador reprovava por "muito longo" — 34 vezes em 276. O limite da regra
  * continua sendo `LIMITE_NARRATIVA`; a folga é só do pedido, porque o modelo
  * estoura o número que recebe.
+ *
+ * A folga medida foi de ~13 caracteres; 40 mantém a mesma margem com o teto
+ * novo de 300, e ainda dá ao modelo espaço para a frase didática que o
+ * parceiro pediu em 19/09.
  */
-export const PEDIDO_NARRATIVA = 240
+export const PEDIDO_NARRATIVA = 260
+
+/**
+ * O TRAVESSÃO SAI DO TEXTO (decisão do parceiro, 19/09).
+ *
+ * "—" é a assinatura mais reconhecível de texto gerado por máquina, e o
+ * assinante lê o card achando que ninguém escreveu aquilo. Sai por
+ * SANEAMENTO, não por reprovação: regra nova no validador custa caro — cada
+ * recusa é uma chamada paga a mais (ver `regras-do-texto.ts`) — e trocar um
+ * caractere é determinístico, não precisa de nova tentativa. O prompt pede;
+ * isto garante.
+ *
+ * Vira vírgula, que é o que o travessão quase sempre substitui em prosa
+ * curta. As limpezas seguintes evitam ", ," e " ," quando o modelo já tinha
+ * pontuação em volta do traço.
+ */
+export function semTravessao(texto: string): string {
+  return texto
+    .replace(/\s*[—–]\s*/g, ', ')
+    .replace(/,\s*,/g, ',')
+    .replace(/,\s*([.;:!?])/g, '$1')
+    .replace(/\s+([.,;:!?])/g, '$1')
+    .replace(/\s{2,}/g, ' ')
+    .trim()
+}
 
 /**
  * A regra que faltava — e que sozinha explicava 219 das 276 reprovações da
@@ -80,12 +109,29 @@ function sistemaDe(forma: string, limiteCaracteres: number, extras: readonly str
     'Você é um analista de basquete escrevendo para assinantes brasileiros.',
     `Escreva ${forma}, em tom sóbrio de comentarista.`,
     ...regrasDoTexto(limiteCaracteres),
+    // O travessão é saneado depois (`semTravessao`), mas pedir aqui evita que
+    // o modelo construa a frase INTEIRA em torno dele e a troca por vírgula
+    // deixe a frase torta.
+    'Não use travessão (— ou –). Separe as ideias com vírgula, ponto ou "e".',
     ...extras,
     METODOLOGIA,
   ].join('\n')
 }
 
-const SISTEMA_NARRATIVA = sistemaDe('UMA frase', PEDIDO_NARRATIVA, [SEM_PERCENTUAL])
+/**
+ * DIDÁTICO, não técnico (decisão do parceiro, 19/09).
+ *
+ * O assinante não é analista: ele precisa entender POR QUE aquele jogador
+ * está ali, em português comum. O tom sóbrio fica; o que muda é a obrigação
+ * de explicar o motivo em vez de só enunciar o dado.
+ */
+const DIDATICO = [
+  'Escreva para quem NÃO acompanha estatística de basquete: explique o porquê do apito em português simples.',
+  'Prefira palavra comum a termo técnico. Se precisar usar um termo da metodologia, diga em seguida o que ele significa, em poucas palavras.',
+  'Frase direta, sem rodeio e sem enfeite: o assinante tem poucos segundos por card.',
+].join(' ')
+
+const SISTEMA_NARRATIVA = sistemaDe('UMA frase', PEDIDO_NARRATIVA, [SEM_PERCENTUAL, DIDATICO])
 const SISTEMA_RESUMO = sistemaDe('até três frases', LIMITE_RESUMO)
 
 /**
@@ -209,7 +255,9 @@ export async function enriquecerComNarrativas(
     try {
       const prompt = construirPrompt()
       const r = await porta.gerar(perfil, { sistema: prompt.sistema, usuario: prompt.usuario })
-      const validado = validarTexto(r.texto, {
+      // Saneia ANTES de validar: o travessão vira vírgula sem gastar uma
+      // reprovação, e o texto que o validador mede é o que o assinante lê.
+      const validado = validarTexto(semTravessao(r.texto), {
         numeros: prompt.numeros,
         limiteCaracteres: limite,
       })

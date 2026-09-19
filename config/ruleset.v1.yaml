@@ -249,6 +249,38 @@ odds:
     RANDOLA: { 5: [1.80, 2.20], 10: [2.30, 3.50] }
 
 # -----------------------------------------------------------------------------
+# SUGESTÃO ESTATÍSTICA — o que o assistente ranqueia quando pedem dica
+#
+# Decisão do parceiro, 19/09/2026. A METODOLOGIA continua sendo quem apita;
+# isto é uma segunda leitura, exibida ao lado dela e nunca confundida com ela
+# (o assistente marca "fora da lista de hoje" e o código verifica).
+#
+# Quem ordena é o MOTOR, função pura, sobre estes valores. A IA recebe a lista
+# pronta e narra — ela não calcula, porque calcular é onde ela inventa.
+# -----------------------------------------------------------------------------
+sugestao_estatistica:
+  criterio: taxa_na_linha # quantas vezes o jogador passou da linha
+  janela_jogos: 10 # sobre quantos jogos ENCERRADOS se conta
+  minimo_jogos: 10 # abaixo disso o jogador não entra: 2 de 2 não é 100%
+  maximo_por_time: 8 # 5 cobre só o quinteto e deixa o banco (os randolas) fora
+
+  # QUAL TAXA ORDENA, já que cada nível tem linhas próprias: um MVP é medido em
+  # 20/25/30/35 e um RANDOLA em 5/10, e comparar as duas é comparar coisas
+  # diferentes. 'menor_linha' ordena pela linha mais baixa do nível — a aposta
+  # mais conservadora de cada um. CONFIRMAR COM O CJ: é definição de
+  # metodologia, e trocar aqui muda o ranking sem tocar código.
+  ordenacao: menor_linha
+
+  # O recorte que vai para os fatos do chat. Quanto mais número injetado, mais
+  # larga a malha do validador que impede estatística inventada — estes valores
+  # são o freio.
+  contexto:
+    incluir_adversario: true # o jogo inteiro, não só o time perguntado
+    todos_os_atributos: true # pontos, rebotes e assistências do time
+    jogos_lembrados: 2 # partidas citadas antes continuam nos fatos
+    topo_do_dia: 15 # POR ATRIBUTO, quando a pergunta não nomeia ninguém
+
+# -----------------------------------------------------------------------------
 # PUSH
 # -----------------------------------------------------------------------------
 push:

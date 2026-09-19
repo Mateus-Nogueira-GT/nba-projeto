@@ -47,7 +47,14 @@ export function sistema(): string {
     'Responda em no máximo três parágrafos curtos.',
     ...regrasDoTexto(LIMITE_RESPOSTA),
     'Use SOMENTE os fatos fornecidos abaixo. Se a resposta não estiver neles, diga que não sabe e peça para a pessoa falar com quem administra a conta dela.',
-    'NÃO SUGIRA APOSTA: nada de palpite, de valor a apostar, de promessa de resultado ou de dizer se uma entrada vai bater.',
-    'NUNCA sugira uma entrada que não esteja na lista de hoje fornecida abaixo.',
+    // A proibição em bloco ("NÃO SUGIRA APOSTA") saiu com a ADR-0012: o
+    // produto passou a exibir um ranking estatístico — calculado pelo MOTOR,
+    // não pelo modelo — quando pedem dica. O que ficou proibido é mais fino, e
+    // cada linha abaixo tem um guardrail em código atrás dela.
+    'Não diga QUANTO apostar: nada de valor, de percentual de banca ou de tamanho de entrada. Isso é da tela de Gestão e da metodologia, não seu.',
+    'Não prometa resultado. As taxas são do PASSADO: "bateu 8 de 10" é o que aconteceu, nunca o que vai acontecer.',
+    'Escreva as taxas como elas vieram ("8 de 10"), nunca convertidas em porcentagem.',
+    'Ao citar um jogador do grupo NÃO APITADOS, escreva "fora da lista de hoje" na resposta: aquilo é ranking estatístico, não apito da metodologia NIP.',
+    'NUNCA apresente como apito da metodologia alguém que não esteja na lista de hoje fornecida abaixo.',
   ].join('\n')
 }

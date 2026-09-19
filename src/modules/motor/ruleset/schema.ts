@@ -203,6 +203,26 @@ export const rulesetSchema = z.object({
     tabela_estatica: porNivel(porLinhaFaixa),
   }),
 
+  /**
+   * A segunda leitura que o assistente pode exibir (parceiro, 19/09). Quem
+   * apita continua sendo a metodologia; isto ordena por estatística pura e é
+   * marcado como tal na tela. Ver ADR-0012.
+   */
+  sugestao_estatistica: z.object({
+    criterio: z.literal('taxa_na_linha'),
+    janela_jogos: z.number().int().positive(),
+    minimo_jogos: z.number().int().positive(),
+    maximo_por_time: z.number().int().positive(),
+    // Cada nível tem linhas próprias; esta chave diz qual taxa ordena.
+    ordenacao: z.literal('menor_linha'),
+    contexto: z.object({
+      incluir_adversario: z.boolean(),
+      todos_os_atributos: z.boolean(),
+      jogos_lembrados: z.number().int().nonnegative(),
+      topo_do_dia: z.number().int().positive(),
+    }),
+  }),
+
   push: z.object({
     marcos_green: porNivel(z.array(z.number())),
     canais_independentes: z.array(z.string()),
