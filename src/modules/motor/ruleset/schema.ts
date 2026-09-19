@@ -192,11 +192,35 @@ export const rulesetSchema = z.object({
     fonte: z.literal('casas'),
     agregacao: z.enum(['mediana', 'media']),
     casas_minimas: z.number().int().positive(),
-    // 'media' entrou em 25/08 por decisão do parceiro (card ODD MÉDIA);
-    // a redação homologada era 'faixa' — pergunta aberta ao CJ.
-    exibicao: z.enum(['faixa', 'media']),
+    // Três formas de escrever a odd na tela, e o YAML escolhe uma:
+    //   faixa       'ODD 1,47–1,62'  (redação homologada original)
+    //   media       'ODD MÉDIA 1,55' (parceiro, 25/08)
+    //   casa_unica  'ODD 1,85'       (parceiro, 19/09 — o produto passou a
+    //                                 trabalhar com UMA casa, e tanto a média
+    //                                 quanto a faixa mentem com uma cotação só)
+    exibicao: z.enum(['faixa', 'media', 'casa_unica']),
     fallback: z.literal('tabela_estatica'),
     tabela_estatica: porNivel(porLinhaFaixa),
+  }),
+
+  /**
+   * A segunda leitura que o assistente pode exibir (parceiro, 19/09). Quem
+   * apita continua sendo a metodologia; isto ordena por estatística pura e é
+   * marcado como tal na tela. Ver ADR-0012.
+   */
+  sugestao_estatistica: z.object({
+    criterio: z.literal('taxa_na_linha'),
+    janela_jogos: z.number().int().positive(),
+    minimo_jogos: z.number().int().positive(),
+    maximo_por_time: z.number().int().positive(),
+    // Cada nível tem linhas próprias; esta chave diz qual taxa ordena.
+    ordenacao: z.literal('menor_linha'),
+    contexto: z.object({
+      incluir_adversario: z.boolean(),
+      todos_os_atributos: z.boolean(),
+      jogos_lembrados: z.number().int().nonnegative(),
+      topo_do_dia: z.number().int().positive(),
+    }),
   }),
 
   push: z.object({

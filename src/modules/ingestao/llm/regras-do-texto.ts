@@ -23,8 +23,13 @@
  * A raiz de `PROIBIDAS` em `validador.ts` cobre as flexões (probabilidades,
  * prováveis); aqui basta o lema, porque é instrução em prosa. O teste de
  * deriva confere que TODA palavra desta lista é de fato reprovada lá.
+ *
+ * "chance" e "vai bater" entraram com a sugestão estatística (ADR-0012). A
+ * taxa de acerto — "bateu 8 de 10" — é o número que mais PARECE previsão, e
+ * sem estas duas o modelo escorrega de "bateu 8 das últimas 10" para "tem boa
+ * chance hoje", que é exatamente o que o produto não afirma.
  */
-export const PALAVRAS_PROIBIDAS = ['probabilidade', 'provável'] as const
+export const PALAVRAS_PROIBIDAS = ['probabilidade', 'provável', 'chance', 'vai bater'] as const
 
 /**
  * O bloco de regras comum aos dois consumidores.

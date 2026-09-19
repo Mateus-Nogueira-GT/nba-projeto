@@ -69,11 +69,20 @@ export type ItemFeed = {
   /** Média da temporada que o motor usou — o card mostra sem chamar o motor. */
   mediaTemporada: number | null
   /**
-   * Faixa de odds entre casas para a linha do apito, da última coleta.
-   * `media` chega com a spec da lógica de dados; o card já sabe renderizar os
-   * dois estados. Null sem coleta — o rodapé então omite a odd.
+   * A odd da linha do apito, da última coleta. A FORMA é decidida na
+   * materialização, lendo `odds.exibicao` do ruleset — a tela só escreve:
+   *   `unica` → uma casa só (parceiro, 19/09)
+   *   `media` → a média entre casas
+   *   nenhuma → a faixa min–max
+   * Null sem coleta: o card então omite a odd.
    */
-  oddFaixa: { min: number; max: number; qtdCasas: number; media?: number } | null
+  oddFaixa: {
+    min: number
+    max: number
+    qtdCasas: number
+    media?: number
+    unica?: number
+  } | null
   /**
    * Frase de análise gerada por LLM a partir DOS FATOS acima. Anexada depois
    * do hash do snapshot (ver `narrativa.ts`) e ausente quando a geração falha

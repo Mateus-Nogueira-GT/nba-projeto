@@ -6,7 +6,10 @@ import { intervaloDoDia } from '../dominio/rodada'
 import { validarTexto } from '../ingestao/llm'
 import { registrarChamada } from '../ingestao/llm/registro'
 import type { PortaLLM } from '../ingestao/llm'
+import type { Ruleset } from '../motor/ruleset/schema'
 import { montarContexto } from './chat-contexto'
+import { marcouOsNaoApitados } from './sugestao/fatos'
+import type { RankingDoDia } from './sugestao/tipos'
 
 /**
  * CHAT DO ASSINANTE — o único caminho de LLM por REQUISIÇÃO.
@@ -20,8 +23,12 @@ import { montarContexto } from './chat-contexto'
  * materializado do dia, metodologia, classificação e rodada — quem chega
  * aqui já passou pelo portão de nível, MVP+) + as últimas mensagens da
  * conversa. O escopo — os dois assuntos permitidos e a recusa do resto —
- * vive em `chat-prompt.ts`. A LLM não consulta banco e não sugere entrada
- * fora da lista.
+ * vive em `chat-prompt.ts`. A LLM não consulta banco.
+ *
+ * Desde a ADR-0012 ela pode APRESENTAR uma sugestão estatística — mas quem
+ * ranqueia é o motor, em função pura sobre o ruleset; ela recebe a lista
+ * pronta e narra. Citar alguém que a metodologia não apitou sem dizer que
+ * está "fora da lista de hoje" é reprovado aqui, em código.
  */
 
 // Os freios moram em `chat-limites.ts` porque `chat-contexto.ts` também
@@ -195,6 +202,17 @@ export async function responder(
      * chamada.
      */
     cotaDiaria: number
+    /**
+     * A SUGESTÃO ESTATÍSTICA desta chamada (ADR-0012) — ranking já lido e
+     * CACHEADO pela rota, porque nenhum módulo importa `next/cache`, mais o
+     * ruleset de onde saem a janela e o recorte.
+     *
+     * Os dois andam JUNTOS de propósito: ranking sem ruleset não sabe recortar
+     * e ruleset sem ranking não tem o que dizer. Ausente, a sugestão não
+     * existe nesta resposta e o assistente se comporta como antes da ADR — a
+     * leitura falhar não pode derrubar o chat.
+     */
+    sugestao?: { ruleset: Ruleset; ranking: RankingDoDia }
   },
 ): Promise<RespostaChat> {
   const pergunta = entrada.texto.trim()
@@ -277,6 +295,17 @@ export async function responder(
       fuso: entrada.fuso,
       temporada: entrada.temporada,
       cotaDiaria,
+      sugestao:
+        entrada.sugestao === undefined
+          ? undefined
+          : {
+              ...entrada.sugestao,
+              pergunta,
+              // Da mais RECENTE para a mais antiga: o recorte lembra os jogos
+              // citados há pouco, e "há pouco" é o FIM da lista, que chega em
+              // ordem cronológica.
+              textosAnteriores: [...historico].reverse().map((m) => m.texto),
+            },
     })
 
     const r = await porta.gerar('chat', {
@@ -284,10 +313,16 @@ export async function responder(
       usuario: `${contexto.fatos}\n\n${conversa}Pergunta do usuário: ${pergunta}`,
     })
 
-    const validado = validarTexto(r.texto, {
-      numeros: contexto.numeros,
-      limiteCaracteres: LIMITE_RESPOSTA,
-    })
+    const validado = marcouOsNaoApitados(r.texto, entrada.sugestao?.ranking)
+      ? validarTexto(r.texto, {
+          numeros: contexto.numeros,
+          limiteCaracteres: LIMITE_RESPOSTA,
+        })
+      : // O guardrail mais importante desta feature (ADR-0012): citar alguém
+        // que a metodologia NÃO apitou sem dizer que está fora da lista faz
+        // ranking estatístico passar por apito do CJ. Reprovar aqui custa uma
+        // chamada, e é barato perto disso.
+        ({ ok: false, motivo: 'sem-marca-fora-da-lista' } as const)
     // Registra DEPOIS do validador, com `ok` sendo o desfecho do texto — a
     // tabela precisa separar "o provedor respondeu e o assinante leu" de "o
     // provedor respondeu e nós recusamos". Ver o mesmo trecho em

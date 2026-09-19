@@ -1,11 +1,15 @@
 import { numerosDoTexto } from '../ingestao/llm'
 import type { Db } from '../dominio/db/tipos'
+import type { Ruleset } from '../motor/ruleset/schema'
 import { CONHECIMENTO } from './chat-conhecimento'
 import { LIMITE_PERGUNTA, LIMITE_POR_MINUTO } from './chat-limites'
 import { telaDaClassificacao } from './estatisticas/time'
 import { telaJogosDoDia } from './estatisticas/jogos-do-dia'
 import { lerFeed } from './lista-secreta'
 import { METODOLOGIA } from './metodologia'
+import { fatosDoRanking } from './sugestao/fatos'
+import { recortar } from './sugestao/recorte'
+import type { RankingDoDia } from './sugestao/tipos'
 
 export type ContextoDoChat = { fatos: string; numeros: number[] }
 
@@ -39,6 +43,20 @@ export async function montarContexto(
     fuso: string
     temporada: string
     cotaDiaria: number
+    /**
+     * A SUGESTÃO ESTATÍSTICA (ADR-0012). Ausente, a seção não sai e os fatos
+     * ficam exatamente como antes dela — falhar a leitura do ranking não pode
+     * derrubar o chat.
+     */
+    sugestao?: {
+      ruleset: Ruleset
+      /** Já lido e cacheado pela rota: nenhum módulo importa `next/cache`. */
+      ranking: RankingDoDia
+      /** A pergunta desta mensagem, para o recorte determinístico. */
+      pergunta: string
+      /** As mensagens anteriores, da mais RECENTE para a mais antiga. */
+      textosAnteriores: readonly string[]
+    }
   },
 ): Promise<ContextoDoChat> {
   const [rodada, tabela, feed] = await Promise.all([
@@ -99,6 +117,28 @@ export async function montarContexto(
       )
   partes.push(`- Total de entradas na lista de hoje: ${itens.length}.`)
   partes.push('')
+
+  // O RANKING ESTATÍSTICO (ADR-0012), quando a rota conseguiu lê-lo. Entra
+  // RECORTADO: a pergunta e as mensagens anteriores decidem quanto dele vem,
+  // porque cada número injetado alarga a malha do validador que impede
+  // estatística inventada.
+  const sugestao = opcoes.sugestao
+  if (sugestao !== undefined && sugestao.ranking.jogos.length > 0) {
+    const recorte = recortar(
+      sugestao.ranking,
+      sugestao.pergunta,
+      sugestao.textosAnteriores,
+      sugestao.ruleset,
+    )
+    partes.push(
+      ...fatosDoRanking(
+        recorte,
+        sugestao.ranking.dataReferencia,
+        sugestao.ruleset.sugestao_estatistica.janela_jogos,
+      ),
+      '',
+    )
+  }
 
   const fatos = partes.join('\n')
   // Derivado, nunca escrito à mão — ver o comentário do cabeçalho.

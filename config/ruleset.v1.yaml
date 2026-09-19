@@ -225,12 +225,21 @@ confianca_exibicao:
 odds:
   fonte: casas
   agregacao: mediana # mediana resiste a outlier de uma casa
-  casas_minimas: 2 # abaixo disso, cai no fallback
-  # Decisão do parceiro (25/08/2026): o card e o detalhe mostram a MÉDIA
-  # entre casas. A redação homologada dizia 'sempre faixa, nunca odd única' —
-  # pergunta reaberta ao CJ (docs/specs/README). Voltar a 'faixa' aqui religa
-  # o comportamento antigo sem tocar código.
-  exibicao: media
+  # UMA casa basta para a linha ser cotada (decisão do parceiro, 19/09/2026).
+  # Era 2: com uma casa só, NENHUMA linha virava cotação e tudo caía na
+  # tabela_estatica — o assinante nunca veria a odd real.
+  casas_minimas: 1
+  # Decisão do parceiro (19/09/2026): o produto passa a trabalhar com UMA casa,
+  # então o card escreve a odd sozinha ("ODD 1,85"), sem o rótulo MÉDIA — não
+  # há o que promediar — e sem a faixa, que com uma casa viraria "1,85–1,85".
+  # QUEM É A CASA aparece no detalhe do apito, na tabela "Odds por casa" que
+  # já existe lá. O aviso do ADR-0004 continua em toda tela com odd.
+  #
+  # Histórico: 'media' entrou em 25/08 (card ODD MÉDIA); a redação homologada
+  # original dizia 'sempre faixa, nunca odd única'. As três formas convivem no
+  # enum — voltar a 'media' ou 'faixa' aqui religa o comportamento anterior sem
+  # tocar código.
+  exibicao: casa_unica
   fallback: tabela_estatica
 
   tabela_estatica: # usada quando não há cobertura das casas
@@ -238,6 +247,38 @@ odds:
     ALL_STAR: { 15: [1.30, 1.70], 20: [2.00, 2.50], 25: [3.00, 5.00] }
     SUPORTE: { 10: [1.39, 1.70], 15: [2.00, 2.50], 20: [3.00, 5.00] }
     RANDOLA: { 5: [1.80, 2.20], 10: [2.30, 3.50] }
+
+# -----------------------------------------------------------------------------
+# SUGESTÃO ESTATÍSTICA — o que o assistente ranqueia quando pedem dica
+#
+# Decisão do parceiro, 19/09/2026. A METODOLOGIA continua sendo quem apita;
+# isto é uma segunda leitura, exibida ao lado dela e nunca confundida com ela
+# (o assistente marca "fora da lista de hoje" e o código verifica).
+#
+# Quem ordena é o MOTOR, função pura, sobre estes valores. A IA recebe a lista
+# pronta e narra — ela não calcula, porque calcular é onde ela inventa.
+# -----------------------------------------------------------------------------
+sugestao_estatistica:
+  criterio: taxa_na_linha # quantas vezes o jogador passou da linha
+  janela_jogos: 10 # sobre quantos jogos ENCERRADOS se conta
+  minimo_jogos: 10 # abaixo disso o jogador não entra: 2 de 2 não é 100%
+  maximo_por_time: 8 # 5 cobre só o quinteto e deixa o banco (os randolas) fora
+
+  # QUAL TAXA ORDENA, já que cada nível tem linhas próprias: um MVP é medido em
+  # 20/25/30/35 e um RANDOLA em 5/10, e comparar as duas é comparar coisas
+  # diferentes. 'menor_linha' ordena pela linha mais baixa do nível — a aposta
+  # mais conservadora de cada um. CONFIRMAR COM O CJ: é definição de
+  # metodologia, e trocar aqui muda o ranking sem tocar código.
+  ordenacao: menor_linha
+
+  # O recorte que vai para os fatos do chat. Quanto mais número injetado, mais
+  # larga a malha do validador que impede estatística inventada — estes valores
+  # são o freio.
+  contexto:
+    incluir_adversario: true # o jogo inteiro, não só o time perguntado
+    todos_os_atributos: true # pontos, rebotes e assistências do time
+    jogos_lembrados: 2 # partidas citadas antes continuam nos fatos
+    topo_do_dia: 15 # POR ATRIBUTO, quando a pergunta não nomeia ninguém
 
 # -----------------------------------------------------------------------------
 # PUSH

@@ -105,11 +105,22 @@ export type CardEntradaProps = {
   /** Média da temporada, do item do feed — o rodapé mostra sem chamar o motor. */
   mediaTemporada?: number | null
   /**
-   * Faixa de odds entre casas. Com `media`, o canto do card escreve
-   * ODD MÉDIA; sem ela, a faixa. Ausente, o canto fica vazio — e é assim que
-   * todo card do Fire Live sai, porque a materialização de lá grava `null`.
+   * A odd na tela. A FORMA vem pronta da materialização, que a lê do ruleset
+   * (`odds.exibicao`) — o card só escreve o que recebeu:
+   *   `unica` → ODD 1,85          (uma casa só)
+   *   `media` → ODD MÉDIA 1,55    (média entre casas)
+   *   nenhuma → ODD 1,47–1,62     (a faixa)
+   *
+   * Ausente, o canto fica vazio — e é assim que todo card do Fire Live sai,
+   * porque a materialização de lá grava `null`.
    */
-  oddFaixa?: { min: number; max: number; qtdCasas: number; media?: number } | null
+  oddFaixa?: {
+    min: number
+    max: number
+    qtdCasas: number
+    media?: number
+    unica?: number
+  } | null
   /**
    * Temperatura do contexto. O Fire Live INTEIRO é quente — não só o modo
    * fire: urgência é da tela ao vivo, não do estado do jogador. Pré-live
@@ -285,29 +296,39 @@ export function CardEntrada(props: CardEntradaProps) {
   // canto que era da nota de confiança, porque é ela que faz o assinante montar
   // a múltipla.
   //
-  // QUEM DECIDE MÉDIA OU FAIXA É O RULESET, não o card. `odds.exibicao`
-  // (decisão do parceiro, 25/08) é aplicada na materialização, que suprime
-  // `media` do item quando a chave é 'faixa' — ver lista-secreta.ts, "a tela
-  // não decide". Escolher a forma aqui faria virar a chave no YAML deixar de
-  // mudar o produto: é a regra 1 do CLAUDE.md.
+  // QUEM DECIDE A FORMA DA ODD É O RULESET, não o card. `odds.exibicao` é
+  // aplicada na materialização, que manda `unica`, `media` ou nenhuma das
+  // duas — ver lista-secreta.ts, "a tela não decide". Escolher a forma aqui
+  // faria virar a chave no YAML deixar de mudar o produto: é a regra 1 do
+  // CLAUDE.md.
   //
-  // O terceiro estado é NENHUMA odd, e ele desenha NADA: "—" grande no lugar
+  // O quarto estado é NENHUMA odd, e ele desenha NADA: "—" grande no lugar
   // de maior destaque anunciaria defeito, e um número de tabela apresentado
   // como odd de casa seria mentira.
   const oddDestaque =
     props.oddFaixa == null
       ? null
-      : props.oddFaixa.media != null
+      : props.oddFaixa.unica != null
         ? {
-            rotulo: 'ODD MÉDIA',
-            valor: decimalPtBr(props.oddFaixa.media, 2),
+            // Uma casa só (parceiro, 19/09): número sozinho, sem o rótulo
+            // MÉDIA, que mentiria — não há o que promediar. Veste o tamanho
+            // grande porque é UM número, como a média; a faixa é que encolhe
+            // para caber em dois.
+            rotulo: 'ODD',
+            valor: decimalPtBr(props.oddFaixa.unica, 2),
             tamanho: componente.odd.valorMedia,
           }
-        : {
-            rotulo: 'ODD',
-            valor: `${decimalPtBr(props.oddFaixa.min, 2)}–${decimalPtBr(props.oddFaixa.max, 2)}`,
-            tamanho: componente.odd.valorFaixa,
-          }
+        : props.oddFaixa.media != null
+          ? {
+              rotulo: 'ODD MÉDIA',
+              valor: decimalPtBr(props.oddFaixa.media, 2),
+              tamanho: componente.odd.valorMedia,
+            }
+          : {
+              rotulo: 'ODD',
+              valor: `${decimalPtBr(props.oddFaixa.min, 2)}–${decimalPtBr(props.oddFaixa.max, 2)}`,
+              tamanho: componente.odd.valorFaixa,
+            }
 
   // A META em duas peças — o rótulo pequeno e o número grande — porque é o
   // número que diz o que o jogador precisa fazer. SÓ no pré-live: o rodapé
@@ -844,6 +865,11 @@ function lenteEmTexto(
       const o = props.oddFaixa
       if (!o) return { rotulo: 'ODD', valor: '—' }
       const casas = `${o.qtdCasas} ${o.qtdCasas === 1 ? 'CASA' : 'CASAS'}`
+      // Com uma casa só, a faixa seria "1,85–1,85": a lente escreve a odd
+      // sozinha, e a contagem de casas fica — é ela que diz de onde veio.
+      if (o.unica != null) {
+        return { rotulo: 'ODD', valor: `${decimalPtBr(o.unica, 2)} · ${casas}` }
+      }
       return {
         rotulo: 'ODD',
         valor: `${decimalPtBr(o.min, 2)}–${decimalPtBr(o.max, 2)} · ${casas}`,

@@ -417,10 +417,27 @@ describe('Lista Secreta · 04 — regras de escrita', () => {
     // Identidade 06: a confiança deixou o card (segue no dado, no push e na
     // ordenação; quem a desenha é a análise do apito) e a odd ocupou o canto,
     // porque é ela que faz o assinante montar a múltipla.
-    const alvo = (await representantesDoDia()).find((r) => r.oddFaixa?.media != null)!
+    //
+    // A FORMA da odd é do ruleset (`odds.exibicao`), não desta tela: uma casa
+    // escreve o número sozinho no tamanho grande, várias escrevem a faixa no
+    // tamanho menor. O que a identidade 06 afirma — e o que este teste
+    // protege — é que a odd é o elemento de maior destaque, seja qual for a
+    // forma. Fixar um dos dois tamanhos aqui faria trocar a chave no YAML
+    // quebrar um teste de tela, que é o oposto da regra 1.
+    const alvo = (await representantesDoDia()).find((r) => r.oddFaixa != null)!
     const html = await renderizar()
-    expect(html).toContain(`font-size:${componente.odd.valorMedia}`)
-    expect(texto(html)).toContain(`ODD MÉDIA ${decimalPtBr(alvo.oddFaixa!.media!, 2)}`)
+    const odd = alvo.oddFaixa!
+    const emDestaque =
+      html.includes(`font-size:${componente.odd.valorMedia}`) ||
+      html.includes(`font-size:${componente.odd.valorFaixa}`)
+    expect(emDestaque, 'a odd é o número grande do card').toBe(true)
+    expect(texto(html)).toContain(
+      odd.unica != null
+        ? `ODD ${decimalPtBr(odd.unica, 2)}`
+        : odd.media != null
+          ? `ODD MÉDIA ${decimalPtBr(odd.media, 2)}`
+          : `ODD ${decimalPtBr(odd.min, 2)}–${decimalPtBr(odd.max, 2)}`,
+    )
     // E o número da nota não sobrou em lugar nenhum do card.
     expect(html).not.toContain('font-size:34px')
   }, 60_000)

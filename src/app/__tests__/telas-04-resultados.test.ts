@@ -1,5 +1,4 @@
 import { gravarConferencia, prepararFotosConferencia } from './conferencia'
-import { componente } from '../../design-system/tokens/componente'
 import { and, eq, inArray } from 'drizzle-orm'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
@@ -558,19 +557,23 @@ describe('Resultados · o estado vem do jogo, não do que a tela não achou', ()
 
   it('o número grande do card é a ODD, e não sobrou percentual nenhum', async () => {
     // A nota de confiança saiu do card na identidade 06 e levou o número de
-    // 34 px junto. Quem ocupa o canto agora é a odd, com duas casas e o
-    // rótulo em cima — e nenhum número do card é porcentagem.
+    // 34 px junto. Quem ocupa o canto agora é a odd, com o rótulo em cima —
+    // e nenhum número do card é porcentagem.
+    //
+    // A FORMA da odd vem do ruleset (`odds.exibicao`): uma casa escreve o
+    // número sozinho, várias escrevem a faixa. O teste aceita as duas, porque
+    // trocar a chave no YAML não pode quebrar teste de tela (regra 1).
     const html = await renderizar(HOJE)
     const cards = cardsDaTela(html)
     expect(cards.length).toBeGreaterThan(0)
 
+    // `\s*` porque rótulo e número são elementos IRMÃOS desde a identidade 06:
+    // ao tirar as tags eles ficam colados ("ODD1,47–1,62").
     const odds = cards.flatMap((card) => [
-      ...card.matchAll(
-        new RegExp(`font-size:${componente.odd.valorMedia}[^"]*"[^>]*>([\\d,]+)<`, 'g'),
-      ),
+      ...textoDaTela(card).matchAll(/ODD\s*(?:MÉDIA\s*)?(\d+,\d{2}(?:–\d+,\d{2})?)/g),
     ])
     expect(odds.length, 'nenhum card da rodada em curso trouxe odd').toBeGreaterThan(0)
-    for (const [, odd] of odds) expect(odd).toMatch(/^\d+,\d{2}$/)
+    for (const [, odd] of odds) expect(odd).toMatch(/^\d+,\d{2}(–\d+,\d{2})?$/)
     for (const card of cards) {
       expect(card).not.toContain('font-size:34px')
       expect(textoDaTela(card)).not.toContain('%')

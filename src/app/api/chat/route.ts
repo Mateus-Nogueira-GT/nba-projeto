@@ -5,6 +5,7 @@ import { calendarioDoRuleset, temporadaDe } from '@/modules/dominio/temporada'
 import { getDb } from '@/modules/dominio/db/cliente'
 import { portaLLMDoAmbiente } from '@/modules/ingestao/llm'
 import { configuracaoChat, conversaDoDia, responder } from '@/modules/entrega/chat'
+import { rankingDoDia } from './ranking'
 import { rulesetAtivo } from '@/modules/entrega/ruleset-ativo'
 import { avaliarAcesso } from '@/modules/plataforma/assinatura/direito'
 import { atende, type NivelPago } from '@/modules/plataforma/assinatura/nivel-do-plano'
@@ -90,6 +91,14 @@ export async function POST(requisicao: Request): Promise<Response> {
     const ruleset = await rulesetAtivo()
     const agora = new Date()
     const dataReferencia = dataDeReferencia(agora, ruleset.rodada.fuso)
+
+    // A SUGESTÃO ESTATÍSTICA (ADR-0012). Lida AQUI, e não dentro de
+    // `responder`, porque o cache é `next/cache` e nenhum módulo do projeto
+    // importa Next. Falhando a leitura, `rankingDoDia` devolve undefined e o
+    // assistente responde como antes dela — a dica é acréscimo, não requisito.
+    const ranking = await rankingDoDia(dataReferencia, ruleset)
+    const sugestao = ranking === undefined ? undefined : { ruleset, ranking }
+
     const r = await responder(getDb(), portaLLMDoAmbiente(), {
       usuarioId: sessao.usuarioId,
       texto,
@@ -104,6 +113,7 @@ export async function POST(requisicao: Request): Promise<Response> {
       ),
       agora,
       cotaDiaria,
+      sugestao,
     })
 
     if (r.ok) return NextResponse.json({ texto: r.texto })
