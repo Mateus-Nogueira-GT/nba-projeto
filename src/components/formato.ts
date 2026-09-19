@@ -125,3 +125,18 @@ export function decorridoCurto(de: Date, agora: Date): string {
 
   return `há ${Math.round(horas / 24)} d`
 }
+
+/**
+ * "88,9" — o aproveitamento de um time, com UMA casa e vírgula.
+ *
+ * Único lugar que escreve aproveitamento (correções de lógica 19/09): a
+ * lateral arredondava para inteiro e a tabela cheia de Estatísticas escrevia
+ * uma casa — o mesmo time, dois números, a 300 px de distância. A casa fica
+ * porque distingue 66,7 de 66,3 na briga por play-in; a unidade NÃO fica,
+ * porque mora no cabeçalho da coluna, não repetida 30 vezes.
+ *
+ * `null` é travessão: temporada sem jogo não é zero por cento.
+ */
+export function formatarAproveitamento(v: number | null): string {
+  return v === null ? '—' : (v * 100).toFixed(1).replace('.', ',')
+}

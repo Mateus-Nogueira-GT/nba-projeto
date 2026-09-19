@@ -497,14 +497,32 @@ describe('Lista Secreta · 05 — a moldura do StatsHub', () => {
     const html = await renderizar()
     const { lerFeed, agruparPorJogador } = await import('../../modules/entrega/lista-secreta')
     const feed = await lerFeed(banco.db, HOJE)
-    // O contador conta CARDS (um por jogador, com as abas de atributo dentro),
-    // não itens do feed: é o que a tela mostra.
-    const cards = agruparPorJogador(feed!.conteudo.itens).length
+    // O contador conta ENTRADAS — uma por (jogador, atributo), que é o que a
+    // palavra diz. Um CARD é um jogador e pode carregar três delas nas abas,
+    // então card e entrada não são a mesma unidade.
+    const entradas = agruparPorJogador(feed!.conteudo.itens).length
     const jogos = new Set(feed!.conteudo.itens.map((i) => i.jogoId)).size
-    expect(html).toContain(`>${cards}</strong>`)
+    expect(html).toContain(`>${entradas}</strong>`)
     expect(html).toContain(`entradas em ${jogos} jogos`)
+    // sem filtro, visível e publicado coincidem: nada de "de N"
+    expect(html).not.toContain(`de ${entradas} entradas`)
     // e a frase de cima não repete o número
-    expect(html).not.toContain(`${cards} entrada`)
+    expect(html).not.toContain(`${entradas} entrada`)
+  }, 60_000)
+
+  it('com filtro na URL, o contador diz "N de M" — o cabeçalho não pode dizer 37 sobre uma tela recortada', async () => {
+    const html = await renderizar({ metodo: 'OPD' })
+    const { lerFeed, agruparPorJogador, filtrarItens } = await import(
+      '../../modules/entrega/lista-secreta'
+    )
+    const feed = await lerFeed(banco.db, HOJE)
+    const total = agruparPorJogador(feed!.conteudo.itens).length
+    const visiveis = agruparPorJogador(
+      filtrarItens(feed!.conteudo.itens, { metodo: 'OPD' }),
+    ).length
+    expect(visiveis).toBeLessThan(total)
+    expect(html).toContain(`>${visiveis}</strong>`)
+    expect(html).toContain(`de ${total} entrada`)
   }, 60_000)
 
   it('acompanhar é a estrela no canto do card; o botão solto sob o card sumiu', async () => {
