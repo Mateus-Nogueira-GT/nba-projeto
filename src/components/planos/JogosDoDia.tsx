@@ -1,3 +1,4 @@
+import { Fragment, type ReactNode } from 'react'
 import { CabecalhoJogo } from '@/design-system/componentes'
 import { semantico } from '@/design-system/tokens/semantico'
 import type { JogoResumo } from '@/modules/entrega/lista-por-jogo'
@@ -20,9 +21,20 @@ export function JogosDoDia({
   jogos,
   fuso,
   temperatura = 'frio',
+  convite,
 }: {
   jogos: JogoResumo[]
   fuso: string
+  /**
+   * A chamada para assinar, repetida UMA vez no meio da página.
+   *
+   * Sem ela o visitante de desktop rolava dois mil pixels de silhueta idêntica
+   * sem nenhuma chamada à vista: a faixa do topo sai da tela e a da lateral vai
+   * junto, porque a coluna inteira é mais alta que a viewport (auditoria de UX
+   * para web, §4.8). UMA repetição, depois do terceiro jogo — o convite a cada
+   * bloco vira anúncio.
+   */
+  convite?: ReactNode
   /**
    * O universo do CABEÇALHO. A silhueta é neutra nos dois: o Fire Live do
    * grátis nunca veste o quente, porque o quente é o modo fire e o modo fire é
@@ -36,21 +48,24 @@ export function JogosDoDia({
 
   return (
     <div style={{ display: 'grid', gap: 18, marginTop: 16 }}>
-      {jogos.map((jogo) => (
-        <section key={jogo.id}>
-          <CabecalhoJogo
-            casaSigla={jogo.casaSigla}
-            visitanteSigla={jogo.visitanteSigla}
-            horarioUtc={jogo.dataHoraUtc}
-            fuso={fuso}
-            status={jogo.status}
-            quartoAtual={jogo.quartoAtual}
-            placarCasa={jogo.placarCasa}
-            placarVisitante={jogo.placarVisitante}
-            temperatura={temperatura}
-          />
-          <SilhuetaPaga forma="cards" />
-        </section>
+      {jogos.map((jogo, i) => (
+        <Fragment key={jogo.id}>
+          {convite && i === 3 && convite}
+          <section>
+            <CabecalhoJogo
+              casaSigla={jogo.casaSigla}
+              visitanteSigla={jogo.visitanteSigla}
+              horarioUtc={jogo.dataHoraUtc}
+              fuso={fuso}
+              status={jogo.status}
+              quartoAtual={jogo.quartoAtual}
+              placarCasa={jogo.placarCasa}
+              placarVisitante={jogo.placarVisitante}
+              temperatura={temperatura}
+            />
+            <SilhuetaPaga forma="cards" />
+          </section>
+        </Fragment>
       ))}
     </div>
   )

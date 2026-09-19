@@ -644,9 +644,12 @@ describe('identidade 06 — cores vivas', () => {
     // Branco puro é a maior luminância do sistema: uma moldura branca faria o
     // card do jogador MENOS importante gritar mais que o do MVP. O TEXTO do
     // nível continua branco cheio — é o que o feedback pediu.
-    expect(NIVEL_JOGADOR.RANDOLA.cor).toBe('#FFFFFF')
     expect(NIVEL_JOGADOR.RANDOLA.borda).toBe(primitivo.brancoVeu55)
     expect(NIVEL_JOGADOR.MVP.borda).toBe(semantico.nivelMvp)
+    // O TEXTO é o branco a 70% desde a auditoria de UX para web: cheio, ele
+    // dava 14,56 e era o rótulo mais berrante da tela — o dobro do segundo
+    // nível mais importante. Continua branco; muda a intensidade.
+    expect(NIVEL_JOGADOR.RANDOLA.cor).toBe(primitivo.brancoVeu70)
   })
 
   it('cada véu da moldura é o decimal exato do seu metálico', () => {
@@ -661,4 +664,30 @@ describe('identidade 06 — cores vivas', () => {
     expect(componente.cardBordaLateral).toBe('6px')
     expect(componente.avatarAnelEspessura).toBe('3px')
   })
+
+describe('auditoria de UX para web — o peso dos quatro rótulos', () => {
+  const SUPERFICIES = [
+    semantico.superficie,
+    semantico.superficieFria2,
+    semantico.superficieFria1,
+    semantico.superficieQuente1,
+    semantico.superficieQuente2,
+  ]
+  const pior = (cor: string) => Math.min(...SUPERFICIES.map((s) => razaoDeContraste(cor, s)))
+
+  it('o Randola não é mais o rótulo mais berrante da tela', () => {
+    const randola = pior(NIVEL_JOGADOR.RANDOLA.cor)
+    const mvp = pior(NIVEL_JOGADOR.MVP.cor)
+    expect(randola).toBeGreaterThanOrEqual(AA.texto)
+    // continua o mais claro dos quatro — é branco —, mas na mesma faixa do
+    // ouro, não no dobro dele.
+    expect(randola).toBeGreaterThan(mvp)
+    expect(randola).toBeLessThan(mvp * 1.5)
+  })
+
+  it('os quatro rótulos passam em AA para texto nas cinco superfícies', () => {
+    for (const [nivel, { cor }] of Object.entries(NIVEL_JOGADOR))
+      expect(pior(cor), `${nivel}: ${pior(cor).toFixed(2)}`).toBeGreaterThanOrEqual(AA.texto)
+  })
+})
 })

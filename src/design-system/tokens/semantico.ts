@@ -71,6 +71,18 @@ export const semantico = {
    * do nível continua branco cheio — foi ali que o parceiro pediu a cor.
    */
   nivelRandolaBorda: p.brancoVeu55,
+  /**
+   * O TEXTO do Randola é o branco a 70%, não o cheio.
+   *
+   * Cheio ele dá 14,56 de contraste no pior caso das cinco superfícies —
+   * contra 7,52 do ouro, 7,09 da prata e 5,45 do bronze. O nível MENOS
+   * importante renderizava com o dobro do peso do segundo mais importante, e
+   * numa tela de varredura o olho ia primeiro para o card que menos importa.
+   * A 70% ele dá 7,86: continua branco, continua o mais claro dos quatro, e
+   * sai de outlier. A cor pedida no feedback 03 é respeitada — muda a
+   * intensidade, não o matiz.
+   */
+  nivelRandolaTexto: p.brancoVeu70,
 
   // -- Canal 2 · nível do APITO (anel) -----------------------------------
   apitoNivel1: p.ambar400,

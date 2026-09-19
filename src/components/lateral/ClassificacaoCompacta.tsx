@@ -43,7 +43,7 @@ export function ClassificacaoCompacta({
               role="tab"
               aria-selected={i === ativa}
               aria-controls="painel-conferencia"
-              className={`${estilos.aba} ${i === ativa ? estilos.abaAtiva : ''}`}
+              className={`${estilos.aba} ${i === ativa ? estilos.abaAtiva : ''} opcao-segmentada`}
               onClick={() => setAtiva(i)}
             >
               {grupo.conferencia}

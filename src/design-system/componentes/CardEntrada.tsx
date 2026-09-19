@@ -241,6 +241,15 @@ export function CardEntrada(props: CardEntradaProps) {
   // E o brilho quente vem SÓ do modo fire, não da tela: no artboard do Fire
   // Live o card sem a pílula leva `box-shadow:none`. Brilhar todo card quente
   // seria um quarto canal de cor — e o brilho deixaria de dizer "modo fire".
+  // `card-alvo` dá hover e foco ao card INTEIRO — o maior alvo de clique do
+  // produto, que até a auditoria de 19/09 não respondia ao mouse. Convive com
+  // `card-modo-fire`, que é dono da animação do modo fire.
+  const classesDoCard = [
+    props.modoFire ? 'card-modo-fire' : '',
+    props.detalheHref ? 'card-alvo' : '',
+  ]
+    .filter(Boolean)
+    .join(' ')
   const brilhoDoCard = props.turbo
     ? componente.turboBrilho
     : props.modoFire
@@ -358,7 +367,7 @@ export function CardEntrada(props: CardEntradaProps) {
 
   return (
     <div
-      className={props.modoFire ? 'card-modo-fire' : undefined}
+      className={classesDoCard || undefined}
       style={{ position: props.detalheHref ? 'relative' : undefined }}
     >
       {/* A faixa metálica CURTA de 56×3 px morreu na identidade 06: o nível do
@@ -414,6 +423,7 @@ export function CardEntrada(props: CardEntradaProps) {
                 {props.jogadorHref ? (
                   <Link
                     href={props.jogadorHref}
+                    className="link-texto"
                     style={{
                       color: 'inherit',
                       textUnderlineOffset: 3,
@@ -696,6 +706,7 @@ export function CardEntrada(props: CardEntradaProps) {
                 <Link
                   key={aba.atributo}
                   href={aba.href}
+                  className="aba-atributo"
                   aria-current={aba.ativo ? 'true' : undefined}
                   style={{
                     padding: '3px 9px',

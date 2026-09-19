@@ -151,4 +151,61 @@ describe('duas visões, sugeridas e realizadas', () => {
     )
     expect(comTextoForjado).not.toContain(fraseDoAtacante)
   })
+
+  it('a maior parte do que se clica responde ao mouse (auditoria de UX para web)', async () => {
+    // A auditoria de 19/09 mediu 520 de 794 elementos interativos sem classe —
+    // logo sem :hover e sem o anel de foco do app. `<summary>` de <details>
+    // nativo é a exceção aceita: ele É o controle do disclosure e o browser o
+    // marca sozinho.
+    const { default: Pagina } = await import('../(app)/gestao/page')
+    const html = renderToStaticMarkup(await Pagina({ searchParams: Promise.resolve({}) }))
+    const corpo = html
+      .replace(/<nav aria-label="Seções do app[\s\S]*?<\/nav>/g, '')
+      // A linha responde pelo invólucro `.linha-alvo`; o link que a cobre não
+      // precisa de estado próprio, como a cobertura do card na Lista.
+      .replace(/(<div class="linha-alvo"[^>]*>)\s*<a\b[^>]*>/g, '$1')
+    const tags = corpo.match(/<(?:a|button|summary)\b[^>]*>/g) ?? []
+    // A COBERTURA do card (`position:absolute;inset:0`) fica de fora: ela não
+    // tem classe porque quem responde é o invólucro `.card-alvo` em volta dela
+    // — dar estado à cobertura desenharia o realce por cima do card, não nele.
+    const sem = tags.filter(
+      (t) =>
+        !t.includes('class=') &&
+        !t.startsWith('<summary') &&
+        !t.includes('position:absolute;inset:0'),
+    )
+    expect(
+      sem.length / tags.length,
+      `${sem.length} de ${tags.length} sem estado:\n${sem.slice(0, 8).join('\n')}`,
+    ).toBeLessThan(0.12)
+  }, 60_000)
+
+  it('"Registrei" é secundário — trinta e sete primários não são primário nenhum', async () => {
+    const { default: Pagina } = await import('../(app)/gestao/page')
+    const html = renderToStaticMarkup(await Pagina({ searchParams: Promise.resolve({}) }))
+    const registrei = [...html.matchAll(/<button[^>]*>Registrei<\/button>/g)].map((m) => m[0])
+    expect(registrei.length).toBeGreaterThan(1)
+    for (const b of registrei) {
+      expect(b).toContain('botao-secundario')
+      expect(b).not.toContain('botao-primario')
+    }
+    // e o primário da tela continua existindo: Aplicar, que se faz uma vez
+    expect(html).toMatch(/<button[^>]*botao-primario[^>]*>Aplicar<\/button>/)
+  }, 60_000)
+
+  it('as sugeridas agrupam por time, e nenhuma linha se perde no caminho', async () => {
+    const { default: Pagina } = await import('../(app)/gestao/page')
+    const html = renderToStaticMarkup(await Pagina({ searchParams: Promise.resolve({}) }))
+    const linhas = (html.match(/>Registrei</g) ?? []).length
+    const grupos = (html.match(/<section style="display:grid;gap:8px"/g) ?? []).length
+    expect(grupos).toBeGreaterThan(1)
+    expect(linhas).toBeGreaterThanOrEqual(grupos)
+  }, 60_000)
+
+  it('a linha escreve o nível do jogador — a faixa colorida não pode ser o único sinal', async () => {
+    const { default: Pagina } = await import('../(app)/gestao/page')
+    const html = renderToStaticMarkup(await Pagina({ searchParams: Promise.resolve({}) }))
+    const texto = html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ')
+    expect(texto).toMatch(/(MVP|All Star|Suporte|Randola) · [A-Z]{3} · /)
+  }, 60_000)
 })

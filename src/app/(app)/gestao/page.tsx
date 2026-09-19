@@ -4,7 +4,7 @@ import { horaCurta } from '@/components/formato'
 import { CabecalhoTela, Chip, Moldura } from '@/components/navegacao'
 import { dataDeReferencia } from '@/modules/dominio/rodada'
 import { NIVEL_JOGADOR } from '@/design-system/tokens/css'
-import { Avatar } from '@/design-system/componentes'
+import { Avatar, IdentidadeTime } from '@/design-system/componentes'
 import { semantico } from '@/design-system/tokens/semantico'
 import { getDb } from '@/modules/dominio/db/cliente'
 import { entradasRealizadasDoDia } from '@/modules/entrega/gestao-realizadas'
@@ -89,10 +89,32 @@ function Numero({ rotulo, valor, apoio }: { rotulo: string; valor: string; apoio
  * voltar à lista e procurar o jogador de novo — só a faixa do formulário,
  * abaixo dele, é que não pertence a esse link.
  */
+/**
+ * As sugeridas AGRUPADAS POR TIME.
+ *
+ * Trinta e sete linhas iguais numa coluna só: achar um jogador ali era rolar
+ * (auditoria de UX para web, §4.5). A Lista agrupa por JOGO, que seria o
+ * agrupamento natural aqui também — mas o confronto exigiria uma leitura nova
+ * na tela de dinheiro, e o time já vem no item. A ordem DENTRO do grupo é a
+ * que chegou (maior aporte primeiro), e os grupos saem na ordem em que o
+ * primeiro jogador de cada um aparece no plano.
+ */
+function agruparPorTime(entradas: EntradaDoPlano[]): [string, EntradaDoPlano[]][] {
+  const grupos = new Map<string, EntradaDoPlano[]>()
+  for (const entrada of entradas) {
+    const sigla = entrada.item.timeSigla
+    const atual = grupos.get(sigla)
+    if (atual) atual.push(entrada)
+    else grupos.set(sigla, [entrada])
+  }
+  return [...grupos]
+}
+
 function LinhaSugerida({ item, entrada, hoje }: EntradaDoPlano & { hoje: string }) {
   const nivel = NIVEL_JOGADOR[item.nivelJogador]
   return (
     <div
+      className="linha-alvo"
       style={{
         borderRadius: 10,
         background: semantico.superficie,
@@ -120,8 +142,10 @@ function LinhaSugerida({ item, entrada, hoje }: EntradaDoPlano & { hoje: string 
         />
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: 15, fontWeight: 700 }}>{item.nome}</div>
+          {/* O rótulo do NÍVEL DO JOGADOR escrito: a faixa colorida da linha
+              é o metálico dele, e cor sozinha não é canal neste projeto. */}
           <div style={{ fontSize: 12, color: semantico.textoSecundario }}>
-            {item.timeSigla} · {ATRIBUTO_ROTULO[item.atributo]}
+            {nivel.rotulo} · {item.timeSigla} · {ATRIBUTO_ROTULO[item.atributo]}
             {item.linha === null ? '' : ` ${item.linha}+`} · nível {item.nivelApito}
             {item.turbo ? ' · turbo' : ''}
           </div>
@@ -186,9 +210,11 @@ function LinhaSugerida({ item, entrada, hoje }: EntradaDoPlano & { hoje: string 
               border: `1px solid ${semantico.divisor}`,
             }}
           />
+          {/* SECUNDÁRIO: trinta e sete primários não são primário nenhum. O
+              primário desta tela é "Aplicar", que se faz uma vez. */}
           <button
             type="submit"
-            className="botao-primario"
+            className="botao-secundario"
             style={{
               padding: '6px 12px',
               borderRadius: 8,
@@ -456,14 +482,19 @@ export default async function PaginaGestao({
           {plano.entradas.length === 0 ? (
             <p style={{ color: semantico.textoSecundario, fontSize: 14 }}>
               A lista de hoje ainda não foi publicada.{' '}
-              <Link href="/" style={{ color: semantico.textoPrimario }}>
+              <Link href="/" className="link-texto" style={{ color: semantico.textoPrimario }}>
                 Ver a Lista Secreta
               </Link>
             </p>
           ) : (
-            <div style={{ display: 'grid', gap: 8 }}>
-              {plano.entradas.map(({ item, entrada }) => (
-                <LinhaSugerida key={item.chave} item={item} entrada={entrada} hoje={hoje} />
+            <div style={{ display: 'grid', gap: 18 }}>
+              {agruparPorTime(plano.entradas).map(([sigla, entradas]) => (
+                <section key={sigla} style={{ display: 'grid', gap: 8 }}>
+                  <IdentidadeTime sigla={sigla} tamanhoLogo={20} />
+                  {entradas.map(({ item, entrada }) => (
+                    <LinhaSugerida key={item.chave} item={item} entrada={entrada} hoje={hoje} />
+                  ))}
+                </section>
               ))}
             </div>
           )}
@@ -480,7 +511,7 @@ export default async function PaginaGestao({
           {realizadas.length === 0 ? (
             <p style={{ color: semantico.textoSecundario, fontSize: 14 }}>
               Nada registrado hoje. Registre pela visão{' '}
-              <Link href="/gestao" style={{ color: semantico.textoPrimario }}>
+              <Link href="/gestao" className="link-texto" style={{ color: semantico.textoPrimario }}>
                 Sugeridas
               </Link>{' '}
               o que você fez fora daqui.

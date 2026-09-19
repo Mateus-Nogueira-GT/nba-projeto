@@ -296,7 +296,16 @@ export default async function PaginaListaSecreta({
         <div className="so-ate-lateral">
           <ConviteDoPlano variante="faixa" minimo="MVP" recurso="A Lista Secreta" voltar="/" />
         </div>
-        <JogosDoDia jogos={jogosDoDia} fuso={fuso} />
+        <JogosDoDia
+          jogos={jogosDoDia}
+          fuso={fuso}
+          // A repetição do meio da página: a faixa do topo e a da lateral saem
+          // da tela depois de alguns blocos de silhueta, e o visitante de
+          // desktop rolava o resto sem nenhuma chamada à vista.
+          convite={
+            <ConviteDoPlano variante="faixa" minimo="MVP" recurso="A Lista Secreta" voltar="/" />
+          }
+        />
       </Moldura>
     )
   }

@@ -215,7 +215,7 @@ export default async function PaginaApito({
 
   if (!process.env.DATABASE_URL) {
     return (
-      <Moldura aba={null}>
+      <Moldura aba={null} largura="dados">
         <h1>Linhas e confiança</h1>
         <p style={{ color: semantico.textoSecundario }}>Banco não configurado.</p>
       </Moldura>
@@ -262,7 +262,7 @@ export default async function PaginaApito({
 
   if (!principal) {
     return (
-      <Moldura aba={null}>
+      <Moldura aba={null} largura="dados">
         <CabecalhoTela sobrancelha="LISTA SECRETA · PRÉ-LIVE" titulo="Sem apito" voltarHref="/" />
         <div
           style={{
@@ -329,6 +329,10 @@ export default async function PaginaApito({
   // conferir jogo inteiro contra alvo de 1º quarto, e a tela não remonta a
   // conta. Sem linha, o gráfico sai sem régua.
   const linhaConferida = detalhe.linhaConferida
+  // O componente desenha no máximo dez colunas (`FormaNoAtributo`), então o
+  // título diz o MENOR entre o que existe e esse teto.
+  const jogosNaForma = Math.min(detalhe.blocos.length, 10)
+  const tituloDaForma = `FORMA NO ATRIBUTO · ${jogosNaForma === 1 ? 'ÚLTIMO 1' : `ÚLTIMOS ${jogosNaForma}`}`
   // A caixa do meio da comparação: LINHA quando há linha; ALVO 1Q quando o
   // apito nasceu ao vivo. Trocar o RÓTULO (e não pôr "+" num alvo) é o que
   // impede a tela de chamar de linha o que é alvo — são grandezas de janelas
@@ -379,7 +383,7 @@ export default async function PaginaApito({
   const geradoEmFinal = geradoEm ?? vivo.geradoEm
 
   return (
-    <Moldura aba={null}>
+    <Moldura aba={null} largura="dados">
       {/* 1 · SOBRANCELHA — o botão de voltar e o universo da tela */}
       <p
         style={{
@@ -514,9 +518,12 @@ export default async function PaginaApito({
         </p>
       )}
 
-      {/* 4 · FORMA NO ATRIBUTO — os últimos 10 com a linha marcada */}
+      {/* 4 · FORMA NO ATRIBUTO — os últimos 10 com a linha marcada. O título
+          dizia sempre "ÚLTIMOS 10", e quem tem menos de dez jogos conferidos
+          lia um título que mente — enquanto o gráfico ao lado já contava a
+          verdade ("bateu 3 de 8"). O 10 é o teto de colunas do componente. */}
       <TituloSecao
-        titulo="FORMA NO ATRIBUTO · ÚLTIMOS 10"
+        titulo={tituloDaForma}
         aux={
           detalhe.bateu.total === 0
             ? undefined

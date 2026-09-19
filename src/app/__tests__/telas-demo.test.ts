@@ -270,7 +270,10 @@ describe('detalhe do apito', () => {
     // — dez barras com a linha marcada, e o "bateu x de y" saiu da caixa para
     // o auxiliar da seção. As asserções finas estão em telas-04-detalhe.test.ts.
     expect(html).toMatch(/bateu \d+ de \d+/)
-    expect(html).toContain('FORMA NO ATRIBUTO · ÚLTIMOS 10')
+    // O número do título é o que o DADO tem, não um 10 fixo (auditoria de UX
+    // para web, §4.3): quem tem menos de dez jogos conferidos lia um título
+    // que mentia, enquanto a legenda ao lado já dizia "bateu 7 de 9".
+    expect(html).toMatch(/FORMA NO ATRIBUTO · ÚLTIMOS? \d+/)
     expect(html).toContain('POR QUE ENTROU')
     expect(html).toContain('VER ESTATÍSTICAS')
     expect(html).not.toContain('ALTÍSSIMO VALOR')
@@ -955,11 +958,13 @@ describe('tela de partida', () => {
     // que também precisaria ser mantido em dia manualmente.
     const ontem = somarDias(HOJE, -1)
     const amanha = somarDias(HOJE, 1)
+    // `[^>]*href=` e não `<a href=`: o `className` da navegação por texto
+    // (auditoria de UX para web) entra antes do href no markup do React.
     expect(html).toMatch(
-      new RegExp(`<a href="/estatisticas\\?data=${ontem}"[^>]*>\\s*← dia anterior\\s*</a>`),
+      new RegExp(`<a [^>]*href="/estatisticas\\?data=${ontem}"[^>]*>\\s*← dia anterior\\s*</a>`),
     )
     expect(html).toMatch(
-      new RegExp(`<a href="/estatisticas\\?data=${amanha}"[^>]*>\\s*dia seguinte →\\s*</a>`),
+      new RegExp(`<a [^>]*href="/estatisticas\\?data=${amanha}"[^>]*>\\s*dia seguinte →\\s*</a>`),
     )
   })
 

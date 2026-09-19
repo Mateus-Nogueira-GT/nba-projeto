@@ -9,10 +9,18 @@ export function MolduraConta({
   titulo,
   descricao,
   aba = null,
+  largura = 560,
   children,
 }: {
   titulo: string
   descricao?: string
+  /**
+   * A coluna. 560 é a de LEITURA e serve a formulário e a texto; a tela de
+   * planos pede mais, porque três planos lado a lado são uma COMPARAÇÃO e
+   * empilhados a 560 viram uma lista que se lê de cima a baixo (auditoria de
+   * UX para web, §4.2).
+   */
+  largura?: number
   /**
    * Aba do rodapé. `null` nas telas de entrada e cadastro: quem ainda não fez
    * login não tem para onde navegar, e uma barra com quatro destinos que
@@ -31,7 +39,7 @@ export function MolduraConta({
         fontFamily: semantico.fonteCorpo,
       }}
     >
-      <div style={{ width: '100%', maxWidth: 560, margin: '0 auto' }}>
+      <div style={{ width: '100%', maxWidth: largura, margin: '0 auto' }}>
         <Link href="/" style={{ color: semantico.textoSecundario, fontSize: 13 }}>
           ← NIP
         </Link>

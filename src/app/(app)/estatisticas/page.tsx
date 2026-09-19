@@ -350,6 +350,7 @@ function colunasDaClassificacao(
       celula: (l) => (
         <a
           href={rotaDoTime(l.timeId)}
+          className="link-texto"
           style={{
             display: 'inline-flex',
             alignItems: 'center',
@@ -503,6 +504,7 @@ export default async function PaginaEstatisticas({
               {resultados.map((r) => (
                 <li key={`${r.tipo}-${r.id}`}>
                   <a
+                    className="link-texto"
                     href={
                       r.tipo === 'JOGADOR'
                         ? rotaDoJogador(r.id, { periodo: '10', atributo: 'PONTOS', q: termo })
@@ -558,15 +560,23 @@ export default async function PaginaEstatisticas({
               aria-label="Navegar por data"
               style={{ display: 'flex', gap: 12, alignItems: 'baseline', marginBottom: 8 }}
             >
-              <a href={`/estatisticas?data=${nav.anterior}`} style={estilo}>
+              <a
+                className="link-texto"
+                href={`/estatisticas?data=${nav.anterior}`}
+                style={estilo}
+              >
                 ← dia anterior
               </a>
               {data !== hoje && (
-                <a href="/estatisticas" style={estilo}>
+                <a className="link-texto" href="/estatisticas" style={estilo}>
                   hoje
                 </a>
               )}
-              <a href={`/estatisticas?data=${nav.seguinte}`} style={estilo}>
+              <a
+                className="link-texto"
+                href={`/estatisticas?data=${nav.seguinte}`}
+                style={estilo}
+              >
                 dia seguinte →
               </a>
             </nav>

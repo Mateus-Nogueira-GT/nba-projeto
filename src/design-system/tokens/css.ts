@@ -22,7 +22,11 @@ export const NIVEL_JOGADOR: Record<
     ...componente.molduraNivel.ALL_STAR,
   },
   SUPORTE: { cor: semantico.nivelSuporte, rotulo: 'Suporte', ...componente.molduraNivel.SUPORTE },
-  RANDOLA: { cor: semantico.nivelRandola, rotulo: 'Randola', ...componente.molduraNivel.RANDOLA },
+  RANDOLA: {
+    cor: semantico.nivelRandolaTexto,
+    rotulo: 'Randola',
+    ...componente.molduraNivel.RANDOLA,
+  },
 }
 
 export const APITO: Record<NivelApito, { cor: string; rotulo: string }> = {
