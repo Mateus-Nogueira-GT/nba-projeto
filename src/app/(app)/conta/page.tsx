@@ -216,14 +216,16 @@ export default async function PaginaConta({
       </div>
 
       <form action={sair} style={{ marginTop: 20 }}>
+        {/* SECUNDÁRIO: primário é UMA ação por tela, e sair da conta não é o
+            que a pessoa veio fazer no Perfil. A regra "contorno azul vira
+            preenchido" da Identidade 05 não distinguia primária de secundária
+            e promoveu este botão por engano. */}
         <button
           type="submit"
+          className="botao-secundario"
           style={{
             padding: '11px 12px',
             borderRadius: 8,
-            border: '1px solid transparent',
-            background: semantico.acento,
-            color: semantico.textoSobreAcento,
             fontFamily: semantico.fonteTitulo,
             letterSpacing: 0.5,
             textTransform: 'uppercase',

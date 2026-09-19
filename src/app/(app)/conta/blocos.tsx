@@ -47,12 +47,17 @@ const ESTILO_CAMPO = {
   fontSize: 15,
 } as const
 
-/** Estilo de botão principal (CTA). */
+/**
+ * Estilo de botão principal (CTA) — só a GEOMETRIA.
+ *
+ * Cor, fundo e borda moram em `.botao-primario` (globals.css): estilo embutido
+ * vence classe, e o hover do manual nunca apareceria. Por isso as três
+ * propriedades do campo saem no spread abaixo.
+ */
+const { border: _bordaCampo, background: _fundoCampo, color: _corCampo, ...GEOMETRIA_DO_CAMPO } =
+  ESTILO_CAMPO
 const ESTILO_BOTAO_PRINCIPAL = {
-  ...ESTILO_CAMPO,
-  border: 0,
-  background: componente.ctaFundo,
-  color: semantico.textoSobreAcento,
+  ...GEOMETRIA_DO_CAMPO,
   fontFamily: semantico.fonteTitulo,
   letterSpacing: 0.5,
   textTransform: 'uppercase' as const,
@@ -62,14 +67,14 @@ const ESTILO_BOTAO_PRINCIPAL = {
 
 /** Estilo de botão secundário/destrutivo. */
 
-/** Estilo de botão secundário com acento (manutenção de conta). */
+/**
+ * Trocar senha / trocar e-mail: a ação primária do próprio formulário — a cor
+ * vem da classe `.botao-primario`, como em todo CTA desde as correções de
+ * 19/09. Aqui fica só a geometria, que é menor que a do CTA de página.
+ */
 const ESTILO_BOTAO_SECUNDARIO_ACENTO = {
   padding: '11px 12px',
   borderRadius: 8,
-  // PREENCHIDO: o azul do manual é ação, nunca contorno (identidade 05).
-  border: '1px solid transparent',
-  background: semantico.acento,
-  color: semantico.textoSobreAcento,
   fontFamily: semantico.fonteTitulo,
   letterSpacing: 0.5,
   textTransform: 'uppercase' as const,
@@ -167,7 +172,7 @@ export function BlocoConta({
                 style={ESTILO_CAMPO}
               />
             </label>
-            <button type="submit" style={ESTILO_BOTAO_PRINCIPAL}>
+            <button type="submit" className="botao-primario" style={ESTILO_BOTAO_PRINCIPAL}>
               Salvar nome
             </button>
           </form>
@@ -252,7 +257,7 @@ export function BlocoConta({
                 diferentes. */}
             Use pelo menos 12 caracteres, com letra e número.
           </p>
-          <button type="submit" style={ESTILO_BOTAO_SECUNDARIO_ACENTO}>
+          <button type="submit" className="botao-primario" style={ESTILO_BOTAO_SECUNDARIO_ACENTO}>
             Trocar senha
           </button>
         </form>
@@ -278,7 +283,7 @@ export function BlocoConta({
               style={ESTILO_CAMPO}
             />
           </label>
-          <button type="submit" style={ESTILO_BOTAO_SECUNDARIO_ACENTO}>
+          <button type="submit" className="botao-primario" style={ESTILO_BOTAO_SECUNDARIO_ACENTO}>
             Trocar e-mail
           </button>
           <p style={{ margin: 0, color: semantico.textoSecundario, fontSize: 12 }}>
@@ -398,15 +403,15 @@ export function BlocoAssinatura({
           <p style={{ margin: '14px 0 0' }}>
             <Link
               href="/assinar"
+              className="botao-primario"
               style={{
-                // O botão primário do manual: 48 px, canto de 8, azul chapado.
+                // O botão primário do manual: 48 px, canto de 8. A cor vem da
+                // classe.
                 display: 'inline-flex',
                 alignItems: 'center',
                 minHeight: componente.ctaAltura,
                 padding: '0 18px',
                 borderRadius: componente.raioControle,
-                background: componente.ctaFundo,
-                color: componente.ctaTexto,
                 fontFamily: semantico.fonteTitulo,
                 letterSpacing: '0.02em',
                 textTransform: 'uppercase',

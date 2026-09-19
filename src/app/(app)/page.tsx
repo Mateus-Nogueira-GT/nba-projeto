@@ -182,10 +182,8 @@ function CartaoDaLista({
       nivelJogador={item.nivelJogador}
       nivelApito={item.nivelApito}
       linha={item.linha}
-      confianca={item.confianca}
       // O grau já veio calculado na materialização (uma vez por evento). A
       // tela lê; não recalcula nem chama o motor.
-      grauConfianca={item.grauConfianca ?? null}
       turbo={item.turbo}
       modoFire={item.modoFire}
       opdOrigemNivel={item.opdOrigemNivel}

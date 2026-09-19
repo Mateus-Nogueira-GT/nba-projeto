@@ -45,14 +45,13 @@ function Campo({ valor }: { valor: string }) {
       />
       <button
         type="submit"
+        className="botao-primario"
         style={{
           padding: '10px 16px',
           borderRadius: 8,
-          border: 'none',
-          background: semantico.textoPrimario,
-          color: semantico.textoSobreAcento,
           fontWeight: 600,
           fontSize: 14,
+          cursor: 'pointer',
         }}
       >
         Buscar
@@ -485,6 +484,9 @@ export default async function PaginaEstatisticas({
       lateral={await lateralPadrao({
         assistente: atende(acesso.nivel, 'MVP'),
         gratis: !atende(acesso.nivel, 'MVP'),
+        // A página já mostra a classificação inteira: a compacta seria o
+        // mesmo dado duas vezes na mesma dobra.
+        semClassificacao: true,
       })} largura="dados" assistente={atende(acesso.nivel, 'MVP')}>
       <CabecalhoTela sobrancelha={SOBRANCELHA_STATS} titulo="STATS" />
 
@@ -593,7 +595,9 @@ export default async function PaginaEstatisticas({
           por varredura, e duas conferências em sequência obrigam a rolar para
           comparar o que a liga publica em paralelo. A classe leva SÓ a media
           query — é o que o estilo inline não faz. */}
-      <div className="grade-conferencias" style={{ display: 'grid', gap: 24 }}>
+      {/* A âncora de "Ver completa" da lateral: sem ela o link caía no topo
+          de Estatísticas, e a classificação fica lá embaixo. */}
+      <div id="classificacao" className="grade-conferencias" style={{ display: 'grid', gap: 24 }}>
         {grupos.map((conferencia) => {
           const linhas = classificacao.linhas.filter((l) => l.conferencia === conferencia)
           const grupo = rotuloDoGrupo(conferencia, linhas.length)

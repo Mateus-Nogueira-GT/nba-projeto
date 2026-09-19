@@ -24,13 +24,6 @@ const NIVEIS: Nivel[] = ['MVP', 'ALL_STAR', 'SUPORTE', 'RANDOLA']
 const APITOS: NivelApito[] = [1, 2, 3]
 const GRAUS = [1, 2, 3, 4, 5] as const
 
-/** Confiança plausível por nível, só para a galeria ter número realista. */
-const CONFIANCA: Record<Nivel, number> = {
-  MVP: 95,
-  ALL_STAR: 90,
-  SUPORTE: 86,
-  RANDOLA: 85,
-}
 
 const EXEMPLO: Record<Nivel, { nome: string; time: string; sigla: string; posicao: string }> = {
   MVP: { nome: 'Jokic', time: 'Denver Nuggets', sigla: 'DEN', posicao: 'C' },
@@ -80,17 +73,18 @@ export default async function PaginaGaleria() {
       <header style={{ marginBottom: 32, maxWidth: 720 }}>
         <h1 style={{ margin: 0 }}>Design System · NIP</h1>
         <p style={{ opacity: 0.75, lineHeight: 1.6 }}>
-          Quatro sinais, quatro formas distintas: a <strong>faixa metálica</strong> no topo é o
-          nível do jogador, o <strong>anel do avatar</strong> é o nível do apito, a{' '}
-          <strong>pílula de contorno</strong> é a faixa de confiança e o{' '}
-          <strong>brilho ao redor do card</strong> só aparece no grau máximo de confiança. Turbo e
-          modo fire nunca comunicam por cor ou brilho sozinhos — sempre selo escrito.
+          Dois canais, duas superfícies (identidade 06): a <strong>moldura do card</strong> —
+          borda, lateral de 6 px e véu — é o nível do jogador, em ouro, prata, bronze ou branco;
+          o <strong>anel do avatar</strong> é o nível do apito, e o numeral ao lado do nome repete
+          a cor dele. A nota de confiança saiu do card e mora na análise do apito; o lugar de
+          destaque agora é da <strong>odd</strong>. Turbo e modo fire nunca comunicam por cor ou
+          brilho sozinhos — sempre selo escrito.
         </p>
       </header>
 
       <Secao
         titulo="4 níveis de jogador × 3 níveis de apito"
-        nota="A faixa metálica muda com o nível do jogador; o anel do avatar muda com o nível do apito. Nenhuma cor é compartilhada entre os dois canais."
+        nota="A MOLDURA muda com o nível do jogador; o anel do avatar muda com o nível do apito. Nenhuma cor é compartilhada entre os dois canais."
       >
         {NIVEIS.map((nivel) =>
           APITOS.map((apito) => (
@@ -102,8 +96,6 @@ export default async function PaginaGaleria() {
               atributo="PONTOS"
               nivelJogador={nivel}
               nivelApito={apito}
-              confianca={CONFIANCA[nivel]}
-              grauConfianca={3}
               linha={20}
             />
           )),
@@ -111,8 +103,8 @@ export default async function PaginaGaleria() {
       </Secao>
 
       <Secao
-        titulo="Card comum (grau 3) vs. grau máximo (grau 5, brilha)"
-        nota="Só o grau 5 de confiança acende o brilho ao redor do card — os demais graus mudam a cor da nota de confiança e da borda lateral."
+        titulo="Dois cards completos, com barrinhas, média e odd"
+        nota="Dos três brilhos da identidade 03 sobraram dois — turbo e modo fire. O da confiança saiu com ela na identidade 06."
       >
         <CardEntrada
           nome="Austin Reaves"
@@ -121,8 +113,6 @@ export default async function PaginaGaleria() {
           atributo="PONTOS"
           nivelJogador="ALL_STAR"
           nivelApito={3}
-          confianca={90}
-          grauConfianca={3}
           linha={18}
           ultimos5={[
             { valor: 22, bateu: true },
@@ -141,8 +131,6 @@ export default async function PaginaGaleria() {
           atributo="PONTOS"
           nivelJogador="MVP"
           nivelApito={3}
-          confianca={97}
-          grauConfianca={5}
           linha={26}
           ultimos5={[
             { valor: 31, bateu: true },
@@ -167,8 +155,6 @@ export default async function PaginaGaleria() {
           atributo="PONTOS"
           nivelJogador="MVP"
           nivelApito={3}
-          confianca={94}
-          grauConfianca={4}
           turbo
           modoFire
           linha={26}
@@ -186,8 +172,6 @@ export default async function PaginaGaleria() {
           atributo="PONTOS"
           nivelJogador="MVP"
           nivelApito={1}
-          confianca={95}
-          grauConfianca={4}
           modoFire
           temperatura="quente"
           vivo
@@ -201,8 +185,6 @@ export default async function PaginaGaleria() {
           atributo="PONTOS"
           nivelJogador="SUPORTE"
           nivelApito={2}
-          confianca={87}
-          grauConfianca={2}
           temperatura="quente"
           vivo
           opdOrigemNivel={3}
@@ -222,8 +204,6 @@ export default async function PaginaGaleria() {
           atributo="REBOTES"
           nivelJogador="MVP"
           nivelApito={2}
-          confianca={92}
-          grauConfianca={4}
           linha={12}
         />
         <CardEntrada
@@ -233,8 +213,6 @@ export default async function PaginaGaleria() {
           atributo="ASSISTENCIAS"
           nivelJogador="SUPORTE"
           nivelApito={2}
-          confianca={86}
-          grauConfianca={1}
           linha={7}
         />
       </Secao>
@@ -251,8 +229,6 @@ export default async function PaginaGaleria() {
           atributo="PONTOS"
           nivelJogador="MVP"
           nivelApito={2}
-          confianca={91}
-          grauConfianca={3}
           linha={24}
         />
         {/* Ícone local do próprio PWA (public/icons/app-192.png) só para provar
@@ -269,8 +245,6 @@ export default async function PaginaGaleria() {
           atributo="PONTOS"
           nivelJogador="MVP"
           nivelApito={2}
-          confianca={91}
-          grauConfianca={3}
           linha={24}
         />
       </Secao>
@@ -308,8 +282,6 @@ export default async function PaginaGaleria() {
           atributo="PONTOS"
           nivelJogador="ALL_STAR"
           nivelApito={3}
-          confianca={91}
-          grauConfianca={4}
           linha={15}
           estado="PRE"
           ultimos5={[
@@ -330,8 +302,6 @@ export default async function PaginaGaleria() {
           atributo="PONTOS"
           nivelJogador="MVP"
           nivelApito={1}
-          confianca={null}
-          grauConfianca={null}
           modoFire
           temperatura="quente"
           vivo
@@ -347,8 +317,6 @@ export default async function PaginaGaleria() {
           atributo="REBOTES"
           nivelJogador="MVP"
           nivelApito={1}
-          confianca={null}
-          grauConfianca={null}
           temperatura="quente"
           estado="FIM_Q1"
           alvo1Q={3}
@@ -363,8 +331,6 @@ export default async function PaginaGaleria() {
           atributo="PONTOS"
           nivelJogador="ALL_STAR"
           nivelApito={3}
-          confianca={91}
-          grauConfianca={4}
           linha={15}
           estado="AGUARDANDO_OFICIAL"
         />
@@ -376,8 +342,6 @@ export default async function PaginaGaleria() {
           atributo="PONTOS"
           nivelJogador="ALL_STAR"
           nivelApito={3}
-          confianca={91}
-          grauConfianca={4}
           linha={15}
           estado="CONFERIDO"
           fez={25}
@@ -398,8 +362,6 @@ export default async function PaginaGaleria() {
           atributo="ASSISTENCIAS"
           nivelJogador="MVP"
           nivelApito={1}
-          confianca={88}
-          grauConfianca={3}
           linha={5}
           estado="CONFERIDO"
           fez={4}
@@ -420,8 +382,6 @@ export default async function PaginaGaleria() {
           atributo="ASSISTENCIAS"
           nivelJogador="ALL_STAR"
           nivelApito={1}
-          confianca={86}
-          grauConfianca={2}
           linha={4}
           estado="CONFERIDO"
           fez={null}
@@ -441,8 +401,6 @@ export default async function PaginaGaleria() {
           atributo="PONTOS"
           nivelJogador="ALL_STAR"
           nivelApito={3}
-          confianca={91}
-          grauConfianca={4}
           opdOrigemNivel={3}
           linha={10}
           atributos={[
@@ -468,8 +426,6 @@ export default async function PaginaGaleria() {
           atributo="REBOTES"
           nivelJogador="SUPORTE"
           nivelApito={3}
-          confianca={91}
-          grauConfianca={4}
           linha={4}
           lente="MEDIA_LINHA"
           mediaTemporada={4.9}
@@ -483,8 +439,6 @@ export default async function PaginaGaleria() {
           atributo="REBOTES"
           nivelJogador="SUPORTE"
           nivelApito={3}
-          confianca={91}
-          grauConfianca={4}
           linha={4}
           lente="ODDS"
           mediaTemporada={4.9}
@@ -498,8 +452,6 @@ export default async function PaginaGaleria() {
           atributo="REBOTES"
           nivelJogador="SUPORTE"
           nivelApito={3}
-          confianca={91}
-          grauConfianca={4}
           linha={4}
           lente="HIERARQUIA"
           hierarquia={{ posicao: 2, total: 8 }}
@@ -513,8 +465,6 @@ export default async function PaginaGaleria() {
           atributo="ASSISTENCIAS"
           nivelJogador="RANDOLA"
           nivelApito={2}
-          confianca={85}
-          grauConfianca={2}
           linha={2}
           lente="HIERARQUIA"
           hierarquia={null}

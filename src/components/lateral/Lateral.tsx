@@ -25,11 +25,18 @@ export function Lateral({
   dados,
   assistente,
   gratis,
+  mostrarClassificacao = true,
 }: {
   dados: DadosDaLateral
   /** O nível tem direito ao assistente. A tela sabe; a lateral só recebe. */
   assistente: boolean
   gratis: boolean
+  /**
+   * `false` no índice de Estatísticas (correções UX 19/09): a página já mostra
+   * a classificação inteira ao lado, e a compacta seria o mesmo dado duas
+   * vezes na mesma dobra.
+   */
+  mostrarClassificacao?: boolean
 }) {
   return (
     <div className={estilos.lateral}>
@@ -38,14 +45,18 @@ export function Lateral({
           variante="faixa"
           minimo="MVP"
           recurso="Lista, Fire Live e assistente"
+          // São TRÊS recursos: a frase montada diria "assistente começa".
+          titulo="Lista, Fire Live e assistente começam no MVP"
           voltar="/"
         />
       )}
       <UltimaNoite noite={dados.noite} temporada={dados.temporada} />
-      <ClassificacaoCompacta
-        conferencias={dados.classificacao.conferencias}
-        temporada={dados.classificacao.temporada}
-      />
+      {mostrarClassificacao && (
+        <ClassificacaoCompacta
+          conferencias={dados.classificacao.conferencias}
+          temporada={dados.classificacao.temporada}
+        />
+      )}
       {!gratis && assistente && <DocaDoAssistente />}
     </div>
   )

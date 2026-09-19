@@ -742,14 +742,13 @@ export default async function PaginaApito({
       {/* 9 · CTA e rodapé */}
       <Link
         href={rotaDoJogador(principal.jogadorId)}
+        className="botao-primario"
         style={{
           display: 'block',
           marginTop: 24,
           padding: 14,
           borderRadius: 12,
           textAlign: 'center',
-          background: componente.ctaFundo,
-          color: semantico.textoSobreAcento,
           fontFamily: semantico.fonteTitulo,
           fontSize: 16,
           letterSpacing: 1,

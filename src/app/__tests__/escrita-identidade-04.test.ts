@@ -4,6 +4,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vite
 import type { PlanoDoDia } from '../../modules/entrega/gestao'
 import type { Ruleset } from '../../modules/motor/ruleset/schema'
 import { razaoDeContraste } from '../../design-system/tokens/contraste'
+import { componente } from '../../design-system/tokens/componente'
 import { semantico } from '../../design-system/tokens/semantico'
 
 let homologado: Ruleset
@@ -105,14 +106,19 @@ async function guia() {
 }
 
 describe('escrita da identidade 04 · guia', () => {
-  it('a nota do exemplo permanece legível sobre o card escuro', async () => {
+  it('o número grande do exemplo permanece legível sobre o card escuro', async () => {
+    // Na identidade 06 o número grande do card deixou de ser a nota de
+    // confiança e passou a ser a ODD — o elemento que o parceiro pediu como
+    // maior atrativo. A regra de legibilidade é a mesma; mudou o dono.
     const exemplo = secao(await guia(), 'Um exemplo de card')
-    const estilo = exemplo.match(/<span style="([^"]*)">92<\/span>/)?.[1]
-    expect(estilo).toBeDefined()
+    const estilo = exemplo.match(
+      new RegExp(`<span style="([^"]*font-size:${componente.odd.valorMedia}[^"]*)"`),
+    )?.[1]
+    expect(estilo, 'a odd não saiu no card de exemplo').toBeDefined()
     const cor = estilo!.match(/(?:^|;)color:(#[a-f0-9]{6})/i)?.[1]
     expect(cor).toBeDefined()
     for (const fundo of [semantico.superficieFria1, semantico.superficieFria2]) {
-      // A nota tem 30px: contraste AA para texto grande.
+      // 38px: contraste AA para texto grande.
       expect(razaoDeContraste(cor!, fundo)).toBeGreaterThanOrEqual(3)
     }
   })

@@ -3,9 +3,14 @@ import { primitivo as p } from './primitivo'
 /**
  * CAMADA 2 · SEMÂNTICO — intenção. É aqui que o resto do sistema fala.
  *
- * DOIS canais visuais categóricos, e só dois (ADR-0005):
- *   borda metálica = nível do JOGADOR
- *   anel colorido  = nível do APITO, com a confiança como número dentro
+ * DOIS canais visuais categóricos, e só dois (ADR-0005). Na identidade 06 eles
+ * trocaram de superfície, sem deixar de ser dois (ADR-0011):
+ *   MOLDURA do card = nível do JOGADOR (borda, lateral de 6 px, véu)
+ *   anel do avatar  = nível do APITO, com o numeral N{n} ao lado do nome
+ *
+ * A confiança saiu do card na identidade 06: o número, a borda lateral do grau
+ * e o brilho do grau 5. A rampa turquesa abaixo continua viva — ela veste a
+ * tela de ANÁLISE do apito, que é onde a confiança passou a morar.
  *
  * A escala de 5 faixas MULTI-MATIZ da proposta original não existe mais — ela
  * colidia com as 4 cores categóricas do apito. A rampa de confiança abaixo
@@ -36,13 +41,36 @@ export const semantico = {
   /** Texto BRANCO sobre azul ou vermelho: CTA, pílula ativa, selo, chip ativo. */
   textoSobreAcento: p.branco,
 
-  // -- Canal 1 · nível do JOGADOR (borda metálica) -----------------------
-  // "preto" do documento virou GRAFITE: borda preta sobre superfície escura
-  // tem contraste ~1.3 e some. Borda invisível não é canal.
+  // -- Canal 1 · nível do JOGADOR (a moldura do card) --------------------
+  // O "preto" do documento nunca pôde ser preto: borda preta sobre superfície
+  // escura tem contraste ~1,3 e some. Foi grafite até a identidade 05 e virou
+  // branco na 06 — os dois resolvem o mesmo problema, um por baixo e outro por
+  // cima. Borda invisível não é canal.
   nivelMvp: p.ouro,
   nivelAllStar: p.prata,
   nivelSuporte: p.bronze,
-  nivelRandola: p.grafite,
+  // Identidade 06: o Randola virou BRANCO por pedido do parceiro. O grafite
+  // existia porque "preto" sumia sobre superfície escura; o branco resolve o
+  // mesmo problema pelo outro lado, e é o que separa o Randola do All Star.
+  nivelRandola: p.branco,
+
+  // -- Identidade 06 · a MOLDURA veste o nível do jogador -------------------
+  // O canal 1 saiu do tracinho de 56×3 px e passou a vestir a moldura inteira
+  // do card: borda, lateral de 6 px e véu no cabeçalho e no rodapé. O véu é o
+  // decimal do metálico a 12%.
+  nivelMvpVeu: p.ouroVeu12,
+  nivelAllStarVeu: p.prataVeu12,
+  nivelSuporteVeu: p.bronzeVeu12,
+  nivelRandolaVeu: p.brancoVeu12,
+  /**
+   * A BORDA da moldura do Randola é o branco a 55%, não o cheio.
+   *
+   * Branco puro é a maior luminância do sistema: uma moldura branca cheia faria
+   * o card do jogador MENOS importante gritar mais alto que o do MVP, e a ordem
+   * de peso visual (MVP > All Star > Suporte > Randola) se inverteria. O TEXTO
+   * do nível continua branco cheio — foi ali que o parceiro pediu a cor.
+   */
+  nivelRandolaBorda: p.brancoVeu55,
 
   // -- Canal 2 · nível do APITO (anel) -----------------------------------
   apitoNivel1: p.ambar400,

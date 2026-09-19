@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs'
 import { eq } from 'drizzle-orm'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
@@ -311,4 +312,40 @@ describe('a classificação sai por conferência', () => {
       await semearClassificacao(banco.db, ruleset, HOJE)
     }
   }, 60_000)
+})
+
+describe('o índice de Estatísticas com a lateral (correções UX 19/09)', () => {
+  it('a lateral do índice NÃO repete a classificação — a página já a mostra inteira', async () => {
+    const html = await renderizarIndice()
+    const aside = /<aside[\s\S]*?<\/aside>/.exec(html)?.[0] ?? ''
+    expect(aside).toContain('Painel lateral')
+    expect(aside).not.toContain('Ver completa')
+    expect(aside).not.toContain('>Classificação<')
+  }, 60_000)
+
+  it('a grade das conferências tem a âncora que "Ver completa" aponta', async () => {
+    const html = await renderizarIndice()
+    expect(html).toContain('id="classificacao"')
+  }, 60_000)
+
+  it('com lateral as conferências empilham SEMPRE — a coluna é 1040 em qualquer largura', () => {
+    // A spec dizia "empilha até 1600; dali em diante cabe". Não cabe: com
+    // lateral, `.comLateral .coluna` é `max-width: 1040px` em QUALQUER largura
+    // (Moldura.module.css), e as duas tabelas juntas pedem 1113. Um teto de
+    // 1599 devolveria o vazamento no monitor grande.
+    const css = readFileSync('src/app/globals.css', 'utf8')
+    expect(css).toMatch(
+      /@media \(min-width: 1280px\)\s*\{\s*\.moldura-com-lateral \.grade-conferencias\s*\{\s*grid-template-columns:\s*1fr;/,
+    )
+    expect(css).not.toContain('max-width: 1599px')
+  })
+
+  it('sem lateral, as duas conferências só saem lado a lado onde cabem (1160+)', () => {
+    // Defeito ANTERIOR a esta passada, que a captura a 1024 revelou: a 900 px
+    // duas tabelas de 1113 px vazavam para os lados.
+    const css = readFileSync('src/app/globals.css', 'utf8')
+    expect(css).toMatch(
+      /@media \(min-width: 1160px\)\s*\{\s*\.grade-conferencias\s*\{\s*grid-template-columns:\s*1fr 1fr;/,
+    )
+  })
 })

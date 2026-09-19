@@ -27,6 +27,7 @@ export function Chip({
   return (
     <Link
       href={href}
+      className={`chip-filtro${ativo ? ' chip-filtro-ativo' : ''}`}
       aria-current={ativo ? 'page' : undefined}
       style={{
         padding: '6px 14px',
@@ -38,11 +39,10 @@ export function Chip({
         textDecoration: 'none',
         whiteSpace: 'nowrap',
         fontWeight: ativo ? 700 : 600,
-        color: ativo ? semantico.textoSobreAcento : semantico.textoSecundario,
-        // Ativo: a borda some DENTRO do preenchimento — o acento nunca é
-        // contorno (identidade 05). Transparente segura a altura da pílula.
-        border: `1.5px solid ${ativo ? 'transparent' : semantico.divisor}`,
-        background: ativo ? semantico.acento : 'transparent',
+        // Cor, borda e preenchimento moram em `.chip-filtro` (globals.css):
+        // é o que dá hover ao chip. Aqui fica só a geometria. Ativo, a borda
+        // some DENTRO do preenchimento — o acento nunca é contorno
+        // (identidade 05); transparente, ela segura a altura da pílula.
       }}
     >
       {children}

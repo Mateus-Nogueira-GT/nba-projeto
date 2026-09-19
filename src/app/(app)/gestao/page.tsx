@@ -1,7 +1,7 @@
 import Link from 'next/link'
 
 import { horaCurta } from '@/components/formato'
-import { CabecalhoTela, Moldura } from '@/components/navegacao'
+import { CabecalhoTela, Chip, Moldura } from '@/components/navegacao'
 import { dataDeReferencia } from '@/modules/dominio/rodada'
 import { NIVEL_JOGADOR } from '@/design-system/tokens/css'
 import { Avatar } from '@/design-system/componentes'
@@ -188,15 +188,13 @@ function LinhaSugerida({ item, entrada, hoje }: EntradaDoPlano & { hoje: string 
           />
           <button
             type="submit"
+            className="botao-primario"
             style={{
               padding: '6px 12px',
               borderRadius: 8,
               fontSize: 12,
               fontWeight: 700,
               cursor: 'pointer',
-              color: semantico.textoSobreAcento,
-              background: semantico.textoPrimario,
-              border: 'none',
             }}
           >
             Registrei
@@ -380,29 +378,15 @@ export default async function PaginaGestao({
             <p style={{ margin: '0 0 6px', fontSize: 11, color: semantico.textoSecundario }}>
               Sua banca
             </p>
+            {/* O seletor de banca é um chip de filtro como qualquer outro:
+                antes ele tinha fundo BRANCO (`textoPrimario`) com tinta branca
+                em cima, e o valor escolhido sumia. */}
             <nav aria-label="Valor da banca" style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-              {ATALHOS.map((v) => {
-                const ativo = v === banca
-                return (
-                  <Link
-                    key={v}
-                    href={`/gestao?banca=${v}`}
-                    aria-current={ativo ? 'page' : undefined}
-                    style={{
-                      padding: '6px 14px',
-                      borderRadius: 999,
-                      fontSize: 13,
-                      fontWeight: ativo ? 700 : 500,
-                      textDecoration: 'none',
-                      color: ativo ? semantico.textoSobreAcento : semantico.textoPrimario,
-                      background: ativo ? semantico.textoPrimario : semantico.superficie,
-                      border: `1px solid ${semantico.divisor}`,
-                    }}
-                  >
-                    {dinheiro(v)}
-                  </Link>
-                )
-              })}
+              {ATALHOS.map((v) => (
+                <Chip key={v} href={`/gestao?banca=${v}`} ativo={v === banca}>
+                  {dinheiro(v)}
+                </Chip>
+              ))}
             </nav>
 
             {/* GET puro: sem estado de cliente, sem JavaScript, e a banca fica na
@@ -427,15 +411,13 @@ export default async function PaginaGestao({
               />
               <button
                 type="submit"
+                className="botao-primario"
                 style={{
                   padding: '8px 16px',
                   borderRadius: 8,
                   fontSize: 13,
                   fontWeight: 700,
                   cursor: 'pointer',
-                  color: semantico.textoSobreAcento,
-                  background: semantico.textoPrimario,
-                  border: 'none',
                 }}
               >
                 Aplicar

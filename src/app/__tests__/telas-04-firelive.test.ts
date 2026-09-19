@@ -496,4 +496,10 @@ describe('Fire Live · desktop — a tela ocupa a largura que tem', () => {
     const html = await renderizar()
     expect(html).toContain(GRADE_DE_CARDS_CSS)
   })
+
+  it('acompanhar é a estrela no canto do card, como na Lista; o botão solto sumiu (correções UX 19/09)', async () => {
+    const html = await renderizar()
+    expect(html).toContain('aria-label="Acompanhar jogador"')
+    expect(html).not.toContain('+ Acompanhar jogador')
+  }, 60_000)
 })

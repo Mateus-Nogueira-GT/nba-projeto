@@ -22,7 +22,12 @@ export const componente = {
   oddTexto: s.textoSecundario,
 
   pilulaBordaLargura: '1.5px',
-  avatarAnelEspessura: '2px',
+  // Identidade 06: o anel engrossou. Com a moldura inteira do card vestindo o
+  // metálico, o canal do APITO precisa de peso próprio para não virar detalhe.
+  avatarAnelEspessura: '3px',
+  // A faixa metálica saiu do CARD na identidade 06 (virou a moldura), mas segue
+  // viva na HIERARQUIA DO TIME, onde ela marca o nível de cada jogador da lista
+  // do CJ e não tem moldura para vestir.
   faixaNivelAltura: '3px',
 
   // -- Identidade 05 · o botão primário do manual ---------------------------
@@ -92,8 +97,9 @@ export const componente = {
   //   turbo            → card do turbo
   //   modo fire        → card quente do Fire Live (contextoQuente.brilho)
   turboBrilho: `0 0 22px ${s.veuTurbo}`,
-  // Borda lateral esquerda do card, na cor do grau de confiança.
-  cardBordaLateral: '3px',
+  // Borda lateral esquerda do card. Era 3 px na cor do grau de confiança; na
+  // identidade 06 virou 6 px na cor do metálico do NÍVEL DO JOGADOR.
+  cardBordaLateral: '6px',
   // 12 px: o canto de CARTÃO do manual (controle é 8, em `raioControle`).
   cardRaio: '12px',
   // Barra rumo ao alvo (Fire Live)
@@ -165,6 +171,39 @@ export const componente = {
     textoInativa: s.textoSecundario,
     raio: '6px',
   },
+  // -- Identidade 06 · a moldura veste o nível do jogador -------------------
+  /**
+   * A MOLDURA do card, por nível do jogador. Mesmo molde de
+   * `abaAtributo.ativaPorNivel`: o componente consulta o mapa, nunca decide a
+   * cor com um `if`.
+   *
+   * O Randola tem BORDA própria — o branco a 55%, não o cheio — pela razão
+   * escrita em `semantico.nivelRandolaBorda`: branco cheio na moldura
+   * inverteria a ordem de peso visual dos quatro níveis.
+   */
+  molduraNivel: {
+    MVP: { borda: s.nivelMvp, veu: s.nivelMvpVeu },
+    ALL_STAR: { borda: s.nivelAllStar, veu: s.nivelAllStarVeu },
+    SUPORTE: { borda: s.nivelSuporte, veu: s.nivelSuporteVeu },
+    RANDOLA: { borda: s.nivelRandolaBorda, veu: s.nivelRandolaVeu },
+  },
+  /** O rótulo do nível em Bebas — o tamanho que o feedback 02 pediu. */
+  nivelRotuloTamanho: '20px',
+  /**
+   * A ODD no canto do card: o elemento de maior destaque, no lugar que era da
+   * nota de confiança. `valorFaixa` é menor porque "1,47–1,62" tem o dobro de
+   * caracteres de "1,55" e precisa caber a 320 px.
+   */
+  // 12 px no rótulo é o PISO do manual, não escolha de composição: um teste
+  // varre a Lista renderizada atrás de qualquer texto abaixo disso. A
+  // hierarquia vem da diferença (12 × 38), não de encolher o rótulo.
+  odd: { rotulo: '12px', valorMedia: '38px', valorFaixa: '26px' },
+  /**
+   * A META do rodapé: o número maior que o rótulo que o nomeia ("REBOTES" 11,
+   * "4+" 24). `aba*` é a mesma proporção dentro da aba de atributo.
+   */
+  meta: { rotulo: '12px', valor: '24px', abaRotulo: '12px', abaValor: '15px' },
+
   // Veredito do card CONFERIDO: "fez N" na cor das barrinhas — bateu, falhou —
   // e o neutro do DNP em texto40. Quem não jogou não ganha ✓ nem ✗.
   conferido: {

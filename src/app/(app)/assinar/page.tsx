@@ -125,15 +125,13 @@ export default async function PaginaAssinar({
                   <input type="hidden" name="sku" value={oferta.sku} />
                   <button
                     type="submit"
+                    className="botao-primario"
                     style={{
                       width: '100%',
                       display: 'grid',
                       gap: 4,
-                      border: 0,
                       borderRadius: 10,
                       padding: 13,
-                      background: componente.ctaFundo,
-                      color: semantico.textoSobreAcento,
                       fontFamily: semantico.fonteTitulo,
                       cursor: 'pointer',
                       textAlign: 'left',

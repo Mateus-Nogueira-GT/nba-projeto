@@ -617,6 +617,9 @@ export default async function PaginaJogador({
             style={{
               padding: '10px 12px',
               borderRadius: 10,
+              // Pílula não é link sublinhado — e dentro do preenchimento azul
+              // o sublinhado ficava pior ainda.
+              textDecoration: 'none',
               border: `1px solid ${contexto.periodo === periodo ? 'transparent' : semantico.divisor}`,
               background: contexto.periodo === periodo ? semantico.acento : 'transparent',
               color:
@@ -718,6 +721,7 @@ export default async function PaginaJogador({
               style={{
                 padding: '8px 10px',
                 borderRadius: 8,
+                textDecoration: 'none',
                 border: `1px solid ${contexto.atributo === atributo ? 'transparent' : semantico.divisor}`,
                 background: contexto.atributo === atributo ? semantico.acento : 'transparent',
                 color:

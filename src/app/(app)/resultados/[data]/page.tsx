@@ -678,8 +678,6 @@ export default async function PaginaResultadosDaRodada({
                           // O veredito ocupa o lugar do %: o card conferido fala de
                           // ACERTO, e nota de confiança ao lado de "fez 27" leria
                           // como se as duas medissem a mesma coisa (§4.4).
-                          confianca={conferido ? null : (item?.confianca ?? null)}
-                          grauConfianca={item?.grauConfianca ?? null}
                           // A linha conferida é decisão da ENTREGA (a mais baixa que
                           // a lista ofereceu); a tela só a escreve.
                           linha={card.linhaConferida}

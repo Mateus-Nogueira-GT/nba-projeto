@@ -72,3 +72,11 @@
   outline: var(--foco);
   outline-offset: 2px;
 }
+
+/* Hover da estrela (correções UX 19/09, §4.15). */
+@media (hover: hover) {
+  .estrela:not(:disabled):hover {
+    border-color: var(--texto-secundario);
+    color: var(--texto100);
+  }
+}
