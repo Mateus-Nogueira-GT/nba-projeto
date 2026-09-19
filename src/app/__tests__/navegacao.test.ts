@@ -322,6 +322,29 @@ describe('cabeçalho de tela (identidade 05)', () => {
     expect(html).toContain('entradas em 7 jogos')
   })
 
+  it('com filtro, o contador diz "N de M": o número da tela é o que ela MOSTRA (correções de lógica 19/09)', () => {
+    const com = renderToStaticMarkup(
+      createElement(CabecalhoTela, {
+        sobrancelha: 'LISTA SECRETA',
+        titulo: 'Hoje',
+        contador: { numero: 3, total: 12, rotulo: 'entradas em 7 jogos' },
+      }),
+    )
+    expect(com).toContain('>3</strong>')
+    expect(com).toContain('de 12 entradas em 7 jogos')
+
+    // sem filtro os dois coincidem e a frase é a de sempre
+    const sem = renderToStaticMarkup(
+      createElement(CabecalhoTela, {
+        sobrancelha: 'LISTA SECRETA',
+        titulo: 'Hoje',
+        contador: { numero: 12, total: 12, rotulo: 'entradas em 7 jogos' },
+      }),
+    )
+    expect(sem).toContain('>12</strong>')
+    expect(sem).not.toContain('de 12')
+  })
+
   it('as lentes viram abas com sublinhado, não pílulas', () => {
     const html = renderToStaticMarkup(
       createElement(CabecalhoTela, {

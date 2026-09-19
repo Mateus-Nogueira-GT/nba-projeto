@@ -3,6 +3,7 @@ import type { ReactNode } from 'react'
 import { Lateral } from '@/components/lateral'
 import { dataDeReferencia } from '@/modules/dominio/rodada'
 import { calendarioDoRuleset, temporadaDe } from '@/modules/dominio/temporada'
+import { configuracaoChat } from '@/modules/entrega/chat-limites'
 import { rulesetAtivo } from '@/modules/entrega/ruleset-ativo'
 
 import { lerLateralCacheada } from './leitura'
@@ -34,10 +35,14 @@ export async function lateralPadrao({
   const hoje = dataDeReferencia(agora, ruleset.rodada.fuso)
   const dados = await lerLateralCacheada(hoje, temporadaDe(agora, config), config)
 
+  // Duas perguntas, como na Moldura: `assistente` diz se ESTE nível tem
+  // direito; `configuracaoChat().habilitado` diz se o chat EXISTE (flag +
+  // cotas). Sem a segunda, a doca mandava o assinante para um /chat que
+  // responde 404 — enquanto o botão flutuante, que já perguntava, sumia.
   return (
     <Lateral
       dados={dados}
-      assistente={assistente}
+      assistente={assistente && configuracaoChat().habilitado}
       gratis={gratis}
       mostrarClassificacao={!semClassificacao}
     />

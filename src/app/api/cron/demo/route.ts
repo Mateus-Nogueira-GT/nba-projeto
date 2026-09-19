@@ -4,6 +4,8 @@ import { rulesetAtivo } from '@/modules/entrega/ruleset-ativo'
 import { autossemeaduraHabilitada } from '@/modules/ingestao/demo/autossemeadura'
 import { simularAte } from '@/modules/ingestao/demo/temporada'
 import { portaLLMDoAmbiente } from '@/modules/ingestao/llm'
+import { revalidateTag } from 'next/cache'
+import { TAG_LATERAL } from '@/app/(app)/lateral/leitura'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 300
@@ -50,6 +52,10 @@ export async function GET(requisicao: Request): Promise<Response> {
         llm: portaLLMDoAmbiente(),
         orcamentoMs: ORCAMENTO_MS,
       })
+      // A rodada simulada acabou de mudar jogos, box scores e classificação
+      // — exatamente o que a lateral lê, cacheado por uma hora. Sem isto a
+      // Lista mostrava a rodada nova e a lateral, a anterior.
+      revalidateTag(TAG_LATERAL, 'max')
       return { executado: true, resumo }
     },
     /*

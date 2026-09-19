@@ -119,14 +119,34 @@ instalada divergir da documentação, a lateral ou não cacheia (custo) ou não 
 (dado velho) — e o teste passa.
 **Correção.** Duas partes. (a) Um teste de fonte fixa a **forma**: `leitura.ts` chama
 `unstable_cache` com `tags: [TAG_LATERAL]` e `revalidate: 3600`; toda chamada de
-`revalidateTag` no repositório passa `'max'` como segundo argumento — a documentação desta
-versão diz que sem o perfil a invalidação é *stale-while-revalidate* e a lateral serviria
-dado velho uma vez. (b) Um **roteiro de conferência na preview**, escrito no plano, com
-resultado esperado: abrir a Lista a 1440, anotar "Última noite"; disparar
-`/api/cron/demo` com o segredo; recarregar; a lateral tem que mostrar a rodada nova sem
-esperar uma hora. Se não mostrar, a assinatura de `revalidateTag` está errada para esta
-versão e o plano diz onde olhar.
-**Aceite.** Teste de fonte verde; roteiro executado e resultado anotado no commit.
+`revalidateTag` no repositório passa `'max'` como segundo argumento. (b) Uma **medição
+contra o runtime real**, feita em 19/09 com uma sonda descartável (rota própria, tag
+própria, contador em memória, zero banco), `next build` + `next start`.
+
+**O que a medição achou — e corrige esta spec.** O texto anterior desta seção dizia que
+*sem* o perfil a invalidação seria *stale-while-revalidate*. É o oposto. A doc da 16.3.1
+(`03-api-reference/04-functions/revalidateTag.md`) e a sonda concordam:
+
+| forma | comportamento |
+| --- | --- |
+| `revalidateTag(tag, 'max')` | marca como obsoleto: a **primeira** leitura seguinte ainda serve o valor velho e busca o novo em segundo plano |
+| `revalidateTag(tag)` | expira na hora, próxima leitura é *cache miss* bloqueante — porém **deprecada** ("may be removed in a future version") |
+| `updateTag(tag)` | expira na hora, mas **só** pode ser chamada de Server Action: "It cannot be used in Route Handlers" |
+
+Os crons são Route Handlers, e a própria doc manda usar `revalidateTag` neles. Então
+`'max'` é a única forma não deprecada disponível, e o código já estava certo — o que
+estava errado era a justificativa escrita.
+
+Sonda (o número é quantas vezes a função cacheada executou): três leituras seguidas → `1`,
+`1`, `1` (o cache serve); invalidar com `'max'`; leitura seguinte → `1` (**velho**, com a
+função rodando em segundo plano); leituras depois → `2`, `2`, `2` (novo).
+
+**Consequência aceita.** Depois do cron, o primeiro visitante da lateral ainda vê a noite
+anterior; do segundo em diante, a nova. Não é instantâneo, mas é o que existe para um
+Route Handler nesta versão — e substitui até uma hora inteira de defasagem.
+**Aceite.** Teste de fonte verde; medição feita e anotada no commit. Falta a ponta a
+ponta com o cron da demo, que escreve no Neon que **produção também lê** — decisão do
+parceiro, não deste plano.
 
 ## 5 · Arquitetura
 

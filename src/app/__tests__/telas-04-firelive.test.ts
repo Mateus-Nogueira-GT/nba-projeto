@@ -161,12 +161,15 @@ describe('Fire Live · 04 — regras de escrita da TELA', () => {
       }
       // Nota de confiança: número puro, sem "%" e sem casa decimal. (No Fire
       // Live ela é nula por regra do produto e sai como "—".)
-      // A LATERAL fica de fora: ela escreve a taxa da noite e da temporada,
-      // percentuais legítimos de resultado observado (docs/04, vocabulário
-      // numérico). O que se cobra aqui é a escrita do PAINEL, onde um "%" seria
-      // lido como probabilidade do apito.
-      expect(html.replace(/<aside[\s\S]*?<\/aside>/g, '')).not.toMatch(/>\d{1,3}%</)
-      expect(html).not.toMatch(/>\d+,\d+</)
+      // A LATERAL fica de fora das DUAS asserções: ela escreve a taxa da noite,
+      // a da temporada e — desde as correções de lógica de 19/09 — o
+      // aproveitamento da classificação com uma casa ("83,3"). Todos são
+      // resultado OBSERVADO (docs/04, vocabulário numérico), não nota de
+      // confiança. O que se cobra aqui é a escrita do PAINEL, onde um "%" ou
+      // um decimal seriam lidos como probabilidade do apito.
+      const painel = html.replace(/<aside[\s\S]*?<\/aside>/g, '')
+      expect(painel).not.toMatch(/>\d{1,3}%</)
+      expect(painel).not.toMatch(/>\d+,\d+</)
       expect(html).not.toContain('ALTÍSSIMO VALOR')
       expect(html).not.toContain('…')
       expect(html).not.toMatch(/\.\.\./)

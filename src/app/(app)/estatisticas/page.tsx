@@ -8,7 +8,7 @@ import { telaDaClassificacao } from '@/modules/entrega/estatisticas/time'
 import type { TelaClassificacao } from '@/modules/entrega/estatisticas/time'
 import { rotaDoJogador, rotaDoJogo, rotaDoTime } from '@/modules/entrega/estatisticas/rotas'
 import { rulesetAtivo } from '@/modules/entrega/ruleset-ativo'
-import { diaLongo, horaCurta } from '@/components/formato'
+import { diaLongo, formatarAproveitamento, horaCurta } from '@/components/formato'
 import { CabecalhoTela, Moldura } from '@/components/navegacao'
 import { LogoTime, Tabela, UltimaAtualizacao } from '@/design-system/componentes'
 import type { Coluna } from '@/design-system/componentes'
@@ -244,11 +244,6 @@ function trilhoDa(posicao: number | null): string {
   return '—'
 }
 
-/** "100,0" — a unidade fica no cabeçalho da coluna, não repetida 30 vezes. */
-function aproveitamentoEscrito(v: number | null): string {
-  return v === null ? '—' : (v * 100).toFixed(1).replace('.', ',')
-}
-
 /**
  * OS ÚLTIMOS RESULTADOS COMO PONTINHOS.
  *
@@ -393,7 +388,7 @@ function colunasDaClassificacao(
       rotulo: '%',
       descricao: 'aproveitamento',
       alinhamento: 'direita',
-      celula: (l) => aproveitamentoEscrito(l.aproveitamento),
+      celula: (l) => formatarAproveitamento(l.aproveitamento),
     },
     {
       chave: 'seq',
