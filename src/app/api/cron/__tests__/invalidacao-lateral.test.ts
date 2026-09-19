@@ -82,6 +82,18 @@ describe('invalidação da lateral', () => {
     },
   )
 
+  it.each(escritoras.map(({ caminho }) => caminho))(
+    '%s invalida TAG_RANKING com o perfil max',
+    (caminho) => {
+      // O ranking estatístico do assistente (ADR-0012) lê os MESMOS box scores
+      // que a lateral: a rodada que fecha move a janela dos últimos dez de
+      // cada jogador. Quem invalida uma precisa invalidar a outra.
+      const fonte = semComentarios(readFileSync(caminho, 'utf8'))
+      expect(fonte).toContain("import { TAG_RANKING } from '@/app/api/chat/ranking'")
+      expect(fonte).toContain("revalidateTag(TAG_RANKING, 'max')")
+    },
+  )
+
   it('todo job de ingestão usado por um cron está classificado: escreve rodada, ou não toca a lateral', () => {
     // A rede para o job NOVO: quem acrescentar `executarJobX` a
     // `orquestradores` e ligá-lo a um cron cai aqui, e decide em qual lista

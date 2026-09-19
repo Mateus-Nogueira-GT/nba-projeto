@@ -96,20 +96,34 @@ describe('coletarOdds (ponta a ponta com a fixture)', () => {
     expect(Number(agregada!.oddMin)).toBe(1.91)
     expect(Number(agregada!.oddMax)).toBe(2.5)
 
-    // caesars cotou 25.5→26 SOZINHA: abaixo de casas_minimas (2), a linha NÃO
-    // vira agregada 'CASAS' — a ausência é o fallback (tabela estática).
-    const linha26 = await banco.db
+    // caesars cotou 25.5→26 SOZINHA. Até 19/09 (`casas_minimas: 2`) a linha
+    // não virava agregada e caía na tabela estática; com o produto em UMA
+    // casa, ela vira cotação de verdade, com qtd_casas = 1 — e min, max e
+    // média coincidem, porque há um número só.
+    const [linha26] = await banco.db
       .select()
       .from(oddsAgregada)
       .where(and(eq(oddsAgregada.jogadorId, jogadorPontosId), eq(oddsAgregada.linha, '26.0')))
-    expect(linha26).toHaveLength(0)
+    expect(linha26).toBeDefined()
+    expect(linha26!.origem).toBe('CASAS')
+    expect(linha26!.qtdCasas).toBe(1)
+    expect(Number(linha26!.oddMin)).toBe(Number(linha26!.oddMax))
+    expect(Number(linha26!.oddMedia)).toBe(Number(linha26!.oddMin))
 
     // Retry no MESMO instante: nem agregada nem snapshot duplicam (regra 5 —
     // a UNIQUE com capturado_em impede o tique fantasma).
+    //
+    // A contagem de agregadas é LIDA antes, não fixada num literal: quantas
+    // linhas agregam depende de `casas_minimas` no ruleset, e o que este
+    // trecho protege é a IDEMPOTÊNCIA — o número não muda no retry.
     const antes = (await banco.db.select().from(oddsSnapshot)).length
+    const agregadasAntes = (await banco.db.select().from(oddsAgregada)).filter(
+      (a) => a.jogadorId === jogadorPontosId,
+    ).length
+    expect(agregadasAntes).toBeGreaterThan(0)
     await coletarOdds(banco.db, fabricaCasas, 'balldontlie', HOJE, AGORA, ruleset)
     const agregadas = await banco.db.select().from(oddsAgregada)
-    expect(agregadas.filter((a) => a.jogadorId === jogadorPontosId)).toHaveLength(1)
+    expect(agregadas.filter((a) => a.jogadorId === jogadorPontosId)).toHaveLength(agregadasAntes)
     expect((await banco.db.select().from(oddsSnapshot)).length).toBe(antes)
     // Coleta em instante NOVO: a série temporal cresce, de propósito.
     await coletarOdds(banco.db, fabricaCasas, 'balldontlie', HOJE, new Date(AGORA.getTime() + 60_000), ruleset)

@@ -12,6 +12,7 @@ import { fontesDeOdds, fontesIncompletas } from '@/modules/ingestao/odds/fontes'
 import { montarFontes } from '@/modules/ingestao/sincronizar/fonte'
 import { revalidateTag } from 'next/cache'
 import { TAG_LATERAL } from '@/app/(app)/lateral/leitura'
+import { TAG_RANKING } from '@/app/api/chat/ranking'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 300
@@ -66,6 +67,9 @@ export async function GET(requisicao: Request): Promise<Response> {
       // direita lê os dois e é cacheada por uma hora. Sem isto ela mostraria a
       // noite de anteontem por até 60 minutos depois de a de ontem fechar.
       revalidateTag(TAG_LATERAL, 'max')
+      // O ranking estatístico do assistente lê os mesmos box scores (ADR-0012):
+      // a rodada que fecha muda a janela dos últimos dez de cada jogador.
+      revalidateTag(TAG_RANKING, 'max')
 
       // Odds das casas de mercado, DEPOIS da rodada e sob LEASE PRÓPRIO: o
       // vínculo evento↔jogo precisa dos jogos do dia já sincronizados, e um

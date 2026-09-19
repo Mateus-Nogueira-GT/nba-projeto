@@ -7,7 +7,13 @@ import { LLMFake } from '../../ingestao/llm'
 import { semearDemo } from '../../ingestao/demo/semear'
 import { carregarRuleset } from '../../motor/ruleset/carregar'
 import { lerFeed } from '../lista-secreta'
-import { LIMITE_NARRATIVA, enriquecerComNarrativas, numerosDoItem, promptDeNarrativa } from '../narrativa'
+import {
+  LIMITE_NARRATIVA,
+  enriquecerComNarrativas,
+  numerosDoItem,
+  promptDeNarrativa,
+  semTravessao,
+} from '../narrativa'
 
 const ruleset = carregarRuleset(readFileSync('config/ruleset.v1.yaml', 'utf8'))
 const AGORA = new Date('2026-08-24T18:00:00.000Z')
@@ -70,10 +76,48 @@ describe('prompt de narrativa', () => {
     const sistema = p.sistema.toLowerCase()
     expect(sistema).toContain('não cite o percentual')
     // O modelo estoura o limite que lhe é dado; pede-se menos para caber.
-    expect(p.sistema).toContain('240 caracteres')
-    expect(p.sistema).not.toContain('280 caracteres')
-    // O validador continua em 280 — a folga é do pedido, não da regra.
-    expect(LIMITE_NARRATIVA).toBe(280)
+    expect(p.sistema).toContain('260 caracteres')
+    expect(p.sistema).not.toContain('300 caracteres')
+    // Teto do parceiro (19/09) — a folga é do pedido, não da regra.
+    expect(LIMITE_NARRATIVA).toBe(300)
+  })
+
+  it('pede tom DIDÁTICO e proíbe travessão (decisões do parceiro, 19/09)', async () => {
+    const feed = await lerFeed(banco.db, HOJE)
+    const sistema = promptDeNarrativa(feed!.conteudo.itens[0]!).sistema.toLowerCase()
+    // Didático: o assinante não acompanha estatística.
+    expect(sistema).toContain('não acompanha estatística')
+    expect(sistema).toContain('português simples')
+    // Travessão: pedido no prompt E saneado depois, para não custar recusa.
+    expect(sistema).toContain('não use travessão')
+  })
+})
+
+describe('travessão: a assinatura de texto de máquina não chega ao card', () => {
+  it('vira vírgula, sem deixar pontuação dobrada', () => {
+    expect(semTravessao('Volta à média — ele vem de duas atuações fracas.')).toBe(
+      'Volta à média, ele vem de duas atuações fracas.',
+    )
+    // Travessão colado, sem espaços em volta
+    expect(semTravessao('Alvo 25—linha baixa para o nível dele.')).toBe(
+      'Alvo 25, linha baixa para o nível dele.',
+    )
+    // Meia-risca também sai
+    expect(semTravessao('Sai o titular – ele assume a bola.')).toBe(
+      'Sai o titular, ele assume a bola.',
+    )
+  })
+
+  it('não cria ", ," nem " ," quando o modelo já pontuou em volta', () => {
+    expect(semTravessao('Ele joga bem, — e hoje pega defesa fraca.')).toBe(
+      'Ele joga bem, e hoje pega defesa fraca.',
+    )
+    expect(semTravessao('Desfalque no topo —.')).toBe('Desfalque no topo.')
+  })
+
+  it('texto sem travessão passa intacto', () => {
+    const frase = 'Ele vem de 3 jogos acima da linha e o time joga em casa.'
+    expect(semTravessao(frase)).toBe(frase)
   })
 })
 

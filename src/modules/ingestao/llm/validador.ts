@@ -15,10 +15,35 @@
 
 export type ResultadoValidacao =
   | { ok: true; texto: string }
-  | { ok: false; motivo: 'probabilidade' | 'numero-inventado' | 'muito-longo' | 'vazio' }
+  | {
+      ok: false
+      motivo:
+        | 'probabilidade'
+        | 'numero-inventado'
+        | 'muito-longo'
+        | 'vazio'
+        /**
+         * Citou quem a metodologia NÃO apitou sem dizer que está fora da
+         * lista (ADR-0012). Motivo PRÓPRIO e não 'numero-inventado': quando
+         * alguém for olhar `llm_chamadas` para entender por que as respostas
+         * sumiram, "o ranking passou por apito" e "o modelo inventou um
+         * número" são investigações diferentes.
+         */
+        | 'sem-marca-fora-da-lista'
+    }
 
-/** Raiz que pega probabilidade, probabilidades, provável, prováveis. */
-const PROIBIDAS = /probabilidad|prov[áa]ve/i
+/**
+ * As raízes que reprovam o texto. Andam de mãos dadas com
+ * `PALAVRAS_PROIBIDAS` em `regras-do-texto.ts` — o teste de deriva confere que
+ * toda palavra dita ao modelo é de fato reprovada aqui.
+ *
+ *   probabilidad|prov[áa]ve  probabilidade(s), provável, prováveis
+ *   chance                   chance(s) — a taxa de acerto é passado observado,
+ *                            não previsão (ADR-0012)
+ *   vai bater                a promessa de resultado, na forma que o modelo
+ *                            mais escreve
+ */
+const PROIBIDAS = /probabilidad|prov[áa]ve|chance|vai bater/i
 
 /**
  * Números "livres" no texto: cercados por não-dígito, com decimal opcional em

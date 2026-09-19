@@ -6,6 +6,7 @@ import { simularAte } from '@/modules/ingestao/demo/temporada'
 import { portaLLMDoAmbiente } from '@/modules/ingestao/llm'
 import { revalidateTag } from 'next/cache'
 import { TAG_LATERAL } from '@/app/(app)/lateral/leitura'
+import { TAG_RANKING } from '@/app/api/chat/ranking'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 300
@@ -56,6 +57,9 @@ export async function GET(requisicao: Request): Promise<Response> {
       // — exatamente o que a lateral lê, cacheado por uma hora. Sem isto a
       // Lista mostrava a rodada nova e a lateral, a anterior.
       revalidateTag(TAG_LATERAL, 'max')
+      // O ranking estatístico do assistente lê os mesmos box scores (ADR-0012):
+      // a rodada que fecha muda a janela dos últimos dez de cada jogador.
+      revalidateTag(TAG_RANKING, 'max')
       return { executado: true, resumo }
     },
     /*

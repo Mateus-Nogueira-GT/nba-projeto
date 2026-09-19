@@ -636,9 +636,15 @@ export default async function PaginaApito({
                     <br />
                   </>
                 )}
-                {faixaOdd
-                  ? `${formatarOdd(faixaOdd[0])} – ${formatarOdd(faixaOdd[1])}`
-                  : 'odd indisponível'}
+                {/* Com UMA casa a faixa seria "1,85 – 1,85": escreve a odd
+                    sozinha. Só vale para a cotação REAL — a tabela de
+                    referência da plataforma é uma faixa de verdade e continua
+                    saindo como faixa. Quem é a casa está na grade abaixo. */}
+                {ruleset.odds.exibicao === 'casa_unica' && cotada?.qtdCasas === 1
+                  ? formatarOdd(cotada.min)
+                  : faixaOdd
+                    ? `${formatarOdd(faixaOdd[0])} – ${formatarOdd(faixaOdd[1])}`
+                    : 'odd indisponível'}
               </span>
             </div>
           )
@@ -661,9 +667,11 @@ export default async function PaginaApito({
           entre N casas" descreveria algo que não está em lugar nenhum da tela. */}
       {temOddNaTela && (
         <p style={{ margin: '12px 0 0', fontSize: 12, lineHeight: 1.5, color: semantico.texto40 }}>
-          {casasNaTela > 0
-            ? `Faixa entre ${casasNaTela} casas na última coleta.`
-            : 'Faixa da tabela de referência da plataforma.'}{' '}
+          {casasNaTela === 1
+            ? 'Cotação de uma casa, na última coleta.'
+            : casasNaTela > 1
+              ? `Faixa entre ${casasNaTela} casas na última coleta.`
+              : 'Faixa da tabela de referência da plataforma.'}{' '}
           Referência de mercado: a odd da sua casa pode ser outra. Nenhuma aposta é feita por aqui.
         </p>
       )}

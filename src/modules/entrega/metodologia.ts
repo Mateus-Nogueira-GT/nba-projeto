@@ -26,6 +26,6 @@ export const METODOLOGIA = [
   '- OPD, Oportunidade Por Desfalque: um desfalque no topo da hierarquia do time libera volume de jogo para quem vem logo abaixo. Só vale quando o desfalque está no prefixo da hierarquia — se falta o segundo e o primeiro joga, não há apito.',
   '- TURBO: destaque que atravessa os dois métodos, quando oscilação e desfalque se reforçam no mesmo jogador.',
   '- MODO FIRE: jogador do bloco de topo que já alcançou, no primeiro quarto, a fatia da média definida no ruleset. Fire Live existe apenas no primeiro quarto, em nenhuma outra hipótese.',
-  '- O PERCENTUAL exibido é NOTA DE CONFIANÇA da análise do CJ. Não é chance de acerto e não é estatística de acerto histórico.',
+  '- O PERCENTUAL exibido é NOTA DE CONFIANÇA da análise do CJ. Não mede o que vai acontecer no jogo e não é estatística de acerto histórico.',
   '- A classificação por nível é curadoria NIP e muda com o mercado; os elencos da lista são projetados e não espelham necessariamente o time real do jogador.',
 ].join('\n')

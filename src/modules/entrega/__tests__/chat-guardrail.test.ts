@@ -69,9 +69,21 @@ describe('o guardrail de assunto', () => {
     expect(pedido.sistema).toContain(RECUSA_FORA_DE_ESCOPO)
   })
 
-  it('o prompt proíbe palpite de aposta — regra 4, odds somente leitura', async () => {
+  it('o prompt proíbe VALOR de aposta e promessa de resultado (ADR-0012)', async () => {
+    // A proibição em bloco ("NÃO SUGIRA APOSTA") saiu: o produto passou a
+    // exibir um ranking estatístico calculado pelo MOTOR quando pedem dica.
+    // O que ficou proibido é mais fino, e cada regra tem guardrail em código:
+    // o valor continua fora, a promessa continua fora, e citar quem a
+    // metodologia não apitou exige a marca — verificada em `chat.ts`.
+    //
+    // A ADR-0004 (odds somente leitura) não mudou: nada aqui envia aposta.
     const { pedido } = await perguntar()
-    expect(pedido.sistema.toLowerCase()).toContain('não sugira aposta')
+    const sistema = pedido.sistema.toLowerCase()
+    expect(sistema).toContain('não diga quanto apostar')
+    expect(sistema).toContain('não prometa resultado')
+    expect(sistema).toContain('fora da lista de hoje')
+    // Taxa é passado, não previsão: a fração nunca vira porcentagem.
+    expect(sistema).toContain('nunca convertidas em porcentagem')
   })
 
   it('a lista do dia chega ao modelo — quem chega aqui já passou pelo portão de nível', async () => {
