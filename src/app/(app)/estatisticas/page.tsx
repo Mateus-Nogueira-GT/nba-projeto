@@ -16,6 +16,7 @@ import { dataDeReferencia } from '@/modules/dominio/rodada'
 import { identidadeDoTime } from '@/design-system/times'
 import { semantico } from '@/design-system/tokens/semantico'
 import { exigirNivel } from '@/modules/plataforma/assinatura/guarda'
+import { lateralPadrao } from '@/app/(app)/lateral/montar'
 import { atende } from '@/modules/plataforma/assinatura/nivel-do-plano'
 import '@/design-system/tokens/tokens.css'
 import { Secao, SemBanco, SOBRANCELHA_STATS } from './moldura'
@@ -49,7 +50,7 @@ function Campo({ valor }: { valor: string }) {
           borderRadius: 8,
           border: 'none',
           background: semantico.textoPrimario,
-          color: semantico.textoSobreCor,
+          color: semantico.textoSobreAcento,
           fontWeight: 600,
           fontSize: 14,
         }}
@@ -86,7 +87,7 @@ const ROTULO = {
  * UMA LINHA DA FILA DE JOGOS — a mesma fila do Fire Live, vista pelo lado do
  * DADO (spec 04, §4.5).
  *
- * A gramática é a do `CabecalhoJogo`: visitante @ mandante, sigla em Anton no
+ * A gramática é a do `CabecalhoJogo`: visitante @ mandante, sigla na fonte de título no
  * lugar do escudo, status com ponto + texto, nada pulsando. O que muda — e é
  * por isso que a linha mora nesta tela e não naquele componente — são duas
  * coisas:
@@ -453,7 +454,7 @@ export default async function PaginaEstatisticas({
   // A classificação é 100% grátis (spec §5, régua da linha 5): a guarda pede
   // login (R-A3) e nada mais. `acesso` só é desestruturado para o botão do
   // assistente (MVP+, decisão 7) — nenhum outro trecho da tela depende dele.
-  const { acesso } = await exigirNivel('GRATIS', '/estatisticas')
+  const { sessao, acesso } = await exigirNivel('GRATIS', '/estatisticas')
 
   const db = getDb()
   const agora = new Date()
@@ -485,7 +486,11 @@ export default async function PaginaEstatisticas({
   const grupos = conferencias.length > 0 ? conferencias : [null]
 
   return (
-    <Moldura aba="stats" largura="dados" assistente={atende(acesso.nivel, 'MVP')}>
+    <Moldura aba="stats" conta={{ email: sessao.email }}
+      lateral={await lateralPadrao({
+        assistente: atende(acesso.nivel, 'MVP'),
+        gratis: !atende(acesso.nivel, 'MVP'),
+      })} largura="dados" assistente={atende(acesso.nivel, 'MVP')}>
       <CabecalhoTela sobrancelha={SOBRANCELHA_STATS} titulo="STATS" />
 
       <Campo valor={termo} />

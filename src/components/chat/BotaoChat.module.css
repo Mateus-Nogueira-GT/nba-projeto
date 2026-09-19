@@ -12,12 +12,12 @@
   border: 1px solid var(--divisor);
   border-radius: 999px;
   background: var(--superficie-elevada);
-  color: var(--acento);
+  color: var(--texto-primario);
   cursor: pointer;
 }
 
 .botao:focus-visible {
-  outline: 2px solid var(--acento);
+  outline: var(--foco);
   outline-offset: 2px;
 }
 

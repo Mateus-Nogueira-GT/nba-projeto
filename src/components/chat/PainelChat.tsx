@@ -38,7 +38,19 @@ export function mensagemDeErro(motivo: string): string {
   }
 }
 
-export function PainelChat({ aoFechar }: { aoFechar: () => void }) {
+export function PainelChat({
+  aoFechar,
+  modo = 'gaveta',
+}: {
+  aoFechar: () => void
+  /**
+   * `gaveta` é a de sempre: véu escuro e painel fixo na borda da tela.
+   * `doca` é a forma que mora DENTRO da lateral direita (identidade 05): sem
+   * véu, sem posição fixa, 60% da altura da janela. Um véu ali escureceria a
+   * própria tela que a pessoa está consultando enquanto pergunta sobre ela.
+   */
+  modo?: 'gaveta' | 'doca'
+}) {
   const [turnos, setTurnos] = useState<Turno[]>([])
   const [texto, setTexto] = useState('')
   const [enviando, setEnviando] = useState(false)
@@ -111,14 +123,18 @@ export function PainelChat({ aoFechar }: { aoFechar: () => void }) {
 
   return (
     <>
-      <div className={estilos.veu} onClick={aoFechar} aria-hidden />
-      <aside className={estilos.painel} role="dialog" aria-label="Assistente NIP">
+      {modo === 'gaveta' && <div className={estilos.veu} onClick={aoFechar} aria-hidden />}
+      <aside
+        className={`${estilos.painel} ${modo === 'doca' ? estilos.doca : ''}`}
+        role={modo === 'gaveta' ? 'dialog' : 'region'}
+        aria-label="Assistente NIP"
+      >
         <header className={estilos.topo}>
           <strong>Assistente</strong>
           <button
             type="button"
             className={estilos.fechar}
-            aria-label="Fechar o assistente"
+            aria-label={modo === 'doca' ? 'Recolher o assistente' : 'Fechar o assistente'}
             onClick={aoFechar}
           >
             ✕

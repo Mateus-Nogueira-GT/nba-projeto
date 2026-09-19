@@ -10,7 +10,7 @@ import { componente } from '@/design-system/tokens/componente'
 import { semantico } from '@/design-system/tokens/semantico'
 import { getDb } from '@/modules/dominio/db/cliente'
 import { dataDeReferencia, somarDias } from '@/modules/dominio/rodada'
-import { calendarioDoRuleset, temporadaDe, type ConfigTemporada } from '@/modules/dominio/temporada'
+import { calendarioDoRuleset } from '@/modules/dominio/temporada'
 import { rotaDoJogador } from '@/modules/entrega/estatisticas/rotas'
 import { estadoDoCiclo } from '@/modules/entrega/lista-por-jogo'
 import { lerFeed, type ItemFeed } from '@/modules/entrega/lista-secreta'
@@ -21,6 +21,7 @@ import {
   greensDoDia,
   recapDaNoite,
   rotaResultados,
+  diasDaTemporada,
   taxaDaTemporada,
 } from '@/modules/entrega/resultados'
 import type {
@@ -30,6 +31,7 @@ import type {
 } from '@/modules/entrega/resultados'
 import { rulesetAtivo } from '@/modules/entrega/ruleset-ativo'
 import { exigirNivel } from '@/modules/plataforma/assinatura/guarda'
+import { lateralPadrao } from '@/app/(app)/lateral/montar'
 import { atende } from '@/modules/plataforma/assinatura/nivel-do-plano'
 import type { Atributo, NivelApito } from '@/modules/motor/tipos'
 import '@/design-system/tokens/tokens.css'
@@ -71,31 +73,6 @@ function dataValida(data: string): boolean {
   return !Number.isNaN(instante.getTime()) && instante.toISOString().slice(0, 10) === data
 }
 
-/**
- * A JANELA DA TEMPORADA — da abertura até a rodada em tela.
- *
- * O contador não é "os últimos N dias": é a temporada corrente, que começa no
- * mês declarado no ruleset (`temporada.mes_inicio`). Somar dias fixos faria a
- * taxa arrastar jogos da temporada passada em outubro, e é ela que o produto
- * usa como argumento de venda. `taxaDaTemporada` recebe a janela em dias
- * porque a consulta é uma só; a regra de onde ela começa é daqui.
- */
-function diasDaTemporada(data: string, config: ConfigTemporada): number {
-  const meioDia = `${data}T12:00:00.000Z`
-  const anoBase = temporadaDe(new Date(meioDia), config).slice(0, 4)
-  const abertura = `${anoBase}-${String(config.mesInicio).padStart(2, '0')}-01T12:00:00.000Z`
-  const dias = Math.round((Date.parse(meioDia) - Date.parse(abertura)) / 86_400_000)
-  // Defesa em profundidade: com o ano preenchido isto não dispara, mas uma
-  // abertura ilegível não pode virar NaN dentro de `somarDias`.
-  if (!Number.isFinite(dias)) return 1
-  // NÃO HÁ ANO 0 no calendário do Postgres: a temporada de 0001-01-01 abriria
-  // em 0000-10-01 e a consulta da taxa morreria convertendo o parâmetro
-  // (diagnóstico de 13/09). A janela para na primeira data que existe — isto
-  // não é limite de calendário da liga, é o alcance do tipo `date`.
-  const ateAPrimeiraData =
-    Math.round((Date.parse(meioDia) - Date.parse('0001-01-01T12:00:00.000Z')) / 86_400_000) + 1
-  return Math.max(1, Math.min(dias + 1, ateAPrimeiraData))
-}
 
 /** Percentual inteiro. O da NOITE e o da TEMPORADA nunca são % de confiança. */
 const inteiro = (taxa: number) => `${Math.round(taxa * 100)}%`
@@ -304,6 +281,7 @@ export default async function PaginaResultadosDaRodada({
 
   if (!process.env.DATABASE_URL) {
     return (
+      // Sem `conta`: este aviso roda antes do login, e não há sessão a mostrar.
       <Moldura aba="lista" largura="dados">
         <h1>Resultados</h1>
         <p style={{ color: semantico.textoSecundario }}>Banco não configurado.</p>
@@ -315,7 +293,7 @@ export default async function PaginaResultadosDaRodada({
   // que convence quem ainda não assina. `exigirNivel` continua aqui porque a
   // tela exige sessão (é a guarda de LOGIN, não de plano). `acesso` só serve
   // ao botão do assistente (MVP+, decisão 7): o resto da tela não depende dele.
-  const { acesso } = await exigirNivel('GRATIS', rotaResultados(data, filtros))
+  const { sessao, acesso } = await exigirNivel('GRATIS', rotaResultados(data, filtros))
 
   const ruleset = await rulesetAtivo()
   const { fuso } = ruleset.rodada
@@ -426,7 +404,15 @@ export default async function PaginaResultadosDaRodada({
       >
         Aplicar
       </button>
-      <Link href={`/resultados/${data}`} style={{ padding: 10, color: semantico.acento }}>
+      <Link
+        href={`/resultados/${data}`}
+        style={{
+          padding: 10,
+          color: semantico.textoPrimario,
+          textDecoration: 'underline',
+          textUnderlineOffset: 3,
+        }}
+      >
         Limpar
       </Link>
     </form>
@@ -472,7 +458,11 @@ export default async function PaginaResultadosDaRodada({
 
   if (rodadaInteira.porJogo.length === 0 && fireLido.length === 0) {
     return (
-      <Moldura aba="lista" largura="dados" assistente={atende(acesso.nivel, 'MVP')}>
+      <Moldura aba="lista" conta={{ email: sessao.email }}
+      lateral={await lateralPadrao({
+        assistente: atende(acesso.nivel, 'MVP'),
+        gratis: !atende(acesso.nivel, 'MVP'),
+      })} largura="dados" assistente={atende(acesso.nivel, 'MVP')}>
         {cabecalho}
         {controles}
         <Vazio>
@@ -486,7 +476,11 @@ export default async function PaginaResultadosDaRodada({
   }
 
   return (
-    <Moldura aba="lista" largura="dados" assistente={atende(acesso.nivel, 'MVP')}>
+    <Moldura aba="lista" conta={{ email: sessao.email }}
+      lateral={await lateralPadrao({
+        assistente: atende(acesso.nivel, 'MVP'),
+        gratis: !atende(acesso.nivel, 'MVP'),
+      })} largura="dados" assistente={atende(acesso.nivel, 'MVP')}>
       {cabecalho}
       {controles}
       <style>{`@keyframes resultados-entrada { from { opacity: 0.7; } to { opacity: 1; } } .resultados-resumo { animation: resultados-entrada 180ms ease-out; } @media (prefers-reduced-motion: reduce) { .resultados-resumo { animation: none; } }`}</style>

@@ -28,7 +28,7 @@ export function SeloContexto({ contexto }: SeloContextoProps) {
         padding: '4px 10px',
         borderRadius: 999,
         fontFamily: semantico.fonteRotulo,
-        fontSize: 11,
+        fontSize: 12,
         fontWeight: 700,
         letterSpacing: 1.5,
         textTransform: 'uppercase',

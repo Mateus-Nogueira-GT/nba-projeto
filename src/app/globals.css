@@ -25,17 +25,19 @@ body {
   line-height: 1;
 }
 .marca-nip strong {
-  font-family: var(--fonte-anton), sans-serif;
+  font-family: var(--fonte-bebas), sans-serif;
   font-size: 28px;
   letter-spacing: 0.08em;
 }
+/* A assinatura da logo ("NBA Intelligence Platform"). O manual pede que ela
+   fique legível quando houver largura — daí os 12px do piso, no lugar dos 9. */
 .marca-nip small {
   color: currentColor;
-  font-family: var(--fonte-barlow), sans-serif;
-  font-size: 9px;
-  font-weight: 700;
+  font-family: var(--fonte-montserrat), sans-serif;
+  font-size: 12px;
+  font-weight: 600;
   letter-spacing: 0.13em;
-  opacity: 0.58;
+  opacity: 0.7;
   text-transform: uppercase;
 }
 
@@ -167,7 +169,7 @@ textarea {
   padding: 24px;
   background: #f5f7fb;
   color: #152033;
-  font-family: var(--fonte-barlow), sans-serif;
+  font-family: var(--fonte-montserrat), sans-serif;
 }
 .oferta-publica section {
   width: min(100%, 560px);
@@ -298,5 +300,33 @@ textarea {
 @media (min-width: 900px) {
   .grade-conta {
     grid-template-columns: 1fr 1fr;
+  }
+}
+
+/* A seção de cada jogo na Lista é um <details> cujo <summary> é o próprio
+   cabeçalho do jogo (identidade 05). O marcador nativo do WebKit sai; quem
+   indica aberto/fechado é o chevron desenhado, que gira. */
+summary.jogo-frio::-webkit-details-marker {
+  display: none;
+}
+.jogo-chevron {
+  flex-shrink: 0;
+  transition: transform 150ms ease;
+}
+details:not([open]) > summary .jogo-chevron {
+  transform: rotate(-90deg);
+}
+@media (prefers-reduced-motion: reduce) {
+  .jogo-chevron {
+    transition: none;
+  }
+}
+
+/* A faixa de convite do grátis mora INLINE até a lateral existir; a partir de
+   1280 ela é o primeiro bloco da coluna da direita, e repeti-la nos dois
+   lugares seria a mesma frase duas vezes na mesma dobra (identidade 05, §8). */
+@media (min-width: 1280px) {
+  .so-ate-lateral {
+    display: none;
   }
 }

@@ -132,7 +132,7 @@ export function HierarquiaDoTime({ linhas, hrefDoJogador, vazio }: HierarquiaDoT
                   style={{
                     display: 'block',
                     fontFamily: semantico.fonteRotulo,
-                    fontSize: 10,
+                    fontSize: 12,
                     fontWeight: 700,
                     letterSpacing: 1.2,
                     textTransform: 'uppercase',
@@ -146,7 +146,7 @@ export function HierarquiaDoTime({ linhas, hrefDoJogador, vazio }: HierarquiaDoT
                 <span
                   style={{
                     fontFamily: semantico.fonteRotulo,
-                    fontSize: 11,
+                    fontSize: 12,
                     fontWeight: 700,
                     letterSpacing: 1.2,
                     padding: '2px 8px',

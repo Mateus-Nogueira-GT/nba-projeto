@@ -87,7 +87,7 @@ export function diaLongo(dataReferencia: string): string {
  * Mesma leitura de `diaLongo`: a data de referência é um rótulo de calendário,
  * lido e formatado em UTC, porque interpretá-la no fuso local recuaria um dia
  * no Brasil inteiro. O dia e o mês saem sem zero à esquerda — é um título em
- * Anton, não uma coluna de tabela.
+ * um título na fonte de display, não uma coluna de tabela.
  */
 export function diaDaRodada(dataReferencia: string): string {
   const [ano, mes, dia] = dataReferencia.split('-').map(Number)
@@ -95,7 +95,10 @@ export function diaDaRodada(dataReferencia: string): string {
     timeZone: 'UTC',
     weekday: 'long',
   })
-  return `${semana.charAt(0).toUpperCase()}${semana.slice(1)}, ${dia}/${mes}`
+  // Sem o "-feira": ele só rouba espaço num título, e é o que a Lista Secreta
+  // já fazia na cópia local desta função.
+  const nome = semana.replace('-feira', '')
+  return `${nome.charAt(0).toUpperCase()}${nome.slice(1)}, ${dia}/${mes}`
 }
 
 /**

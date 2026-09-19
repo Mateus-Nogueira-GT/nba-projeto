@@ -10,6 +10,8 @@ import {
 import { coletarOddsDoDia } from '@/modules/ingestao/odds/coleta-do-dia'
 import { fontesDeOdds, fontesIncompletas } from '@/modules/ingestao/odds/fontes'
 import { montarFontes } from '@/modules/ingestao/sincronizar/fonte'
+import { revalidateTag } from 'next/cache'
+import { TAG_LATERAL } from '@/app/(app)/lateral/leitura'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 300
@@ -59,6 +61,11 @@ export async function GET(requisicao: Request): Promise<Response> {
         },
       )
       if (!rodada.executado) return rodada
+
+      // A classificação e o box score da noite acabaram de mudar: a lateral
+      // direita lê os dois e é cacheada por uma hora. Sem isto ela mostraria a
+      // noite de anteontem por até 60 minutos depois de a de ontem fechar.
+      revalidateTag(TAG_LATERAL, 'max')
 
       // Odds das casas de mercado, DEPOIS da rodada e sob LEASE PRÓPRIO: o
       // vínculo evento↔jogo precisa dos jogos do dia já sincronizados, e um

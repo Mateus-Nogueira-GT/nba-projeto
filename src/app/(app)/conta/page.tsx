@@ -16,6 +16,7 @@ import { BlocoAlertas, BlocoAssinatura, BlocoConta, BlocoDispositivos } from './
 import { estadoExperienciaDoUsuario } from '@/modules/plataforma/experiencia/servico'
 import { identidadesDeApresentacao } from '@/modules/dominio/identidade-apresentacao'
 import { identidadeDoTime } from '@/design-system/times'
+import { lateralPadrao } from '@/app/(app)/lateral/montar'
 
 export const dynamic = 'force-dynamic'
 export const metadata = { title: 'Minha conta' }
@@ -124,7 +125,16 @@ export default async function PaginaConta({
   )
 
   return (
-    <Moldura aba="conta" largura="dados" assistente={atende(acesso.nivel, 'MVP')}>
+    <Moldura
+      aba="conta"
+      largura="dados"
+      conta={{ email: usuario.email, nome: usuario.nome, fotoUrl: usuario.fotoUrl }}
+      lateral={await lateralPadrao({
+        assistente: atende(acesso.nivel, 'MVP'),
+        gratis: !atende(acesso.nivel, 'MVP'),
+      })}
+      assistente={atende(acesso.nivel, 'MVP')}
+    >
       <CabecalhoTela sobrancelha="SUA CONTA" titulo="PERFIL" />
       <section style={{ display: 'flex', gap: 16, alignItems: 'center', marginBottom: 20 }}>
         <AvatarUsuario
@@ -211,9 +221,9 @@ export default async function PaginaConta({
           style={{
             padding: '11px 12px',
             borderRadius: 8,
-            border: `1px solid ${semantico.acento}`,
-            background: 'transparent',
-            color: semantico.acento,
+            border: '1px solid transparent',
+            background: semantico.acento,
+            color: semantico.textoSobreAcento,
             fontFamily: semantico.fonteTitulo,
             letterSpacing: 0.5,
             textTransform: 'uppercase',

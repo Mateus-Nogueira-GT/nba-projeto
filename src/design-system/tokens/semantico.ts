@@ -17,16 +17,24 @@ import { primitivo as p } from './primitivo'
  * cor categórica.
  */
 export const semantico = {
-  // -- Superfícies (tema escuro é a base) --------------------------------
-  fundo: p.tinta800,
-  superficie: p.tinta700,
-  superficieElevada: p.tinta600,
+  // -- Superfícies (as quatro do manual: fundo, cartão, campo, divisória) ----
+  fundo: p.fundoNip,
+  superficie: p.cartaoNip,
+  superficieElevada: p.campoNip,
   divisor: p.tinta500,
 
   // -- Texto -------------------------------------------------------------
-  textoPrimario: p.tinta50,
-  textoSecundario: p.tinta300,
+  textoPrimario: p.branco,
+  textoSecundario: p.cinzaNip,
+  /**
+   * Texto ESCURO sobre cor — o número dentro do anel do apito, e só ele. Sobre
+   * o amarelo do nível 1 o branco daria ~1,5; é por isso que este token existe
+   * e continua escuro. Quem senta sobre o azul ou o vermelho do manual usa
+   * `textoSobreAcento`.
+   */
   textoSobreCor: p.tinta900,
+  /** Texto BRANCO sobre azul ou vermelho: CTA, pílula ativa, selo, chip ativo. */
+  textoSobreAcento: p.branco,
 
   // -- Canal 1 · nível do JOGADOR (borda metálica) -----------------------
   // "preto" do documento virou GRAFITE: borda preta sobre superfície escura
@@ -44,40 +52,60 @@ export const semantico = {
   apitoModoFire: p.laranja400,
 
   // -- Estado ------------------------------------------------------------
-  alerta: p.vermelho400,
+  alerta: p.vermelhoNipClaro,
 
-  // -- Tipografia (identidade 02) -----------------------------------------
-  fonteTitulo: p.fonteAnton,
-  fonteRotulo: p.fonteBarlowCondensed,
-  fonteCorpo: p.fonteBarlow,
+  // -- Tipografia (identidade 05 · Manual da Marca) -------------------------
+  fonteTitulo: p.fonteBebas,
+  /**
+   * Rótulo em caixa-alta. Era a Barlow Condensed; virou Montserrat porque o
+   * manual reserva a Bebas a título curto, chamada e número de impacto e a
+   * PROÍBE em texto de formulário — e o rótulo veste formulário.
+   */
+  fonteRotulo: p.fonteMontserrat,
+  fonteCorpo: p.fonteMontserrat,
+  /**
+   * Número de impacto: confiança, placar, contador, os números da noite.
+   * `scripts/medir-digitos.mjs` mediu a Bebas Neue — 27,20 px em todos os
+   * dígitos duplos, ou seja, largura fixa — então ela pode vestir número que
+   * muda a cada refresh de 30 s sem o card pular. Se a fonte mudar, medir de
+   * novo: proporcional aqui obriga a voltar para a Montserrat com `tnum`.
+   */
+  fonteNumero: p.fonteBebas,
 
   // -- Acento de interface --------------------------------------------------
-  acento: p.laranjaAcento,
-  // Ponta clara do degradê de CTA — combinada com `acento` na camada de
-  // componente (ver `componente.ctaFundo`). Fica aqui, e não composta já
-  // como linear-gradient(), porque o teste "todo token semântico aponta para
-  // um valor da paleta primitiva" exige igualdade literal com um valor do
-  // primitivo — um gradiente já montado não seria mais um alias.
-  acentoClaro: p.laranjaAcentoClaro,
-  aoVivo: p.vermelho400,
+  /**
+   * O azul do manual — AÇÃO E ESTADO ATIVO, sempre como PREENCHIMENTO.
+   *
+   * Ele tem o mesmo matiz do azul do turbo (212° contra 211°). Como texto sobre
+   * o cartão dá 2,48 e reprova; qualquer tinta clara o bastante para passar em
+   * AA seria, aos olhos, o 🔵 do CJ — um quarto canal de cor mentindo. Então
+   * ele só existe preenchido, com `textoSobreAcento` em cima. Tinta é branca.
+   * O teste "azul nunca é tinta" varre a UI inteira atrás de violação.
+   */
+  acento: p.azulNip,
+  /** Hover do botão primário (o manual pede "estado hover mais claro"). */
+  acentoClaro: p.azulNipHover,
+  /** Ao vivo como TINTA — texto e ponto. O selo cheio é `vivoSelo`. */
+  aoVivo: p.vermelhoNipClaro,
 
   // -- Identidade 03 · broadcast -------------------------------------------
   // Superfícies dos dois universos: pré-live FRIO, ao vivo QUENTE. Os
   // gradientes são compostos na camada de componente (contextoFrio/Quente) —
   // aqui ficam só os aliases, como o teste de paridade exige.
-  superficieFria1: p.marinho650,
-  superficieFria2: p.marinho750,
-  fundoTelaFim: p.marinho850,
-  superficieQuente1: p.roxo700,
-  superficieQuente2: p.roxo800,
-  bordaQuente: p.roxoBorda,
-  vivoSelo: p.vermelhoVivo,
+  superficieFria1: p.campoFrio,
+  superficieFria2: p.cartaoFrio,
+  fundoTelaFim: p.fundoTelaFimNip,
+  superficieQuente1: p.campoQuente,
+  superficieQuente2: p.cartaoQuente,
+  bordaQuente: p.bordaQuenteNip,
+  /** Ao vivo CHEIO — o selo, com branco em cima. A tinta é `aoVivo`. */
+  vivoSelo: p.vermelhoNip,
   barrinhaBateu: p.verdeBarrinha,
   barrinhaFalhou: p.vermelhoBarrinha,
-  veuFrio: p.turquesaVeu,
-  veuQuente: p.laranjaVeu,
+  veuFrio: p.azulNipVeu7,
+  veuQuente: p.vermelhoNipVeu8,
   veuTurbo: p.azulVeuTurbo,
-  veuFire: p.laranjaVeuFire,
+  veuFire: p.vermelhoNipVeu22,
 
   // -- Rampa de confiança — grau 1 (menor) ao 5 (maior) ----------------------
   confiancaGrau1: p.turquesa700,
@@ -115,26 +143,26 @@ export const semantico = {
   // texto40 — uma cor, várias intensidades (a densidade do Sofascore sem a
   // paleta dele). `texto100` é o próprio textoPrimario, com nome de escala
   // para o componente falar a mesma língua nos quatro degraus.
-  texto100: p.tinta50,
-  texto70: p.tinta50Veu70,
-  texto55: p.tinta50Veu55,
+  texto100: p.branco,
+  texto70: p.brancoVeu70,
+  texto55: p.brancoVeu55,
   // Nome legado da identidade 04. O piso de 55% preserva AA em texto pequeno.
-  texto40: p.tinta50Veu55,
+  texto40: p.brancoVeu55,
   // Régua fina entre linhas de tabela — o `divisor` a meia força. Alias de um
   // primitivo, como o teste de paridade exige.
   divisorSuave: p.tinta500Veu50,
   // Ao vivo com forma própria DENTRO do quente: o sólido é o mesmo `aoVivo`
   // (o ponto e o texto); tinta e borda vestem o badge de status de largura
   // fixa. Distinto do amarelo do nível 1 e do laranja do nível 2 por teste.
-  aoVivoSolido: p.vermelho400,
-  aoVivoTinta: p.vermelhoVeu14,
-  aoVivoBorda: p.vermelhoVeu45,
+  aoVivoSolido: p.vermelhoNipClaro,
+  aoVivoTinta: p.vermelhoClaroVeu14,
+  aoVivoBorda: p.vermelhoClaroVeu45,
   // Aba de atributo ativa (PTS · REB · AST no rodapé do card): borda no verde
   // do nível 3, fundo na tinta dele. Alias, como o teste de paridade exige.
   apitoNivel1Tinta: p.ambarVeu12,
   apitoNivel2Tinta: p.laranjaVeu12,
-  /** Véu do laranja de UI — fundo de estado ativo em seletor de TELA. */
-  acentoVeu: p.laranjaVeu,
+  /** Véu do azul de UI — fundo de estado ativo em seletor de TELA. */
+  acentoVeu: p.azulNipVeu8,
   apitoNivel3Tinta: p.verdeVeu12,
   apitoTurboTinta: p.azulVeu12,
   // Par do turbo — para brilho e fundo. O categórico continua sendo apitoTurbo.
@@ -143,6 +171,27 @@ export const semantico = {
   // Durações
   duracaoEstado: p.duracao200,
   duracaoEntrada: p.duracao400,
+
+  // -- Identidade 05 · moldura e marca -------------------------------------
+  /**
+   * O CROMO — barra do topo no desktop, barra inferior no celular, painel da
+   * marca no login. Sobre o fundo ele dá 1,09: o cromo NÃO se separa do
+   * conteúdo por contraste, e sim pela linha divisória na borda da barra.
+   */
+  cromo: p.navy,
+  /**
+   * O anel de foco é BRANCO, nunca o acento: o azul de interface tem o matiz
+   * do turbo, e um contorno azul em volta de um campo seria um sinal de apito
+   * fora do card.
+   */
+  focoAnel: p.branco,
+  /** Véu do paywall: o fundo do manual em dois passos, sobre a silhueta. */
+  veuPaywallInicio: p.fundoNipVeu20,
+  veuPaywallFim: p.fundoNipVeu70,
+  /** A barra de navegação sobe para o topo a partir daqui. */
+  larguraTopo: p.pontoDeQuebraTopo,
+  /** A lateral direita passa a existir a partir daqui. */
+  larguraLateral: p.pontoDeQuebraLateral,
 } as const
 
 export type Semantico = typeof semantico

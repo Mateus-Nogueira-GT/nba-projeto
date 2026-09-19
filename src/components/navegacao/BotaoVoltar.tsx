@@ -25,8 +25,10 @@ export function BotaoVoltar({ href }: { href: string }) {
         height: 34,
         flexShrink: 0,
         borderRadius: 10,
-        border: `1.5px solid ${semantico.acento}`,
-        color: semantico.acento,
+        // Contorno NEUTRO e traço branco: o voltar não é ação principal, e o
+        // acento só existe preenchido (identidade 05).
+        border: `1.5px solid ${semantico.divisor}`,
+        color: semantico.textoPrimario,
         textDecoration: 'none',
       }}
     >

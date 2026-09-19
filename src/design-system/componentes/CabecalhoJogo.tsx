@@ -37,6 +37,16 @@ export type CabecalhoJogoProps = {
   temperatura?: 'frio' | 'quente'
   /** Visão ilustrativa do confronto; não representa posse ou posições ao vivo. */
   mostrarQuadra?: boolean
+  /**
+   * `summary` transforma o cabeçalho no GATILHO de um `<details>` — é assim que
+   * a Lista Secreta colapsa a seção de cada jogo (identidade 05). Ele ganha o
+   * chevron e some o marcador nativo do navegador; o padrão `div` é o de
+   * sempre, para as telas que não colapsam nada.
+   *
+   * Só o universo FRIO aceita: o Fire Live mostra um jogo por vez, não há
+   * seção a fechar.
+   */
+  raiz?: 'div' | 'summary'
 }
 
 /** 19:30 — sempre no fuso pedido; o servidor da Vercel roda em UTC. */
@@ -45,8 +55,9 @@ const horaCurta = (quando: Date, fuso: string) =>
 
 const ROTULO: CSSProperties = {
   fontFamily: semantico.fonteRotulo,
-  fontSize: 10,
-  letterSpacing: 1.5,
+  // 12 é o piso do manual; abaixo dele o rótulo some no celular.
+  fontSize: 12,
+  letterSpacing: '0.06em',
   textTransform: 'uppercase',
   fontWeight: 700,
 }
@@ -124,11 +135,17 @@ export function CabecalhoJogo(props: CabecalhoJogoProps) {
     const mostraQuartos =
       props.status === 'ENCERRADO' && quartosVisitante.length > 0 && quartosCasa.length > 0
 
+    const Raiz = props.raiz ?? 'div'
+
     return (
-      <div
+      <Raiz
         className="jogo-frio"
         style={{
           display: 'flex',
+          // `summary` traz o triângulo nativo do navegador e o cursor de texto;
+          // o chevron desenhado abaixo é o indicador, igual nos dois sistemas.
+          listStyle: Raiz === 'summary' ? 'none' : undefined,
+          cursor: Raiz === 'summary' ? 'pointer' : undefined,
           // Com a quebra por quarto o lado direito tem DUAS linhas: alinhar
           // pela primeira deixaria o bloco pendurado abaixo do placar. É a
           // diferença entre o artboard de Resultados (center, 24px) e o da
@@ -180,7 +197,7 @@ export function CabecalhoJogo(props: CabecalhoJogoProps) {
             aria-label={`Pontos por quarto: ${props.visitanteSigla} ${quartosVisitante.join(', ')}; ${props.casaSigla} ${quartosCasa.join(', ')}`}
             style={{
               fontFamily: semantico.fonteRotulo,
-              fontSize: 10,
+              fontSize: 12,
               letterSpacing: 1,
               textTransform: 'uppercase',
               textAlign: 'right',
@@ -211,7 +228,23 @@ export function CabecalhoJogo(props: CabecalhoJogoProps) {
         ) : (
           statusEncerrado
         )}
-      </div>
+        {Raiz === 'summary' && (
+          <svg
+            aria-hidden
+            className="jogo-chevron"
+            width="16"
+            height="16"
+            viewBox="0 0 16 16"
+            fill="none"
+            stroke={semantico.textoSecundario}
+            strokeWidth="1.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="M4 6l4 4 4-4" />
+          </svg>
+        )}
+      </Raiz>
     )
   }
 

@@ -54,6 +54,13 @@ vi.mock('../../modules/plataforma/assinatura/direito', async () => {
   const { acessoDeTeste } = await import('../../modules/plataforma/__tests__/acesso-de-teste')
   return { avaliarAcesso: async () => acessoDeTeste('ALL_STAR') }
 })
+vi.mock('next/cache', () => ({
+  // `unstable_cache` fora do runtime do Next não tem store: no teste ele é a
+  // própria função. `revalidateTag`/`revalidatePath` viram no-op.
+  unstable_cache: (fn: (...args: never[]) => unknown) => fn,
+  revalidateTag: () => {},
+  revalidatePath: () => {},
+}))
 vi.mock('../../modules/dominio/db/cliente', () => ({
   getDb: () => banco.db,
   fecharDb: async () => {},
@@ -607,7 +614,7 @@ describe('Detalhe do apito — o esqueleto fixo da análise (identidade 04)', ()
     expect(hero).toContain(item.nome)
     // O mercado, com a linha sempre inteira e com "+".
     expect(hero).toContain(`>${ATRIBUTO_ROTULO[item.atributo]} ${item.linha}+<`)
-    // A pílula do grau, em Anton 34, segue a decisão da identidade 04: nota pura.
+    // A pílula do grau, em Bebas 34, segue a decisão da identidade 04: nota pura.
     expect(item.confianca).not.toBeNull()
     expect(hero).toMatch(/font-size:34px/)
     expect(hero).toContain(`>${Math.round(item.confianca!)}<`)
@@ -665,7 +672,7 @@ describe('Detalhe do apito — o esqueleto fixo da análise (identidade 04)', ()
 
   it('sem confiança a pílula não vira uma caixa invisível — o mesmo vazio do card', async () => {
     // O Fire Live não tem nota (o feed grava `confianca: null`). O "—" em
-    // Anton 34 na cor do divisor dá ~1,4:1 sobre o fundo: o elemento mais alto
+    // Bebas 34 na cor do divisor dá ~1,4:1 sobre o fundo: o elemento mais alto
     // do hero virava uma caixa vazia. A 1.1 já resolveu o MESMO vazio no
     // CardEntrada tirando o "—" — duas telas do mesmo produto, uma decisão só.
     const item = await sujeitoFireLive()

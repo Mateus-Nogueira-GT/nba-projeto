@@ -29,6 +29,7 @@ import { filtrarOcultos, jogadoresOcultosComNome } from '@/modules/plataforma/jo
 import { exibir } from './acoes'
 import { ConviteDoPlano } from '@/components/planos/ConviteDoPlano'
 import { JogosDoDia } from '@/components/planos/JogosDoDia'
+import { lateralPadrao } from '@/app/(app)/lateral/montar'
 import { atende } from '@/modules/plataforma/assinatura/nivel-do-plano'
 import { exigirNivel } from '@/modules/plataforma/assinatura/guarda'
 import '@/design-system/tokens/tokens.css'
@@ -248,6 +249,7 @@ export default async function PaginaFireLive({
 
   if (!process.env.DATABASE_URL) {
     return (
+      // Sem `conta`: este aviso roda antes do login, e não há sessão a mostrar.
       <Moldura aba="fire-live" largura="dados">
         <h1>Fire Live</h1>
         <p style={{ color: semantico.textoSecundario }}>
@@ -273,15 +275,26 @@ export default async function PaginaFireLive({
   if (!atende(acesso.nivel, 'MVP')) {
     const jogos = await jogosDoDiaResumo(getDb(), hoje, fuso)
     return (
-      <Moldura aba="fire-live" assistente={atende(acesso.nivel, 'MVP')}>
+      <Moldura
+        aba="fire-live"
+        conta={{ email: sessao.email }}
+        lateral={await lateralPadrao({
+          assistente: atende(acesso.nivel, 'MVP'),
+          gratis: !atende(acesso.nivel, 'MVP'),
+        })}
+        assistente={atende(acesso.nivel, 'MVP')}
+      >
         <CabecalhoTela
           sobrancelha="FIRE LIVE"
           titulo="ACONTECENDO"
-          contexto="aoVivo"
           selo={<SeloContexto contexto="aoVivo" />}
         />
-        <JogosDoDia jogos={jogos} fuso={fuso} />
-        <ConviteDoPlano minimo="MVP" recurso="O Fire Live" voltar="/fire-live" />
+        <div className="so-ate-lateral">
+          <ConviteDoPlano variante="faixa" minimo="MVP" recurso="O Fire Live" voltar="/fire-live" />
+        </div>
+        {/* Cabeçalho QUENTE (é a tela do ao vivo), silhueta NEUTRA: o universo
+            quente é o modo fire, e o modo fire é o sinal (identidade 05, §8). */}
+        <JogosDoDia jogos={jogos} fuso={fuso} temperatura="quente" />
       </Moldura>
     )
   }
@@ -338,11 +351,19 @@ export default async function PaginaFireLive({
   const primeiraEspera = visiveis.find((g) => g.estado === 'AGUARDANDO')?.jogoId ?? null
 
   return (
-    <Moldura aba="fire-live" largura="dados" assistente={atende(acesso.nivel, 'MVP')}>
+    <Moldura
+      aba="fire-live"
+      conta={{ email: sessao.email }}
+      lateral={await lateralPadrao({
+        assistente: atende(acesso.nivel, 'MVP'),
+        gratis: !atende(acesso.nivel, 'MVP'),
+      })}
+      largura="dados"
+      assistente={atende(acesso.nivel, 'MVP')}
+    >
       <CabecalhoTela
         sobrancelha="FIRE LIVE"
         titulo="ACONTECENDO"
-        contexto="aoVivo"
         selo={<SeloContexto contexto="aoVivo" />}
       >
         <div style={{ display: 'grid', gap: 12, flex: 1 }}>

@@ -10,6 +10,7 @@ import { rulesetAtivo } from '../../modules/entrega/ruleset-ativo'
 import { simularAte } from '../../modules/ingestao/demo/temporada'
 import { LLMFake } from '../../modules/ingestao/llm'
 import type { ConteudoFeed } from '../../modules/entrega/lista-secreta'
+import { componente } from '../../design-system/tokens/componente'
 import { gravarConferencia } from './conferencia'
 
 /**
@@ -62,6 +63,13 @@ vi.mock('../../modules/plataforma/assinatura/direito', async () => {
   const { acessoDeTeste } = await import('../../modules/plataforma/__tests__/acesso-de-teste')
   return { avaliarAcesso: async () => acessoDeTeste('ALL_STAR') }
 })
+vi.mock('next/cache', () => ({
+  // `unstable_cache` fora do runtime do Next não tem store: no teste ele é a
+  // própria função. `revalidateTag`/`revalidatePath` viram no-op.
+  unstable_cache: (fn: (...args: never[]) => unknown) => fn,
+  revalidateTag: () => {},
+  revalidatePath: () => {},
+}))
 vi.mock('../../modules/dominio/db/cliente', () => ({
   getDb: () => banco.db,
   fecharDb: async () => {},
@@ -395,9 +403,10 @@ describe('a rodada segue o fuso do cliente', () => {
       const html = renderToStaticMarkup(await Pagina({ searchParams: Promise.resolve({}) }))
 
       // O estado "sem lista" da 04 é "Próxima lista às HH:MM"; publicada, o
-      // subtítulo conta a rodada: "N entradas em M jogos".
+      // o CONTADOR do cabeçalho conta a rodada (identidade 05): o número num
+      // <strong> e o que ele conta ao lado.
       expect(html).not.toContain('Próxima lista às')
-      expect(html).toMatch(/\d+ entradas em \d+ jogos/)
+      expect(html).toMatch(/entradas em \d+ jogos/)
     } finally {
       vi.setSystemTime(AGORA)
     }
@@ -531,7 +540,7 @@ describe('Estatísticas — identidade 03 (conferência em lote)', () => {
     // A identidade chega pela Moldura (gradiente) e pela tipografia
     for (const html of [htmlIndice, htmlJogador, htmlTime]) {
       expect(html).toContain('linear-gradient(175deg')
-      expect(html).toContain('var(--fonte-anton)')
+      expect(html).toContain('var(--fonte-bebas)')
       expect(html).not.toContain('PROBABILIDADE')
     }
     // 2P% no perfil (proposta comercial) e o boxscore por partida no time
@@ -749,7 +758,7 @@ describe('Fire Live — identidade 03', () => {
     const antes = renderToStaticMarkup(await Pagina({ searchParams: Promise.resolve({}) }))
     await gravarConferencia('fire-live', antes)
     // temperatura quente no card do fire live, mesmo sem modo fire
-    expect(antes).toContain('linear-gradient(135deg, #241A2E, #161226 55%)')
+    expect(antes).toContain(componente.contextoQuente.cardGradiente)
     expect(antes).toContain('/ ') // contagem da BarraAlvo
     // no card, o nome é LINK para as estatísticas do jogador
     expect(antes).toContain(`${alvo.nome}</a>`)
@@ -837,7 +846,7 @@ describe('Detalhe do apito — identidade 03', () => {
     await gravarConferencia('detalhe-apito', html)
 
     // hero no universo frio da identidade 03
-    expect(html).toContain('linear-gradient(135deg, #16213A, #111A2E 55%)')
+    expect(html).toContain(componente.contextoFrio.cardGradiente)
     // blocos dos últimos 5 usam o PAR das barrinhas — nunca o verde categórico
     // do apito nível 3, que significa outra coisa no mesmo produto
     expect(html).toContain('#2FBF71')

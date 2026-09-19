@@ -454,7 +454,7 @@ export default async function PaginaApito({
           </p>
         </div>
         {/* Sem nota não há pílula: o Fire Live grava `confianca: null`, e o
-            "—" em Anton 34 na cor do divisor dá ~1,4:1 sobre o fundo — o
+            "—" em Bebas 34 na cor do divisor dá ~1,4:1 sobre o fundo — o
             elemento mais alto do hero virava uma caixa vazia. Mesma decisão
             que o CardEntrada tomou para o MESMO vazio (identidade 04, 1.1). */}
         {principal.confianca !== null && (
@@ -749,7 +749,7 @@ export default async function PaginaApito({
           borderRadius: 12,
           textAlign: 'center',
           background: componente.ctaFundo,
-          color: semantico.textoSobreCor,
+          color: semantico.textoSobreAcento,
           fontFamily: semantico.fonteTitulo,
           fontSize: 16,
           letterSpacing: 1,
@@ -775,8 +775,9 @@ export default async function PaginaApito({
               padding: 12,
               borderRadius: 12,
               textAlign: 'center',
-              border: `1.5px solid ${semantico.acento}`,
-              color: semantico.acento,
+              border: '1.5px solid transparent',
+              background: semantico.acento,
+              color: semantico.textoSobreAcento,
               fontFamily: semantico.fonteTitulo,
               fontSize: 14,
               letterSpacing: 1,

@@ -72,7 +72,7 @@ export function FormularioLogin({ destino }: { destino: string }) {
         style={{
           ...campo,
           background: componente.ctaFundo,
-          color: semantico.textoSobreCor,
+          color: semantico.textoSobreAcento,
           fontFamily: semantico.fonteTitulo,
           letterSpacing: 0.5,
           textTransform: 'uppercase',

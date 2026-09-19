@@ -31,6 +31,13 @@ vi.mock('../../modules/plataforma/assinatura/direito', async () => {
   const { acessoDeTeste } = await import('../../modules/plataforma/__tests__/acesso-de-teste')
   return { avaliarAcesso: async () => acessoDeTeste(nivelNoTeste) }
 })
+vi.mock('next/cache', () => ({
+  // `unstable_cache` fora do runtime do Next não tem store: no teste ele é a
+  // própria função. `revalidateTag`/`revalidatePath` viram no-op.
+  unstable_cache: (fn: (...args: never[]) => unknown) => fn,
+  revalidateTag: () => {},
+  revalidatePath: () => {},
+}))
 vi.mock('../../modules/dominio/db/cliente', () => ({ getDb: () => banco.db, fecharDb: async () => {} }))
 
 beforeAll(async () => {
@@ -59,6 +66,11 @@ afterAll(async () => {
 async function renderizarHome() {
   const { default: Pagina } = await import('../(app)/page')
   return renderToStaticMarkup(await Pagina({ searchParams: Promise.resolve({}) }))
+}
+
+/** O HTML sem a coluna da direita. */
+function semLateral(html: string): string {
+  return html.replace(/<aside[\s\S]*?<\/aside>/g, '')
 }
 
 describe('a home por nível (spec §5, linha 1)', () => {
@@ -92,7 +104,10 @@ describe('a home por nível (spec §5, linha 1)', () => {
     nivelNoTeste = 'MVP'
     const html = await renderizarHome()
     expect(html).toContain('href="/apito/')
-    expect(html).not.toContain('começa no')
+    // A LATERAL fica de fora: o banner de plano mora nela para o grátis
+    // (identidade 05, §8) e não bloqueia nada — o que esta asserção prova é
+    // que o CONTEÚDO da tela vem inteiro, sem convite no lugar dele.
+    expect(semLateral(html)).not.toContain('começa no')
   })
 
   it('Resultados é inteiro para o GRATIS — a prova social (decisão 9)', async () => {
@@ -110,7 +125,10 @@ describe('a home por nível (spec §5, linha 1)', () => {
       await Pagina({ params: Promise.resolve({ data: data! }), searchParams: Promise.resolve({}) }),
     )
     // Nada de convite nem redirecionamento — a tela é a mesma para todo nível.
-    expect(html).not.toContain('começa no')
+    // A LATERAL fica de fora: o banner de plano mora nela para o grátis
+    // (identidade 05, §8) e não bloqueia nada — o que esta asserção prova é
+    // que o CONTEÚDO da tela vem inteiro, sem convite no lugar dele.
+    expect(semLateral(html)).not.toContain('começa no')
     // O conteúdo da análise está inteiro: um card conferido por apitado
     // publicado, o mesmo que o pago veria (spec, decisão 9). Diferente da
     // home, esta tela não linka para `/apito/` para nenhum nível — o card

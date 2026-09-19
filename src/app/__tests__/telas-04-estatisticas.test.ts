@@ -76,6 +76,13 @@ vi.mock('../../modules/plataforma/assinatura/direito', async () => {
   const { acessoDeTeste } = await import('../../modules/plataforma/__tests__/acesso-de-teste')
   return { avaliarAcesso: async () => acessoDeTeste('ALL_STAR') }
 })
+vi.mock('next/cache', () => ({
+  // `unstable_cache` fora do runtime do Next não tem store: no teste ele é a
+  // própria função. `revalidateTag`/`revalidatePath` viram no-op.
+  unstable_cache: (fn: (...args: never[]) => unknown) => fn,
+  revalidateTag: () => {},
+  revalidatePath: () => {},
+}))
 vi.mock('../../modules/dominio/db/cliente', () => ({
   getDb: () => banco.db,
   fecharDb: async () => {},
@@ -607,7 +614,7 @@ describe('o auxiliar das seções que leem o histórico', () => {
 })
 
 describe('tela do jogador · o hero', () => {
-  it('o nome é o h1, no hero ao lado do rosto — Anton 26, e uma só vez na tela', async () => {
+  it('o nome é o h1, no hero ao lado do rosto — fonte de título 26, e uma só vez na tela', async () => {
     const html = await renderizarJogador(alvo)
     const titulos = html.match(/<h1[^>]*>[\s\S]*?<\/h1>/g) ?? []
 
@@ -617,9 +624,9 @@ describe('tela do jogador · o hero', () => {
     expect(titulos.length).toBe(1)
     expect(texto(titulos[0]!).trim()).toBe(tela.perfil.nome)
     expect(titulos[0]).toContain('font-size:26px')
-    // Anton, o mesmo token de título do resto da identidade (a pilha de
-    // fallback vem escapada no HTML; a variável é o que interessa).
-    expect(titulos[0]).toContain('var(--fonte-anton)')
+    // Bebas Neue, o mesmo token de título do resto da identidade (a pilha
+    // de fallback vem escapada no HTML; a variável é o que interessa).
+    expect(titulos[0]).toContain('var(--fonte-bebas)')
     // Dentro do hero: depois do rosto de 72, antes dos quatro números.
     expect(html.indexOf('<h1')).toBeGreaterThan(html.indexOf('width:72px'))
     expect(html.indexOf('<h1')).toBeLessThan(html.indexOf('NOTA · RECORTE'))
@@ -658,7 +665,9 @@ describe('tela do jogador · as duas visões de time', () => {
       expect(ancoras.length).toBe(2)
       for (const marcacao of ancoras) {
         expect(marcacao).toContain('text-decoration:underline')
-        expect(marcacao).toContain(`color:${semantico.acento}`)
+        // Identidade 05: link é BRANCO sublinhado. O azul do manual tem o
+        // matiz do turbo e não pode virar tinta de texto.
+        expect(marcacao).toContain(`color:${semantico.textoPrimario}`)
         // NADA de `inline-block` com padding: o alvo ampliado parava em ~22 px
         // (12 de texto + 8 de padding), abaixo do mínimo de 24 que ele dizia
         // atingir, e o critério 2.5.8 do WCAG 2.2 nem se aplica a link dentro

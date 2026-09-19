@@ -43,7 +43,7 @@
 }
 
 .botaoPrimario {
-  color: var(--texto-sobre-cor);
+  color: var(--texto-sobre-acento);
   background: var(--apito-nivel3);
   border: 1px solid var(--apito-nivel3);
 }

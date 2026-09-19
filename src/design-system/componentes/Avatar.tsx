@@ -86,7 +86,7 @@ export function Avatar({
             position: 'absolute',
             right: -4,
             bottom: -4,
-            fontSize: 9,
+            fontSize: 12,
             fontWeight: 700,
             fontFamily: semantico.fonteRotulo,
             color: semantico.textoSobreCor,

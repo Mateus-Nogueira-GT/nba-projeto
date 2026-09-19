@@ -437,3 +437,86 @@ completo e SVG local, e podem ser acompanhados como atalhos sem expandir o elenc
 As preferências ficam em Perfil: intensidade, som, volume, somente acompanhados,
 atributos e jogadores silenciados. Lista, Fire Live e perfis estatísticos oferecem o
 controle de acompanhamento; páginas de time oferecem o equivalente para times.
+
+---
+
+## Identidade 05 — Manual da Marca (referência vigente)
+
+Spec: `docs/superpowers/specs/2026-09-18-identidade-05-manual-da-marca-design.md`.
+
+A paleta e as fontes são as do Manual da Marca (v1.0, 16/09/2026): azul `#0057B8` para ação
+e estado ativo, vermelho `#C8102E` para atenção, navy `#001D3D` no cromo, cinza `#A6ABB4`
+no texto secundário, branco no texto principal, e as quatro superfícies do manual (fundo
+`#071426`, cartão `#101C30`, campo `#18243A`, divisória `#2A3852`). Bebas Neue em título
+curto, chamada e número de impacto; Montserrat na interface, no campo, no botão e no dado.
+O laranja saiu da interface. O 🟠 do nível 2 do apito ficou: é vocabulário homologado do
+CJ, e sinal não é decoração.
+
+**Azul é preenchimento, nunca tinta.** O azul do manual tem o mesmo matiz do azul do turbo
+(212° contra 211°). Como texto sobre o cartão ele dá 2,48 e reprova; qualquer tinta clara o
+bastante para passar em AA seria, aos olhos, o 🔵 do CJ — um quarto canal de cor dizendo o
+que o anel já diz, e dizendo errado. Então o estado ativo é pílula preenchida com
+`textoSobreAcento`, o link é branco sublinhado, o contorno ativo virou preenchimento e o
+anel de foco é branco (`focoAnel`). O teste `tokens.test.ts` › "azul nunca é tinta" varre
+`design-system/componentes`, `components` e `app` atrás de acento em `color`, `stroke`,
+`border` ou `outline`.
+
+**Vermelho: cheio no selo, claro na tinta.** `vivoSelo` é o vermelho do manual com branco
+em cima (5,88); `aoVivo` e `alerta` são a tinta clara `#FF5C70`, que passa em AA como texto
+sobre o cartão (5,70). É a mesma divisão que o app já fazia, com o pigmento trocado.
+
+**Texto sobre cor virou dois tokens.** `textoSobreCor` (escuro) ficou para o número dentro
+do anel do apito — sobre o amarelo do nível 1, o branco daria ~1,5, e é isso que o teste
+"texto BRANCO dentro do anel reprovaria" registra. `textoSobreAcento` (branco) cobre tudo
+que senta sobre o azul ou o vermelho: CTA, pílula ativa, selo, chip ativo.
+
+**Os dois universos foram re-derivados do manual**, não inventados: o frio é o cartão e o
+campo com 10% de azul; o quente, o cartão com 12% e o campo com 15% de vermelho — que dá
+quase o roxo da identidade 03, agora com origem declarada.
+
+Os canais de estratégia não mudaram: anel do apito, faixa metálica do nível do jogador,
+rampa turquesa de confiança, nota da partida e o par das barrinhas seguem como estavam.
+
+**A fonte de número é medida, não escolhida.** `scripts/medir-digitos.mjs` roda a família no
+Chrome e mede os dígitos duplos; a Bebas Neue deu 27,20 px em todos, ou seja, largura fixa,
+e por isso pode vestir placar, confiança e contador sem o card pular a cada refresh de 30 s.
+Trocar a fonte de título obriga a medir de novo.
+
+### A moldura de três regiões
+
+A `Moldura` tem cromo, conteúdo e lateral, e o que muda entre larguras é só onde cada um
+senta. Abaixo de 1024 px o cromo é a barra inferior; a partir dali é a barra do topo, com a
+marca à esquerda, as cinco pílulas e o atalho da conta. A partir de 1280 px nasce a coluna
+da direita, de 320 px, com a última noite conferida, a classificação por conferência e a
+doca do assistente — e só nas telas de aba, porque o detalhe do apito e a tela teórica são
+leitura corrida.
+
+As DUAS barras saem no HTML e o CSS esconde uma. É isso que mantém a moldura como componente
+de servidor: sem medir janela, sem `usePathname`, sem JavaScript em toda página só para
+escolher uma barra. Os pontos de quebra vivem em `semantico.larguraTopo` e
+`larguraLateral`, e o `.module.css` os repete porque media query não lê variável CSS — um
+teste compara os dois.
+
+A lateral é lida por `modules/entrega/lateral.ts` e cacheada por hora
+(`app/(app)/lateral/leitura.ts`), com a tag revalidada pelo cron da rodada. Ela só lê dado
+grátis, e é isso que permite um cache compartilhado entre usuários.
+
+### A Lista na anatomia do StatsHub
+
+Título, controles, contador, cards — a mesma página que o Player Trends. A fileira de
+filtros tem duas formas: a folha inferior no celular (identidade 04) e um chip com menu por
+grupo a partir de 1024 px, com o rótulo mostrando o que está filtrando. As lentes viraram
+abas com sublinhado. Cada jogo é um `<details open>` cujo `<summary>` é o próprio
+`CabecalhoJogo`; fechar um jogo é gesto da sessão, não preferência da conta. O contador
+("37 entradas em 7 jogos") é o número da tela, e saiu da frase da rodada. Acompanhar virou
+uma estrela no canto do card, no lugar do botão solto que quebrava o ritmo da grade.
+
+### O paywall veste silhueta
+
+O grátis vê a MESMA moldura do assinante — sobrancelha, H1, selo, cabeçalhos de jogo reais —
+com uma faixa azul no topo e silhuetas no lugar dos cards. A silhueta é forma pura: a única
+prop é `forma`, ela não recebe dado nenhum e a quantidade de blocos é fixa, porque quantos
+apitos existem hoje também é sinal. Desfoque é CSS, e CSS o leitor desliga: um conteúdo real
+borrado entregaria nome, nível e confiança no código-fonte de quem não paga. `paywall.test.ts`
+e `telas-05-gratis.test.ts` cobram as duas coisas — a assinatura da silhueta e a ausência de
+qualquer nome do feed no HTML do grátis.

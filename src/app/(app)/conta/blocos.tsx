@@ -15,6 +15,8 @@ import {
 } from '@/modules/plataforma/assinatura/nivel-do-plano'
 import type { EstadoExperiencia } from '@/modules/plataforma/experiencia/contrato'
 
+import { SilhuetaPaga } from '@/components/planos/SilhuetaPaga'
+
 import {
   atualizarNome,
   cancelarAssinatura,
@@ -50,7 +52,7 @@ const ESTILO_BOTAO_PRINCIPAL = {
   ...ESTILO_CAMPO,
   border: 0,
   background: componente.ctaFundo,
-  color: semantico.textoSobreCor,
+  color: semantico.textoSobreAcento,
   fontFamily: semantico.fonteTitulo,
   letterSpacing: 0.5,
   textTransform: 'uppercase' as const,
@@ -64,9 +66,10 @@ const ESTILO_BOTAO_PRINCIPAL = {
 const ESTILO_BOTAO_SECUNDARIO_ACENTO = {
   padding: '11px 12px',
   borderRadius: 8,
-  border: `1px solid ${semantico.acento}`,
-  background: 'transparent',
-  color: semantico.acento,
+  // PREENCHIDO: o azul do manual é ação, nunca contorno (identidade 05).
+  border: '1px solid transparent',
+  background: semantico.acento,
+  color: semantico.textoSobreAcento,
   fontFamily: semantico.fonteTitulo,
   letterSpacing: 0.5,
   textTransform: 'uppercase' as const,
@@ -184,7 +187,7 @@ export function BlocoConta({
                   padding: 0,
                   border:
                     usuario.fotoUrl === a
-                      ? `2px solid ${semantico.acento}`
+                      ? `2px solid ${semantico.textoPrimario}`
                       : `1px solid ${semantico.divisor}`,
                   borderRadius: 12,
                   background: 'transparent',
@@ -396,13 +399,16 @@ export function BlocoAssinatura({
             <Link
               href="/assinar"
               style={{
-                display: 'inline-block',
-                padding: '11px 18px',
-                borderRadius: 10,
+                // O botão primário do manual: 48 px, canto de 8, azul chapado.
+                display: 'inline-flex',
+                alignItems: 'center',
+                minHeight: componente.ctaAltura,
+                padding: '0 18px',
+                borderRadius: componente.raioControle,
                 background: componente.ctaFundo,
-                color: semantico.textoSobreCor,
+                color: componente.ctaTexto,
                 fontFamily: semantico.fonteTitulo,
-                letterSpacing: 0.5,
+                letterSpacing: '0.02em',
                 textTransform: 'uppercase',
                 textDecoration: 'none',
               }}
@@ -455,7 +461,9 @@ export function BlocoAlertas({
         {recebeAlertas ? (
           <AtivarAlertas />
         ) : (
-          <ConviteDoPlano minimo="MVP" recurso="Os alertas de apito" voltar="/conta" />
+          <SilhuetaPaga forma="formulario">
+            <ConviteDoPlano minimo="MVP" recurso="Os alertas de apito" voltar="/conta" />
+          </SilhuetaPaga>
         )}
         <PainelExperiencia inicial={experiencia} jogadores={jogadores} times={times} />
       </div>

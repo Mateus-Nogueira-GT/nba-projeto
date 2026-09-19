@@ -72,7 +72,7 @@ export function FormularioCadastro() {
           ...campo,
           border: 0,
           background: componente.ctaFundo,
-          color: semantico.textoSobreCor,
+          color: semantico.textoSobreAcento,
           fontFamily: semantico.fonteTitulo,
           letterSpacing: 0.5,
           textTransform: 'uppercase',

@@ -10,8 +10,10 @@ import {
   SeloContexto,
 } from '@/design-system/componentes'
 import { semantico } from '@/design-system/tokens/semantico'
+import { componente } from '@/design-system/tokens/componente'
 import { CONFIANCA_GRAU, NIVEL_JOGADOR, APITO, TURBO, MODO_FIRE } from '@/design-system/tokens/css'
 import { razaoDeContraste } from '@/design-system/tokens/contraste'
+import { Chip } from '@/components/navegacao'
 import { SeletorJogosAoVivo } from '@/components/ao-vivo/SeletorJogosAoVivo'
 import '@/design-system/tokens/tokens.css'
 import { negarSeNaoForAdmin } from '../guarda'
@@ -68,7 +70,10 @@ export default async function PaginaGaleria() {
         background: semantico.fundo,
         color: semantico.textoPrimario,
         minHeight: '100vh',
-        padding: 32,
+        // O respiro encolhe com a tela. Com 32 fixos sobravam 256 px a 320, e
+        // o card de entrada precisa dos mesmos ~288 que tem no app — a galeria
+        // era a única tela do projeto com rolagem horizontal a 320.
+        padding: 'clamp(16px, 4vw, 32px)',
         fontFamily: 'system-ui, sans-serif',
       }}
     >
@@ -518,7 +523,7 @@ export default async function PaginaGaleria() {
 
       <Secao
         titulo="Identidade 04 · cabeçalho de jogo e selo de contexto"
-        nota="A única fronteira de seção da varredura: visitante @ mandante, sigla em Anton, sem escudo. Frio na Lista Secreta; quente com o placar do 1º quarto no Fire Live; mudo enquanto o jogo não começou. O ponto do ao vivo não pulsa — nada se anima continuamente. O selo preenchido no canto do cabeçalho da tela veste os dois universos."
+        nota="A única fronteira de seção da varredura: visitante @ mandante, sigla na fonte de título, sem escudo. Frio na Lista Secreta; quente com o placar do 1º quarto no Fire Live; mudo enquanto o jogo não começou. O ponto do ao vivo não pulsa — nada se anima continuamente. O selo preenchido no canto do cabeçalho da tela veste os dois universos."
       >
         <CabecalhoJogo
           casaSigla="IND"
@@ -691,52 +696,133 @@ export default async function PaginaGaleria() {
       </Secao>
 
       <Secao
-        titulo="Contraste verificado"
-        nota="Valores calculados na renderização — não são texto fixo."
+        titulo="Identidade 05 · marca"
+        nota="As peças do Manual da Marca: botão primário chapado, selo de contexto nas duas temperaturas, chip ativo e inativo, e os dois universos re-derivados das superfícies do manual. O azul só aparece preenchido; a tinta é branca."
       >
-        <table style={{ borderCollapse: 'collapse', fontSize: 13, maxWidth: 560 }}>
-          <thead>
-            <tr style={{ textAlign: 'left', opacity: 0.6 }}>
-              <th style={{ padding: '6px 12px 6px 0' }}>Elemento</th>
-              <th style={{ padding: '6px 12px 6px 0' }}>vs superfície</th>
-              <th style={{ padding: '6px 0' }}>vs texto sobre cor</th>
-            </tr>
-          </thead>
-          <tbody>
-            {[
-              ...Object.entries(APITO).map(([k, v]) => [`Apito nível ${k}`, v.cor] as const),
-              ['Apito turbo', TURBO.cor] as const,
-              ['Modo fire', MODO_FIRE.cor] as const,
-              ...Object.entries(NIVEL_JOGADOR).map(([k, v]) => [`Faixa ${k}`, v.cor] as const),
-              ...Object.entries(CONFIANCA_GRAU).map(
-                ([k, v]) => [`Pílula confiança grau ${k}`, v] as const,
-              ),
-            ].map(([nome, cor]) => (
-              <tr key={nome} style={{ borderTop: `1px solid ${semantico.divisor}` }}>
-                <td style={{ padding: '6px 12px 6px 0' }}>
-                  <span
-                    aria-hidden
-                    style={{
-                      display: 'inline-block',
-                      width: 10,
-                      height: 10,
-                      borderRadius: 2,
-                      background: cor,
-                      marginRight: 8,
-                    }}
-                  />
-                  {nome}
-                </td>
-                <td style={{ padding: '6px 12px 6px 0', fontVariantNumeric: 'tabular-nums' }}>
-                  {razaoDeContraste(cor, semantico.superficie).toFixed(2)}:1
-                </td>
-                <td style={{ padding: '6px 0', fontVariantNumeric: 'tabular-nums' }}>
-                  {razaoDeContraste(cor, semantico.textoSobreCor).toFixed(2)}:1
-                </td>
+        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
+          <span
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              padding: '0 18px',
+              minHeight: componente.ctaAltura,
+              borderRadius: componente.raioControle,
+              background: componente.ctaFundo,
+              color: componente.ctaTexto,
+              fontWeight: 700,
+            }}
+          >
+            Ver os planos
+          </span>
+          <SeloContexto contexto="preLive" />
+          <SeloContexto contexto="aoVivo" />
+          <Chip href="#" ativo>
+            Ativo
+          </Chip>
+          <Chip href="#" ativo={false}>
+            Inativo
+          </Chip>
+        </div>
+        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+          {(
+            [
+              ['Universo frio · pré-live', componente.contextoFrio],
+              ['Universo quente · Fire Live', componente.contextoQuente],
+            ] as const
+          ).map(([nome, contexto]) => (
+            <div
+              key={nome}
+              style={{
+                flex: '1 1 260px',
+                padding: 16,
+                borderRadius: componente.cardRaio,
+                background: contexto.cardGradiente,
+                border: `1px solid ${contexto.borda}`,
+              }}
+            >
+              <p style={{ margin: 0, fontFamily: semantico.fonteRotulo, fontSize: 12 }}>{nome}</p>
+              <p
+                style={{
+                  margin: '6px 0 0',
+                  fontFamily: semantico.fonteNumero,
+                  fontSize: 34,
+                  fontVariantNumeric: 'tabular-nums',
+                }}
+              >
+                88
+              </p>
+            </div>
+          ))}
+        </div>
+      </Secao>
+
+      <Secao
+        titulo="Contraste verificado"
+        nota="Valores calculados na renderização — não são texto fixo. A última coluna mede o par do manual: branco sobre o preenchimento."
+      >
+        {/* A tabela rola DENTRO de si a 320 px. Uma tabela de quatro colunas
+            numéricas não encolhe abaixo do seu min-content, e sem este
+            invólucro ela empurrava a página inteira para os lados — rolagem
+            horizontal é o que o manual proíbe (p.6). */}
+        <div style={{ overflowX: 'auto', maxWidth: '100%' }}>
+          <table style={{ borderCollapse: 'collapse', fontSize: 13, maxWidth: 560 }}>
+            <thead>
+              <tr style={{ textAlign: 'left', opacity: 0.6 }}>
+                <th style={{ padding: '6px 12px 6px 0' }}>Elemento</th>
+                <th style={{ padding: '6px 12px 6px 0' }}>vs superfície</th>
+                <th style={{ padding: '6px 12px 6px 0' }}>vs texto sobre cor</th>
+                <th style={{ padding: '6px 0' }}>vs branco</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {[
+                ...Object.entries(APITO).map(([k, v]) => [`Apito nível ${k}`, v.cor] as const),
+                ['Apito turbo', TURBO.cor] as const,
+                ['Modo fire', MODO_FIRE.cor] as const,
+                ...Object.entries(NIVEL_JOGADOR).map(([k, v]) => [`Faixa ${k}`, v.cor] as const),
+                ...Object.entries(CONFIANCA_GRAU).map(
+                  ([k, v]) => [`Pílula confiança grau ${k}`, v] as const,
+                ),
+                // Identidade 05: as três cores do manual que recebem texto
+                // BRANCO em cima. A coluna "vs superfície" é a que NÃO deve
+                // passar (elas são fundo, não tinta); a "vs branco" é a que tem
+                // de passar. Vêm sob a chave `fundo` de propósito: é o que elas
+                // são aqui, e é assim que o teste "azul nunca é tinta" as lê.
+                ...[
+                  { nome: 'Acento · azul do manual', fundo: semantico.acento },
+                  { nome: 'Acento · hover', fundo: semantico.acentoClaro },
+                  { nome: 'Selo ao vivo · vermelho do manual', fundo: semantico.vivoSelo },
+                ].map((amostra) => [amostra.nome, amostra.fundo] as const),
+              ].map(([nome, cor]) => (
+                <tr key={nome} style={{ borderTop: `1px solid ${semantico.divisor}` }}>
+                  <td style={{ padding: '6px 12px 6px 0' }}>
+                    <span
+                      aria-hidden
+                      style={{
+                        display: 'inline-block',
+                        width: 10,
+                        height: 10,
+                        borderRadius: 2,
+                        background: cor,
+                        marginRight: 8,
+                      }}
+                    />
+                    {nome}
+                  </td>
+                  <td style={{ padding: '6px 12px 6px 0', fontVariantNumeric: 'tabular-nums' }}>
+                    {razaoDeContraste(cor, semantico.superficie).toFixed(2)}:1
+                  </td>
+                  <td style={{ padding: '6px 12px 6px 0', fontVariantNumeric: 'tabular-nums' }}>
+                    {razaoDeContraste(cor, semantico.textoSobreCor).toFixed(2)}:1
+                  </td>
+                  <td style={{ padding: '6px 0', fontVariantNumeric: 'tabular-nums' }}>
+                    {razaoDeContraste(cor, semantico.textoSobreAcento).toFixed(2)}:1
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </Secao>
     </main>
   )

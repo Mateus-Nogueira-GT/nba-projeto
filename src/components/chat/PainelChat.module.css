@@ -51,7 +51,7 @@
 .fechar:focus-visible,
 .enviar:focus-visible,
 .caixa:focus-visible {
-  outline: 2px solid var(--acento);
+  outline: var(--foco);
   outline-offset: 2px;
 }
 
@@ -126,4 +126,15 @@
   color: var(--texto-secundario);
   font-family: var(--fonte-rotulo);
   font-size: 11px;
+}
+
+/* MODO DOCA (identidade 05): o mesmo painel, dentro da lateral direita. Sem
+   posição fixa e sem véu — ele divide a coluna com os blocos acima, que rolam
+   para fora quando ele cresce. */
+.doca {
+  position: static;
+  width: 100%;
+  height: 60vh;
+  border: 1px solid var(--divisor);
+  border-radius: 12px;
 }

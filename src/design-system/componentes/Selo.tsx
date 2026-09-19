@@ -19,7 +19,7 @@ export function Selo({ icone, rotulo, cor }: SeloProps) {
         gap: 4,
         padding: '2px 8px',
         borderRadius: 999,
-        fontSize: 11,
+        fontSize: 12,
         fontWeight: 600,
         letterSpacing: 0.3,
         background: componente.marcadorOpdFundo,

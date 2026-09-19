@@ -1,53 +1,45 @@
 import Link from 'next/link'
 
+import { componente } from '@/design-system/tokens/componente'
 import { semantico } from '@/design-system/tokens/semantico'
 
+import { ABAS, type Aba } from './abas'
 import { IconeAba } from './icones'
 
 /**
- * BARRA DE NAVEGAÇÃO — as abas do produto.
+ * BARRA DE NAVEGAÇÃO DO CELULAR — as abas do produto, no rodapé.
  *
  * Até aqui cada tela era uma ilha ligada por links de rodapé: quem abria a
- * Lista Secreta não tinha como chegar ao Fire Live sem saber a URL. Cinco abas
- * é o teto de um polegar em tela de celular — Estatísticas e a aba teórica
- * ficam a um toque de distância dentro de "Conta".
+ * Lista Secreta não tinha como chegar ao Fire Live sem saber a URL.
  *
- * Identidade 02: ícones geométricos em SVG (sem emoji) e rótulos em
- * `semantico.fonteRotulo`. "Resultados" saiu do nome da aba — a tela de
- * resultados passa a viver dentro de "Entradas" (redesenho da Task 8); aqui
- * o tipo já reflete o destino final.
+ * Identidade 05: ela veste o CROMO (navy) e se separa do conteúdo pela linha
+ * divisória, não por contraste — o navy sobre o fundo dá 1,09. A aba ativa é
+ * uma pílula PREENCHIDA no acento com texto branco, o mesmo estado que a barra
+ * do topo usa no desktop. A partir de `larguraTopo` esta barra é escondida por
+ * CSS (`Moldura.module.css`) e a do topo aparece: as duas saem no HTML, e quem
+ * escolhe é a media query.
+ *
+ * A lista de abas mora em `abas.ts`, compartilhada com a barra do topo.
  *
  * Componente de servidor de propósito: a aba ativa vem por props de quem
  * renderiza, não de `usePathname`. Uma barra de navegação não justifica
  * embarcar JavaScript em todas as páginas do app.
  */
-export type Aba = 'lista' | 'fire-live' | 'stats' | 'gestao' | 'conta'
-
-const ABAS: {
-  id: Aba
-  href: string
-  rotulo: string
-  forma: 'quadrado' | 'quadradoVazado' | 'circulo' | 'losango'
-}[] = [
-  { id: 'lista', href: '/', rotulo: 'ENTRADAS', forma: 'quadrado' },
-  { id: 'fire-live', href: '/fire-live', rotulo: 'AO VIVO', forma: 'quadradoVazado' },
-  { id: 'stats', href: '/estatisticas', rotulo: 'STATS', forma: 'circulo' },
-  { id: 'gestao', href: '/gestao', rotulo: 'GESTÃO', forma: 'losango' },
-  { id: 'conta', href: '/conta', rotulo: 'PERFIL', forma: 'circulo' },
-]
-
 export function BarraInferior({ atual }: { atual: Aba }) {
   return (
     <nav
       aria-label="Seções do app"
+      className="barra-inferior"
       style={{
         position: 'fixed',
         left: 0,
         right: 0,
         bottom: 0,
         zIndex: 20,
-        display: 'flex',
-        background: semantico.superficie,
+        // O `display` NÃO vem aqui: estilo embutido vence media query, e é a
+        // media query da Moldura que esconde esta barra no desktop. Ele mora
+        // em `Moldura.module.css`, sob a classe global `barra-inferior`.
+        background: semantico.cromo,
         borderTop: `1px solid ${semantico.divisor}`,
         // A barra invade a faixa do gesto de home do iPhone se não recuar.
         paddingBottom: 'env(safe-area-inset-bottom, 0px)',
@@ -65,20 +57,30 @@ export function BarraInferior({ atual }: { atual: Aba }) {
               display: 'flex',
               flexDirection: 'column',
               alignItems: 'center',
-              gap: 4,
-              padding: '8px 2px 10px',
+              gap: 2,
+              margin: '6px 2px',
+              padding: '6px 4px',
+              borderRadius: componente.pilulaNav.raio,
               textDecoration: 'none',
               fontFamily: semantico.fonteRotulo,
-              fontSize: 11,
-              letterSpacing: 1.5,
-              fontWeight: ativo ? 700 : 500,
-              color: ativo ? semantico.acento : semantico.textoSecundario,
+              // 12px é o piso do manual; os 11 de antes ficavam abaixo dele.
+              fontSize: 12,
+              // Uma linha, sempre: a 390 cada aba tem ~74px e "AO VIVO"
+              // quebrava em duas, desalinhando os rótulos da fileira. O
+              // tracking menor e o respiro menor compram a folga sem descer
+              // do piso de 12.
+              whiteSpace: 'nowrap',
+              letterSpacing: '0.02em',
+              textTransform: 'uppercase',
+              fontWeight: 600,
+              background: ativo ? componente.pilulaNav.fundoAtiva : 'transparent',
+              color: ativo ? componente.pilulaNav.textoAtiva : componente.pilulaNav.textoInativa,
               // Redundância: a aba ativa não se distingue só pela cor — o
-              // ícone preenchido, o peso da fonte e o `aria-current` acima já
-              // marcam o estado, sem depender de nenhum border-top.
+              // preenchimento, o peso da fonte e o `aria-current` acima já
+              // marcam o estado.
             }}
           >
-            <IconeAba forma={aba.forma} ativo={ativo} />
+            <IconeAba aba={aba.id} ativo={ativo} />
             {aba.rotulo}
           </Link>
         )

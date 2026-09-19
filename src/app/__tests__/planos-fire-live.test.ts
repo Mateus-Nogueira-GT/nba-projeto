@@ -35,6 +35,13 @@ vi.mock('../../modules/plataforma/assinatura/direito', async () => {
   const { acessoDeTeste } = await import('../../modules/plataforma/__tests__/acesso-de-teste')
   return { avaliarAcesso: async () => acessoDeTeste(nivelNoTeste) }
 })
+vi.mock('next/cache', () => ({
+  // `unstable_cache` fora do runtime do Next não tem store: no teste ele é a
+  // própria função. `revalidateTag`/`revalidatePath` viram no-op.
+  unstable_cache: (fn: (...args: never[]) => unknown) => fn,
+  revalidateTag: () => {},
+  revalidatePath: () => {},
+}))
 vi.mock('../../modules/dominio/db/cliente', () => ({
   getDb: () => banco.db,
   fecharDb: async () => {},
