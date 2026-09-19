@@ -69,8 +69,13 @@ export function CabecalhoTela({
   seletor?: GrupoDeOpcoes
   acoes?: ReactNode
   lentes?: GrupoDeOpcoes
-  /** O número da tela e o que ele conta ("37" · "entradas em 7 jogos"). */
-  contador?: { numero: number; rotulo: string }
+  /**
+   * O número da tela e o que ele conta ("37" · "entradas em 7 jogos").
+   * `total`, quando difere de `numero`, vira "3 de 12 entradas…": o número
+   * grande é o que a tela MOSTRA depois dos filtros, e o total é o que existe
+   * (correções de lógica 19/09).
+   */
+  contador?: { numero: number; total?: number; rotulo: string }
   children?: ReactNode
 }) {
   return (
@@ -156,7 +161,9 @@ export function CabecalhoTela({
               color: semantico.textoSecundario,
             }}
           >
-            {contador.rotulo}
+            {contador.total !== undefined && contador.total !== contador.numero
+              ? `de ${contador.total} ${contador.rotulo}`
+              : contador.rotulo}
           </span>
         </p>
       )}

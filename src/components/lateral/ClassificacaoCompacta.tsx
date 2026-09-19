@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { useState } from 'react'
 
+import { formatarAproveitamento } from '@/components/formato'
 import { IdentidadeTime } from '@/design-system/componentes'
 import type { DadosDaLateral } from '@/modules/entrega/lateral'
 
@@ -74,11 +75,7 @@ export function ClassificacaoCompacta({
                 <td>
                   {linha.vitorias}–{linha.derrotas}
                 </td>
-                <td>
-                  {linha.aproveitamento === null
-                    ? '—'
-                    : Math.round(linha.aproveitamento * 100)}
-                </td>
+                <td>{formatarAproveitamento(linha.aproveitamento)}</td>
               </tr>
             ))}
           </tbody>

@@ -424,6 +424,11 @@ export default async function PaginaListaSecreta({
   }
 
   const entradasPublicadas = agruparPorJogador(doDia)
+  // O que sobrou na tela, na MESMA unidade do publicado: cada card guarda as
+  // entradas do jogador nas abas de atributo, então somá-las é contar entradas
+  // visíveis — contar cards diria "31 entradas" onde há 37 (correções de
+  // lógica 19/09, §4.1).
+  const entradasVisiveis = cartoes.reduce((n, cartao) => n + cartao.atributos.length, 0)
   const jogosComApito = new Set(doDia.map((i) => i.jogoId)).size
   const recorteVazio = cartoes.length === 0 && entradasPublicadas.length > 0
 
@@ -609,7 +614,15 @@ export default async function PaginaListaSecreta({
           })),
         }}
         contador={{
-          numero: entradasPublicadas.length,
+          // O número grande é o que a tela MOSTRA (depois dos filtros e do
+          // corte de quantidade); o total é o que foi publicado. Iguais sem
+          // filtro; "3 de 37" com.
+          //
+          // Conta ENTRADAS, não cards, porque é o que o rótulo diz: um card
+          // é um JOGADOR e pode carregar até três entradas nas abas de
+          // atributo. Sem filtro os dois lados batem com o publicado.
+          numero: entradasVisiveis,
+          total: entradasPublicadas.length,
           rotulo: `entrada${entradasPublicadas.length === 1 ? '' : 's'} em ${jogosComApito} jogo${jogosComApito === 1 ? '' : 's'}`,
         }}
       >

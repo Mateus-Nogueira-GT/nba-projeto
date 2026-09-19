@@ -32,12 +32,20 @@ const mocks = vi.hoisted(() => ({
   ruleset: { rodada: { fuso: 'America/Sao_Paulo' } },
   porta: { nome: 'llm-de-mentira' },
   simularAte: vi.fn(),
+  revalidateTag: vi.fn(),
 }))
 
 vi.mock('@/modules/dominio/db/cliente', () => ({ getDb: () => mocks.db }))
 vi.mock('@/modules/entrega/ruleset-ativo', () => ({ rulesetAtivo: async () => mocks.ruleset }))
 vi.mock('@/modules/ingestao/llm', () => ({ portaLLMDoAmbiente: () => mocks.porta }))
 vi.mock('@/modules/ingestao/demo/temporada', () => ({ simularAte: mocks.simularAte }))
+vi.mock('next/cache', () => ({
+  revalidateTag: mocks.revalidateTag,
+  // `leitura.ts` chama `unstable_cache` ao ser importado (a rota importa
+  // `TAG_LATERAL` de lá); devolver a função crua é o bastante — este teste
+  // não lê a lateral.
+  unstable_cache: (fn: unknown) => fn,
+}))
 
 import { GET, maxDuration } from '../route'
 
@@ -54,6 +62,7 @@ describe.sequential('/api/cron/demo', () => {
     vi.spyOn(console, 'error').mockImplementation(() => undefined)
     mocks.simularAte.mockReset()
     mocks.simularAte.mockResolvedValue(RESUMO)
+    mocks.revalidateTag.mockReset()
     process.env.CRON_SECRET = 'segredo'
   })
 
@@ -93,6 +102,26 @@ describe.sequential('/api/cron/demo', () => {
       llm: mocks.porta,
       orcamentoMs: 240_000,
     })
+  })
+
+  it('depois de avançar a temporada, invalida a lateral — que é cacheada por uma hora', async () => {
+    process.env.DEMO_AUTOSSEMEADURA = 'true'
+
+    await pedir()
+
+    expect(mocks.revalidateTag).toHaveBeenCalledWith('lateral', 'max')
+    // depois de simular, não antes
+    expect(mocks.simularAte.mock.invocationCallOrder[0]!).toBeLessThan(
+      mocks.revalidateTag.mock.invocationCallOrder[0]!,
+    )
+  })
+
+  it('pular (sem a variável) não invalida nada', async () => {
+    delete process.env.DEMO_AUTOSSEMEADURA
+
+    await pedir()
+
+    expect(mocks.revalidateTag).not.toHaveBeenCalled()
   })
 
   it('o orçamento deixa folga para o resumo sair antes do corte da Vercel', async () => {
