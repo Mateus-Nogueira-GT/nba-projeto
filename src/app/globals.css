@@ -279,16 +279,40 @@ textarea {
   .so-desktop {
     display: table-cell;
   }
+}
+
+/*
+ * As duas conferências lado a lado, e só onde CABEM. O mínimo de conteúdo das
+ * duas tabelas juntas é 1113 px (nomes de time longos, quatro colunas); a
+ * 900 px elas vazavam para os lados, que é o que o manual proíbe — defeito
+ * anterior a esta passada, que a captura a 1024 revelou.
+ */
+@media (min-width: 1160px) {
   .grade-conferencias {
     grid-template-columns: 1fr 1fr;
   }
   /*
    * Banco sem conferência nenhuma cai numa tabela só — e ela toma a largura
-   * inteira, em vez de ficar na metade esquerda com a direita vazia, que é
-   * exatamente a sobra de tela que esta passada veio corrigir.
+   * inteira, em vez de ficar na metade esquerda com a direita vazia.
    */
   .grade-conferencias > :only-child {
     grid-column: 1 / -1;
+  }
+}
+
+/*
+ * Com a lateral (a partir de 1280) sobram 1040 px para o conteúdo: duas
+ * conferências lado a lado dão 508 cada, e a tabela do Oeste — nomes longos —
+ * rola por dentro e corta o TRILHO.
+ *
+ * SEM limite superior, e isto corrige a spec: `.comLateral .coluna` é
+ * `max-width: 1040px` em QUALQUER largura (Moldura.module.css), então as duas
+ * conferências não passam a caber a 1600 — a coluna não cresce. Um teto de
+ * 1599 devolveria o vazamento no monitor grande.
+ */
+@media (min-width: 1280px) {
+  .moldura-com-lateral .grade-conferencias {
+    grid-template-columns: 1fr;
   }
 }
 
@@ -330,3 +354,85 @@ details:not([open]) > summary .jogo-chevron {
     display: none;
   }
 }
+
+/* ===== CONTROLES COM ESTADO (correções UX 19/09, §4.15) =====
+
+   Estilo embutido não tem :hover nem :focus-visible. As CORES dos controles
+   que mudam de estado moram aqui; a geometria (padding, fonte, raio, largura)
+   continua embutida em cada um. Quem usa uma destas classes NÃO escreve
+   background, color nem border embutidos — o embutido venceria a classe e o
+   hover nunca apareceria.
+
+   Só tokens: nenhum hex aqui. O hover fica atrás de (hover: hover) para a
+   tela de toque não ficar com o estado preso depois do toque. */
+
+/* O botão primário do manual: azul chapado, hover mais claro, texto branco. */
+.botao-primario {
+  background: var(--cta-fundo);
+  color: var(--cta-texto);
+  border: 1px solid transparent;
+}
+.botao-primario:focus-visible {
+  outline: var(--foco);
+  outline-offset: 2px;
+}
+
+/* Sair, cancelar, voltar: contorno na divisória, texto branco. */
+.botao-secundario {
+  background: transparent;
+  color: var(--texto-primario);
+  border: 1px solid var(--divisor);
+}
+.botao-secundario:focus-visible {
+  outline: var(--foco);
+  outline-offset: 2px;
+}
+
+/* As pílulas das duas barras. A ativa é preenchida no acento (identidade 05);
+   o `aria-current` acompanha, e a classe modificadora é o que o CSS lê. */
+.pilula-nav {
+  background: transparent;
+  color: var(--texto-secundario);
+}
+.pilula-nav-ativa {
+  background: var(--acento);
+  color: var(--texto-sobre-acento);
+}
+.pilula-nav:focus-visible {
+  outline: var(--foco);
+  outline-offset: 2px;
+}
+
+/* O chip de filtro, nos menus do desktop e na folha do celular. */
+.chip-filtro {
+  background: transparent;
+  color: var(--texto-secundario);
+  border: 1.5px solid var(--divisor);
+}
+.chip-filtro-ativo {
+  background: var(--acento);
+  color: var(--texto-sobre-acento);
+  border-color: transparent;
+}
+.chip-filtro:focus-visible {
+  outline: var(--foco);
+  outline-offset: 2px;
+}
+
+@media (hover: hover) {
+  .botao-primario:hover {
+    background: var(--cta-fundo-hover);
+  }
+  .botao-secundario:hover {
+    background: var(--superficie-elevada);
+  }
+  .pilula-nav:not(.pilula-nav-ativa):hover {
+    background: var(--superficie-elevada);
+    color: var(--texto100);
+  }
+  .chip-filtro:not(.chip-filtro-ativo):hover {
+    background: var(--superficie-elevada);
+    color: var(--texto100);
+  }
+}
+/* ===== FIM CONTROLES COM ESTADO ===== */

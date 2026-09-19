@@ -148,10 +148,13 @@ function CartaoAoVivo({
   item,
   grupo,
   quartoFireLive,
+  acaoCanto,
 }: {
   item: ItemFireLiveNaTela
   grupo: GrupoFireLive
   quartoFireLive: number
+  /** A estrela de acompanhar, no canto do card — a mesma peça da Lista. */
+  acaoCanto?: React.ReactNode
 }) {
   // O estado do card sai do JOGO, nunca do `encerrado` gravado no snapshot: o
   // quarto vira entre um ciclo e outro, e o badge tem que virar com ele. Sem
@@ -170,6 +173,7 @@ function CartaoAoVivo({
 
   return (
     <CardEntrada
+      acaoCanto={acaoCanto}
       nome={item.nome}
       jogadorHref={rotaDoJogador(item.jogadorId)}
       detalheHref={`/apito/${item.jogadorId}?atributo=${item.atributo}`}
@@ -184,11 +188,6 @@ function CartaoAoVivo({
       atributo={item.atributo}
       nivelJogador={item.nivelJogador}
       nivelApito={item.nivelApito}
-      // Confiança é conceito PRÉ-LIVE (docs/02-motor-regras.md): o item
-      // do Fire Live traz `confianca: null` e a pílula sai neutra, sem
-      // brilho — não é dado faltando, é a regra do produto.
-      confianca={item.confianca}
-      grauConfianca={null}
       turbo={item.turbo}
       modoFire={item.modoFire}
       opdOrigemNivel={item.opdOrigemNivel}
@@ -500,10 +499,13 @@ export default async function PaginaFireLive({
                     item={item}
                     grupo={grupoSelecionado}
                     quartoFireLive={quartoFireLive}
-                  />
-                  <BotaoAcompanharJogador
-                    jogadorId={item.jogadorId}
-                    inicial={experiencia.jogadoresAcompanhados.includes(item.jogadorId)}
+                    acaoCanto={
+                      <BotaoAcompanharJogador
+                        variante="estrela"
+                        jogadorId={item.jogadorId}
+                        inicial={experiencia.jogadoresAcompanhados.includes(item.jogadorId)}
+                      />
+                    }
                   />
                 </div>
               ))}

@@ -87,6 +87,13 @@
   background: var(--superficie);
 }
 
+/* Os dois últimos chips da fileira encostam na borda direita da coluna; um
+   menu de 220 px ancorado à esquerda deles avançava sobre a lateral. */
+.chipMenu:nth-last-child(-n + 2) > .menu {
+  left: auto;
+  right: 0;
+}
+
 @media (min-width: 1024px) {
   .chips {
     display: flex;
@@ -97,5 +104,14 @@
 
   .folha {
     display: none;
+  }
+}
+
+/* Hover do chip-menu (correções UX 19/09, §4.15). Atrás de (hover: hover) para
+   a tela de toque não ficar com o estado preso depois do toque. */
+@media (hover: hover) {
+  .chipMenu > summary:hover {
+    background: var(--superficie-elevada);
+    color: var(--texto100);
   }
 }

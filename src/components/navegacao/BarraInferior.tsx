@@ -51,6 +51,7 @@ export function BarraInferior({ atual }: { atual: Aba }) {
           <Link
             key={aba.id}
             href={aba.href}
+            className={`pilula-nav${ativo ? ' pilula-nav-ativa' : ''}`}
             aria-current={ativo ? 'page' : undefined}
             style={{
               flex: 1,
@@ -73,8 +74,8 @@ export function BarraInferior({ atual }: { atual: Aba }) {
               letterSpacing: '0.02em',
               textTransform: 'uppercase',
               fontWeight: 600,
-              background: ativo ? componente.pilulaNav.fundoAtiva : 'transparent',
-              color: ativo ? componente.pilulaNav.textoAtiva : componente.pilulaNav.textoInativa,
+              // A cor mora na classe `.pilula-nav` (globals.css): é o que dá
+              // hover à pílula, que estilo embutido não tem.
               // Redundância: a aba ativa não se distingue só pela cor — o
               // preenchimento, o peso da fonte e o `aria-current` acima já
               // marcam o estado.

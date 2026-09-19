@@ -12,6 +12,8 @@ import { simularAte } from '../../modules/ingestao/demo/temporada'
 import { LLMFake } from '../../modules/ingestao/llm'
 import type { ItemFeed } from '../../modules/entrega/lista-secreta'
 import { identidadeDoTime } from '../../design-system/times'
+import { componente } from '../../design-system/tokens/componente'
+import { decimalPtBr } from '../../design-system/formato'
 import { GRADE_DE_CARDS_CSS, LARGURA_DA_MOLDURA } from '../../components/navegacao'
 
 /**
@@ -149,7 +151,8 @@ describe('Lista Secreta · 04 — a varredura por jogo', () => {
     expect(html.split(`>${nome}</a>`).length - 1).toBe(1)
     // E as abas do rodapé trocam o atributo daquele card, só dele.
     expect(html).toMatch(new RegExp(`aba=${jogadorId}%3A(PONTOS|REBOTES|ASSISTENCIAS)`))
-    expect(html).toMatch(/>(PTS|REB|AST) \d+\+</)
+    // No TEXTO: a aba virou rótulo pequeno + número grande na identidade 06.
+    expect(texto(html)).toMatch(/(PTS|REB|AST) \d+\+/)
   }, 60_000)
 
   it('a aba pedida na URL é a ativa daquele card, sem mexer nos outros', async () => {
@@ -212,9 +215,17 @@ describe('Lista Secreta · 04 — a varredura por jogo', () => {
     // Numa tela de varredura, rodapé que muda de ordem de card para card
     // obriga a ler em vez de varrer (artboard: `PTS 10+ · REB 3+ · AST 4+`).
     const html = await renderizar()
-    const fileiras = [...html.matchAll(/(?:<a[^>]*>(?:PTS|REB|AST) \d+\+<\/a>)+/g)].map((m) =>
-      [...m[0].matchAll(/>(PTS|REB|AST) \d+\+</g)].map((x) => x[1]),
-    )
+    // Por card, e pelo TEXTO de cada âncora: na identidade 06 a aba virou
+    // rótulo pequeno + número grande, e casar o HTML cru deixaria de enxergar
+    // as abas em vez de reprovar a ordem delas.
+    const fileiras = [...html.matchAll(/<article[\s\S]*?<\/article>/g)]
+      .map((card) =>
+        [...card[0].matchAll(/<a\b[^>]*>([\s\S]*?)<\/a>/g)]
+          .map((m) => texto(m[1]!))
+          .filter((t) => /^(PTS|REB|AST)( \d+\+)?$/.test(t))
+          .map((t) => t.slice(0, 3)),
+      )
+      .filter((fileira) => fileira.length > 0)
     expect(fileiras.length, 'nenhum card com abas hoje').toBeGreaterThan(0)
     expect(
       fileiras.some((f) => f.length > 1),
@@ -402,10 +413,33 @@ describe('Lista Secreta · 04 — a varredura por jogo', () => {
 })
 
 describe('Lista Secreta · 04 — regras de escrita', () => {
-  it('a nota de confiança é o número inteiro, sem "%" (o artboard 04 tirou o sinal)', async () => {
-    const alvo = (await representantesDoDia()).find((r) => r.confianca !== null)!
+  it('o número grande do card é a ODD, com o rótulo em cima — a nota de confiança saiu', async () => {
+    // Identidade 06: a confiança deixou o card (segue no dado, no push e na
+    // ordenação; quem a desenha é a análise do apito) e a odd ocupou o canto,
+    // porque é ela que faz o assinante montar a múltipla.
+    //
+    // A FORMA da odd é do ruleset (`odds.exibicao`), não desta tela: uma casa
+    // escreve o número sozinho no tamanho grande, várias escrevem a faixa no
+    // tamanho menor. O que a identidade 06 afirma — e o que este teste
+    // protege — é que a odd é o elemento de maior destaque, seja qual for a
+    // forma. Fixar um dos dois tamanhos aqui faria trocar a chave no YAML
+    // quebrar um teste de tela, que é o oposto da regra 1.
+    const alvo = (await representantesDoDia()).find((r) => r.oddFaixa != null)!
     const html = await renderizar()
-    expect(html).toContain(`>${Math.round(alvo.confianca!)}<`)
+    const odd = alvo.oddFaixa!
+    const emDestaque =
+      html.includes(`font-size:${componente.odd.valorMedia}`) ||
+      html.includes(`font-size:${componente.odd.valorFaixa}`)
+    expect(emDestaque, 'a odd é o número grande do card').toBe(true)
+    expect(texto(html)).toContain(
+      odd.unica != null
+        ? `ODD ${decimalPtBr(odd.unica, 2)}`
+        : odd.media != null
+          ? `ODD MÉDIA ${decimalPtBr(odd.media, 2)}`
+          : `ODD ${decimalPtBr(odd.min, 2)}–${decimalPtBr(odd.max, 2)}`,
+    )
+    // E o número da nota não sobrou em lugar nenhum do card.
+    expect(html).not.toContain('font-size:34px')
   }, 60_000)
 
   it('nunca "probabilidade", linha inteira com "+", odd em faixa, % sem decimal', async () => {
@@ -432,23 +466,28 @@ describe('Lista Secreta · 04 — regras de escrita', () => {
       // A nota da partida é "nota" e não aparece aqui; "nível" é do jogador e
       // do apito, nunca da partida.
       expect(html.toLowerCase()).not.toMatch(/nível da partida|nota do jogo/)
-      // Linha SEMPRE inteira, com "+". Nem no rótulo longo, nem na aba.
-      expect(html).toMatch(/(PONTOS|REBOTES|ASSISTÊNCIAS|PTS|REB|AST) \d+\+/)
-      expect(html).not.toMatch(/(PONTOS|REBOTES|ASSISTÊNCIAS|PTS|REB|AST)\s+\d+,\d/)
+      // Linha SEMPRE inteira, com "+". Nem no rótulo longo, nem na aba. No
+      // TEXTO, porque a identidade 06 partiu a meta em rótulo + número.
+      const semTags = texto(html)
+      expect(semTags).toMatch(/(PONTOS|REBOTES|ASSISTÊNCIAS|PTS|REB|AST) \d+\+/)
+      expect(semTags).not.toMatch(/(PONTOS|REBOTES|ASSISTÊNCIAS|PTS|REB|AST)\s+\d+,\d/)
       expect(html.toLowerCase()).not.toContain('meio ponto')
       // ODD NUNCA SOLTA. A FORMA (média entre casas ou faixa) é decisão do
       // parceiro e mora em `odds.exibicao` no ruleset — a tela não escolhe. O
       // que a tela nunca pode fazer é escrever um número de odd sem dizer o
       // que ele é, porque "ODD 1,45" se lê como a odd de uma casa específica,
       // e é isso que docs/04 proíbe.
-      for (const achado of html.matchAll(/ODD ([^<·]*)/g)) {
+      // No TEXTO: rótulo e valor da odd são dois elementos irmãos desde a 06.
+      for (const achado of semTags.matchAll(/\bODD\b\s*([^·]{0,24})/g)) {
         expect(achado[1]!.trim(), 'odd sem faixa nem rótulo de média').toMatch(
           /^(MÉDIA \d,\d{2}|\d,\d{2}–\d,\d{2})/,
         )
       }
-      // Nota de confiança: número puro, sem "%" e sem casa decimal.
+      // Nenhum percentual na tela: a nota de confiança saiu do card na 06, e
+      // nenhum outro número dele é porcentagem. A antiga proibição de decimal
+      // solto morreu com ela — a odd é decimal por natureza, e quem garante
+      // que ela nunca sai sem rótulo é a varredura logo acima.
       expect(html).not.toMatch(/>\d{1,3}%</)
-      expect(html).not.toMatch(/>\d+,\d+</)
       expect(html).not.toContain('ALTÍSSIMO VALOR')
       expect(html).not.toContain('…')
       expect(html).not.toMatch(/\.\.\./)

@@ -48,9 +48,20 @@ describe('esqueleto de carregamento', () => {
     expect(html).toContain('Carregando')
   })
 
-  it('telas de detalhe não ganham barra de abas', () => {
+  it('telas de detalhe: só a barra do topo, nenhuma pílula acesa', () => {
     const html = renderToStaticMarkup(createElement(Esqueleto, { aba: null, linhas: 1 }))
-    expect(html).not.toContain('ENTRADAS')
+    expect(html).not.toContain('barra-inferior')
+    expect(html).toContain('aria-label="Seções do app (topo)"')
+    expect(html).not.toContain('aria-current="page"')
+  })
+
+  it('nas telas de aba o esqueleto reserva a lateral — senão a coluna encolhe quando o conteúdo chega', () => {
+    // A coluna ia de 1120 para 1040 no instante em que a lateral chegava, e a
+    // tela pulava a cada navegação a partir de 1280.
+    const comAba = renderToStaticMarkup(createElement(Esqueleto, { aba: 'lista' }))
+    expect(comAba).toContain('aria-label="Painel lateral"')
+    const semAba = renderToStaticMarkup(createElement(Esqueleto, { aba: null }))
+    expect(semAba).not.toContain('aria-label="Painel lateral"')
   })
 
   it('a animação respeita prefers-reduced-motion', () => {

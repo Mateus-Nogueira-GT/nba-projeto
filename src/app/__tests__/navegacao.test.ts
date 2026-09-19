@@ -28,10 +28,13 @@ describe('navegação (identidade 02)', () => {
     // não sendo canal único (peso da fonte e `aria-current` acompanham).
     const html = renderToStaticMarkup(createElement(BarraInferior, { atual: 'fire-live' }))
     expect(html).toContain('aria-current="page"')
-    expect(html).toContain(`background:${componente.pilulaNav.fundoAtiva}`)
-    expect(html).toContain(`color:${componente.pilulaNav.textoAtiva}`)
+    // A cor saiu do embutido e mora na classe (correções UX 19/09): é o que
+    // dá hover à pílula. A ativa leva a modificadora; o CSS global preenche.
+    expect(html).toMatch(/class="pilula-nav pilula-nav-ativa"[^>]*aria-current="page"/)
+    expect(html).not.toContain(`background:${componente.pilulaNav.fundoAtiva}`)
     // uma pílula acesa, e uma só
     expect(html.match(/aria-current="page"/g)).toHaveLength(1)
+    expect(html.match(/pilula-nav-ativa/g)).toHaveLength(1)
   })
 
   it('os ícones são de traço, 20 px, um por aba — nada de forma geométrica', () => {
@@ -244,10 +247,23 @@ describe('moldura (identidade 05)', () => {
     expect(com).toContain('aria-label="Painel lateral"')
   })
 
-  it('tela sem aba não ganha barra nenhuma nem lateral', () => {
+  it('tela sem aba: barra do TOPO sim (o desktop tem navegação sempre), barra inferior e lateral não', () => {
+    // Correções UX 19/09, §4.8: detalhe do apito, time e teoria ficavam sem
+    // marca nem navegação a partir de 1024 — sobrava o chevron de voltar. A
+    // barra inferior segue só nas abas: no celular, a tela de leitura sem
+    // barra foi decisão da identidade 04.
     const html = renderToStaticMarkup(createElement(Moldura, { aba: null }, 'x'))
     expect(html).not.toContain('barra-inferior')
-    expect(html).not.toContain('Seções do app')
+    expect(html).toContain('aria-label="Seções do app (topo)"')
+    expect(html).not.toContain('aria-current="page"')
+    expect(html).not.toContain('Painel lateral')
+  })
+
+  it('a moldura com lateral expõe a classe global que o CSS de tela lê', () => {
+    const com = renderToStaticMarkup(createElement(Moldura, { aba: 'stats', lateral: 'x' }, 'y'))
+    const sem = renderToStaticMarkup(createElement(Moldura, { aba: 'stats' }, 'y'))
+    expect(com).toContain('moldura-com-lateral')
+    expect(sem).not.toContain('moldura-com-lateral')
   })
 
   it('a grade de cards nunca exige mais largura do que a tela tem', () => {
@@ -362,9 +378,35 @@ describe('filtros (identidade 05)', () => {
     expect(html).toContain('role="group"')
   })
 
-  it('o chip do grupo mostra o que está filtrando, não o nome do filtro', () => {
+  it('o chip do grupo mostra o grupo E o que está filtrando: "Método: OPD"', () => {
     const html = renderToStaticMarkup(createElement(FolhaDeFiltros, { grupos }))
     expect(html).toContain('aria-label="Método: OPD"')
-    expect(html).toContain('>OPD<')
+    // Correções UX 19/09: só o valor ("G", "BOS", "5 vítimas") não dizia de
+    // que grupo era.
+    expect(html).toContain('>Método: OPD<')
+    expect(html).not.toContain('>OPD<')
+  })
+
+  it('o recorte ativo com o × sai DUAS vezes: na folha do celular e na fileira do desktop', () => {
+    // Sem o chip na fileira, tirar três filtros de uma vez no desktop exigia
+    // abrir três menus e escolher "Todos" em cada um.
+    const html = renderToStaticMarkup(
+      createElement(FolhaDeFiltros, { grupos, ativos: [{ rotulo: '3 filtros', limparHref: '/' }] }),
+    )
+    expect(html.match(/aria-label="Limpar filtro 3 filtros"/g)).toHaveLength(2)
+    // e na fileira ele vem ANTES dos menus
+    const fileira = html.slice(0, html.indexOf('<details'))
+    expect(fileira).toContain('Limpar filtro 3 filtros')
+  })
+
+  it('os menus fecham ao apontar fora da fileira (asserção de fonte — o arnês não hidrata)', () => {
+    const fonte = readFileSync('src/components/navegacao/FolhaDeFiltros.tsx', 'utf8')
+    expect(fonte).toContain("document.addEventListener('pointerdown'")
+    expect(fonte).toContain("document.removeEventListener('pointerdown'")
+  })
+
+  it('os dois últimos menus ancoram à direita — não avançam sobre a lateral', () => {
+    const css = readFileSync('src/components/navegacao/FolhaDeFiltros.module.css', 'utf8')
+    expect(css).toMatch(/\.chipMenu:nth-last-child\(-n \+ 2\) > \.menu\s*\{[^}]*right:\s*0/)
   })
 })

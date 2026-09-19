@@ -23,11 +23,17 @@ ao mesmo tempo no mesmo card.
 
 > **Cada informação precisa de um canal visual próprio.**
 
-| Informação                     | Canal                                           | Estado                 |
-| ------------------------------ | ----------------------------------------------- | ---------------------- |
-| **Nível do jogador**           | borda metálica — dourado, prata, bronze, preto  | mantido                |
-| **Nível do apito + confiança** | **anel único**: a cor é o nível, o número é o % | **fundido (ADR-0005)** |
-| ~~Escala de 5 faixas~~         | —                                               | **removida**           |
+| Informação           | Canal                                                      | Estado                     |
+| -------------------- | ---------------------------------------------------------- | -------------------------- |
+| **Nível do jogador** | **moldura do card** — ouro, prata, bronze, branco           | identidade 06 (ADR-0011)   |
+| **Nível do apito**   | anel do avatar + o numeral `N{n}` ao lado do nome            | identidade 06 (ADR-0011)   |
+| **Odd**              | o número grande do canto — o lugar de maior destaque do card | identidade 06              |
+| ~~Confiança no card~~ | —                                                           | **saiu** — vive na análise |
+| ~~Escala de 5 faixas~~ | —                                                          | **removida (ADR-0005)**    |
+
+> A fusão do ADR-0005 continua valendo no que ela decidiu: o nível do apito tem UM lugar na
+> tela, e nenhuma escala de confiança pode reusar as cores categóricas dele. O que a
+> identidade 06 mudou é a superfície de cada canal e o destino do número da confiança.
 
 ### Por que a fusão é correta, e não só conveniente
 
@@ -84,15 +90,15 @@ um diff na camada primitiva.
 ## Anatomia do card
 
 ```
-┌─────────────────────────────────────────────────────┐
-│ ╔═══════╗                                  ╭─────╮  │  borda metálica = NÍVEL
-│ ║ FOTO  ║  NOME DO JOGADOR          ANEL → │ 92% │  │  anel colorido  = APITO
-│ ║       ║  ⬤ Time · Pos · PTS              ╰─────╯  │  número no anel = CONFIANÇA
-│ ╚═══════╝  ▪▪▫▪▪  últimas partidas                  │
-│                                                     │
-│  odd 1,30 – 1,70 · média de N casas                 │
-│  [OPD nível 2]  ← só quando há cruzamento pré-live  │
-└─────────────────────────────────────────────────────┘
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓  ┃ 6px e a borda em volta:
+┃ ░░░ véu do metálico a 12% ░░░░░░░░░░ [★] [ 1º Q ] ░░┃  ┃  MOLDURA = nível do JOGADOR
+┃ ╔═══════╗  NOME DO JOGADOR             ODD MÉDIA    ┃
+┃ ║ FOTO  ║  SUPORTE · N2 · G                1,58     ┃  anel do avatar = nível do APITO
+┃ ╚══N2═══╝  ⬤ NYK  vs  ⬤ UTA                         ┃  "SUPORTE" na cor do metálico
+┃  ▪▪▫▪▪  últimas partidas                            ┃  "N2" na cor do apito
+┃  análise do apito, quando existe                    ┃  1,58 = o número de destaque
+┃ ░░ REBOTES 4+ ░░░░░░░░░░░░░░░░░░░░░░░░ MÉDIA 4,9 ░░░┃  meta: o número > o rótulo
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
 ```
 
 Elementos obrigatórios pelo documento do CJ: foto, nível, círculo de apito com a cor,
@@ -125,9 +131,13 @@ Ao calcular as razões de verdade (`tokens/contraste.ts`), duas coisas mudaram:
 branco, os anéis dão 1,54 · 2,14 · 1,94 · 2,63; sobre o tom escuro, 12,67 · 9,08 · 10,02 ·
 7,41. Uma regra única em vez de um caso especial.
 
-**O "preto" do nível Randola virou grafite.** Borda preta sobre superfície escura tem razão
-~1,3 e desaparece. Borda invisível não é canal — o grafite entrega 4,88:1. É desvio
-consciente do documento de origem, pela razão que o próprio documento estabelece.
+**O "preto" do nível Randola nunca pôde ser preto.** Borda preta sobre superfície escura tem
+razão ~1,3 e desaparece; borda invisível não é canal. Foi grafite até a identidade 05 e, na
+06, virou **branco** por pedido do parceiro — os dois resolvem o mesmo problema, um por
+baixo e outro por cima. O branco tem um efeito colateral próprio: é a maior luminância do
+sistema, e uma moldura branca cheia faria o card do jogador MENOS importante gritar mais
+alto que o do MVP. Por isso o branco se divide em dois usos — **texto** do nível em branco
+cheio, **moldura** em branco a 55%.
 
 Todas as combinações da galeria são verificadas em `__tests__/tokens.test.ts`, e a própria
 galeria imprime as razões calculadas em tempo de renderização.
@@ -520,3 +530,68 @@ apitos existem hoje também é sinal. Desfoque é CSS, e CSS o leitor desliga: u
 borrado entregaria nome, nível e confiança no código-fonte de quem não paga. `paywall.test.ts`
 e `telas-05-gratis.test.ts` cobram as duas coisas — a assinatura da silhueta e a ausência de
 qualquer nome do feed no HTML do grátis.
+
+
+---
+
+## Identidade 06 — cores vivas e a odd no lugar da confiança (19/09/2026)
+
+Três blocos de feedback do parceiro sobre a tela da Identidade 05 diziam a mesma coisa por
+três caminhos: a cor está apagada e a hierarquia está invertida. A resposta tem duas metades,
+porque o diagnóstico tinha duas causas.
+
+**Matiz.** Sete cores subiram de saturação e de contraste. Cada uma foi medida contra as
+CINCO superfícies onde uma cor de card pode pousar — `cartaoNip #101C30`, `cartaoFrio
+#0E223E`, `campoFrio #162947`, `campoQuente #2C1A30`, `cartaoQuente #221B30` —, e a coluna
+que vale é a do pior caso, não a da média.
+
+| Cor | Antes | Depois | saturação | pior contraste |
+| --- | --- | --- | --- | --- |
+| MVP | `#E0B24A` | `#F2AE1C` | 71 → 89 | 7,37 → 7,52 |
+| All Star | `#C3CCDA` | `#A9B6C9` | 24 → 23 | 8,99 → 7,09 |
+| Suporte | `#C8823C` | `#F08040` | 56 → 85 | 4,66 → 5,45 |
+| Randola | `#7C8AA3` | `#FFFFFF` | — | 4,17 → 14,56 |
+| Apito 1 🟡 | `#FFC93D` | `#FFDD00` | 100 → 100 (43° → 52°) | 9,48 → 10,81 |
+| Apito 2 🟠 | `#FF9838` | `#FFA31F` | 100 → 100 (29° → 35°) | 6,80 → 7,29 |
+| Apito 3 🟢 | `#3DD37E` | `#2BE884` | 63 → 80 | 7,50 → 9,00 |
+
+A **prata é a única que desce de contraste**, de propósito: é o que abre distância do branco
+puro que o Randola passou a usar. O azul do turbo não muda — é o azul do Manual da Marca.
+
+**Área.** Subir o matiz não bastaria: num card de ~300 × 200 px, a cor cromática ocupava o
+anel do avatar e as barrinhas, e o resto era azul-marinho. Então o metálico saiu do tracinho
+de 56 × 3 px e passou a vestir a moldura inteira — borda, lateral de 6 px, véu a 12% no
+cabeçalho e no rodapé —, e o rótulo do nível saiu de 12 px cinza para **Bebas 20 px na cor**.
+O gradiente frio/quente da identidade 03 sobrevive por baixo da moldura: pré-live continua
+frio, Fire Live continua quente.
+
+### A hierarquia do card, de cima para baixo
+
+1. **nome do jogador** — Bebas 22 px. Quem é ele vem primeiro; foi para 22 justamente porque
+   o rótulo do nível em 20 o deixaria menor que a própria classificação.
+2. **odd** — Bebas 38 px, o número de maior destaque, no canto que era da nota de confiança.
+   Em faixa (`1,47–1,62`) ela desce para 26 px, que é o corpo em que ela cabe a 320 px.
+3. **nível** — Bebas 20 px na cor do metálico, com o numeral do apito em 12 px ao lado.
+4. **meta** — `REBOTES` em 12 px, `4+` em Bebas 24 px. O número é o que diz o que o jogador
+   precisa fazer.
+
+**12 px é piso, não escolha.** O manual proíbe texto menor, e um teste varre a Lista
+renderizada atrás de qualquer `font-size` de 9, 10 ou 11 px. A hierarquia vem da diferença
+entre os corpos (12 × 38), nunca de encolher o rótulo.
+
+### Três estados da odd, e nenhum inventa número
+
+1. o item traz `oddFaixa.media` — é o que `odds.exibicao: media` manda hoje → `ODD MÉDIA 1,58`;
+2. o item traz faixa sem média (o ruleset virado para `faixa`) → `ODD 1,47–1,62`;
+3. o item não tem odd — inclusive **todo card do Fire Live**, que grava `oddFaixa: null` por
+   decisão de produto → o canto fica vazio. Um "—" grande no lugar de maior destaque
+   anunciaria defeito, e um número da tabela estática apresentado como odd de casa seria
+   mentira.
+
+### O que saiu
+
+A nota de confiança deixou o card por inteiro: o número, a borda lateral na cor do grau e o
+brilho do grau 5 — dos três brilhos da identidade 03 sobraram dois, turbo e modo fire. O
+dado não mudou: o item continua carregando a nota, o push continua usando e a Lista continua
+ordenando por ela. Quem a desenha é a tela de **análise do apito**, onde a rampa turquesa
+segue viva. O custo comercial está no [ADR-0011](adr/0011-moldura-do-nivel-e-saida-da-confianca.md).

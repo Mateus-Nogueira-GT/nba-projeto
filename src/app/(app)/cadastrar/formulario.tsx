@@ -2,7 +2,6 @@
 
 import { useActionState } from 'react'
 
-import { componente } from '@/design-system/tokens/componente'
 import { semantico } from '@/design-system/tokens/semantico'
 import { cadastrar } from './acoes'
 
@@ -33,6 +32,11 @@ export function FormularioCadastro() {
     color: semantico.textoPrimario,
     fontSize: 15,
   } as const
+
+  // A geometria do campo, sem as cores: o botão primário veste
+  // `.botao-primario` (globals.css) e estilo embutido venceria a classe — o
+  // hover do manual nunca apareceria.
+  const { border: _borda, background: _fundo, color: _cor, ...geometriaDoCampo } = campo
 
   return (
     <form action={acao} style={{ display: 'grid', gap: 13 }}>
@@ -68,11 +72,9 @@ export function FormularioCadastro() {
       <button
         type="submit"
         disabled={enviando}
+        className="botao-primario"
         style={{
-          ...campo,
-          border: 0,
-          background: componente.ctaFundo,
-          color: semantico.textoSobreAcento,
+          ...geometriaDoCampo,
           fontFamily: semantico.fonteTitulo,
           letterSpacing: 0.5,
           textTransform: 'uppercase',

@@ -67,8 +67,6 @@ export default async function PaginaComoFunciona() {
   const ruleset = await rulesetAtivo()
   const t = montarTeoria(ruleset)
   const faixasConfianca = [...ruleset.confianca_exibicao.faixas].sort((a, b) => a.de - b.de)
-  const notaDoExemplo = 92
-  const grauDoExemplo = faixasConfianca.findLast((faixa) => notaDoExemplo >= faixa.de)?.grau ?? null
 
   return (
     <Moldura aba={null}>
@@ -423,8 +421,6 @@ export default async function PaginaComoFunciona() {
             atributo="PONTOS"
             nivelJogador="ALL_STAR"
             nivelApito={3}
-            confianca={notaDoExemplo}
-            grauConfianca={grauDoExemplo}
             turbo={false}
             modoFire={false}
             opdOrigemNivel={3}

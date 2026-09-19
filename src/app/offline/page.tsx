@@ -59,7 +59,10 @@ export default function PaginaOffline() {
             padding: '0 18px',
             borderRadius: 10,
             background: semantico.apitoNivel3,
-            color: semantico.textoSobreAcento,
+            // O fundo é COR DE DADO (o verde do nível 3), não o acento: o
+            // texto sobre ele é escuro, como o número dentro do anel. Branco
+            // aqui reprovaria em AA.
+            color: semantico.textoSobreCor,
             fontWeight: 750,
             textDecoration: 'none',
           }}

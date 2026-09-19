@@ -22,20 +22,36 @@ export const primitivo = {
   tinta50: '#F5F8FC',
   branco: '#FFFFFF',
 
-  // Cromáticos — nível do apito, definidos pelo CJ
-  ambar400: '#FFC93D',
-  laranja400: '#FF9838',
-  verde400: '#3DD37E',
+  // Cromáticos — nível do apito, definidos pelo CJ.
+  // Identidade 06: os três subiram de saturação e de contraste. O azul do turbo
+  // não: ele é o azul do Manual da Marca, e o parceiro não o citou.
+  ambar400: '#FFDD00',
+  laranja400: '#FFA31F',
+  verde400: '#2BE884',
   azul400: '#4DA3FF',
 
-  // Metálicos — nível do jogador
-  ouro: '#E0B24A',
-  prata: '#C3CCDA',
-  bronze: '#C8823C',
-  grafite: '#7C8AA3',
+  // Metálicos — nível do jogador.
+  // Identidade 06: o metálico saiu do tracinho de 56×3 px e passou a vestir a
+  // MOLDURA inteira do card, então precisa de cor viva, não de discrição. A
+  // PRATA é a única que DESCE de contraste (8,99 → 7,09), de propósito: é o que
+  // abre distância do branco puro que o Randola passou a usar. E `grafite` saiu
+  // com ele.
+  ouro: '#F2AE1C',
+  prata: '#A9B6C9',
+  bronze: '#F08040',
+
+  // Véus da MOLDURA — o decimal de cada metálico a 12%, para o fundo do
+  // cabeçalho e do rodapé do card. O do Randola é o branco, porque o Randola
+  // é branco.
+  ouroVeu12: 'rgba(242,174,28,.12)',
+  prataVeu12: 'rgba(169,182,201,.12)',
+  bronzeVeu12: 'rgba(240,128,64,.12)',
+  brancoVeu12: 'rgba(255,255,255,.12)',
 
   // Barrinhas de histórico: par PRÓPRIO — o verde categórico do apito nível 3
-  // (#3DD37E) não pode dizer também "bateu a linha" no mesmo card.
+  // (#2BE884) não pode dizer também "bateu a linha" no mesmo card. Eles ficaram
+  // perto de matiz na identidade 06; separam-se por FORMA, que é o que o card
+  // usa: pílula cheia com número dentro × anel e aba vazados.
   verdeBarrinha: '#2FBF71',
   // #E05555 do mockup reprovou em AA com o valor branco dentro (3.75) —
   // escurecido até passar (4.93) sem perder o tom.
@@ -85,12 +101,12 @@ export const primitivo = {
   tinta500Veu50: 'rgba(42,56,82,.5)',
   // Tinta do verde do nível 3 (verde400) para o FUNDO da aba de atributo ativa
   // no rodapé do card: a borda é o verde cheio, o fundo é ele a 12%.
-  verdeVeu12: 'rgba(61,211,126,.12)',
+  verdeVeu12: 'rgba(43,232,132,.12)',
   // Os pares do verdeVeu12 nos outros níveis do apito: a aba de atributo ativa
   // veste a cor do NÍVEL DO APITO daquele card, nunca um verde fixo — verde é
   // N3, e um verde num card N1 seria um quarto canal mentindo.
-  ambarVeu12: 'rgba(255,201,61,.12)',
-  laranjaVeu12: 'rgba(255,152,56,.12)',
+  ambarVeu12: 'rgba(255,221,0,.12)',
+  laranjaVeu12: 'rgba(255,163,31,.12)',
   azulVeu12: 'rgba(77,163,255,.12)',
   // Par do azul do turbo (azul400) para brilho e fundo — nunca no lugar do
   // categórico.

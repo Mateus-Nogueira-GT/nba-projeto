@@ -22,9 +22,12 @@ import { lerLateralCacheada } from './leitura'
 export async function lateralPadrao({
   assistente,
   gratis,
+  semClassificacao = false,
 }: {
   assistente: boolean
   gratis: boolean
+  /** O índice de Estatísticas passa `true`: a classificação já está na página. */
+  semClassificacao?: boolean
 }): Promise<ReactNode> {
   const ruleset = await rulesetAtivo()
   const config = calendarioDoRuleset(ruleset)
@@ -41,6 +44,7 @@ export async function lateralPadrao({
       dados={dados}
       assistente={assistente && configuracaoChat().habilitado}
       gratis={gratis}
+      mostrarClassificacao={!semClassificacao}
     />
   )
 }

@@ -198,10 +198,13 @@ describe('Lista Secreta', () => {
     // POR JOGO · POR NÍVEL — ver `telas-04-lista.test.ts`.
     expect(html).toContain('LISTA SECRETA')
     expect(html).toContain('LISTA DO DIA')
-    expect(html).toMatch(/PONTOS \d+\+/)
+    // No TEXTO: na identidade 06 a meta virou rótulo pequeno + número grande,
+    // dois elementos irmãos, e no HTML cru há tags entre eles.
+    const semTags = html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ')
+    expect(semTags).toMatch(/PONTOS \d+\+/)
     // Nenhuma LINHA com meio ponto. Cegar em /\d,5/ seria errado: a tela de
     // Gestão exibe "0,5 unidade" legitimamente.
-    expect(html).not.toMatch(/(PONTOS|REBOTES|ASSISTÊNCIAS)\s+\d+,\d/)
+    expect(semTags).not.toMatch(/(PONTOS|REBOTES|ASSISTÊNCIAS)\s+\d+,\d/)
   }, 60_000)
 })
 

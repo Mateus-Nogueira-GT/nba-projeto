@@ -93,6 +93,19 @@ describe('perfil — a conta da pessoa, não um relatório sobre ela (spec 12/09
     expect(html).toContain('demo@teste.com')
   })
 
+  it('"Sair" é secundário: contorno, não o azul do CTA (correções UX 19/09)', async () => {
+    // Primário é UMA ação por tela. Sair da conta não é o que a pessoa veio
+    // fazer no Perfil — a regra "contorno azul vira preenchido" da Identidade
+    // 05 o promoveu por engano.
+    const { default: Pagina } = await import('../(app)/conta/page')
+    const html = renderToStaticMarkup(await Pagina({ searchParams: Promise.resolve({}) }))
+    const sair = /<button[^>]*>Sair<\/button>/.exec(html)?.[0] ?? ''
+    expect(sair, 'o botão Sair não foi encontrado').not.toBe('')
+    expect(sair).toContain('class="botao-secundario"')
+    expect(sair).not.toContain('#0057B8')
+    expect(sair).not.toContain('botao-primario')
+  })
+
   it('a pessoa escolhe um dos oito avatares e troca o nome sem JavaScript', async () => {
     const { default: Pagina } = await import('../(app)/conta/page')
     const html = renderToStaticMarkup(await Pagina({ searchParams: Promise.resolve({}) }))

@@ -358,11 +358,17 @@ describe('o card carrega contexto materializado (identidade 03)', () => {
       createElement(CardEntrada, {
         nome: item.nome, timeSigla: item.timeSigla, posicao: item.posicao,
         atributo: item.atributo, nivelJogador: item.nivelJogador,
-        nivelApito: item.nivelApito, confianca: item.confianca,
-        grauConfianca: item.grauConfianca, linha: item.linha,
+        nivelApito: item.nivelApito, linha: item.linha,
         oddFaixa: item.oddFaixa,
       } as Parameters<typeof CardEntrada>[0]),
     )
+
+  /**
+   * O texto que o card mostra, sem marcação. Desde a identidade 06 a odd é
+   * rótulo pequeno + número grande, dois elementos IRMÃOS — procurar
+   * "ODD 1,85" no HTML cru não acha, porque há uma tag no meio.
+   */
+  const textoDoCard = (html: string) => html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ')
 
   it('com UMA casa, o item leva a odd sozinha — e o card escreve ODD 1,85', async () => {
     const feed = await lerFeed(banco.db, HOJE)
@@ -384,11 +390,11 @@ describe('o card carrega contexto materializado (identidade 03)', () => {
 
     const comOdd = await publicarECarregar(item.chave)
     expect(comOdd.oddFaixa).toEqual({ min: 1.85, max: 1.85, qtdCasas: 1, unica: 1.85 })
-    const html = cardDoItem(comOdd)
-    expect(html).toContain('ODD 1,85')
+    const texto = textoDoCard(cardDoItem(comOdd))
+    expect(texto).toContain('ODD 1,85')
     // Nem "MÉDIA" (não há o que promediar) nem "1,85–1,85".
-    expect(html).not.toContain('ODD MÉDIA')
-    expect(html).not.toContain('1,85–1,85')
+    expect(texto).not.toContain('ODD MÉDIA')
+    expect(texto).not.toContain('1,85–1,85')
   })
 
   it('com VÁRIAS casas sob casa_unica, a faixa volta: escolher um número seria inventar a casa', async () => {
@@ -410,7 +416,7 @@ describe('o card carrega contexto materializado (identidade 03)', () => {
 
     const comFaixa = await publicarECarregar(item.chave)
     expect(comFaixa.oddFaixa).toEqual({ min: 1.47, max: 1.62, qtdCasas: 8 })
-    expect(cardDoItem(comFaixa)).toContain('ODD 1,47–1,62')
+    expect(textoDoCard(cardDoItem(comFaixa))).toContain('ODD 1,47–1,62')
   })
 
   it('trocar odds.exibicao no YAML muda a forma sem tocar código (regra 1)', async () => {
@@ -430,11 +436,15 @@ describe('o card carrega contexto materializado (identidade 03)', () => {
       origem: 'CASAS',
     })
 
+    // O padrão do ruleset agora é `casa_unica`; para provar que a chave do
+    // YAML ainda manda, publica com um clone em 'media'.
     const comMedia = structuredClone(ruleset)
     comMedia.odds.exibicao = 'media'
     const item06 = await publicarECarregar(item.chave, comMedia)
     expect(item06.oddFaixa).toEqual({ min: 1.47, max: 1.62, qtdCasas: 8, media: 1.55 })
-    expect(cardDoItem(item06)).toContain('ODD MÉDIA 1,55')
+    // No TEXTO: na identidade 06 a odd subiu para o canto do card e virou
+    // rótulo pequeno + número grande, dois elementos irmãos.
+    expect(textoDoCard(cardDoItem(item06))).toContain('ODD MÉDIA 1,55')
   })
 
   it('a janela da média vem do RULESET, não de um literal (regra 1)', async () => {
@@ -629,8 +639,6 @@ describe('a tela consome o feed materializado', () => {
         atributo: item.atributo,
         nivelJogador: item.nivelJogador,
         nivelApito: item.nivelApito,
-        confianca: item.confianca,
-        grauConfianca: null,
         turbo: item.turbo,
         modoFire: item.modoFire,
         opdOrigemNivel: item.opdOrigemNivel,
