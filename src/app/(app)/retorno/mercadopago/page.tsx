@@ -11,6 +11,8 @@ export default async function PaginaRetornoMercadoPago() {
 
   return (
     <MolduraConta
+      // Quem chega aqui passou pelo checkout: está logado, e tem navegação.
+      autenticado
       titulo={acesso.nivel !== 'GRATIS' ? 'Pagamento confirmado' : 'Confirmação em andamento'}
       descricao={
         acesso.nivel !== 'GRATIS'
