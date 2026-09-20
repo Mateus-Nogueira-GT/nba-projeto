@@ -280,6 +280,10 @@ describe('moldura (identidade 05)', () => {
     expect(css).toContain(`(min-width: ${semantico.larguraLateral}px)`)
     const filtros = readFileSync('src/components/navegacao/FolhaDeFiltros.module.css', 'utf8')
     expect(filtros).toContain(`(min-width: ${semantico.larguraTopo}px)`)
+    // A moldura da conta repete o mesmo número: ela também tem barra do topo
+    // a partir de 1024, e um terceiro lugar escaparia deste teste.
+    const conta = readFileSync('src/components/conta/MolduraConta.module.css', 'utf8')
+    expect(conta).toContain(`(min-width: ${semantico.larguraTopo}px)`)
   })
 
   it('o esqueleto veste a MESMA moldura, com o cromo inteiro', () => {
@@ -409,4 +413,38 @@ describe('filtros (identidade 05)', () => {
     const css = readFileSync('src/components/navegacao/FolhaDeFiltros.module.css', 'utf8')
     expect(css).toMatch(/\.chipMenu:nth-last-child\(-n \+ 2\) > \.menu\s*\{[^}]*right:\s*0/)
   })
+
+describe('moldura da conta — barra do topo para quem está logado', () => {
+  it('quem ESTÁ logado tem navegação no desktop', async () => {
+    // O mesmo defeito que a auditoria de 19/09 corrigiu na `Moldura` (§4.8),
+    // numa moldura que aquela passada não cobria: /assinar e o retorno do
+    // checkout ficavam sem marca e sem navegação a partir de 1024.
+    const { MolduraConta } = await import('../../components/conta/MolduraConta')
+    const html = renderToStaticMarkup(
+      createElement(MolduraConta, { titulo: 'Planos', aba: 'conta', autenticado: true }, 'x'),
+    )
+    expect(html).toContain('aria-label="Seções do app (topo)"')
+    expect(html).toContain('aria-current="page"')
+  })
+
+  it('sem aba, a barra existe e nenhuma pílula acende — é o caso do retorno do checkout', async () => {
+    const { MolduraConta } = await import('../../components/conta/MolduraConta')
+    const html = renderToStaticMarkup(
+      createElement(MolduraConta, { titulo: 'Pagamento', autenticado: true }, 'x'),
+    )
+    expect(html).toContain('aria-label="Seções do app (topo)"')
+    expect(html).not.toContain('aria-current="page"')
+    expect(html).not.toContain('barra-inferior')
+  })
+
+  it('quem NÃO está logado não ganha barra nenhuma', async () => {
+    // Cinco pílulas que redirecionam todas de volta para o login são ruído —
+    // é o mesmo argumento pelo qual a barra INFERIOR já não aparece em
+    // /entrar e /cadastrar.
+    const { MolduraConta } = await import('../../components/conta/MolduraConta')
+    const html = renderToStaticMarkup(createElement(MolduraConta, { titulo: 'Entrar' }, 'x'))
+    expect(html).not.toContain('Seções do app')
+    expect(html).not.toContain('barra-inferior')
+  })
+})
 })

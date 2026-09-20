@@ -72,6 +72,7 @@ export default async function PaginaAssinar({
       descricao="O que cada nível da NIP entrega."
       aba="conta"
       largura={1120}
+      autenticado
     >
       <div style={{ display: 'grid', gap: 18 }}>
         <p style={{ margin: 0, color: semantico.textoSecundario }}>

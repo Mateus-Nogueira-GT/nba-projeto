@@ -1,15 +1,18 @@
 import type { ReactNode } from 'react'
 import Link from 'next/link'
 
-import { BarraInferior, type Aba } from '@/components/navegacao'
+import { BarraInferior, BarraTopo, type Aba } from '@/components/navegacao'
 import { componente } from '@/design-system/tokens/componente'
 import { semantico } from '@/design-system/tokens/semantico'
+
+import estilos from './MolduraConta.module.css'
 
 export function MolduraConta({
   titulo,
   descricao,
   aba = null,
   largura = 560,
+  autenticado = false,
   children,
 }: {
   titulo: string
@@ -27,7 +30,28 @@ export function MolduraConta({
    * redirecionam de volta para o login é ruído.
    */
   aba?: Aba | null
-  children: ReactNode
+  /**
+   * A pessoa já entrou? Decide a barra do TOPO, que é do desktop.
+   *
+   * `/assinar` e o retorno do checkout são de quem ESTÁ logado e ficavam sem
+   * marca e sem navegação a partir de 1024 — o mesmo defeito que a auditoria
+   * de 19/09 corrigiu na `Moldura` (§4.8), nesta moldura que ela não cobria.
+   *
+   * `/entrar` e `/cadastrar` NÃO recebem: cinco pílulas que redirecionam todas
+   * de volta para o login são ruído, que é o mesmo argumento pelo qual a barra
+   * inferior já não aparece ali.
+   *
+   * Vem separado de `aba` porque o retorno do checkout é logado e não é aba
+   * nenhuma — `aba !== null` deixaria justamente ele de fora.
+   */
+  autenticado?: boolean
+  /**
+   * OPCIONAL no tipo, como em `FolhaDeFiltros`: `createElement(C, props, filhos)`
+   * só satisfaz um `children` obrigatório se ele for repetido dentro da props —
+   * e passar filho por props é justamente o que o lint proíbe. Na prática a
+   * moldura sempre recebe conteúdo.
+   */
+  children?: ReactNode
 }) {
   return (
     <main
@@ -35,11 +59,22 @@ export function MolduraConta({
         minHeight: '100vh',
         background: componente.fundoTela,
         color: semantico.textoPrimario,
-        padding: aba === null ? '40px 18px' : '40px 18px 96px',
         fontFamily: semantico.fonteCorpo,
       }}
     >
-      <div style={{ width: '100%', maxWidth: largura, margin: '0 auto' }}>
+      {autenticado && (
+        <div className={estilos.topo}>
+          <BarraTopo atual={aba} />
+        </div>
+      )}
+      <div
+        style={{
+          padding: aba === null ? '40px 18px' : '40px 18px 96px',
+          width: '100%',
+          maxWidth: largura,
+          margin: '0 auto',
+        }}
+      >
         <Link href="/" style={{ color: semantico.textoSecundario, fontSize: 13 }}>
           ← NIP
         </Link>
