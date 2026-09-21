@@ -5,6 +5,7 @@ import { casas, mapaJogadores, mapaMercados } from '@/modules/dominio/db/schema'
 import { atributoEnum } from '@/modules/dominio/db/schema/enums'
 import { negarSeNaoForAdmin } from '../guarda'
 import { confirmarVinculoDeMercado } from './acoes'
+import { semantico } from '@/design-system/tokens/semantico'
 
 // Lê banco a cada requisição — nunca prerenderiza no build.
 export const dynamic = 'force-dynamic'
@@ -45,7 +46,7 @@ export default async function PaginaMercados() {
   return (
     <main style={{ padding: 24, fontFamily: 'system-ui', maxWidth: 720 }}>
       <h1 style={{ marginTop: 0 }}>Curadoria de mercados</h1>
-      <p style={{ color: '#555' }}>
+      <p style={{ color: semantico.textoSecundario }}>
         {listaCasas.length} casa{listaCasas.length === 1 ? '' : 's'} · {confirmados.length}{' '}
         mercado{confirmados.length === 1 ? '' : 's'} confirmado{confirmados.length === 1 ? '' : 's'} ·{' '}
         {vinculosDeCasa.length} vínculo{vinculosDeCasa.length === 1 ? '' : 's'} de jogador
@@ -59,7 +60,7 @@ export default async function PaginaMercados() {
       )}
 
       <h2>Mercados pendentes ({pendentes.length})</h2>
-      {pendentes.length === 0 && <p style={{ color: '#555' }}>Fila vazia.</p>}
+      {pendentes.length === 0 && <p style={{ color: semantico.textoSecundario }}>Fila vazia.</p>}
       {pendentes.map((m) => (
         <form
           key={m.id}

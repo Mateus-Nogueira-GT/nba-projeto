@@ -5,6 +5,7 @@ import { identidadesJogador, jogadores, mapaJogadores } from '@/modules/dominio/
 import { sugerir, type Sugestao } from '@/modules/ingestao/niveis/similaridade'
 import { negarSeNaoForAdmin } from '../guarda'
 import { confirmarVinculo } from './acoes'
+import { semantico } from '@/design-system/tokens/semantico'
 
 // Lê banco a cada requisição — nunca prerenderiza no build.
 export const dynamic = 'force-dynamic'
@@ -120,7 +121,7 @@ export default async function PaginaMapeamento() {
         {pendentes.map(({ sugestao, estado }) => (
           <li
             key={sugestao.nomeNaLista}
-            style={{ border: '1px solid #ccc', borderRadius: 6, padding: 16, marginBottom: 12 }}
+            style={{ border: `1px solid ${semantico.divisor}`, borderRadius: 6, padding: 16, marginBottom: 12 }}
           >
             <h2 style={{ margin: '0 0 4px', fontSize: 18 }}>{sugestao.nomeNaLista}</h2>
             <p style={{ margin: '0 0 12px', fontSize: 13 }}>{ROTULO[estado]}</p>
@@ -141,7 +142,7 @@ export default async function PaginaMapeamento() {
                       alignItems: 'center',
                       gap: 12,
                       padding: '6px 0',
-                      borderTop: '1px solid #eee',
+                      borderTop: `1px solid ${semantico.divisor}`,
                     }}
                   >
                     <span style={{ flex: 1 }}>

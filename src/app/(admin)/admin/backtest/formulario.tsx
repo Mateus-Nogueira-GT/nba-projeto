@@ -3,6 +3,7 @@
 import { useActionState } from 'react'
 
 import { salvarCandidato, type EstadoCandidato } from './acoes'
+import { semantico } from '@/design-system/tokens/semantico'
 
 const INICIAL: EstadoCandidato = { erro: null }
 
@@ -26,7 +27,7 @@ export function FormularioCandidato() {
           style={{ width: '100%', fontFamily: 'monospace' }}
         />
       </label>
-      {estado.erro && <pre style={{ color: '#b00020', whiteSpace: 'pre-wrap' }}>{estado.erro}</pre>}
+      {estado.erro && <pre style={{ color: semantico.alerta, whiteSpace: 'pre-wrap' }}>{estado.erro}</pre>}
       <button type="submit" disabled={pendente}>
         {pendente ? 'Validando…' : 'Salvar candidato'}
       </button>

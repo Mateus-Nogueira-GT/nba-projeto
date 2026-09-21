@@ -13,6 +13,7 @@ import {
 } from './acoes'
 import { NOME_COOKIE_LINK_REDEFINICAO } from './link-redefinicao'
 import { dataHora, diaCompleto } from '@/components/formato'
+import { semantico } from '@/design-system/tokens/semantico'
 
 // O painel admin é operado do Brasil e não passa pelo ruleset — o fuso aqui é
 // só apresentação, não decide a que rodada nada pertence.
@@ -21,7 +22,7 @@ const FUSO_ADMIN = 'America/Sao_Paulo'
 export const dynamic = 'force-dynamic'
 export const metadata = { title: 'Usuários · Painel' }
 
-const celula = { padding: '8px 10px', borderTop: '1px solid #ddd', fontSize: 13 } as const
+const celula = { padding: '8px 10px', borderTop: `1px solid ${semantico.divisor}`, fontSize: 13 } as const
 
 export default async function PaginaUsuarios({
   searchParams,
@@ -81,12 +82,30 @@ export default async function PaginaUsuarios({
     <main style={{ padding: 24, fontFamily: 'system-ui', maxWidth: 1100, lineHeight: 1.5 }}>
       <h1 style={{ marginBottom: 4 }}>Usuários</h1>
       {avisoTemporada && (
-        <p role="status" style={{ fontSize: 13, padding: 8, background: '#fff0cc' }}>
+        <p role="status" style={{
+          fontSize: 13,
+          padding: 8,
+          // Era um amarelo claro com o texto branco do tema escuro em
+          // cima: 1,1 de contraste, ou seja, aviso invisível.
+          background: semantico.superficieElevada,
+          color: semantico.textoPrimario,
+          border: `1px solid ${semantico.divisor}`,
+          borderRadius: 6,
+        }}>
           {avisoTemporada}
         </p>
       )}
       {linkRedefinicao && (
-        <p role="status" style={{ fontSize: 13, padding: 8, background: '#fffbcc' }}>
+        <p role="status" style={{
+          fontSize: 13,
+          padding: 8,
+          // Era um amarelo claro com o texto branco do tema escuro em
+          // cima: 1,1 de contraste, ou seja, aviso invisível.
+          background: semantico.superficieElevada,
+          color: semantico.textoPrimario,
+          border: `1px solid ${semantico.divisor}`,
+          borderRadius: 6,
+        }}>
           Link de redefinição (válido por 1 hora, uso único): <code>{linkRedefinicao}</code>
         </p>
       )}

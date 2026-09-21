@@ -6,6 +6,7 @@ import type { Diferenca, ResultadoBacktest } from '@/modules/entrega/backtest/ex
 import { rulesetAtivo } from '@/modules/entrega/ruleset-ativo'
 import { negarSeNaoForAdmin } from '../guarda'
 import { FormularioCandidato } from './formulario'
+import { semantico } from '@/design-system/tokens/semantico'
 
 // Lê banco a cada requisição — nunca prerenderiza no build.
 export const dynamic = 'force-dynamic'
@@ -74,14 +75,14 @@ export default async function PaginaBacktest({
   return (
     <main style={{ padding: 24, fontFamily: 'system-ui', maxWidth: 760 }}>
       <h1 style={{ marginTop: 0 }}>Backtest de rulesets</h1>
-      <p style={{ color: '#555' }}>
+      <p style={{ color: semantico.textoSecundario }}>
         Reexecuta o motor sobre o histórico com um ruleset candidato e compara com o ativo. Nada é
         gravado no histórico real.
       </p>
 
       <h2>Comparar</h2>
       {candidatos.length === 0 ? (
-        <p style={{ color: '#555' }}>Nenhum candidato salvo ainda — cadastre um abaixo.</p>
+        <p style={{ color: semantico.textoSecundario }}>Nenhum candidato salvo ainda — cadastre um abaixo.</p>
       ) : (
         <form method="get" style={{ display: 'flex', gap: 8, alignItems: 'end', flexWrap: 'wrap' }}>
           <label>
@@ -109,14 +110,14 @@ export default async function PaginaBacktest({
         </form>
       )}
 
-      {erro && <p style={{ color: '#b00020' }}>{erro}</p>}
+      {erro && <p style={{ color: semantico.alerta }}>{erro}</p>}
 
       {comparativo && (
         <>
           <h2>
             Resultado · {comparativo.a.periodo.de} a {comparativo.a.periodo.ate}
           </h2>
-          <p style={{ color: '#555' }}>
+          <p style={{ color: semantico.textoSecundario }}>
             Amostra classificável: {comparativo.a.classificaveis} (ativo) vs{' '}
             {comparativo.b.classificaveis} (candidato). Amostra pequena dá número, não conclusão.
           </p>
@@ -124,7 +125,7 @@ export default async function PaginaBacktest({
             <thead>
               <tr>
                 {['métrica', 'ativo', 'candidato', 'delta'].map((h) => (
-                  <th key={h} style={{ border: '1px solid #ccc', padding: '4px 10px' }}>
+                  <th key={h} style={{ border: `1px solid ${semantico.divisor}`, padding: '4px 10px' }}>
                     {h}
                   </th>
                 ))}
@@ -139,10 +140,10 @@ export default async function PaginaBacktest({
                 ] as const
               ).map(([nome, va, vb, delta]) => (
                 <tr key={nome}>
-                  <td style={{ border: '1px solid #ccc', padding: '4px 10px' }}>{nome}</td>
-                  <td style={{ border: '1px solid #ccc', padding: '4px 10px' }}>{va}</td>
-                  <td style={{ border: '1px solid #ccc', padding: '4px 10px' }}>{vb}</td>
-                  <td style={{ border: '1px solid #ccc', padding: '4px 10px' }}>{delta}</td>
+                  <td style={{ border: `1px solid ${semantico.divisor}`, padding: '4px 10px' }}>{nome}</td>
+                  <td style={{ border: `1px solid ${semantico.divisor}`, padding: '4px 10px' }}>{va}</td>
+                  <td style={{ border: `1px solid ${semantico.divisor}`, padding: '4px 10px' }}>{vb}</td>
+                  <td style={{ border: `1px solid ${semantico.divisor}`, padding: '4px 10px' }}>{delta}</td>
                 </tr>
               ))}
             </tbody>
@@ -165,7 +166,7 @@ export default async function PaginaBacktest({
       <h2>Novo candidato</h2>
       <FormularioCandidato />
 
-      <p style={{ marginTop: 24, fontSize: 12, color: '#777' }}>
+      <p style={{ marginTop: 24, fontSize: 12, color: semantico.textoSecundario }}>
         Medição do comportamento de regra sobre dado histórico — não é sugestão de aposta nem
         promessa de retorno. O ruleset ativo continua versionado em git; promover um candidato é um
         commit do YAML, não um UPDATE.

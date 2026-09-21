@@ -89,7 +89,7 @@ export const semantico = {
   apitoNivel2: p.laranja400,
   apitoNivel3: p.verde400,
   apitoTurbo: p.azul400,
-  apitoModoFire: p.laranja400,
+  apitoModoFire: p.coralFogo,
 
   // -- Estado ------------------------------------------------------------
   alerta: p.vermelhoNipClaro,
@@ -191,6 +191,15 @@ export const semantico = {
   // Régua fina entre linhas de tabela — o `divisor` a meia força. Alias de um
   // primitivo, como o teste de paridade exige.
   divisorSuave: p.tinta500Veu50,
+  // Contorno de CONTROLE secundário (o botão que não é o primário azul do
+  // manual). Nasceu em 21/09: o botão "Como funciona" era texto cinza sem
+  // moldura e ninguém via que dava para clicar. O `divisor` não servia — ele
+  // mede 1,57 sobre o fundo, abaixo dos 3,0 que um elemento gráfico precisa,
+  // e uma pílula com ele continuaria parecendo apagada. Este mede 6,12.
+  // Divide pigmento com `nivelRandolaBorda` de propósito: branco translúcido
+  // é cromo neutro, não sinal — ao contrário do laranja, que carregava dois
+  // significados e por isso foi separado.
+  contornoControle: p.brancoVeu55,
   // Ao vivo com forma própria DENTRO do quente: o sólido é o mesmo `aoVivo`
   // (o ponto e o texto); tinta e borda vestem o badge de status de largura
   // fixa. Distinto do amarelo do nível 1 e do laranja do nível 2 por teste.

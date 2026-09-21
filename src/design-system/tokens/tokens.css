@@ -25,7 +25,7 @@
   --apito-nivel2: #FFA31F;
   --apito-nivel3: #2BE884;
   --apito-turbo: #4DA3FF;
-  --apito-modo-fire: #FFA31F;
+  --apito-modo-fire: #FF6B35;
   --alerta: #FF5C70;
   --fonte-titulo: var(--fonte-bebas), 'Arial Narrow', sans-serif;
   --fonte-rotulo: var(--fonte-montserrat), system-ui, sans-serif;
@@ -72,6 +72,7 @@
   --texto55: rgba(255,255,255,.55);
   --texto40: rgba(255,255,255,.55);
   --divisor-suave: rgba(42,56,82,.5);
+  --contorno-controle: rgba(255,255,255,.55);
   --ao-vivo-solido: #FF5C70;
   --ao-vivo-tinta: rgba(255,92,112,.14);
   --ao-vivo-borda: rgba(255,92,112,.45);

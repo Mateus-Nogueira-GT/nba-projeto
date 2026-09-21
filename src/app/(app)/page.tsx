@@ -466,16 +466,30 @@ export default async function PaginaListaSecreta({
             href="/como-funciona"
             className="link-texto"
             style={{
+              // Pílula CONTORNADA, não o azul do manual: o primário chapado
+              // competiria com o H1 e com as ações reais da tela. Era texto
+              // cinza sem moldura — lia como legenda desativada, e o caminho
+              // para a metodologia inteira morria aí.
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 6,
+              padding: '7px 14px',
+              borderRadius: 999,
+              border: `1px solid ${semantico.contornoControle}`,
               fontFamily: semantico.fonteRotulo,
               fontSize: 12,
               fontWeight: 600,
               letterSpacing: '0.06em',
               textTransform: 'uppercase',
-              color: semantico.textoSecundario,
+              // Tinta cheia (18,47 sobre o fundo). O cinza de antes dava 8,01 e
+              // passava em AA — o problema nunca foi legibilidade, foi não
+              // parecer clicável.
+              color: semantico.textoPrimario,
               textDecoration: 'none',
               whiteSpace: 'nowrap',
             }}
           >
+            <span aria-hidden>?</span>
             Como funciona
           </Link>
         }

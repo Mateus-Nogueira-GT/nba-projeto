@@ -27,6 +27,16 @@ export const primitivo = {
   // não: ele é o azul do Manual da Marca, e o parceiro não o citou.
   ambar400: '#FFDD00',
   laranja400: '#FFA31F',
+  // Coral do MODO FIRE. Nasceu em 21/09 porque `apitoModoFire` vinha reusando o
+  // `laranja400` acima — e os dois APARECEM JUNTOS: um card com apito nível 2 e
+  // modo fire pintava o anel e o selo da mesma tinta, dizendo duas coisas
+  // diferentes do vocabulário homologado com uma cor só.
+  // Escolhido por medição, não por gosto: sobre o fundo do selo (`#18243A`,
+  // texto 12 px 600, exige AA 4,5) dá 5,48; a vizinha perceptual mais próxima é
+  // `bronze` (ΔE 15,9), que é rótulo metálico — outra forma, outro lugar do
+  // card. O rosa `#FF7A9C` media melhor (6,30 / ΔE 20,1) e foi descartado por
+  // dividir família com o `aoVivo`, que ocupa a mesma tela.
+  coralFogo: '#FF6B35',
   verde400: '#2BE884',
   azul400: '#4DA3FF',
 
@@ -87,9 +97,11 @@ export const primitivo = {
   notaFundoBoa: '#3D5A80',
   notaFundoMediana: '#4A4E69',
   notaFundoFraca: '#5C3A3A',
-  // Texto claro de cada faixa. Excepcional e ótima são as duas faixas verdes
-  // e compartilham o mesmo texto — mesmo padrão de reúso de
-  // `apitoNivel2`/`apitoModoFire` em semantico.ts.
+  // Texto claro de cada faixa. Excepcional e ótima são as duas faixas verdes e
+  // compartilham o mesmo texto — aqui o reúso é legítimo, porque as duas faixas
+  // JÁ são a mesma família e nunca se contradizem. (Este comentário citava
+  // `apitoNivel2`/`apitoModoFire` como precedente; aquele reúso era defeito e
+  // foi desfeito em 21/09 — ver `coralFogo`.)
   notaTextoVerde: '#EAFBF2',
   notaTextoAzul: '#E8EFF7',
   notaTextoRoxo: '#E9E9F0',
@@ -121,7 +133,8 @@ export const primitivo = {
   // As cinco cores da marca e as quatro superfícies, literais do PDF (p.2 e
   // p.5). O laranja de interface saiu daqui: o manual o proíbe em negrito. O
   // `laranja400` acima FICA — ele é o 🟠 do nível 2 do apito, vocabulário
-  // homologado do CJ, e sinal não é decoração.
+  // homologado do CJ, e sinal não é decoração. Mas é SÓ isso: desde 21/09 o
+  // modo fire tem tinta própria (`coralFogo`).
   azulNip: '#0057B8',
   // Hover do botão primário: o azul com 12% de branco. É o mais claro que ainda
   // deixa o texto branco em cima passar em AA (5,34).

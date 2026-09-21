@@ -38,6 +38,27 @@ describe('camadas de token', () => {
     expect(infratores).toEqual([])
   })
 
+  it('nenhuma TELA escreve hex direto — inclusive o painel admin', () => {
+    // O teste acima só varre `design-system/componentes`, e foi por essa fresta
+    // que o painel admin passou: ele não tem layout próprio, herda o tema
+    // ESCURO da raiz, e vinha pintando texto com `#555` (2,48 de contraste) e
+    // avisos com fundo `#fff0cc` sob texto branco — 1,13, ou seja, invisível.
+    // Uma tela interna também é tela.
+    const telas: string[] = []
+    const varrer = (dir: string) => {
+      for (const entrada of readdirSync(dir, { withFileTypes: true })) {
+        const caminho = join(dir, entrada.name)
+        if (entrada.isDirectory()) varrer(caminho)
+        else if (/\.tsx?$/.test(entrada.name) && !caminho.includes('__tests__')) {
+          if (HEX.test(readFileSync(caminho, 'utf8'))) telas.push(caminho)
+        }
+      }
+    }
+    varrer('src/app')
+
+    expect(telas).toEqual([])
+  })
+
   it('o hex vive SÓ no primitivo — semântico e componente só referenciam', () => {
     const semanticoFonte = readFileSync('src/design-system/tokens/semantico.ts', 'utf8')
     const componenteFonte = readFileSync('src/design-system/tokens/componente.ts', 'utf8')
@@ -82,6 +103,25 @@ describe('dois canais visuais, e só dois', () => {
   it('o nível do apito tem 3 cores + turbo, sem repetição', () => {
     const cores = [...Object.values(APITO).map((a) => a.cor), TURBO.cor]
     expect(new Set(cores).size).toBe(4)
+  })
+
+  it('o MODO FIRE não usa a cor de nenhum nível do apito', () => {
+    // Os dois aparecem no MESMO card: `CardEntrada` pinta o anel com
+    // `APITO[nivel].cor` e o selo 🔥 com `MODO_FIRE.cor`. Até 21/09 os dois
+    // eram `laranja400`, então um apito nível 2 em modo fire dizia duas coisas
+    // do vocabulário homologado com uma tinta só. O teste de "sem repetição"
+    // acima não pegava, porque só olha os níveis e o turbo.
+    const doApito = [...Object.values(APITO).map((a) => a.cor), TURBO.cor]
+    expect(doApito).not.toContain(MODO_FIRE.cor)
+  })
+
+  it('o selo do MODO FIRE passa em AA como texto — 12 px 600 não é texto grande', () => {
+    // `Selo` pinta a cor como TINTA e contorno sobre `marcadorOpdFundo`, não
+    // sobre a superfície do card: medir contra o card daria um número que
+    // ninguém vê.
+    expect(razaoDeContraste(MODO_FIRE.cor, componente.marcadorOpdFundo)).toBeGreaterThanOrEqual(
+      AA.texto,
+    )
   })
 
   it('os dois canais não compartilham nenhuma cor', () => {
