@@ -209,33 +209,69 @@ describe('heartbeat e alerta de dado parado', () => {
 
 describe('parser da lista real do CJ', () => {
   const r = lerListaDeNiveis(conteudo)
+  const porAtributo = (a: 'PONTOS' | 'REBOTES' | 'ASSISTENCIAS') =>
+    r.jogadores.filter((j) => j.atributo === a)
 
-  it('lê os 30 times', () => {
-    expect(r.timesEncontrados).toHaveLength(30)
+  it('acha os 90 cabeçalhos de time — 3 seções × 30 times cada', () => {
+    // As três seções escrevem o cabeçalho de jeitos diferentes (negrito em
+    // PONTOS/REBOTES, texto puro em ASSISTÊNCIAS) — ver nomeDoTime /
+    // nomeDoTimeSemNegrito. Nenhum cabeçalho fica sem sigla reconhecida.
+    expect(r.timesEncontrados).toHaveLength(90)
     expect(r.timesSemSigla).toEqual([])
   })
 
-  it('lê os 230 jogadores sem nenhum problema de leitura', () => {
-    expect(r.jogadores).toHaveLength(230)
-    expect(r.problemas).toEqual([])
+  it('lê PONTOS: 30 times, 234 jogadores', () => {
+    const pontos = porAtributo('PONTOS')
+    expect(new Set(pontos.map((j) => j.timeSigla)).size).toBe(30)
+    expect(pontos).toHaveLength(234)
   })
 
-  it('pega o time escrito como DOIS spans em negrito na mesma linha', () => {
+  it('lê REBOTES: 30 times, 118 jogadores', () => {
+    // Inclui os 4 jogadores do Miami que o documento não numera (a posição é
+    // inferida da ordem de aparição — ver jogadorSemOrdinal).
+    const rebotes = porAtributo('REBOTES')
+    expect(new Set(rebotes.map((j) => j.timeSigla)).size).toBe(30)
+    expect(rebotes).toHaveLength(118)
+  })
+
+  it('lê ASSISTÊNCIAS: 57 jogadores em 29 times — Detroit fica de fora', () => {
+    // Detroit tem cabeçalho de time (entra nos 90 acima) mas o único jogador
+    // listado, na linha 712, não tem nível: "1 \- Cadê Cunningham". O
+    // documento não define o nível dele; inventar um violaria a regra 3
+    // ("nenhuma regra inventada"). Por isso Detroit não aparece aqui — é
+    // exatamente o único `problema` do teste seguinte, não um bug do parser.
+    const assistencias = porAtributo('ASSISTENCIAS')
+    expect(new Set(assistencias.map((j) => j.timeSigla)).size).toBe(29)
+    expect(assistencias).toHaveLength(57)
+  })
+
+  it('sobra exatamente um problema: o nível que falta no documento (Detroit, ASSISTÊNCIAS)', () => {
+    expect(r.problemas).toHaveLength(1)
+    expect(r.problemas[0]).toMatchObject({
+      linhaNoArquivo: 712,
+      motivo: 'não foi possível separar ordinal, nome e nível',
+    })
+    expect(r.problemas[0]?.conteudo).toContain('Cadê Cunningham')
+  })
+
+  it('pega o time escrito como DOIS spans em negrito na mesma linha (PONTOS)', () => {
     // "**Dallas** **Mavericks**" — um regex ingênuo perderia os 9 jogadores.
-    expect(r.jogadores.filter((j) => j.timeSigla === 'DAL')).toHaveLength(9)
+    // Filtra por PONTOS porque REBOTES e ASSISTÊNCIAS também têm um Dallas.
+    expect(porAtributo('PONTOS').filter((j) => j.timeSigla === 'DAL')).toHaveLength(9)
   })
 
-  it('tolera os três separadores diferentes do arquivo', () => {
+  it('tolera os três separadores diferentes do arquivo (PONTOS)', () => {
+    const pontos = porAtributo('PONTOS')
     // "4 \- Jarret Allen \- \- Suport principal"  (separador duplicado)
-    expect(r.jogadores.find((j) => j.nomeNaLista === 'Jarret Allen')?.nivel).toBe('SUPORTE')
+    expect(pontos.find((j) => j.nomeNaLista === 'Jarret Allen')?.nivel).toBe('SUPORTE')
     // "6- \- Dany Wolf \- Randola"                (número colado, separador duplo)
-    expect(r.jogadores.find((j) => j.nomeNaLista === 'Dany Wolf')?.nivel).toBe('RANDOLA')
+    expect(pontos.find((j) => j.nomeNaLista === 'Dany Wolf')?.nivel).toBe('RANDOLA')
     // "5-M wagner \- Randola"                     (número colado no nome)
-    expect(r.jogadores.find((j) => j.nomeNaLista === 'M wagner')?.nivel).toBe('RANDOLA')
+    expect(pontos.find((j) => j.nomeNaLista === 'M wagner')?.nivel).toBe('RANDOLA')
   })
 
   it('Philadelphia tem DOIS MVPs, nas posições 1 e 2 (P7)', () => {
-    const phi = r.jogadores.filter((j) => j.timeSigla === 'PHI' && j.nivel === 'MVP')
+    const phi = porAtributo('PONTOS').filter((j) => j.timeSigla === 'PHI' && j.nivel === 'MVP')
 
     expect(phi.map((j) => j.posicaoHierarquia)).toEqual([1, 2])
   })
@@ -337,13 +373,20 @@ describe('import da lista — reexecutável e não destrutivo', () => {
     })
 
     expect(rel.jaExistia).toBe(false)
-    expect(rel.timesEncontrados).toBe(30)
-    expect(rel.totalNaLista).toBe(230)
-    expect(rel.problemas).toEqual([])
+    // 3 seções × 30 cabeçalhos de time cada (PONTOS negrito, REBOTES negrito,
+    // ASSISTÊNCIAS texto puro — ver nomeDoTime / nomeDoTimeSemNegrito).
+    expect(rel.timesEncontrados).toBe(90)
+    // Soma dos três atributos: 234 (PONTOS) + 118 (REBOTES) + 57 (ASSISTÊNCIAS).
+    expect(rel.totalNaLista).toBe(409)
+    // O único problema que sobra: o documento não deu nível para o jogador de
+    // Detroit em ASSISTÊNCIAS (linha 712, "1 \- Cadê Cunningham"). Inventar um
+    // nível violaria a regra 3 do projeto — reportar é o comportamento certo.
+    expect(rel.problemas).toHaveLength(1)
+    expect(rel.problemas[0]?.conteudo).toContain('Cadê Cunningham')
 
     // Nada de jogador confirmado ainda: TODOS ficam pendentes, nenhum some.
     expect(rel.casados).toBe(0)
-    expect(new Set(rel.pendentes).size + rel.casados).toBeGreaterThan(220)
+    expect(new Set(rel.pendentes).size + rel.casados).toBeGreaterThan(300)
 
     const versoes = await banco.db.select().from(niveisVersao)
     expect(versoes.every((v) => !v.ativa)).toBe(true)
@@ -394,15 +437,18 @@ describe('import da lista — reexecutável e não destrutivo', () => {
     const versao = (await banco.db.select().from(niveisVersao))[0]!
     const r = await completarVersao(banco.db, versao.id, conteudo, PROVEDOR)
 
-    expect(r.adicionados).toBe(1)
+    // O documento real classifica Wembayama em DOIS atributos — MVP, posição
+    // 1, tanto em PONTOS quanto em REBOTES. O modelo é (jogador, atributo):
+    // isso são duas linhas legítimas em `niveis`, não uma duplicata.
+    expect(r.adicionados).toBe(2)
 
     const gravados = await banco.db
       .select()
       .from(niveis)
       .where(eq(niveis.niveisVersaoId, versao.id))
-    expect(gravados).toHaveLength(1)
-    expect(gravados[0]?.nivel).toBe('MVP')
-    expect(gravados[0]?.posicaoHierarquia).toBe(1)
+    expect(gravados).toHaveLength(2)
+    expect(gravados.every((g) => g.nivel === 'MVP' && g.posicaoHierarquia === 1)).toBe(true)
+    expect(new Set(gravados.map((g) => g.atributo))).toEqual(new Set(['PONTOS', 'REBOTES']))
   })
 
   it('a versão só passa a valer por ativação explícita', async () => {

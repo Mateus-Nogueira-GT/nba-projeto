@@ -159,10 +159,23 @@ export type JogadorSim = {
   medias: { ppg: number; rpg: number; apg: number }
 }
 
-/** Por sigla, na ordem da hierarquia do CJ. Quem não tem sigla fica de fora. */
+/**
+ * Por sigla, na ordem da hierarquia do CJ. Quem não tem sigla fica de fora.
+ *
+ * FILTRA POR `PONTOS`: o elenco do time é a lista de pontos, porque é ela que
+ * carrega a hierarquia completa (6 a 9 por time) e é essa hierarquia que a
+ * OPD consulta. As listas de rebotes e assistências são recortes de 3 a 4
+ * nomes por time — não são elencos, e a demo já sintetiza os outros dois
+ * atributos por conta própria em `semear.ts` (via `niveisDoJogador`), então
+ * não precisa deles vindos da lista. Sem este filtro, `jogadores` traz os
+ * três atributos e o "elenco" de um time soma pontos + rebotes +
+ * assistências — nomes repetidos e `posicaoHierarquia` conflitante entre
+ * as ocorrências do mesmo jogador.
+ */
 export function elencosDaLista(jogadores: readonly JogadorNaLista[]): Map<string, JogadorSim[]> {
   const elencos = new Map<string, JogadorSim[]>()
   for (const j of jogadores) {
+    if (j.atributo !== 'PONTOS') continue
     if (j.timeSigla === null) continue
     const lista = elencos.get(j.timeSigla) ?? []
     lista.push({

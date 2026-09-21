@@ -6,6 +6,7 @@ import type { Db } from '../../dominio/db/tipos'
 import { conferenciaDe } from '../../dominio/conferencias'
 import { identidadeNbaPorAlias } from '../../dominio/identidades-nba'
 import { ativarVersaoNiveis } from '../../dominio/repositorios/niveis'
+import { normalizarTexto } from '../../dominio/texto'
 import { ATRIBUTOS } from '../../motor/tipos'
 import { importarListaDeNiveis } from '../niveis/importar'
 import { lerListaDeNiveis } from '../niveis/parser'
@@ -16,11 +17,17 @@ export const ARQUIVO_LISTA = 'data/fontes/introducao-ia-nba.md'
 export const PROVEDOR_DEMO = 'demo'
 
 /**
- * A CHAVE é o nome do CJ em caixa baixa, não o nome gravado. `nomeCompleto`
- * recebe o nome oficial quando curado; reexecuções resolvem o UUID pelo
- * vínculo confirmado em mapa_jogadores, nunca pelo nome de apresentação.
+ * A CHAVE é o nome do CJ normalizado (sem acento, sem caixa, pontuação
+ * solta) — a mesma régua de `dominio/texto.ts` que já casa "Doncic" com
+ * "doncick" na busca e resolve aliases curados em `identidades-nba.ts`.
+ * Duas grafias do MESMO nome (acento ou caixa) precisam cair no mesmo
+ * UUID: "Ja morant" e "Já morant" são uma pessoa só, e um `toLowerCase()`
+ * puro as separava — daí o card e o mapa de fotos enxergarem dois
+ * jogadores onde o CJ só quis dizer um. `nomeCompleto` recebe o nome
+ * oficial quando curado; reexecuções resolvem o UUID pelo vínculo
+ * confirmado em mapa_jogadores, nunca pelo nome de apresentação.
  */
-export const chaveDeNome = (nome: string): string => nome.toLowerCase()
+export const chaveDeNome = (nome: string): string => normalizarTexto(nome)
 
 export type Cadastro = {
   analise: ResultadoParse

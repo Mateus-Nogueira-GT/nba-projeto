@@ -111,8 +111,19 @@ export async function semearDemo(
   // 2 · Médias da temporada — a MESMA que montarFatos vai consultar.
   const temporada = temporadaDe(agora, calendarioDoRuleset(ruleset))
   // Chaveado como `jaExistentes` — o laço abaixo itera as CHAVES dele.
+  // FILTRO POR ATRIBUTO: o documento agora traz, além da lista de PONTOS,
+  // listas de REBOTES e ASSISTÊNCIAS com o MESMO jogador em nível DIFERENTE
+  // (ex.: Shai é MVP em pontos e "All star" na lista de assistências; LeBron
+  // é Suporte em pontos e "All star" na de assistências). Sem este filtro, o
+  // `Map` (last-write-wins) pega o nível da ÚLTIMA lista em que o nome
+  // aparece no arquivo — não o de pontos — e todo o resto desta função (que
+  // já se chama `nivelPontos`) passa a calcular média/delta/oscilação com o
+  // nível errado. Foi o que apagava o apito do LeBron (cascata em
+  // detalhe-apito.test.ts) e o modo fire do Shai.
   const nivelPorNome = new Map(
-    analise.jogadores.map((j) => [chaveDeNome(j.nomeNaLista), j.nivel] as const),
+    analise.jogadores
+      .filter((j) => j.atributo === 'PONTOS')
+      .map((j) => [chaveDeNome(j.nomeNaLista), j.nivel] as const),
   )
   for (const [nome, jogadorId] of jaExistentes) {
     const nivel = nivelPorNome.get(nome)
@@ -174,6 +185,20 @@ export async function semearDemo(
   //     e voltou à média no jogo seguinte. Sem esse segundo grupo, a aba de
   //     Resultados só teria quem continua abaixo — e o jogo conferido seria
   //     mais um jogo ruim, fazendo a estratégia parecer errar sempre.
+  //
+  //     REVISADO em 21/09/2026 contra a versão do documento que trocou
+  //     CLE|Strus e DEN|Watson (Randola) por CLE|Peyton Watson (Randola),
+  //     DEN|Derozan, MIN|Kuminga, MIA|klay thompson, NOP|mathurin (Suporte) e
+  //     LAC|Max strus (Randola): nenhum desses seis é usado abaixo, e a troca
+  //     só mexeu no degrau Suporte/Randola dos seis times — não em MVP/All
+  //     Star, que é de onde TODOS os protagonistas daqui vêm (Brunson, LeBron
+  //     [Suporte, mas a exceção documentada acima], Curry, Shai, Tatum, Jokic,
+  //     Giannis, Jamal Murray). Recasting não foi necessário; o que quebrava
+  //     os testes era outro bug (ver comentário do filtro `atributo ===
+  //     'PONTOS'` logo abaixo, e em `nivelPorNome`) — a próxima troca de
+  //     elenco só exige revisar esta lista se mexer em MVP/All Star de OKC,
+  //     DEN, LAL, PHI, GSW, BOS, NYK ou MIA (os times de hoje) ou tirar algum
+  //     destes oito jogadores de quadra.
   type Cenario = { nome: string; jogosAbaixo: number; desde?: number }
   const CENARIOS: Record<Atributo, Cenario[]> = {
     PONTOS: [
@@ -228,7 +253,14 @@ export async function semearDemo(
       jogoDoTime.set(visitante, jogoId)
     }
 
+    // Mesmo motivo do filtro em `nivelPorNome`: sem ele, este laço processa o
+    // MESMO jogador até três vezes (uma por lista) e a passagem da lista de
+    // ASSISTÊNCIAS/REBOTES é a que grava por último (onConflictDoUpdate) —
+    // com a grafia daquela lista, que pode não bater com `CENARIOS` (ex.:
+    // "Lebron James" na lista de assistências vs. "LeBron James" em
+    // `CENARIOS`), apagando a oscilação roteirizada com um jogo na média.
     for (const j of analise.jogadores) {
+      if (j.atributo !== 'PONTOS') continue
       const nome = j.nomeNaLista
       const jogadorId = jaExistentes.get(chaveDeNome(nome))
       const jogoId = j.timeSigla === null ? undefined : jogoDoTime.get(j.timeSigla)
@@ -340,7 +372,14 @@ export async function semearDemo(
     const timeVisitanteId = idDoTime('DEN')
     if (timeCasaId && timeVisitanteId) {
       const elenco: JogadorAoVivo[] = []
+      // Mesmo filtro do laço de histórico: sem ele, um jogador do OKC/DEN que
+      // também aparece na lista de rebotes ou assistências entraria duas ou
+      // três vezes no elenco, com o nível daquela lista (ex.: Shai é MVP em
+      // pontos e "All star" na lista de assistências) — e quem decide o
+      // modo fire não pode depender de qual entrada o array processou por
+      // último.
       for (const j of analise.jogadores) {
+        if (j.atributo !== 'PONTOS') continue
         if (j.timeSigla !== 'OKC' && j.timeSigla !== 'DEN') continue
         const jogadorId = jaExistentes.get(chaveDeNome(j.nomeNaLista))
         if (jogadorId === undefined) continue

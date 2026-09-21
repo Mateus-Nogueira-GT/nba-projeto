@@ -64,12 +64,32 @@ function ehLinhaDeDefinicao(normalizada: string): boolean {
 }
 
 /**
- * Só quatro níveis existem. Os sufixos "principal"/"secundário" são redundantes
- * com a posição ordinal e NÃO têm efeito no motor — nenhuma regra os consulta.
+ * Typo específico do documento, não normalização esperta: "Suporye" aparece
+ * várias vezes na seção de REBOTES (y e t são vizinhas no teclado). Curadoria
+ * explícita, como o MAPA de times.ts trata "Phenix suns" — nunca fuzzy match,
+ * que erraria em silêncio uma palavra nova amanhã.
+ */
+const TYPOS_DE_NIVEL: ReadonlyArray<readonly [RegExp, string]> = [[/\bsuporye\b/g, 'suporte']]
+
+/**
+ * Só quatro níveis existem. Os qualificadores de posição — "principal",
+ * "secundário/a", "primário", "terciário/a", "quaternário/a", "terceira
+ * opção", e o ordinal nu ("Suporte 4") — são redundantes com a posição
+ * ordinal e NÃO têm efeito no motor — nenhuma regra os consulta. O documento
+ * de 21/09 introduziu as variantes de terceiro/quarto lugar e a flexão de
+ * gênero; nenhuma delas existia na versão anterior.
  */
 function traduzirNivel(bruto: string): Nivel | null {
-  const n = normalizarTexto(bruto)
-    .replace(/\b(principal|secundario|primario)\b/g, '')
+  let n = normalizarTexto(bruto)
+  for (const [typo, correto] of TYPOS_DE_NIVEL) n = n.replace(typo, correto)
+
+  n = n
+    .replace(/\bterceira opcao\b/g, '')
+    .replace(
+      /\b(principal|secundario|secundaria|primario|terciario|terciaria|quaternario|quaternaria|\d+)\b/g,
+      '',
+    )
+    .replace(/\s+/g, ' ')
     .trim()
 
   if (n === 'mvp') return 'MVP'
@@ -77,6 +97,47 @@ function traduzirNivel(bruto: string): Nivel | null {
   if (n === 'suporte' || n === 'suport') return 'SUPORTE'
   if (n === 'randola') return 'RANDOLA'
   return null
+}
+
+/** Tira o negrito de uma linha "**...**"; devolve a linha como está se não tiver. */
+function semNegrito(linha: string): string {
+  const l = linha.trim()
+  if (l.startsWith('**') && l.endsWith('**')) return l.slice(2, -2).trim()
+  return l
+}
+
+/**
+ * REBOTES do Miami não numera os jogadores:
+ *
+ *   **Giannis \- MVP principal**
+ *   **Adebayo \- MVP secundário**
+ *
+ * Sem ordinal, a linha cairia em `nomeDoTime` (o teste `^\d` falha) e viraria
+ * time falso. O discriminador seguro: depois de tirar o negrito, a ÚLTIMA
+ * peça separada por "-" traduz para um nível válido — nome de time nunca
+ * termina em MVP/All star/Suporte/Randola.
+ *
+ * Numa lista onde a posição é o que a OPD consulta, a ordem de aparição é a
+ * hierarquia: quem chamar isto atribui a posição pela ordem em que o jogador
+ * aparece dentro do time, porque o documento não escreveu o ordinal.
+ */
+function jogadorSemOrdinal(linha: string): { nome: string; nivel: Nivel } | null {
+  const limpa = semNegrito(linha)
+  if (/^\d/.test(limpa)) return null // tem ordinal — é o caminho normal, não este
+
+  const pedacos = limpa
+    .split(/\s*\\?-\s*/)
+    .map((p) => p.trim())
+    .filter((p) => p.length > 0)
+  if (pedacos.length < 2) return null
+
+  const nivel = traduzirNivel(pedacos[pedacos.length - 1]!)
+  if (nivel === null) return null
+
+  const nome = pedacos.slice(0, -1).join(' ').replace(/\s+/g, ' ').trim()
+  if (nome.length === 0) return null
+
+  return { nome, nivel }
 }
 
 /** Linha de cabeçalho de time: só spans em negrito, sem entrada numerada. */
@@ -97,7 +158,26 @@ function nomeDoTime(linha: string): string | null {
   // antes dele, o `**` da frente faz o `^\d` falhar e cada jogador vira time.
   if (/^\s*\d+\s*\\?-/.test(nome)) return null
 
+  // Nem toda linha em negrito sem ordinal é time — ver jogadorSemOrdinal.
+  if (jogadorSemOrdinal(linha) !== null) return null
+
   return nome
+}
+
+/**
+ * Cabeçalho de time em texto puro, sem negrito — como a seção de
+ * ASSISTÊNCIAS escreve ("New York Knicks", "Denver"). O discriminador
+ * seguro já existe: `siglaDoTime()`. Uma linha que o mapa curado de
+ * times.ts reconhece É um time; prosa solta que o mapa não conhece
+ * continua prosa — nunca vira time por parecer nome de time.
+ */
+function nomeDoTimeSemNegrito(linha: string): string | null {
+  const limpa = linha.trim()
+  if (limpa.length === 0) return null
+  if (limpa.startsWith('**')) return null // isso é cabeçalho em negrito, não este caso
+  if (/^\d/.test(limpa)) return null // entrada numerada de jogador, não time
+  if (siglaDoTime(limpa) === null) return null
+  return limpa
 }
 
 /**
@@ -118,6 +198,8 @@ export function lerListaDeNiveis(conteudo: string): ResultadoParse {
   let atributoAtual: Atributo | null = null
   let timeAtual: string | null = null
   let siglaAtual: string | null = null
+  // Posição para entradas sem ordinal (REBOTES do Miami) — reinicia a cada time novo.
+  let contadorSemOrdinal = 0
 
   for (const [indice, linhaBruta] of linhas.entries()) {
     const numero = indice + 1
@@ -129,6 +211,7 @@ export function lerListaDeNiveis(conteudo: string): ResultadoParse {
       atributoAtual = secao
       timeAtual = null
       siglaAtual = null
+      contadorSemOrdinal = 0
       continue
     }
 
@@ -137,12 +220,38 @@ export function lerListaDeNiveis(conteudo: string): ResultadoParse {
     if (linha.trim().length === 0) continue
     if (ehLinhaDeDefinicao(normalizada)) continue
 
-    const time = nomeDoTime(linha)
+    // ASSISTÊNCIAS escreve o time em texto puro; PONTOS e REBOTES, em negrito.
+    const time = nomeDoTime(linha) ?? nomeDoTimeSemNegrito(linha)
     if (time !== null) {
       timeAtual = time
       siglaAtual = siglaDoTime(time)
       timesEncontrados.push(time)
       if (siglaAtual === null) timesSemSigla.push(time)
+      contadorSemOrdinal = 0
+      continue
+    }
+
+    // REBOTES do Miami: jogador sem ordinal, a posição vem da ordem de aparição.
+    const semOrdinal = jogadorSemOrdinal(linha)
+    if (semOrdinal !== null) {
+      if (timeAtual === null) {
+        problemas.push({
+          linhaNoArquivo: numero,
+          conteudo: linha.trim(),
+          motivo: 'jogador antes de qualquer cabeçalho de time',
+        })
+        continue
+      }
+      contadorSemOrdinal += 1
+      jogadores.push({
+        nomeNaLista: semOrdinal.nome,
+        posicaoHierarquia: contadorSemOrdinal,
+        nivel: semOrdinal.nivel,
+        atributo: atributoAtual,
+        timeNaLista: timeAtual,
+        timeSigla: siglaAtual,
+        linhaNoArquivo: numero,
+      })
       continue
     }
 
