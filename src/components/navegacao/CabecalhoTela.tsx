@@ -45,6 +45,10 @@ export type GrupoDeOpcoes = {
  *   `selo`      o SeloContexto preenchido no canto direito, na altura do título
  *   `seletor`   o segmentado POR JOGO · POR NÍVEL (ou HOJE · RESULTADOS)
  *   `acoes`     o que fica à direita do seletor — os filtros
+ *   `aoLadoDoTitulo`  o que acompanha o H1 na mesma linha — hoje só o botão
+ *                     COMO FUNCIONA, na Lista. Existe separado de `acoes`
+ *                     porque `acoes` mora na fileira do seletor, e na Lista
+ *                     ela já é dos filtros.
  *   `lentes`    a fileira de lentes que troca a zona 2 de TODOS os cards
  *   `contador`  o número da tela ("37 entradas em 7 jogos"), à moda do StatsHub
  *
@@ -58,6 +62,7 @@ export function CabecalhoTela({
   selo,
   seletor,
   acoes,
+  aoLadoDoTitulo,
   lentes,
   contador,
   children,
@@ -68,6 +73,7 @@ export function CabecalhoTela({
   selo?: ReactNode
   seletor?: GrupoDeOpcoes
   acoes?: ReactNode
+  aoLadoDoTitulo?: ReactNode
   lentes?: GrupoDeOpcoes
   /**
    * O número da tela e o que ele conta ("37" · "entradas em 7 jogos").
@@ -107,17 +113,20 @@ export function CabecalhoTela({
             {sobrancelha}
           </p>
           {titulo && (
-            <h1
-              style={{
-                margin: '6px 0 0',
-                fontFamily: semantico.fonteTitulo,
-                fontSize: 32,
-                letterSpacing: '0.02em',
-                textTransform: 'uppercase',
-              }}
-            >
-              {titulo}
-            </h1>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 14, flexWrap: 'wrap' }}>
+              <h1
+                style={{
+                  margin: '6px 0 0',
+                  fontFamily: semantico.fonteTitulo,
+                  fontSize: 32,
+                  letterSpacing: '0.02em',
+                  textTransform: 'uppercase',
+                }}
+              >
+                {titulo}
+              </h1>
+              {aoLadoDoTitulo}
+            </div>
           )}
         </div>
         {selo}

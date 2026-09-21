@@ -506,6 +506,7 @@ describe('a conta diz o plano na linguagem da NIP (spec de planos, §5)', () => 
       direitoId: 'direito-1',
       validoAte: new Date('2026-11-01T12:00:00.000Z'),
       modalidade: 'MENSAL',
+      metodologiaAceitaEm: new Date('2026-09-20T12:00:00.000Z'),
     }
     const { assinaturas } = await import('../../modules/dominio/db/schema')
     await banco.db.delete(assinaturas)
@@ -547,6 +548,7 @@ describe('a conta diz o plano na linguagem da NIP (spec de planos, §5)', () => 
       direitoId: 'direito-2',
       validoAte: new Date('2027-07-01T03:00:00.000Z'),
       modalidade: 'TEMPORADA',
+      metodologiaAceitaEm: new Date('2026-09-20T12:00:00.000Z'),
     }
     const { assinaturas } = await import('../../modules/dominio/db/schema')
     await banco.db.delete(assinaturas)
@@ -590,6 +592,7 @@ describe('a conta diz o plano na linguagem da NIP (spec de planos, §5)', () => 
       direitoId: 'direito-do-upgrade',
       validoAte: new Date('2026-11-05T12:00:00.000Z'),
       modalidade: 'MENSAL',
+      metodologiaAceitaEm: new Date('2026-09-20T12:00:00.000Z'),
     }
     const { assinaturas } = await import('../../modules/dominio/db/schema')
     await banco.db.delete(assinaturas)

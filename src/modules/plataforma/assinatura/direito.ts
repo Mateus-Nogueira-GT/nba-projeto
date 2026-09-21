@@ -11,6 +11,16 @@ export type AcessoComNivel = {
   direitoId: string | null
   validoAte: Date | null
   modalidade: Modalidade | null
+  /**
+   * Quando a pessoa aceitou a metodologia. NULO = nunca (spec 20/09).
+   *
+   * Vem JUNTO do acesso, e não de uma consulta própria, pelo motivo do
+   * comentário da consulta abaixo: função em iad1 e banco em sa-east-1, cada
+   * ida custa ~150 ms (ADR-0008). Uma terceira ida em toda navegação
+   * autenticada, para ler uma coluna, é exatamente o que aquela otimização
+   * existe para impedir. A coluna já está na linha que o join traz.
+   */
+  metodologiaAceitaEm: Date | null
 }
 
 /**
@@ -35,6 +45,9 @@ const GRATIS: AcessoComNivel = Object.freeze({
   direitoId: null,
   validoAte: null,
   modalidade: null,
+  // Substituído pelo do usuário em `avaliarAcesso`: a constante é compartilhada
+  // entre todos, e o aceite é de cada um.
+  metodologiaAceitaEm: null,
 })
 
 export async function avaliarAcesso(
@@ -58,6 +71,7 @@ export async function avaliarAcesso(
   const linhas = await db
     .select({
       status: usuarios.status,
+      metodologiaAceitaEm: usuarios.metodologiaAceitaEm,
       direitoId: direitosAcesso.id,
       fim: direitosAcesso.fim,
       nivelDoPlano: direitosAcesso.nivelDoPlano,
@@ -92,6 +106,7 @@ export async function avaliarAcesso(
       direitoId: l.direitoId,
       validoAte: l.fim,
       modalidade: (l.modalidade as Modalidade | null) ?? null,
+      metodologiaAceitaEm: l.metodologiaAceitaEm,
     }
     if (
       !vencedor ||
@@ -100,7 +115,8 @@ export async function avaliarAcesso(
       vencedor = candidato
     }
   }
-  return vencedor ?? GRATIS
+  // O GRATIS é uma constante compartilhada; o aceite é DESTE usuário.
+  return vencedor ?? { ...GRATIS, metodologiaAceitaEm: primeira.metodologiaAceitaEm }
 }
 
 export async function concederCortesia(

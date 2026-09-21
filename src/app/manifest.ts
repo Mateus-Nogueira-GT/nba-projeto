@@ -10,7 +10,9 @@ export default function manifest(): MetadataRoute.Manifest {
     short_name: marcaNip.nome,
     description: marcaNip.descricao,
     lang: 'pt-BR',
-    start_url: '/',
+    // A ABERTURA decide: Ao Vivo quando há jogo no 1º quarto, a Lista no resto
+    // do dia. `/` continua sendo a Lista — quem muda é por onde o app entra.
+    start_url: '/abrir',
     scope: '/',
     display: 'standalone',
     // A splash e a barra do sistema vestem o FUNDO do app (o `textoSobreCor`

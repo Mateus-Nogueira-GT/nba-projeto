@@ -36,6 +36,22 @@ export async function exigirNivel(
     if (acesso.motivo === 'bloqueio-administrativo') redirect('/conta')
     redirect(`/entrar?destino=${encodeURIComponent(destino)}`)
   }
+  // O ACEITE DA METODOLOGIA vem ANTES do nível: é o que faz a conta nova ler o
+  // método antes de ver preço (decisão do parceiro, 20/09).
+  //
+  // Mora aqui, e não numa chamada própria em cada tela, porque este é o ponto
+  // por onde as doze telas já passam — repetir a checagem em cada uma seria
+  // esquecê-la na décima terceira. O custo é misturar dois assuntos no mesmo
+  // guarda: nível de assinatura e consentimento. O teste de fonte
+  // "toda tela de (app) passa pelo portão" é o que mantém a conta fechada.
+  //
+  // O dado vem no `acesso` que já foi lido, e NÃO de uma consulta própria:
+  // `avaliarAcesso` faz uma consulta só de propósito (ADR-0008), e uma
+  // terceira ida ao banco por navegação para ler uma coluna desfaria isso.
+  if (acesso.metodologiaAceitaEm === null) {
+    redirect(`/metodologia?destino=${encodeURIComponent(destino)}`)
+  }
+
   if (!atende(acesso.nivel, minimo)) {
     redirect(`/assinar?nivel=${minimo}&voltar=${encodeURIComponent(destino)}`)
   }

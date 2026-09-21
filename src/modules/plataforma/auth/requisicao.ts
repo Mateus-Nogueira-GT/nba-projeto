@@ -2,7 +2,10 @@ import { isIP } from 'node:net'
 import { headers } from 'next/headers'
 
 const DESTINO_SEGURO = '/'
-const DESTINOS_POS_LOGIN = new Set(['/', '/assinar', '/conta', '/admin/usuarios'])
+// `/abrir` é a porta da frente: ela decide entre Ao Vivo e Lista. Sem ela aqui,
+// o destino padrão do login cairia silenciosamente em `/` e a abertura nunca
+// aconteceria.
+const DESTINOS_POS_LOGIN = new Set(['/', '/abrir', '/assinar', '/conta', '/admin/usuarios'])
 
 type Cabecalhos = Pick<Headers, 'get'>
 
