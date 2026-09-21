@@ -166,7 +166,9 @@ describe('cadastro self-service controlado', () => {
     expect(resultado.ok).toBe(true)
     if (!resultado.ok) throw new Error('cadastro deveria ter sido criado')
     expect(await avaliarAcesso(banco.db, resultado.usuarioId, AGORA)).toEqual(
-      acessoDeTeste('GRATIS'),
+      // `null` no aceite: a conta acabou de nascer e ainda não passou pelo
+      // portão da metodologia — é o estado real de quem se cadastrou agora.
+      acessoDeTeste('GRATIS', null),
     )
   })
 })
@@ -301,7 +303,7 @@ describe('direito de acesso e eventos financeiros', () => {
       AGORA,
       null,
     )
-    expect(await avaliarAcesso(banco.db, usuarioId, AGORA)).toEqual(acessoDeTeste('GRATIS'))
+    expect(await avaliarAcesso(banco.db, usuarioId, AGORA)).toEqual(acessoDeTeste('GRATIS', null))
   })
 
   it('pagamento aprovado concede até a próxima cobrança e duplicata não duplica', async () => {
@@ -361,7 +363,7 @@ describe('direito de acesso e eventos financeiros', () => {
       null,
     )
     expect(await avaliarAcesso(banco.db, usuarioId, new Date(AGORA.getTime() + 3_000))).toEqual(
-      acessoDeTeste('GRATIS'),
+      acessoDeTeste('GRATIS', null),
     )
   })
 

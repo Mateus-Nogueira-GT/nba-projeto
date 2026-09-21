@@ -1,0 +1,1 @@
+ALTER TABLE "usuarios" ADD COLUMN "metodologia_aceita_em" timestamp with time zone;

@@ -605,4 +605,17 @@ describe('Lista Secreta · 05 — a moldura do StatsHub', () => {
       `${sem.length} de ${tags.length} sem estado:\n${sem.slice(0, 8).join('\n')}`,
     ).toBeLessThan(0.12)
   }, 60_000)
+
+  it('o cabeçalho tem o botão da metodologia, ao lado do título (spec 20/09)', async () => {
+    // Quem está olhando "SUPORTE · N2 · ODD MÉDIA 1,58" precisa ter de onde
+    // perguntar o que isso quer dizer; a metodologia inteira já existia e só o
+    // Perfil alcançava.
+    const html = await renderizar()
+    expect(html).toContain('href="/como-funciona"')
+    // ao lado do H1, e não na fileira de filtros: o recorte entre o <h1> e o
+    // fim do bloco do título tem que conter o link.
+    const depoisDoTitulo = html.slice(html.indexOf('LISTA DO DIA'))
+    const ateOsFiltros = depoisDoTitulo.slice(0, depoisDoTitulo.indexOf('FILTRAR'))
+    expect(ateOsFiltros).toContain('/como-funciona')
+  }, 60_000)
 })

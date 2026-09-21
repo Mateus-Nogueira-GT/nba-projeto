@@ -23,7 +23,7 @@ describe('manifest PWA', () => {
       name: 'NIP',
       short_name: 'NIP',
       lang: 'pt-BR',
-      start_url: '/',
+      start_url: '/abrir',
       scope: '/',
       display: 'standalone',
       background_color: semantico.fundo,

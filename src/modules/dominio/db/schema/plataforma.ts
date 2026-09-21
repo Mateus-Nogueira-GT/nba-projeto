@@ -44,6 +44,15 @@ export const usuarios = pgTable('usuarios', {
   papel: papelUsuarioEnum('papel').notNull().default('USUARIO'),
   criadoEm: timestamp('criado_em', { withTimezone: true }).notNull().defaultNow(),
   ultimoAcesso: timestamp('ultimo_acesso', { withTimezone: true }),
+  /**
+   * Quando a pessoa clicou em OK, CONCORDO na metodologia. NULO = nunca.
+   *
+   * Timestamp e não booleano porque "concordo" é REGISTRO: a data importa, e
+   * custa o mesmo. Não guardamos QUAL versão do texto foi aceita — hoje não
+   * existe versão de metodologia para comparar, e inventar uma agora seria
+   * resolver problema que não há.
+   */
+  metodologiaAceitaEm: timestamp('metodologia_aceita_em', { withTimezone: true }),
 })
 
 /** Limite de 2 ativos por conta. No 3º, encerra a sessão mais antiga. */

@@ -75,6 +75,11 @@ describe('a aba teórica é derivada do ruleset, nunca escrita à mão', () => {
 
 describe('a página /como-funciona', () => {
   const fonte = readFileSync('src/app/(app)/como-funciona/page.tsx', 'utf8')
+  // O TEXTO da metodologia mudou de arquivo em 20/09: ele passou a ser um
+  // componente que DUAS telas renderizam (a vitrine e o portão de aceite), para
+  // não haver duas cópias divergindo. O portão de sessão continua na página; as
+  // afirmações sobre o conteúdo seguem o conteúdo.
+  const conteudo = readFileSync('src/components/metodologia/Conteudo.tsx', 'utf8')
 
   it('exige sessão, mas NÃO exige assinatura (vitrine para quem ainda não assinou)', () => {
     expect(fonte).toContain('sessaoAtual')
@@ -85,22 +90,22 @@ describe('a página /como-funciona', () => {
   })
 
   it('todo número vem do view-model do ruleset', () => {
-    expect(fonte).toContain('montarTeoria')
+    expect(conteudo).toContain('montarTeoria')
   })
 
   it('chama o número de nota de confiança e nega ser probabilidade (P12)', () => {
-    expect(fonte).toContain('nota de confiança da análise')
+    expect(conteudo).toContain('nota de confiança da análise')
     // A palavra só pode aparecer NEGADA — a ressalva que o P12 exige.
-    const ocorrencias = [...fonte.matchAll(/probabilidade/gi)]
+    const ocorrencias = [...conteudo.matchAll(/probabilidade/gi)]
     expect(ocorrencias.length).toBeGreaterThan(0)
     for (const oc of ocorrencias) {
-      const contexto = fonte.slice(Math.max(0, oc.index - 40), oc.index)
+      const contexto = conteudo.slice(Math.max(0, oc.index - 40), oc.index)
       expect(contexto).toMatch(/não é|nunca|nem/i)
     }
   })
 
   it('traz o aviso de blowout, que o documento manda morar aqui', () => {
-    expect(fonte).toContain('t.blowout.diferenca')
-    expect(fonte).toContain('t.blowout.quarto')
+    expect(conteudo).toContain('t.blowout.diferenca')
+    expect(conteudo).toContain('t.blowout.quarto')
   })
 })

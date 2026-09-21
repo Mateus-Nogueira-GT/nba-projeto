@@ -35,15 +35,19 @@ async function criarUsuario(email: string): Promise<string> {
 
 describe('avaliarAcesso — o nível, não um booleano', () => {
   it('sem id de usuário: sem-sessao, sem tocar o banco', async () => {
-    expect(await avaliarAcesso(banco.db, null, AGORA)).toEqual({ nivel: null, motivo: 'sem-sessao' })
+    expect(await avaliarAcesso(banco.db, null, AGORA)).toEqual({
+      nivel: null,
+      motivo: 'sem-sessao',
+    })
   })
 
   it('id que não existe: sem-sessao (nunca GRATIS)', async () => {
     // Um LEFT JOIN sem linha nenhuma tem que virar sem-sessao, não GRATIS:
     // são telas diferentes (entrar × a home do grátis).
-    expect(
-      await avaliarAcesso(banco.db, '00000000-0000-4000-8000-00000000dead', AGORA),
-    ).toEqual({ nivel: null, motivo: 'sem-sessao' })
+    expect(await avaliarAcesso(banco.db, '00000000-0000-4000-8000-00000000dead', AGORA)).toEqual({
+      nivel: null,
+      motivo: 'sem-sessao',
+    })
   })
 
   it('usuário sem direito: GRATIS — é um nível, não uma recusa', async () => {
@@ -53,6 +57,7 @@ describe('avaliarAcesso — o nível, não um booleano', () => {
       direitoId: null,
       validoAte: null,
       modalidade: null,
+      metodologiaAceitaEm: null,
     })
   })
 
@@ -77,6 +82,7 @@ describe('avaliarAcesso — o nível, não um booleano', () => {
       direitoId: direito!.id,
       validoAte: fim,
       modalidade: 'MENSAL',
+      metodologiaAceitaEm: null,
     })
   })
 

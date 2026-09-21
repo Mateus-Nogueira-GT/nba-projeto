@@ -19,7 +19,10 @@ export async function entrar(_estado: string | null, formulario: FormData): Prom
   const email = String(formulario.get('email') ?? '')
   const senha = String(formulario.get('senha') ?? '')
   const fingerprint = String(formulario.get('dispositivo') ?? 'desconhecido')
-  const destino = destinoInternoSeguro(String(formulario.get('destino') ?? '/'))
+  // Sem destino explícito, quem decide é a ABERTURA: Ao Vivo se há jogo no 1º
+  // quarto, a Lista no resto do dia. Com destino (alguém foi barrado numa tela
+  // protegida), ele continua mandando.
+  const destino = destinoInternoSeguro(String(formulario.get('destino') ?? '/abrir'))
 
   const agora = new Date()
   const r = await autenticar(

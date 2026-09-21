@@ -26,7 +26,7 @@ export default async function PaginaEntrar({
   const destinoBruto = Array.isArray(parametros.destino)
     ? parametros.destino[0]
     : parametros.destino
-  const destino = destinoInternoSeguro(destinoBruto ?? '/')
+  const destino = destinoInternoSeguro(destinoBruto ?? '/abrir')
   const cadastroAberto = configuracaoProdutoPago().cadastroPublicoHabilitado
   const avisoBruto = Array.isArray(parametros.aviso) ? parametros.aviso[0] : parametros.aviso
   const mensagemDoAviso = avisoBruto ? TEXTO_DO_AVISO[avisoBruto] : undefined

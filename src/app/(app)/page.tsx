@@ -458,6 +458,27 @@ export default async function PaginaListaSecreta({
       <CabecalhoTela
         sobrancelha="LISTA SECRETA"
         titulo="LISTA DO DIA"
+        // Quem está olhando "SUPORTE · N2 · ODD MÉDIA 1,58" precisa ter de onde
+        // perguntar o que isso quer dizer. A metodologia inteira já existe e só
+        // o Perfil alcançava.
+        aoLadoDoTitulo={
+          <Link
+            href="/como-funciona"
+            className="link-texto"
+            style={{
+              fontFamily: semantico.fonteRotulo,
+              fontSize: 12,
+              fontWeight: 600,
+              letterSpacing: '0.06em',
+              textTransform: 'uppercase',
+              color: semantico.textoSecundario,
+              textDecoration: 'none',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            Como funciona
+          </Link>
+        }
         selo={<SeloContexto contexto="preLive" />}
         seletor={{
           rotulo: 'Ordem da lista',
