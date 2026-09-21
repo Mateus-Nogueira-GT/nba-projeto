@@ -175,9 +175,10 @@ describe('A2..A5 · alvos do Fire Live no 1º quarto', () => {
     ).toBeNull()
     // 4 rpg -> 1 por quarto -> x2 = 2 -> não PASSA de 2, não vale
     expect(alvoFireLive({ mediaPorJogo: 4, atributo: 'REBOTES', nivel: 'MVP' }, ruleset)).toBeNull()
-    // assistências: só entra quem tem média >= 5
+    // assistências: só entra quem tem média >= 4 (documento de 21/09; a versão
+    // anterior dizia >= 5)
     expect(
-      alvoFireLive({ mediaPorJogo: 4.9, atributo: 'ASSISTENCIAS', nivel: 'MVP' }, ruleset),
+      alvoFireLive({ mediaPorJogo: 3.9, atributo: 'ASSISTENCIAS', nivel: 'MVP' }, ruleset),
     ).toBeNull()
   })
 

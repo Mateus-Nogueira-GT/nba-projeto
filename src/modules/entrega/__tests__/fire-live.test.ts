@@ -523,6 +523,50 @@ describe('contrato do evento de push', () => {
   })
 })
 
+describe('atributo de demonstração não vira push', () => {
+  it('apito de PONTOS (homologado) gera push; apito de REBOTES (demonstração) não', async () => {
+    // Insere os apitos direto no banco, no lugar do motor: com
+    // `niveis.atributos: [PONTOS]` ligado, o motor nunca produz um apito de
+    // REBOTES sozinho. O teste precisa provar que o apito de rebotes EXISTE
+    // (linha na tabela, alvo definido) e que mesmo assim não vira mensagem —
+    // não que "não houve apito nenhum".
+    await banco.db.insert(apitos).values([
+      {
+        rulesetVersao: `v${ruleset.version}`,
+        jogoId,
+        jogadorId: idPorNome.get('Luka Doncic')!,
+        atributo: 'PONTOS',
+        estrategia: 'FIRE_LIVE',
+        nivelJogador: 'MVP',
+        nivelApito: 1,
+        alvo1q: 11,
+      },
+      {
+        rulesetVersao: `v${ruleset.version}`,
+        jogoId,
+        jogadorId: idPorNome.get('Luka Doncic')!,
+        atributo: 'REBOTES',
+        estrategia: 'FIRE_LIVE',
+        nivelJogador: 'MVP',
+        nivelApito: 1,
+        alvo1q: 5,
+      },
+    ])
+
+    await executarCiclo(banco.db, ruleset, fila, {
+      jogoId,
+      estadoAnterior: null,
+      iniciadoEm: TIPOFF,
+      agora: DURANTE,
+    })
+
+    const atributosNoPush = fila.doCanal('FIRE_LIVE_APITO').map((m) => m.dados.atributo)
+
+    expect(atributosNoPush).toContain('PONTOS')
+    expect(atributosNoPush).not.toContain('REBOTES')
+  })
+})
+
 describe('gatilho do tipoff', () => {
   it('reserva o jogo uma única vez, mesmo com o cron reexecutando', async () => {
     await banco.db.delete(fireLiveExecucoes)

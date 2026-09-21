@@ -73,9 +73,13 @@ arredondamento:
 # -----------------------------------------------------------------------------
 niveis:
   ordem: [MVP, ALL_STAR, SUPORTE, RANDOLA]
-  atributos: [PONTOS, REBOTES, ASSISTENCIAS]
-  # ATENÇÃO: hoje só existe classificação de PONTOS.
-  # REBOTES e ASSISTENCIAS ainda serão enviados pelo Mestre da NBA.
+  # INTERRUPTOR. Este array é o que motor/index.ts e motor/fire-live/avaliar.ts
+  # iteram. Rebotes e assistências JÁ TÊM dado real no banco (versão do CJ de
+  # 21/09), mas as tabelas de confiança e de odds dos dois continuam
+  # `origem: demonstracao` — números nossos, não dele. Religar aqui põe apito
+  # com número inventado no celular de assinante pagante.
+  # Religar quando o CJ mandar % e odds de rebotes e assistências.
+  atributos: [PONTOS]
 
 # -----------------------------------------------------------------------------
 # LISTA SECRETA — MÉTODO 1: OSCILAÇÃO
@@ -143,7 +147,9 @@ fire_live:
   assistencias:
     operacao: soma
     valor: 1
-    media_minima: 5 # só entra jogador com apg >= 5
+    # MUDOU entre versões do documento: a anterior dizia >= 5, a de 21/09 diz
+    # >= 4. Vale a nova.
+    media_minima: 4 # só entra jogador com apg >= 4
 
   travas:
     pontos_alvo_minimo: 4 # alvo só vale se >= 4
@@ -351,10 +357,12 @@ por_atributo:
       janela: 2
       mapa_nivel: { 1: 3, 2: 2 }
 
-    # Delta menor que o de pontos: quem tira 10 rebotes não cai 6 num jogo ruim,
-    # cai 3. Usar o delta de pontos aqui faria o limiar ficar inalcançável.
+    # Delta do DOCUMENTO (versão de 21/09): "a oscilação é considerada em
+    # rebotes quando o jogador faz <=4 abaixo da média". Não é mais estimativa
+    # nossa. O `origem: demonstracao` do bloco continua valendo por causa de
+    # `confianca` e `odds`, que o documento não dá para rebotes.
     oscilacao:
-      delta: { MVP: 3, ALL_STAR: 3, SUPORTE: 2, RANDOLA: 2 }
+      delta: { MVP: 4, ALL_STAR: 4, SUPORTE: 4, RANDOLA: 4 }
       nivel_minimo_apito: { MVP: 1, ALL_STAR: 1, SUPORTE: 1, RANDOLA: 1 }
 
     confianca:

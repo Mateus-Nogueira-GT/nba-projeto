@@ -3,7 +3,7 @@ import { and, eq, isNull } from 'drizzle-orm'
 
 import { mapaJogadores, niveis, niveisVersao, times } from '../../dominio/db/schema'
 import type { Db } from '../../dominio/db/tipos'
-import { lerListaDeNiveis, type ProblemaDeParse } from './parser'
+import { lerListaDeNiveis, type JogadorNaLista, type ProblemaDeParse } from './parser'
 
 export type RelatorioImport = {
   versaoId: string
@@ -108,7 +108,10 @@ export async function importarListaDeNiveis(
 
   // 4 · Só entra em `niveis` quem já tem jogador confirmado — a FK exige.
   const pendentes: string[] = []
-  const linhas: (typeof niveis.$inferInsert)[] = []
+  const candidatas = new Map<
+    string,
+    { linha: typeof niveis.$inferInsert; origem: JogadorNaLista }[]
+  >()
 
   for (const j of analise.jogadores) {
     const jogadorId = mapeados.get(j.nomeNaLista) ?? null
@@ -119,18 +122,45 @@ export async function importarListaDeNiveis(
       continue
     }
 
-    linhas.push({
-      niveisVersaoId: versaoNova!.id,
-      jogadorId,
-      timeId,
-      atributo: 'PONTOS',
-      nivel: j.nivel,
-      posicaoHierarquia: j.posicaoHierarquia,
+    const chave = `${jogadorId}:${j.atributo}`
+    const grupo = candidatas.get(chave) ?? []
+    grupo.push({
+      linha: {
+        niveisVersaoId: versaoNova!.id,
+        jogadorId,
+        timeId,
+        atributo: j.atributo,
+        nivel: j.nivel,
+        posicaoHierarquia: j.posicaoHierarquia,
+      },
+      origem: j,
     })
+    candidatas.set(chave, grupo)
+  }
+
+  // A chave única é (versão, jogador, atributo). Duas entradas na mesma chave
+  // são o MESMO jogador em times diferentes — e o vínculo jogador↔time vem da
+  // curadoria do CJ, nunca da nossa. Escolher uma seria inventar regra, então
+  // nenhuma entra e o caso vai para o relatório.
+  const linhas: (typeof niveis.$inferInsert)[] = []
+  const problemas = [...analise.problemas]
+
+  for (const grupo of candidatas.values()) {
+    if (grupo.length === 1) {
+      linhas.push(grupo[0]!.linha)
+      continue
+    }
+    for (const { origem } of grupo) {
+      problemas.push({
+        linhaNoArquivo: origem.linhaNoArquivo,
+        conteudo: `${origem.nomeNaLista} — ${origem.timeNaLista} (${origem.atributo})`,
+        motivo: 'mesmo jogador em dois times no mesmo atributo',
+      })
+    }
   }
 
   if (linhas.length > 0) {
-    await db.insert(niveis).values(linhas).onConflictDoNothing()
+    await db.insert(niveis).values(linhas)
   }
 
   return {
@@ -142,7 +172,7 @@ export async function importarListaDeNiveis(
     timesSemSigla: analise.timesSemSigla,
     casados: linhas.length,
     pendentes,
-    problemas: analise.problemas,
+    problemas,
   }
 }
 
@@ -207,7 +237,7 @@ export async function completarVersao(
 
   const jaGravados = new Set(
     (await db.select().from(niveis).where(eq(niveis.niveisVersaoId, versaoId))).map(
-      (n) => n.jogadorId,
+      (n) => `${n.jogadorId}:${n.atributo}`,
     ),
   )
   const mapeados = new Map(
@@ -230,13 +260,13 @@ export async function completarVersao(
       aindaPendentes.push(j.nomeNaLista)
       continue
     }
-    if (jaGravados.has(jogadorId)) continue
+    if (jaGravados.has(`${jogadorId}:${j.atributo}`)) continue
 
     linhas.push({
       niveisVersaoId: versaoId,
       jogadorId,
       timeId,
-      atributo: 'PONTOS',
+      atributo: j.atributo,
       nivel: j.nivel,
       posicaoHierarquia: j.posicaoHierarquia,
     })

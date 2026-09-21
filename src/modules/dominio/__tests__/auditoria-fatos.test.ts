@@ -23,6 +23,12 @@ import { bancoDeTeste } from './ajuda-banco'
 
 const ruleset = carregarRuleset(readFileSync('config/ruleset.v1.yaml', 'utf8'))
 const calendario = calendarioDoRuleset(ruleset)
+
+// Produção está em `niveis.atributos: [PONTOS]` (Tarefa 7): rebotes e
+// assistências ficam desligados até o CJ mandar % e odds. O teste de rebotes
+// abaixo religa os três num clone — nunca no arquivo de produção.
+const tresAtributos = structuredClone(ruleset)
+tresAtributos.niveis.atributos = ['PONTOS', 'REBOTES', 'ASSISTENCIAS']
 const HOJE = '2026-01-15'
 
 let banco: Awaited<ReturnType<typeof bancoDeTeste>>
@@ -190,7 +196,7 @@ describe('auditoria do contrato entre dados persistidos e motor', () => {
   it('usa a hierarquia de rebotes para o desfalque de Towns', async () => {
     await banco.db.insert(lesoesEscalacao).values({ jogoId, jogadorId: townsId, status: 'FORA' })
     const fatos = await montarFatos(banco.db, HOJE, calendario)
-    const sinais = avaliar(fatos, ruleset).filter((a) => a.estrategia === 'LISTA_SECRETA')
+    const sinais = avaliar(fatos, tresAtributos).filter((a) => a.estrategia === 'LISTA_SECRETA')
 
     // DOCX P347-348: Towns fora beneficia o próximo de REBOTES. Brunson
     // continua em quadra e impede OPD na hierarquia distinta de PONTOS.

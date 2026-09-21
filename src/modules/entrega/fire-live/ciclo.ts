@@ -7,6 +7,7 @@ import { gravarApitos } from '../../dominio/repositorios/apitos'
 import { gravarGreens } from '../../dominio/repositorios/greens'
 import { avaliarFireLive } from '../../motor/fire-live/avaliar'
 import type { Green } from '../../motor/fire-live/avaliar'
+import { origemDoAtributo } from '../../motor'
 import { montarChave } from '../../motor/tipos'
 import type { Apito, Nivel } from '../../motor/tipos'
 import type { Ruleset } from '../../motor/ruleset/schema'
@@ -160,7 +161,7 @@ export async function executarCiclo(
     gravarGreens(db, greensCalculados),
   ])
 
-  const pushes = await drenarOutbox(db, fila, opcoes.jogoId, opcoes.agora)
+  const pushes = await drenarOutbox(db, ruleset, fila, opcoes.jogoId, opcoes.agora)
 
   // Materializa por último, com os apitos do jogo já persistidos: a tela lê
   // este snapshot, nunca o motor. Escrita pulada quando o hash não muda.
@@ -190,6 +191,7 @@ export async function executarCiclo(
  */
 async function drenarOutbox(
   db: Db,
+  ruleset: Ruleset,
   fila: PortaFila,
   jogoId: string,
   agora: Date,
@@ -223,8 +225,17 @@ async function drenarOutbox(
     throw new Error(`apito Fire Live ${apitoSemAlvo.id} sem alvo do primeiro quarto`)
   }
 
+  // Atributo de demonstração NÃO vira push. As tabelas de confiança e odds de
+  // rebotes e assistências são nossas, não do CJ (`origem: demonstracao` no
+  // ruleset), e o push é o único canal que não tem onde carregar esse aviso:
+  // chega no celular do assinante sem moldura, sem tela, sem rodapé.
+  // A tela pode mostrar com ressalva; o push, não.
+  const apitosParaPush = apitosPendentes.filter(
+    (apito) => origemDoAtributo(apito.atributo, ruleset) === 'homologado',
+  )
+
   const mensagens: MensagemPush[] = [
-    ...apitosPendentes.map((a) =>
+    ...apitosParaPush.map((a) =>
       mensagemDeApito(
         {
           chaveDeduplicacao: montarChave(a.jogoId, a.jogadorId, a.atributo, 'FIRE_LIVE', null),

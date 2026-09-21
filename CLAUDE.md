@@ -119,8 +119,10 @@ de mock, a regra 2 foi violada.
   isso usa `jogadores.time_id` (o time REAL do provedor). Usar a lista do CJ ali diria que
   o LeBron venceu um jogo do Philadelphia do qual ele não participou. A regra acima vale
   para tudo que alimenta o motor; a aba de consulta é o outro lado da fronteira.
-- **Só existe classificação de PONTOS.** Rebotes e assistências virão depois. O modelo já
-  é `(jogador, atributo)` — não assuma pontos em lugar nenhum.
+- **Rebotes e assistências têm classificação desde 21/09/2026**, mas estão
+  **desligados** em `niveis.atributos`, que hoje é `[PONTOS]`. Os dados estão no banco; o
+  que falta são as tabelas de % e de odds dos dois, que o documento do CJ não dá. Não
+  religue sem elas — as que estão no ruleset são demonstração, não dele.
 - **Fire Live é só 1º quarto.** Nada além disso, em nenhuma hipótese.
 - **O % não é probabilidade**, é score de confiança. Nunca escreva "probabilidade" na UI.
   Ver [`docs/04-design-system.md`](docs/04-design-system.md).

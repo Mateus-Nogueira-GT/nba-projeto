@@ -257,6 +257,73 @@ describe('parser da lista real do CJ', () => {
   })
 })
 
+describe('parser · o negrito da seção de rebotes', () => {
+  it('não confunde jogador em negrito com cabeçalho de time', () => {
+    const conteudo = [
+      '**Lista de Níveis(Rebotes)**',
+      '',
+      '**Knicks**',
+      '',
+      '**1 \\- Towns \\- MVP**',
+      '**2 \\- Hart \\- All star**',
+    ].join('\n')
+
+    const r = lerListaDeNiveis(conteudo)
+
+    expect(r.timesEncontrados).toEqual(['Knicks'])
+    expect(r.jogadores.map((j) => j.nomeNaLista)).toEqual(['Towns', 'Hart'])
+  })
+})
+
+describe('parser · as três seções', () => {
+  it('dá a cada jogador o atributo da sua seção e para na Lista secreta', () => {
+    const conteudo = [
+      '**Lista de Níveis(Pontos)**',
+      '**Knicks**',
+      '1 \\- Brunson \\- MVP',
+      '',
+      '**Lista de Níveis(Rebotes)**',
+      '**Knicks**',
+      '**1 \\- Towns \\- MVP**',
+      '',
+      '**Assistências**',
+      '**Knicks**',
+      '1 \\- Josh Hart \\- Suporte',
+      '',
+      '**Lista secreta**',
+      '1 \\- nao deve ser lido \\- MVP',
+    ].join('\n')
+
+    const r = lerListaDeNiveis(conteudo)
+
+    expect(r.jogadores.map((j) => [j.nomeNaLista, j.atributo])).toEqual([
+      ['Brunson', 'PONTOS'],
+      ['Towns', 'REBOTES'],
+      ['Josh Hart', 'ASSISTENCIAS'],
+    ])
+  })
+
+  it('ignora as faixas de média sem chamá-las de time nem de problema', () => {
+    const conteudo = [
+      '**Lista de Níveis(Rebotes)**',
+      'Classificação de jogadores rebotes',
+      'Mvp \\- média de  10 rebotes em diante',
+      'Alls star \\- media de 7 a 9,8 rebotes',
+      '**Classificação de jogadores rebotes**',
+      '**Mvp \\- média de  10 rebotes em diante**',
+      '**Knicks**',
+      '**1 \\- Towns \\- MVP**',
+    ].join('\n')
+
+    const r = lerListaDeNiveis(conteudo)
+
+    expect(r.timesEncontrados).toEqual(['Knicks'])
+    expect(r.timesSemSigla).toEqual([])
+    expect(r.problemas).toEqual([])
+    expect(r.jogadores).toHaveLength(1)
+  })
+})
+
 // ===========================================================================
 // 4b · IMPORT
 // ===========================================================================
@@ -345,6 +412,73 @@ describe('import da lista — reexecutável e não destrutivo', () => {
 
     const depois = await banco.db.select().from(niveisVersao).where(eq(niveisVersao.id, versao.id))
     expect(depois[0]?.ativa).toBe(true)
+  })
+})
+
+describe('importador · jogador repetido em dois times', () => {
+  it('não grava nenhuma das duas e reporta o caso', async () => {
+    // A colisão só é visível para o motor depois que o jogador já tem
+    // jogadorId confirmado — é (jogadorId, atributo) que é a chave única de
+    // `niveis`, não o nome bruto da lista. Isso reflete o cenário real: uma
+    // versão anterior já tinha "Klay Thompson" confirmado num time, e a
+    // versão NOVA do documento é que introduz a contradição.
+    const versaoAnterior = [
+      '**Lista de Níveis(Pontos)**',
+      '**Dallas** **Mavericks**',
+      '1 \\- Klay Thompson \\- Randola',
+    ].join('\n')
+    await importarListaDeNiveis(banco.db, versaoAnterior, {
+      provedor: PROVEDOR,
+      origemArquivo: 'teste-repetido-v1',
+      importadoPor: 'teste',
+    })
+
+    const [jogador] = await banco.db
+      .insert(jogadores)
+      .values({ nomeCompleto: 'Klay Thompson' })
+      .returning()
+    await confirmarMapeamento(banco.db, {
+      nomeNaLista: 'Klay Thompson',
+      provedor: PROVEDOR,
+      jogadorId: jogador!.id,
+      provedorPlayerId: 'ext-klay',
+      score: 1,
+      confirmadoPor: 'admin',
+      agora: new Date('2026-09-21T00:00:00Z'),
+    })
+
+    const conteudo = [
+      '**Lista de Níveis(Pontos)**',
+      '**Dallas** **Mavericks**',
+      '1 \\- Klay Thompson \\- Randola',
+      '**Miami Heat**',
+      '1 \\- Klay Thompson \\- Suporte',
+    ].join('\n')
+
+    const r = await importarListaDeNiveis(banco.db, conteudo, {
+      provedor: PROVEDOR,
+      origemArquivo: 'teste-repetido',
+      importadoPor: 'teste',
+    })
+
+    expect(r.casados).toBe(0)
+    expect(r.problemas.map((p) => p.motivo)).toContain(
+      'mesmo jogador em dois times no mesmo atributo',
+    )
+  })
+})
+
+describe('importador · o atributo não é literal', () => {
+  it('não grava PONTOS cravado em lugar nenhum', () => {
+    const fonte = readFileSync('src/modules/ingestao/niveis/importar.ts', 'utf8')
+    // Tirar comentários ANTES de procurar: um `includes` cru casa dentro de
+    // comentário e o teste passaria com a linha ainda lá.
+    const semComentarios = fonte
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .replace(/^\s*\/\/.*$/gm, '')
+
+    expect(semComentarios).not.toContain("atributo: 'PONTOS'")
+    expect(semComentarios).toContain('atributo: j.atributo')
   })
 })
 

@@ -21,6 +21,13 @@ import { limparDemo, semearDemo } from '../demo/semear'
 
 const ruleset = carregarRuleset(readFileSync('config/ruleset.v1.yaml', 'utf8'))
 
+// Produção está em `niveis.atributos: [PONTOS]` (Tarefa 7): rebotes e
+// assistências ficam desligados até o CJ mandar % e odds. Este bloco audita
+// a demo nos três atributos, então religa-os AQUI, num clone — nunca no
+// arquivo de produção.
+const tresAtributos = structuredClone(ruleset)
+tresAtributos.niveis.atributos = ['PONTOS', 'REBOTES', 'ASSISTENCIAS']
+
 import {
   historicoOscilacao,
   mediaDe,
@@ -165,7 +172,7 @@ describe('semearDemo (PGlite, banco vazio)', () => {
 
   beforeAll(async () => {
     banco = await bancoDeTeste()
-    resumo = await semearDemo(banco.db, ruleset, AGORA)
+    resumo = await semearDemo(banco.db, tresAtributos, AGORA)
   }, 120_000)
   afterAll(async () => {
     await banco.fechar()
@@ -481,7 +488,7 @@ describe('semearDemo (PGlite, banco vazio)', () => {
 
   it('reexecutar o seed não duplica nada', async () => {
     const antes = (await banco.db.select().from(jogadores)).length
-    const segundo = await semearDemo(banco.db, ruleset, AGORA)
+    const segundo = await semearDemo(banco.db, tresAtributos, AGORA)
     const depois = (await banco.db.select().from(jogadores)).length
     expect(depois).toBe(antes)
     expect(segundo.times).toBe(30)

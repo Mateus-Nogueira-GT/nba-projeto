@@ -40,7 +40,7 @@ não do seed. A demo é prova, não maquete.
 
 | O quê | O que falta | Como aparece na tela |
 | --- | --- | --- |
-| **Níveis de rebotes e assistências** | O CJ classificou só pontos | Derivados da posição pelo seed |
+| **Níveis de rebotes e assistências** | O CJ classificou, mas não enviou % e odds — ruleset tem só demonstração | Derivados da posição pelo seed |
 | **Tabelas de rebotes e assistências** | Linhas, confiança, odds e marcos | `por_atributo` no ruleset, `origem: demonstracao` — a aba **Como funciona** marca "· demonstração" |
 | **Gestão de banca** | O modelo do CJ ("enviado no grupo") não chegou | `gestao_banca` no ruleset — a aba mostra um aviso em vermelho |
 | **Casas de aposta** | Nenhum contrato (G4) | "Casa Alfa/Beta/Gama" — nomes fictícios de propósito |

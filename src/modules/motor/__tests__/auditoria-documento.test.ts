@@ -13,6 +13,13 @@ import type { Atributo, JogadorFato, JogoFato, Nivel, TimeFato } from '../tipos'
 
 const homologado = carregarRuleset(yamlBruto)
 
+// `niveis.atributos` em produção é [PONTOS]: rebotes e assistências estão
+// desligados até o CJ mandar % e odds (ver o comentário no ruleset). Estes
+// testes auditam as regras dos três atributos, então religam os três AQUI —
+// nunca no arquivo de produção.
+const tresAtributos = structuredClone(homologado)
+tresAtributos.niveis.atributos = ['PONTOS', 'REBOTES', 'ASSISTENCIAS']
+
 it('aliases reconciliados não escolhem silenciosamente entre exceções conflitantes', () => {
   const configurado = structuredClone(homologado)
   configurado.oscilacao.excecoes_por_jogador = { 'nome-editorial': 7, 'alias-confirmado': 6 }
@@ -26,11 +33,11 @@ it('aliases reconciliados não escolhem silenciosamente entre exceções conflit
  * homologa. O YAML de produção não é modificado.
  */
 function comRegrasDeRebotes(): Ruleset {
-  const rebotes = homologado.por_atributo.REBOTES!
+  const rebotes = tresAtributos.por_atributo.REBOTES!
   return rulesetSchema.parse({
-    ...homologado,
+    ...tresAtributos,
     por_atributo: {
-      ...homologado.por_atributo,
+      ...tresAtributos.por_atributo,
       REBOTES: {
         ...rebotes,
         oscilacao: {
@@ -173,7 +180,7 @@ describe('auditoria do Fire Live · fronteira entre atributos', () => {
       { jogadorId: atleta.id, quarto: 1, pontos: 9, rebotes: 5, assistencias: 3 },
     ]
 
-    const resultado = avaliarFireLive(time, jogo, homologado, {
+    const resultado = avaliarFireLive(time, jogo, tresAtributos, {
       opdPreLive: new Map([[atleta.id, 1]]),
     })
     expect(Object.fromEntries(resultado.apitos.map((a) => [a.atributo, a.opdOrigemNivel]))).toEqual(
@@ -202,8 +209,19 @@ describe('auditoria do Fire Live · fronteira entre atributos', () => {
       { jogadorId: suporte.id, quarto: 1, pontos: 6, rebotes: 0, assistencias: 0 },
     ]
 
-    // O primeiro de PONTOS está em quadra. A ausência do líder de REBOTES
-    // não pode autorizar um sinal que depende do topo de outro atributo.
+    // Gap pré-existente, não consequência de `niveis.atributos`: este teste
+    // NÃO exercita hoje um vazamento de hierarquia entre atributos, com
+    // nenhum dos dois rulesets. `avaliarFireLive` descarta jogadores FORA
+    // antes do loop `for (const atributo of ruleset.niveis.atributos)`
+    // (`fire-live/avaliar.ts:90`, antes da linha 97) — `especialista` sai do
+    // cálculo ali, qualquer que seja o array. E `topoLiberado` só é chamado
+    // sob `atributo === 'PONTOS'`, fixo em `avaliar.ts:124`; não há caminho
+    // que leve `blocoDeTopo`/`topoLiberado` por REBOTES. `blocoDeTopo(time,
+    // 'PONTOS')` também filtra por `classificacoes['PONTOS'] !== undefined`,
+    // e `especialista` só tem `{ REBOTES: 'MVP' }` — fora da hierarquia de
+    // PONTOS de qualquer forma. O teste passa porque `topo` (o líder real de
+    // PONTOS) está em quadra e bloqueia `suporte`, não por causa de nada
+    // cross-atributo. Trocar para `tresAtributos` aqui seria um no-op.
     const resultado = avaliarFireLive(time, jogo, homologado, { opdPreLive: new Map() })
     expect(resultado.apitos.filter((a) => a.jogadorId === suporte.id)).toEqual([])
   })

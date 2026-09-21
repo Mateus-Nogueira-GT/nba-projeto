@@ -151,3 +151,34 @@ E duas mudanças em documento já aprovado, que precisam ser comunicadas:
 | ---------------------------------------------------------------------- | --------------------------------------- |
 | App **passa** a se conectar a casas de apostas (leitura de odds)       | p.2, caixa vermelha "REGRA FUNDAMENTAL" |
 | Escala de confiança de 5 faixas **removida**, fundida no anel de apito | p.4                                     |
+
+---
+
+## Versão de 21/09/2026 do documento — dez perguntas
+
+A versão nova trouxe rebotes e assistências. O que ela **não** resolve, e que por isso não
+virou código:
+
+1. O documento termina em **"Atualização lista secreta de assistências:"** e não vem nada
+   depois. O que era para vir? Até vir, a lista de assistências pode estar velha.
+2. **Randola não existe** em rebotes nem em assistências — as duas tabelas só definem MVP,
+   All Star e Suporte, e as listas confirmam. É esquecimento ou é regra?
+3. **Assistências: ≤2 ou 4/3/3?** A seção geral diz "≤2 abaixo da média"; a de assistências
+   diz MVP ≤4, All Star ≤3, Suporte ≤3.
+4. **Vãos nas faixas:** 9,9 rebotes não é MVP (≥10) nem All Star (7–9,8). Mesma coisa em
+   7,95 assistências e 6,95 rebotes.
+5. **Modo Fire: 70% ou 75%?** O parágrafo diz 70, a OBS diz 75. Seguimos com 75 (P4).
+6. **Klay Thompson** aparece em Dallas e Miami; **Mathurin**, em Pelicans e Clippers. Qual
+   vale? O import recusa os dois e reporta. (Wiggins em Miami e Atlanta são Andrew e Aaron,
+   dois jogadores reais — não é o mesmo caso.)
+7. **Detroit, em assistências,** tem "Cadê Cunningham" sem nível nenhum.
+8. **"Jogadores fora da lista de rebotes entram na oscilação com média acima de 4"** — em
+   que nível de apito? Quem não está na lista não tem nível, e a regra "Suporte e Randola
+   não apitam nível 1" não o alcança.
+9. **% e odds de rebotes e assistências.** O documento só dá as de pontos. Sem elas,
+   `niveis.atributos` não pode voltar a listar os três.
+10. **E quando o jogador repetido ainda não foi confirmado?** O import recusa e reporta a
+    repetição quando o nome já tem jogador confirmado. Na PRIMEIRA aparição não: as duas
+    ocorrências caem em `pendentes`, que é uma lista de nomes sem time, então a contradição
+    do documento fica invisível na tela de admin. Nada errado é gravado, mas ninguém fica
+    sabendo. Vale anotar o time em `pendentes`, ou o CJ prefere resolver na origem?

@@ -22,6 +22,13 @@ import { detalheDoApito } from '../detalhe-apito'
 import type { ItemFeed } from '../tipos-feed'
 
 const ruleset = carregarRuleset(yamlBruto)
+
+// Produção está em `niveis.atributos: [PONTOS]` (Tarefa 7): rebotes e
+// assistências ficam desligados até o CJ mandar % e odds. O teste de rebotes
+// abaixo religa os três num clone — nunca no arquivo de produção.
+const tresAtributos = structuredClone(ruleset)
+tresAtributos.niveis.atributos = ['PONTOS', 'REBOTES', 'ASSISTENCIAS']
+
 const HOJE = '2026-01-15'
 let banco: Awaited<ReturnType<typeof bancoDeTeste>>
 let jogadorId: string
@@ -203,7 +210,7 @@ describe('o detalhe explica os mesmos fatos que produziram o apito', () => {
 
   it('o apito N1 de Suporte em rebotes não é negado por sua própria explicação', async () => {
     await historico([{ pontos: 30, minutos: '30', rebotes: 0 }])
-    const item = await itemDoMotor('REBOTES')
+    const item = await itemDoMotor('REBOTES', tresAtributos)
     expect(item.nivelApito).toBe(1)
     const detalhe = await detalheDoApito(banco.db, ruleset, item)
     expect(detalhe.fatores.find((f) => f.chave === 'NIVEL_APITO')?.texto).not.toContain(

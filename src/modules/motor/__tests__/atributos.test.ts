@@ -19,6 +19,18 @@ function soPontos(): Ruleset {
   return copia
 }
 
+/**
+ * Em produção `niveis.atributos` é `[PONTOS]` (ver o comentário no ruleset):
+ * rebotes e assistências ficam desligados até o CJ mandar % e odds. Os testes
+ * abaixo auditam o comportamento dos três atributos, então religam REBOTES e
+ * ASSISTENCIAS só nesta cópia — nunca no arquivo de produção.
+ */
+function comTresAtributos(): Ruleset {
+  const copia = structuredClone(ruleset)
+  copia.niveis.atributos = ['PONTOS', 'REBOTES', 'ASSISTENCIAS']
+  return copia
+}
+
 describe('pontos não muda — o bloco homologado é intocável', () => {
   it('as linhas de MVP continuam sendo as da tabela do CJ', () => {
     expect(linhasDoNivel('MVP', 'PONTOS', ruleset)).toEqual([20, 25, 30, 35])
@@ -52,13 +64,13 @@ describe('rebotes e assistências têm escala própria', () => {
     const rebotes = deltaOscilacao('MVP', 'REBOTES', 'jokic', ruleset)
     const pontos = deltaOscilacao('MVP', 'PONTOS', 'jokic', ruleset)
 
-    expect(rebotes).toBe(3)
+    expect(rebotes).toBe(4)
     expect(rebotes!).toBeLessThan(pontos!)
   })
 
   it('o limiar sai da média com o delta do atributo', () => {
-    // Jokic, 12,9 rpg, MVP, delta 3 → 9,9
-    expect(limiarOscilacao(12.9, 'MVP', 'REBOTES', 'jokic', ruleset)).toBeCloseTo(9.9, 10)
+    // Jokic, 12,9 rpg, MVP, delta 4 (documento de 21/09) → 8,9
+    expect(limiarOscilacao(12.9, 'MVP', 'REBOTES', 'jokic', ruleset)).toBeCloseTo(8.9, 10)
   })
 
   it('a confiança de assistências vem da tabela de assistências', () => {
@@ -107,6 +119,15 @@ describe('sem bloco, o atributo simplesmente não existe', () => {
   })
 })
 
+describe('o interruptor de atributo', () => {
+  it('mantém rebotes e assistências desligados até o CJ mandar % e odds', () => {
+    // `niveis.atributos` é o array que motor/index.ts e fire-live/avaliar.ts
+    // iteram: ele é o liga-desliga. Com os níveis de rebotes no banco, religar
+    // põe no ar apito com confiança e odd que NÓS inventamos.
+    expect(ruleset.niveis.atributos).toEqual(['PONTOS'])
+  })
+})
+
 describe('o green carrega o atributo em que foi batido', () => {
   it('12 rebotes no 1º quarto viram green de REBOTES, não de PONTOS', () => {
     const pivo = {
@@ -130,7 +151,7 @@ describe('o green carrega o atributo em que foi batido', () => {
       ],
     }
 
-    const { greens } = avaliarFireLive(time, jogo, ruleset, { opdPreLive: new Map() })
+    const { greens } = avaliarFireLive(time, jogo, comTresAtributos(), { opdPreLive: new Map() })
     const deRebotes = greens.filter((g) => g.atributo === 'REBOTES')
 
     // MVP em rebotes: marcos 10 e 12 caem com 12 rebotes.

@@ -10,6 +10,7 @@ import { rulesetAtivo } from '../../modules/entrega/ruleset-ativo'
 import { simularAte } from '../../modules/ingestao/demo/temporada'
 import { LLMFake } from '../../modules/ingestao/llm'
 import type { ConteudoFeed } from '../../modules/entrega/lista-secreta'
+import type { Ruleset } from '../../modules/motor/ruleset/schema'
 import { componente } from '../../design-system/tokens/componente'
 import { gravarConferencia } from './conferencia'
 
@@ -51,6 +52,8 @@ const AGORA = new Date('2026-01-15T18:00:00.000Z')
 const HOJE = dataDeReferencia(AGORA, FUSO)
 
 let banco: Awaited<ReturnType<typeof bancoDeTeste>>
+/** O ruleset usado para semear e republicar esta suíte — ver comentário no beforeAll. */
+let rulesetDaDemo: Ruleset
 
 const USUARIO_DEMO = '00000000-0000-4000-8000-000000000001'
 vi.mock('../../modules/plataforma/auth/cookies', () => ({
@@ -101,7 +104,14 @@ beforeAll(async () => {
   // amostral suficiente para o Fire Live acender. Com 5 dias a tela de
   // Resultados fica pobre e a variedade de níveis some; com 49 a suíte paga
   // minutos de PGlite por nada.
-  await simularAte(banco.db, await rulesetAtivo(), AGORA, {
+  // Produção está em `niveis.atributos: [PONTOS]` (Tarefa 7): rebotes e
+  // assistências ficam desligados até o CJ mandar % e odds. Esta suíte audita
+  // as três abas do card, então religa os três num clone do ruleset de
+  // produção só para o seed — nunca no arquivo de produção, e as chamadas
+  // avulsas a `rulesetAtivo()` nesta suíte continuam lendo o de produção.
+  rulesetDaDemo = structuredClone(await rulesetAtivo())
+  rulesetDaDemo.niveis.atributos = ['PONTOS', 'REBOTES', 'ASSISTENCIAS']
+  await simularAte(banco.db, rulesetDaDemo, AGORA, {
     diasDeHistorico: 21,
     llm: new LLMFake(),
   })
@@ -1057,7 +1067,10 @@ describe('a foto do jogador', () => {
     // confiança →" e encontrava o monograma "LJ" — o mesmo jogador, dois
     // rostos. /gestao, /resultados e /estatisticas já passavam a foto.
     const { lerFeed, publicarListaSecreta } = await import('../../modules/entrega/lista-secreta')
-    const ruleset = await rulesetAtivo()
+    // O mesmo ruleset que semeou o banco (três atributos): republicar com o
+    // de produção (só PONTOS) apagaria da lista o item se o sorteio tivesse
+    // escolhido um apitado de REBOTES/ASSISTENCIAS.
+    const ruleset = rulesetDaDemo
 
     // O apitado que ganha a foto é LIDO da lista de hoje — o roteiro (que
     // punha o LeBron ali de propósito) não decide mais quem apita. Só ele

@@ -99,8 +99,9 @@ niveis (
 )
 ```
 
-> Hoje só existe `atributo = PONTOS`. Quando o CJ mandar rebotes e assistências,
-> é INSERT de uma nova versão — nada de schema muda.
+> Desde 21/09/2026, os três atributos (PONTOS, REBOTES, ASSISTENCIAS) têm registros no
+> banco. O INSERT de uma nova versão quando o CJ mandar dados atualizados já está pronto —
+> nada de schema muda.
 
 ---
 

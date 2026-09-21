@@ -63,7 +63,13 @@ vi.mock('next/navigation', async (importOriginal) => {
 beforeAll(async () => {
   process.env.DATABASE_URL = 'postgres://demo'
   banco = await bancoDeTeste()
-  await simularAte(banco.db, await rulesetAtivo(), AGORA, {
+  // Produção está em `niveis.atributos: [PONTOS]` (Tarefa 7): rebotes e
+  // assistências ficam desligados até o CJ mandar % e odds. Esta suíte audita
+  // as abas de atributo do card, então religa os três num clone do ruleset de
+  // produção só para o seed — nunca no arquivo de produção.
+  const rulesetDaLista = structuredClone(await rulesetAtivo())
+  rulesetDaLista.niveis.atributos = ['PONTOS', 'REBOTES', 'ASSISTENCIAS']
+  await simularAte(banco.db, rulesetDaLista, AGORA, {
     diasDeHistorico: 21,
     llm: new LLMFake(),
   })

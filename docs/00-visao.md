@@ -14,7 +14,7 @@ Assinatura via Mercado Pago. Escopo v0 fechado conforme a proposta comercial.
 | Métodos | oscilação + OPD                                      | alvo por atributo no 1Q                      |
 | Filtros | nº de vítimas (1/2/5/todas), todas do dia, ordenação | todos, por time, por jogo, excluir jogadores |
 
-Atributos: **pontos, rebotes e assistências**. Hoje só existe classificação de pontos.
+Atributos: **pontos, rebotes e assistências**. Desde 21/09/2026, todos têm classificação no banco; `niveis.atributos` (ruleset) aguarda as tabelas de % e odds dos dois novos para ativação. (Nota: os dois novos atributos estão **fora do contrato v0** — ver "Escopo apareceu depois" abaixo.)
 
 ## O que sustenta
 

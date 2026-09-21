@@ -33,8 +33,9 @@ Os sufixos "principal"/"secundário" da lista são redundantes com a posição o
 como texto informativo do card.
 
 **A classificação é por atributo.** O doc diz "Shai é MVP _em pontos_", "Jokic é MVP _em
-rebotes_". Hoje existe **só a lista de PONTOS**; rebotes e assistências virão depois.
-O modelo já nasce com a chave `(jogador, atributo)`.
+rebotes_". Desde 21/09/2026, os três atributos têm classificação no banco de dados, mas
+`niveis.atributos` (ruleset) lista apenas `[PONTOS]` até que o CJ forneça as tabelas de % e odds
+para rebotes e assistências. O modelo já nasce com a chave `(jogador, atributo)`.
 
 ---
 

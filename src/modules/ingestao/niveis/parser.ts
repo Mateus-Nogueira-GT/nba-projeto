@@ -1,10 +1,11 @@
-import type { Nivel } from '../../motor/tipos'
+import type { Atributo, Nivel } from '../../motor/tipos'
 import { normalizarTexto, siglaDoTime } from './times'
 
 export type JogadorNaLista = {
   nomeNaLista: string
   posicaoHierarquia: number
   nivel: Nivel
+  atributo: Atributo
   timeNaLista: string
   timeSigla: string | null
   linhaNoArquivo: number
@@ -24,8 +25,43 @@ export type ResultadoParse = {
   problemas: ProblemaDeParse[]
 }
 
-const INICIO = /lista de niveis/
 const FIM = /^\*\*lista secreta\*\*/
+
+/**
+ * Os três cabeçalhos de seção do documento, já normalizados.
+ * `normalizarTexto` tira acento, baixa a caixa e troca pontuação por espaço:
+ * "**Lista de Níveis(Rebotes)**" vira "lista de niveis rebotes".
+ */
+const SECOES: ReadonlyArray<readonly [RegExp, Atributo]> = [
+  [/^lista de niveis pontos$/, 'PONTOS'],
+  [/^lista de niveis rebotes$/, 'REBOTES'],
+  [/^assistencias$/, 'ASSISTENCIAS'],
+]
+
+function secaoDaLinha(normalizada: string): Atributo | null {
+  for (const [regex, atributo] of SECOES) {
+    if (regex.test(normalizada)) return atributo
+  }
+  return null
+}
+
+/**
+ * Prosa que a seção de rebotes intercala com os dados: o título da
+ * classificação e as faixas de média, cada um aparecendo em versão simples E
+ * em negrito. Não são time nem jogador.
+ *
+ * A rede de segurança é `timesSemSigla`: se uma linha de prosa escapar desta
+ * lista, ela vira "time sem sigla" e o teste do arquivo real falha. Nada some
+ * em silêncio — é a mesma garantia que o parser já dá para linha ilegível.
+ */
+const DEFINICAO: readonly RegExp[] = [
+  /^classificacao de jogadores/,
+  /^(mvp|all star|alls star|suporte|randola)\b.*\b(media|em diante)\b/,
+]
+
+function ehLinhaDeDefinicao(normalizada: string): boolean {
+  return DEFINICAO.some((r) => r.test(normalizada))
+}
 
 /**
  * Só quatro níveis existem. Os sufixos "principal"/"secundário" são redundantes
@@ -47,7 +83,6 @@ function traduzirNivel(bruto: string): Nivel | null {
 function nomeDoTime(linha: string): string | null {
   const limpa = linha.trim()
   if (!limpa.startsWith('**')) return null
-  if (/^\s*\d+\s*\\?-/.test(limpa)) return null
 
   // "**Dallas** **Mavericks**" são DOIS spans na mesma linha — juntar os dois,
   // senão o time inteiro (9 jogadores) some sem aviso.
@@ -55,7 +90,14 @@ function nomeDoTime(linha: string): string | null {
   if (spans.length === 0) return null
 
   const nome = spans.join(' ').replace(/\s+/g, ' ').trim()
-  return nome.length > 0 ? nome : null
+  if (nome.length === 0) return null
+
+  // A seção de REBOTES escreve o jogador em negrito ("**1 \- Towns \- MVP**").
+  // O teste de "é entrada numerada?" tem que rodar DEPOIS de tirar o negrito;
+  // antes dele, o `**` da frente faz o `^\d` falhar e cada jogador vira time.
+  if (/^\s*\d+\s*\\?-/.test(nome)) return null
+
+  return nome
 }
 
 /**
@@ -73,7 +115,7 @@ export function lerListaDeNiveis(conteudo: string): ResultadoParse {
   const timesEncontrados: string[] = []
   const timesSemSigla: string[] = []
 
-  let dentro = false
+  let atributoAtual: Atributo | null = null
   let timeAtual: string | null = null
   let siglaAtual: string | null = null
 
@@ -82,12 +124,18 @@ export function lerListaDeNiveis(conteudo: string): ResultadoParse {
     const linha = linhaBruta.trimEnd()
     const normalizada = normalizarTexto(linha)
 
-    if (!dentro) {
-      if (INICIO.test(normalizada)) dentro = true
+    const secao = secaoDaLinha(normalizada)
+    if (secao !== null) {
+      atributoAtual = secao
+      timeAtual = null
+      siglaAtual = null
       continue
     }
+
+    if (atributoAtual === null) continue
     if (FIM.test(linha.trim().toLowerCase())) break
     if (linha.trim().length === 0) continue
+    if (ehLinhaDeDefinicao(normalizada)) continue
 
     const time = nomeDoTime(linha)
     if (time !== null) {
@@ -99,9 +147,16 @@ export function lerListaDeNiveis(conteudo: string): ResultadoParse {
     }
 
     // Entrada de jogador começa com o número da hierarquia.
-    if (!/^\s*\d+/.test(linha)) continue
+    // A seção de REBOTES pode ter a entrada em negrito: **1 \- Nome \- Nível**
+    if (!/^\s*(?:\*\*)?\d+/.test(linha)) continue
 
-    const pedacos = linha
+    // Remover negrito se a linha for **...**
+    let linhaParaParse = linha.trim()
+    if (linhaParaParse.startsWith('**') && linhaParaParse.endsWith('**')) {
+      linhaParaParse = linhaParaParse.slice(2, -2).trim()
+    }
+
+    const pedacos = linhaParaParse
       .split(/\s*\\?-\s*/)
       .map((p) => p.trim())
       .filter((p) => p.length > 0)
@@ -157,6 +212,7 @@ export function lerListaDeNiveis(conteudo: string): ResultadoParse {
       nomeNaLista: nome,
       posicaoHierarquia: posicao,
       nivel,
+      atributo: atributoAtual,
       timeNaLista: timeAtual,
       timeSigla: siglaAtual,
       linhaNoArquivo: numero,
