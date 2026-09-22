@@ -92,6 +92,10 @@ chave no painel do OpenRouter. É o freio que não depende do nosso código.
 | `ODDS_BETMGM_LANG` · `_AUTH_HEADER` · `_AUTH_PREFIX` | BetMGM | padrões `en` · `Authorization` · `Bearer` (sem espaço; vazio = chave nua) |
 | `ODDS_ALTENAR_GATEWAY_BASE` · `_ORIGIN` · `_INTEGRATION` · `_SPORT_ID` | Altenar | idem: os quatro ligam a fonte |
 | `ODDS_ALTENAR_CHAMP_ID` | Altenar | opcional; filtra a NBA |
+| `ODDS_SUPERBET_BASE_URL` · `_LOCALE` · `_SPORT_ID` | Superbet | os três ligam a fonte; o host já carrega o mercado (`-br`) e o basquete é `4` |
+| `ODDS_SUPERBET_CHAMP_ID` | Superbet | opcional; `tournament_id` da NBA, a confirmar quando a liga voltar |
+| `ODDS_SUPERBET_EVENTOS_PATH` · `_EVENTO_PATH` · `_JANELA_MS` | Superbet | opcionais; padrões confirmados contra o feed em 22/09 |
+| `ODDS_SUPERBET_API_KEY` · `_AUTH_HEADER` · `_AUTH_PREFIX` | Superbet | opcionais; o feed é aberto (sem credencial) |
 
 Sem nenhuma delas, a coleta de odds do cron é um no-op e as telas seguem no
 fallback da tabela estática. Config pela metade **não** liga meia-fonte.

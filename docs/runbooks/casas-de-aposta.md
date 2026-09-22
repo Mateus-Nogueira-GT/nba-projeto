@@ -1,9 +1,9 @@
-# Runbook — ligar uma casa de aposta (BetMGM ou Altenar)
+# Runbook — ligar uma casa de aposta (BetMGM, Altenar ou Superbet)
 
 **Data:** 28/08/2026 · implementa a seção 6 da spec
 [`2026-08-28-casas-betmgm-altenar-design.md`](../superpowers/specs/2026-08-28-casas-betmgm-altenar-design.md).
 
-O código das duas casas **já está pronto e testado**. Ligar uma delas é
+O código das três casas **já está pronto e testado**. Ligar uma delas é
 preencher variáveis de ambiente e confirmar a curadoria — **nenhum código
 muda**. Sem as variáveis, a fonte simplesmente não existe e o app funciona
 exatamente como hoje (a tabela estática é o fallback das telas).
@@ -64,6 +64,71 @@ costumam apagar espaço no fim do valor; por isso o esquema é gravado sem ele.
 O guia de integração que temos é de OUTRA conta. `Origin`, `integration` e os
 ids são por conta: **não copie os do guia**.
 
+
+### Superbet
+
+A Superbet não publica documentação de integração. O que este adapter fala é
+o **offer server** — o mesmo feed que o site e o app da casa consomem, servido
+por Fastly e **particionado por mercado no host**: `production-superbet-offer-br…`
+é o Brasil, `-ro`, `-pl`, `-be`, `-gr`, `-rs`, `-hr` são os outros. Por isso
+não existe env de "país": o país está na `baseUrl`, e trocar de praça é trocar
+uma variável.
+
+**Formas confirmadas contra o feed em 22/09/2026** (jogo Fenerbahce·Besiktas):
+
+| Env | O que é | Obrigatório |
+| --- | --- | --- |
+| `ODDS_SUPERBET_BASE_URL` | host do offer server, com o mercado dentro | sim |
+| `ODDS_SUPERBET_LOCALE` | locale do caminho (`pt-BR`) | sim |
+| `ODDS_SUPERBET_SPORT_ID` | id do esporte; **basquete é `4`**, confirmado | sim |
+| `ODDS_SUPERBET_CHAMP_ID` | `tournament_id` da NBA, para filtrar | não |
+| `ODDS_SUPERBET_EVENTOS_PATH` | template da lista; padrão `/v3/subscription/{locale}/prematch?sports={sportId}` | não |
+| `ODDS_SUPERBET_EVENTO_PATH` | template do evento; padrão `/v3/{locale}/events?events={id}&includeOnly=fixture,markets` | não |
+| `ODDS_SUPERBET_JANELA_MS` | janela de leitura do SSE; padrão `5000` | não |
+| `ODDS_SUPERBET_API_KEY` · `_AUTH_HEADER` · `_AUTH_PREFIX` | credencial, se a conta tiver uma; o feed observado é aberto | não |
+
+**A LISTA é um SSE, não JSON.** `text/event-stream`, linhas `data:[…]`, e é
+uma **assinatura**: o fluxo não fecha sozinho, fica aberto esperando
+atualização. Por isso a leitura tem janela — lê o retrato inicial, para, e
+devolve. Sem isso a coleta penduraria no primeiro evento e o cron estouraria
+o prazo. O mesmo evento repetido em blocos seguintes é ignorado (o primeiro
+vale), e bloco cortado pela janela é descartado em silêncio: JSON truncado não
+pode virar cotação.
+
+A lista **não filtra por data** — traz a agenda pré-jogo inteira do esporte,
+como a BetMGM. `fora_do_dia` alto é esperado, não defeito. Ela também só traz
+o mercado principal (`tags: "preselected"`); **os props de jogador vivem no
+detalhe**, que é JSON normal com envelope `events`.
+
+**DOIS formatos de prop de pontos, publicados lado a lado:**
+
+| Mercado | `specifiers` | Exemplo | Vira linha |
+| --- | --- | --- | --- |
+| `Jogador - Total de Pontos (Inc. prorrogação)` | `{player, total}` | "Anthony Brown - Mais de 9.5" | 9.5 → **10+** |
+| `Jogador - Pontos (Inc. prorrogação)` | `{player, milestone}` | "Anthony Brown 5+" | 5 → **5+**, direto |
+
+O segundo é o achado que importa: **"Marcará N ou mais pontos" já é a linha
+"N+" do CJ**, sem conversão. Ele não passa por `linhaDoLadoOver` de propósito
+— aquela função recusa inteiro porque "over 25" não equivale a "25+", mas
+milestone 5 equivale a "5+" por definição da própria casa. Tem um lado só, então
+`oddUnder` sai nulo, o que é correto e não é dado faltando.
+
+Os dois lados do mercado de total compartilham `market_line_uuid`, e é essa a
+chave que remonta o par — mais confiável do que casar por nome.
+
+**Vocabulário de status:** `1` é ativa, `2` é suspensa (a casa devolve preço
+1.00 junto), e `display: false` não exibe. Qualquer outro valor é **descarte,
+nunca inclusão** — se a casa mudar a numeração, `odds_superbet_descartadas`
+estoura no resultado do job. Falha visível, não silenciosa: é o número do
+passo 4.
+
+**O `tournament_id` da NBA ainda não foi confirmado.** Em 22/09/2026 a liga
+estava fora de temporada e não aparecia no feed — o que havia era WNBA
+(`2174`), Turquia (`2185`), Grécia, Brasil, Israel. Confirme quando a NBA
+voltar (~03/11) rodando o censo e lendo o `tournament_id` de um jogo dela. Até
+lá, sem `ODDS_SUPERBET_CHAMP_ID` a fonte traz o basquete inteiro e o vínculo
+descarta o que não é jogo nosso — funciona, só gasta mais chamada.
+
 **Config incompleta = fonte desligada.** Falta `brand`? A BetMGM não entra na
 coleta. É de propósito: meia-config ligaria um job que falha todo dia às 9h em
 silêncio.
@@ -85,12 +150,13 @@ casador vai (corretamente) não achar par para nenhum.
 ```bash
 npx dotenv -e .env.local -- npm run odds:censo -- --fonte=altenar
 npx dotenv -e .env.local -- npm run odds:censo -- --fonte=betmgm
+npx dotenv -e .env.local -- npm run odds:censo -- --fonte=superbet
 ```
 
 O censo é **somente leitura**: não grava nada. Ele imprime todo nome de
 mercado que a casa publica hoje, com a contagem de cotações ativas, e todo
 nome de jogador que dá para ler. É a matéria-prima da curadoria, e existe
-porque **nenhuma das duas documentações mostra como a casa grafia os props de
+porque **nenhuma das documentações mostra como a casa grafia os props de
 NBA** — adivinhar aqui é média calculada sobre o mercado errado.
 
 Com a saída na mão:
