@@ -3,7 +3,8 @@ import { notFound } from 'next/navigation'
 import { z } from 'zod'
 
 import { getDb } from '@/modules/dominio/db/cliente'
-import { calendarioDoRuleset, temporadaDe } from '@/modules/dominio/temporada'
+import { calendarioDoRuleset } from '@/modules/dominio/temporada'
+import { temporadaParaExibir } from '@/modules/entrega/estatisticas/temporadas'
 import { estadoExperienciaDoUsuario } from '@/modules/plataforma/experiencia/servico'
 import { exigirNivel } from '@/modules/plataforma/assinatura/guarda'
 import { lateralPadrao } from '@/app/(app)/lateral/montar'
@@ -458,7 +459,7 @@ export default async function PaginaJogador({
   const ruleset = await rulesetAtivo()
   const db = getDb()
   const calendario = calendarioDoRuleset(ruleset)
-  const temporada = temporadaDe(agora, calendario)
+  const temporada = await temporadaParaExibir(db, ruleset, agora)
   // O calendário vai junto porque a tabela jogo a jogo NOMEIA a temporada:
   // `jogos` guarda a data, não o rótulo, e sem ele a leitura não teria como
   // recortar a janela — o auxiliar voltaria a afirmar "temporada 2025-26"
@@ -824,6 +825,7 @@ export default async function PaginaJogador({
         fonte={tela.atualizacao.fonte}
         agora={agora}
         fuso={ruleset.rodada.fuso}
+        temporada={temporada}
       />
     </Moldura>
   )

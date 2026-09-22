@@ -1,5 +1,10 @@
 # Ingestão NBA — provedores e operação
 
+> **Puxando uma temporada inteira do passado?** O procedimento tem ordem própria
+> e passos que este documento não cobre (desligar a autossemeadura antes de tudo,
+> limpar a demonstração, retomar por checkpoint):
+> [temporada-retroativa.md](temporada-retroativa.md).
+
 ## Provedores homologados por contrato
 
 | Papel | Produto | Namespace imutável | Base URL |

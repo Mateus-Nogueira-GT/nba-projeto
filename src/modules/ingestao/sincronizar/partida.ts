@@ -10,9 +10,10 @@ import {
   lesoesEscalacao,
 } from '../../dominio/db/schema'
 import type { Db } from '../../dominio/db/tipos'
+import { CapacidadeNaoSuportadaError } from '../nba/porta'
 import type { FonteNBA, LinhaBoxScore, LinhaBoxScoreTimeExterna } from '../nba/porta'
 import { consultarComOrigem, type ResultadoComOrigem } from '../nba/failover'
-import { mapaDeJogadores, mapaDeTimes, type Resumo } from './identidade'
+import { garantirJogadores, mapaDeJogadores, mapaDeTimes, type Resumo } from './identidade'
 import { excluded } from './upsert'
 
 export type JogoParaSincronizar = {
@@ -76,6 +77,61 @@ function linhaDeJogador(l: LinhaBoxScore) {
  * tabelas diferentes, e a de quarto é a que o Fire Live lê — sem ela, o
  * workflow observa um estado que nunca muda.
  */
+/**
+ * Cadastra quem o box score cita e o cadastro não conhece.
+ *
+ * O cadastro vem de `/players/active` — só o elenco de HOJE. Num jogo de
+ * temporada passada isso deixa de fora todo mundo que se aposentou desde
+ * então, e a rejeição de `persistirBoxScore` descartaria a partida inteira por
+ * causa de um nome. Aqui perguntamos ao provedor quem são esses ids; quem ele
+ * também não conhece continua sendo motivo de rejeição, que é o que impede
+ * estatística órfã.
+ *
+ * Fica FORA da transação de propósito: I/O de rede antes do commit, como o
+ * resto do módulo. Se a reserva não souber responder, voltamos ao
+ * comportamento anterior — o retroativo é trabalho da fonte primária.
+ */
+export async function resolverJogadoresDesconhecidos(
+  db: Db,
+  fonte: FonteNBA,
+  provedor: string,
+  linhas: LinhaBoxScore[],
+): Promise<number> {
+  const porIdExterno = await mapaDeJogadores(db, provedor)
+  const desconhecidos = [...new Set(linhas.map((l) => l.jogadorIdExterno))].filter(
+    (id) => !porIdExterno.has(id),
+  )
+  if (desconhecidos.length === 0) return 0
+
+  let externos
+  try {
+    externos = await fonte.jogadoresPorId(desconhecidos)
+  } catch (erro) {
+    if (erro instanceof CapacidadeNaoSuportadaError) return 0
+    throw erro
+  }
+  if (externos.length === 0) return 0
+
+  const times = await mapaDeTimes(db)
+  const antes = porIdExterno.size
+  const depois = await garantirJogadores(
+    db,
+    provedor,
+    externos.map((j) => ({
+      idExterno: j.idExterno,
+      nomeCompleto: j.nomeCompleto,
+      timeId: j.timeSiglaProvedor ? (times.get(j.timeSiglaProvedor.toUpperCase()) ?? null) : null,
+      posicao: j.posicao,
+      alturaCm: j.alturaCm,
+      numeroCamisa: j.numeroCamisa,
+      fotoUrl: j.fotoUrl,
+      ativo: j.ativo,
+    })),
+  )
+
+  return Math.max(0, depois.size - antes)
+}
+
 export async function sincronizarBoxScore(
   db: Db,
   fonte: FonteNBA,
@@ -87,6 +143,7 @@ export async function sincronizarBoxScore(
     (fonteEfetiva) => fonteEfetiva.boxScore(jogo.idExterno),
     jogo.provedor,
   )
+  await resolverJogadoresDesconhecidos(db, fonte, jogo.provedor, resposta.dados)
   return db.transaction((tx) => persistirBoxScore(tx, jogo, agora, resposta))
 }
 

@@ -320,3 +320,31 @@ describe('auditoria do Fire Live · fronteira entre atributos', () => {
     expect(blocoDeTopo(time, 'PONTOS').map((j) => j.id)).toEqual([primeiroEmPontos.id])
   })
 })
+
+// A virada da temporada exibida é calendário operacional, não estratégia — mas
+// vive no ruleset pela mesma razão que `mes_inicio`: nenhum número de
+// calendário solto no código (regra 1).
+describe('piso de virada da temporada exibida', () => {
+  it('o ruleset homologado declara o piso', () => {
+    expect(homologado.temporada.minimo_jogos_para_exibir).toBe(1)
+  })
+
+  it('o schema recusa o piso ausente em vez de assumir um default', () => {
+    const semPiso = structuredClone(homologado) as Record<string, unknown>
+    const temporada = { ...(semPiso['temporada'] as Record<string, unknown>) }
+    delete temporada['minimo_jogos_para_exibir']
+    semPiso['temporada'] = temporada
+
+    expect(() => rulesetSchema.parse(semPiso)).toThrow()
+  })
+
+  it('o schema recusa piso zero: a temporada sem jogo nenhum nunca é a exibida', () => {
+    const zerado = structuredClone(homologado) as Record<string, unknown>
+    zerado['temporada'] = {
+      ...(zerado['temporada'] as Record<string, unknown>),
+      minimo_jogos_para_exibir: 0,
+    }
+
+    expect(() => rulesetSchema.parse(zerado)).toThrow()
+  })
+})

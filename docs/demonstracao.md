@@ -137,6 +137,22 @@ licenciado, ou cair de volta no monograma do `Avatar` (que já existe como estad
 
 Nenhum dos quatro exige mudança de código.
 
+### O passo 1 tem runbook próprio desde 22/09/2026
+
+A decisão do parceiro é entrar no ar com a **temporada 2025-26 real** em vez do
+seed, porque o lançamento (~02/10) acontece ~32 dias antes de a NBA voltar
+(~03/11). Assim que o backfill rodar
+([temporada-retroativa.md](runbooks/temporada-retroativa.md)), **este documento
+encolhe**: classificação, box scores, médias e campanha deixam de ser
+demonstração e passam a ser dado do provedor — a tabela "Diga que é
+demonstração" perde as três primeiras linhas.
+
+O que **continua** sendo demonstração depois do backfill: os níveis do CJ (até a
+reimportação contra os jogadores reais), as odds (até o contrato com as casas) e
+a gestão de banca. E, durante o hiato, **não há apito nenhum** — nem real nem de
+demonstração —, então nada em Lista Secreta ou Fire Live precisa de ressalva:
+as telas explicam que a temporada ainda não começou.
+
 ## Odds: média entre casas (25/08)
 
 A demo grava `odd_media` igual à mediana nas agregadas — o rodapé `ODD MÉDIA`

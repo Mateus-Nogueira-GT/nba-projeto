@@ -36,6 +36,15 @@ media:
 temporada:
   mes_inicio: 10 # outubro
   formato: dois_anos # 2025-26   (alternativa: ano_inicial -> 2025)
+  # Quantos jogos ENCERRADOS a temporada do calendário precisa ter para as telas
+  # de CONSULTA passarem a mostrá-la. Antes disso elas mostram a última temporada
+  # com dado — senão, entre o lançamento e a primeira bola, o assinante veria
+  # tela vazia sem erro nenhum.
+  #
+  # 1 = vira no primeiro jogo encerrado, que é o que mantém a consulta alinhada
+  # com o motor (a média sai só da temporada nova — decisão do parceiro,
+  # 22/09/2026). Subir o número adia a virada da consulta sem tocar em código.
+  minimo_jogos_para_exibir: 1
 
 # -----------------------------------------------------------------------------
 # RODADA — o fuso que decide a que DIA um jogo pertence

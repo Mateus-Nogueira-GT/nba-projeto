@@ -86,6 +86,11 @@ export const rulesetSchema = z.object({
   temporada: z.object({
     mes_inicio: z.number().int().min(1).max(12),
     formato: z.enum(['dois_anos', 'ano_inicial']),
+    /**
+     * Piso de jogos encerrados para a CONSULTA virar de temporada. Sem default
+     * no código de propósito: é o ruleset que manda (regra 1).
+     */
+    minimo_jogos_para_exibir: z.number().int().min(1),
   }),
 
   /**

@@ -25,7 +25,17 @@ import type { ConteudoFeedFireLive, ItemFireLive } from './feed'
  * quarto caso é o único em que "funcionando e vazio" é a resposta certa.
  */
 export type EstadoVazio =
-  'SEM_JOGO_HOJE' | 'AGUARDANDO_PRIMEIRO_JOGO' | 'NENHUM_EM_1Q' | 'SEM_APITO_AINDA'
+  | 'SEM_JOGO_HOJE'
+  /**
+   * A temporada do calendário ainda não teve jogo — os ~32 dias entre o
+   * lançamento e a volta da NBA. Distinto de `SEM_JOGO_HOJE`: ali é uma folga
+   * de terça-feira, aqui é um mês inteiro, e repetir o mesmo texto faria a
+   * tela parecer quebrada.
+   */
+  | 'TEMPORADA_NAO_COMECOU'
+  | 'AGUARDANDO_PRIMEIRO_JOGO'
+  | 'NENHUM_EM_1Q'
+  | 'SEM_APITO_AINDA'
 
 export type FeedFireLive = {
   itens: ItemFireLive[]

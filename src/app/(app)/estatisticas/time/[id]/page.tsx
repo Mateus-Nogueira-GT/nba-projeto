@@ -3,7 +3,7 @@ import { z } from 'zod'
 
 import { getDb } from '@/modules/dominio/db/cliente'
 import { dataDeReferencia } from '@/modules/dominio/rodada'
-import { calendarioDoRuleset, temporadaDe } from '@/modules/dominio/temporada'
+import { temporadaParaExibir } from '@/modules/entrega/estatisticas/temporadas'
 import { estadoExperienciaDoUsuario } from '@/modules/plataforma/experiencia/servico'
 import { telaJogosDoDia } from '@/modules/entrega/estatisticas/jogos-do-dia'
 import { hierarquiaDoTime, telaDoTime } from '@/modules/entrega/estatisticas/time'
@@ -281,8 +281,8 @@ export default async function PaginaTime({
   const agora = new Date()
   const ruleset = await rulesetAtivo()
   const { fuso } = ruleset.rodada
-  const temporada = temporadaDe(agora, calendarioDoRuleset(ruleset))
   const db = getDb()
+  const temporada = await temporadaParaExibir(db, ruleset, agora)
   const tela = await telaDoTime(db, id, { temporada })
   if (tela === null) notFound()
 
@@ -462,6 +462,7 @@ export default async function PaginaTime({
         fonte={tela.atualizacao.fonte}
         agora={agora}
         fuso={fuso}
+        temporada={temporada}
       />
     </Moldura>
   )

@@ -2,7 +2,7 @@ import type { ReactNode } from 'react'
 
 import { Lateral } from '@/components/lateral'
 import { dataDeReferencia } from '@/modules/dominio/rodada'
-import { calendarioDoRuleset, temporadaDe } from '@/modules/dominio/temporada'
+import { calendarioDoRuleset } from '@/modules/dominio/temporada'
 import { configuracaoChat } from '@/modules/entrega/chat-limites'
 import { rulesetAtivo } from '@/modules/entrega/ruleset-ativo'
 
@@ -33,7 +33,11 @@ export async function lateralPadrao({
   const config = calendarioDoRuleset(ruleset)
   const agora = new Date()
   const hoje = dataDeReferencia(agora, ruleset.rodada.fuso)
-  const dados = await lerLateralCacheada(hoje, temporadaDe(agora, config), config)
+  const dados = await lerLateralCacheada(
+    hoje,
+    config,
+    ruleset.temporada.minimo_jogos_para_exibir,
+  )
 
   // Duas perguntas, como na Moldura: `assistente` diz se ESTE nível tem
   // direito; `configuracaoChat().habilitado` diz se o chat EXISTE (flag +

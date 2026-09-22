@@ -56,6 +56,10 @@ export class FonteFake implements FonteNBA {
   listarJogadores() {
     return this.responder(this.fixture.jogadores ?? [])
   }
+  jogadoresPorId(idsExternos: string[]) {
+    const pedidos = new Set(idsExternos)
+    return this.responder((this.fixture.jogadores ?? []).filter((j) => pedidos.has(j.idExterno)))
+  }
   listarJogos(_dataIso: string) {
     return this.responder(this.fixture.jogos ?? [])
   }

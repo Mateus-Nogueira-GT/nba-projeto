@@ -17,6 +17,7 @@ import {
   jogosDaData,
   persistirBoxScore,
   persistirBoxScoreDoTime,
+  resolverJogadoresDesconhecidos,
   sincronizarClassificacao,
   sincronizarEscalacao,
   type JogoParaSincronizar,
@@ -160,6 +161,19 @@ async function persistirSnapshotsDasIdentidades(
         : boxJogador?.provedor === reserva?.provedor
           ? reserva
           : null
+
+    // Quem o box score cita e o cadastro não conhece é resolvido ANTES do
+    // commit — é a última chamada de rede do ciclo, e sem ela um aposentado
+    // derruba a partida inteira no backfill de temporada passada.
+    if (identidadeDoBoxJogador && boxJogador) {
+      const criados = await resolverJogadoresDesconhecidos(
+        db,
+        fontes.failover,
+        identidadeDoBoxJogador.provedor,
+        boxJogador.dados,
+      )
+      if (criados > 0) somar(contagens, 'jogadores_criados', criados)
+    }
 
     // Todo I/O externo terminou. O commit abaixo troca o snapshot do jogo como
     // unidade; falha na segunda metade desfaz também a primeira.

@@ -215,6 +215,9 @@ export class FonteComFailover implements FonteNBA {
   listarJogadores(): Promise<JogadorExterno[]> {
     return this.executar((f) => f.listarJogadores())
   }
+  jogadoresPorId(idsExternos: string[]): Promise<JogadorExterno[]> {
+    return this.executar((f) => f.jogadoresPorId(idsExternos))
+  }
   listarJogos(dataIso: string): Promise<JogoExterno[]> {
     return this.executar((f) => f.listarJogos(dataIso))
   }

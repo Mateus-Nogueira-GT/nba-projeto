@@ -23,7 +23,7 @@ vi.mock('@/app/(app)/lateral/leitura', () => ({
 vi.mock('@/modules/entrega/ruleset-ativo', () => ({
   rulesetAtivo: async () => ({
     rodada: { fuso: 'America/Sao_Paulo' },
-    temporada: { mes_inicio: 10, formato: 'dois_anos' },
+    temporada: { mes_inicio: 10, formato: 'dois_anos', minimo_jogos_para_exibir: 1 },
   }),
 }))
 

@@ -80,22 +80,30 @@ export class FonteHttp implements FonteNBA {
     }))
   }
 
+  private mapearJogador(j: Json): JogadorExterno {
+    const time = j['team'] as Json | undefined
+    return {
+      idExterno: String(j['id'] ?? ''),
+      nomeCompleto:
+        texto(j['full_name']) ??
+        [texto(j['first_name']), texto(j['last_name'])].filter(Boolean).join(' '),
+      timeSiglaProvedor: texto(time?.['abbreviation']) ?? texto(j['team_abbreviation']),
+      posicao: texto(j['position']),
+      alturaCm: numero(j['height_cm']),
+      numeroCamisa: numero(j['jersey_number']),
+      fotoUrl: texto(j['headshot_url']),
+      ativo: j['is_active'] !== false,
+    }
+  }
+
   async listarJogadores(): Promise<JogadorExterno[]> {
-    return (await this.buscar('/players')).map((j) => {
-      const time = j['team'] as Json | undefined
-      return {
-        idExterno: String(j['id'] ?? ''),
-        nomeCompleto:
-          texto(j['full_name']) ??
-          [texto(j['first_name']), texto(j['last_name'])].filter(Boolean).join(' '),
-        timeSiglaProvedor: texto(time?.['abbreviation']) ?? texto(j['team_abbreviation']),
-        posicao: texto(j['position']),
-        alturaCm: numero(j['height_cm']),
-        numeroCamisa: numero(j['jersey_number']),
-        fotoUrl: texto(j['headshot_url']),
-        ativo: j['is_active'] !== false,
-      }
-    })
+    return (await this.buscar('/players')).map((j) => this.mapearJogador(j))
+  }
+
+  async jogadoresPorId(idsExternos: string[]): Promise<JogadorExterno[]> {
+    if (idsExternos.length === 0) return []
+    const consulta = idsExternos.map((id) => encodeURIComponent(id)).join(',')
+    return (await this.buscar(`/players?ids=${consulta}`)).map((j) => this.mapearJogador(j))
   }
 
   async listarJogos(dataIso: string): Promise<JogoExterno[]> {

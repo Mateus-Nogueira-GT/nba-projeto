@@ -18,6 +18,7 @@ import { confrontoDoItem, estadoDoCiclo, jogosDoDiaResumo } from '@/modules/entr
 import { lerFeed } from '@/modules/entrega/lista-secreta'
 import { rulesetAtivo } from '@/modules/entrega/ruleset-ativo'
 import { rotaDoJogador } from '@/modules/entrega/estatisticas/rotas'
+import { estadoDaTemporada } from '@/modules/entrega/estatisticas/temporadas'
 import {
   CabecalhoJogo,
   CardEntrada,
@@ -68,15 +69,24 @@ function TextoVazio({
   estado,
   primeiroJogo,
   fuso,
+  proximoJogo,
 }: {
   estado: EstadoVazio
   primeiroJogo: Date | null
   fuso: string
+  /** Data legível do próximo jogo agendado — só o hiato a usa. */
+  proximoJogo?: string | null
 }) {
   const textos: Record<EstadoVazio, { titulo: string; corpo: string }> = {
     SEM_JOGO_HOJE: {
       titulo: 'Sem jogos hoje',
       corpo: 'A NBA não tem partidas hoje. O Fire Live volta na próxima rodada.',
+    },
+    TEMPORADA_NAO_COMECOU: {
+      titulo: 'A temporada ainda não começou',
+      corpo: proximoJogo
+        ? `A NBA volta em ${proximoJogo}, e o Fire Live volta com ela. Até lá, as estatísticas da temporada passada estão na aba STATS.`
+        : 'A NBA está entre temporadas. O Fire Live volta quando a bola subir — até lá, as estatísticas da temporada passada estão na aba STATS.',
     },
     AGUARDANDO_PRIMEIRO_JOGO: {
       titulo: 'Ainda não começou',
@@ -311,6 +321,15 @@ export default async function PaginaFireLive({
     jogadoresOcultosComNome(getDb(), sessao.usuarioId),
     estadoExperienciaDoUsuario(getDb(), sessao.usuarioId),
   ])
+
+  // "Sem jogos hoje" numa terça de folga e "sem jogos por mais um mês" são
+  // coisas diferentes para quem paga. Só perguntamos ao banco no caso vazio.
+  const hiato =
+    feed.estadoVazio === 'SEM_JOGO_HOJE'
+      ? await estadoDaTemporada(getDb(), ruleset, agora)
+      : null
+  const estadoVazio =
+    hiato?.emHiato === true ? ('TEMPORADA_NAO_COMECOU' as const) : feed.estadoVazio
   // Cabeçalhos e cards vêm do mesmo recorte, incluindo jogos ainda ao vivo
   // que começaram na rodada anterior e atravessaram a meia-noite.
   const jogosDoDia = feed.jogos
@@ -415,8 +434,13 @@ export default async function PaginaFireLive({
         <AtualizarAoVivo />
       )}
 
-      {feed.estadoVazio !== null && !temRecorte && visiveis.length === 0 && (
-        <TextoVazio estado={feed.estadoVazio} primeiroJogo={feed.primeiroJogoUtc} fuso={fuso} />
+      {estadoVazio !== null && !temRecorte && visiveis.length === 0 && (
+        <TextoVazio
+          estado={estadoVazio}
+          primeiroJogo={feed.primeiroJogoUtc}
+          fuso={fuso}
+          proximoJogo={hiato?.proximoJogo ?? null}
+        />
       )}
 
       {recorteVazio && (

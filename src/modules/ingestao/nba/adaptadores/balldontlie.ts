@@ -344,7 +344,7 @@ export function mapearTimeBalldontlie(bruto: unknown): TimeExterno {
   }
 }
 
-export function mapearJogadorBalldontlie(bruto: unknown): JogadorExterno {
+export function mapearJogadorBalldontlie(bruto: unknown, ativo = true): JogadorExterno {
   const jogador = validar(jogadorSchema, bruto, 'jogador ativo')
   return {
     idExterno: String(jogador.id),
@@ -354,7 +354,7 @@ export function mapearJogadorBalldontlie(bruto: unknown): JogadorExterno {
     alturaCm: alturaEmCentimetros(jogador.height),
     numeroCamisa: numeroCamisa(jogador.jersey_number),
     fotoUrl: null,
-    ativo: true,
+    ativo,
   }
 }
 
@@ -533,7 +533,43 @@ export class FonteBalldontlie implements FonteNBA {
     const jogadores = await this.buscarLista('/players/active?per_page=100', jogadorSchema, {
       paginado: true,
     })
-    return jogadores.map(mapearJogadorBalldontlie)
+    return jogadores.map((j) => mapearJogadorBalldontlie(j))
+  }
+
+  /**
+   * Resolve jogadores pelo id, incluindo quem não está mais na liga.
+   *
+   * `/players` cobre a história inteira; `/players/active` só o elenco de hoje.
+   * Chegar aqui significa que o cadastro — alimentado pelo segundo — não
+   * conhece o id, então o jogador está fora da liga: é o que `ativo: false`
+   * registra. Se ele voltar a aparecer em `/players/active`, a sincronização
+   * de elenco em modo SNAPSHOT corrige o estado (`sincronizar/elenco.ts`).
+   *
+   * Em lotes de 100 — o `per_page` máximo do provedor — para não montar uma
+   * URL de 300 ids que o servidor recusa.
+   */
+  async jogadoresPorId(idsExternos: string[]): Promise<JogadorExterno[]> {
+    if (idsExternos.length === 0) return []
+
+    const unicos = [...new Set(idsExternos)]
+    const resolvidos: JogadorExterno[] = []
+
+    for (let inicio = 0; inicio < unicos.length; inicio += 100) {
+      const lote = unicos.slice(inicio, inicio + 100)
+      const consulta = lote
+        .map((id) => `player_ids[]=${encodeURIComponent(id)}`)
+        .join('&')
+      const jogadores = await this.buscarLista(
+        `/players?${consulta}&per_page=100`,
+        jogadorSchema,
+        { paginado: true },
+      )
+      // Id que o provedor não conhece simplesmente não volta na lista. Quem
+      // decide o que fazer com a ausência é a sincronização, não o adapter.
+      resolvidos.push(...jogadores.map((j) => mapearJogadorBalldontlie(j, false)))
+    }
+
+    return resolvidos
   }
 
   async listarJogos(dataIso: string): Promise<JogoExterno[]> {

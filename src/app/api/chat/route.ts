@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 
 import { dataDeReferencia, intervaloDoDia } from '@/modules/dominio/rodada'
-import { calendarioDoRuleset, temporadaDe } from '@/modules/dominio/temporada'
+import { temporadaParaExibir } from '@/modules/entrega/estatisticas/temporadas'
 import { getDb } from '@/modules/dominio/db/cliente'
 import { portaLLMDoAmbiente } from '@/modules/ingestao/llm'
 import { configuracaoChat, conversaDoDia, responder } from '@/modules/entrega/chat'
@@ -104,12 +104,14 @@ export async function POST(requisicao: Request): Promise<Response> {
       texto,
       dataReferencia,
       fuso: ruleset.rodada.fuso,
-      // A temporada é calculada AQUI porque é aqui que o ruleset existe:
+      // A temporada é resolvida AQUI porque é aqui que o ruleset existe:
       // `responder` não o recebe, e passá-lo só para isto arrastaria o motor
-      // para dentro do chat.
-      temporada: temporadaDe(
+      // para dentro do chat. É a temporada EXIBIDA: o assistente precisa
+      // falar dos mesmos números que a tela ao lado dele mostra.
+      temporada: await temporadaParaExibir(
+        getDb(),
+        ruleset,
         intervaloDoDia(dataReferencia, ruleset.rodada.fuso).inicio,
-        calendarioDoRuleset(ruleset),
       ),
       agora,
       cotaDiaria,

@@ -2,6 +2,7 @@ import { unstable_cache } from 'next/cache'
 
 import { getDb } from '@/modules/dominio/db/cliente'
 import type { ConfigTemporada } from '@/modules/dominio/temporada'
+import { temporadaParaExibirNoCalendario } from '@/modules/entrega/estatisticas/temporadas'
 import { lerLateral, type DadosDaLateral } from '@/modules/entrega/lateral'
 
 /**
@@ -23,8 +24,25 @@ export const TAG_LATERAL = 'lateral'
  * função não é página nem lê feed.
  */
 export const lerLateralCacheada = unstable_cache(
-  async (hoje: string, temporada: string, config: ConfigTemporada): Promise<DadosDaLateral> =>
-    lerLateral(getDb(), { hoje, temporada, config }),
+  async (
+    hoje: string,
+    config: ConfigTemporada,
+    minimoJogosParaExibir: number,
+  ): Promise<DadosDaLateral> => {
+    const db = getDb()
+    // A temporada é resolvida AQUI, e não em quem monta a lateral: a lateral
+    // aparece em toda tela de aba, e uma consulta ao banco no momento do monte
+    // sairia do cache e acompanharia cada abertura de página. Os argumentos
+    // são a chave do cache — por isso o piso entra como número, e não o
+    // ruleset inteiro.
+    const temporada = await temporadaParaExibirNoCalendario(
+      db,
+      config,
+      minimoJogosParaExibir,
+      new Date(),
+    )
+    return lerLateral(db, { hoje, temporada, config })
+  },
   ['lateral'],
   { tags: [TAG_LATERAL], revalidate: 3600 },
 )

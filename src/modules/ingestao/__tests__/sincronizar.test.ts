@@ -14,6 +14,7 @@ import {
   jogadores,
   jogos,
   lesoesEscalacao,
+  mapaJogadores,
   mediasJogador,
   times,
 } from '../../dominio/db/schema'
@@ -639,14 +640,55 @@ describe('dado incompleto não vira dado inventado', () => {
     expect(await banco.db.select().from(jogos)).toHaveLength(0)
   })
 
-  it('box score de jogador sem identidade aborta o snapshot inteiro', async () => {
+  it('jogador fora do cadastro que o provedor conhece é resolvido, e a partida grava', async () => {
     await sincronizarTimes(banco.db, fonte())
     await sincronizarJogos(banco.db, fonte(), DATA, AGORA)
     const partidas = await jogosDaData(banco.db, fonte(), DATA)
 
-    // Nenhum jogador foi sincronizado: não há identidade para resolver.
+    // Nenhum jogador foi sincronizado: é o retrato do backfill de temporada
+    // passada, em que o box score cita quem /players/active não devolve. O
+    // provedor os devolve marcados como fora da liga, que é o caso real.
+    const aposentados = new FonteFake(PROVEDOR, {
+      ...FIXTURE,
+      jogadores: FIXTURE.jogadores!.map((j) => ({ ...j, ativo: false })),
+    })
+    const r = await sincronizarBoxScore(banco.db, aposentados, partidas[0]!, AGORA)
+
+    expect(r.gravados).toBeGreaterThan(0)
+
+    // O jogador nasce, e o estado que a fronteira determinou chega intacto.
+    const criados = await banco.db.select().from(jogadores)
+    expect(criados.length).toBeGreaterThan(0)
+    expect(criados.every((j) => j.ativo === false)).toBe(true)
+
+    // A curadoria do CJ não foi tocada: vínculo é trabalho humano.
+    expect(await banco.db.select().from(mapaJogadores)).toHaveLength(0)
+  })
+
+  it('reexecutar a mesma partida não duplica o jogador resolvido', async () => {
+    await sincronizarTimes(banco.db, fonte())
+    await sincronizarJogos(banco.db, fonte(), DATA, AGORA)
+    const partidas = await jogosDaData(banco.db, fonte(), DATA)
+
+    await sincronizarBoxScore(banco.db, fonte(), partidas[0]!, AGORA)
+    const depoisDaPrimeira = await banco.db.select().from(jogadores)
+    await sincronizarBoxScore(banco.db, fonte(), partidas[0]!, AGORA)
+    const depoisDaSegunda = await banco.db.select().from(jogadores)
+
+    expect(depoisDaSegunda).toHaveLength(depoisDaPrimeira.length)
+  })
+
+  it('box score de jogador que o provedor também não conhece aborta o snapshot inteiro', async () => {
+    await sincronizarTimes(banco.db, fonte())
+    await sincronizarJogos(banco.db, fonte(), DATA, AGORA)
+    const partidas = await jogosDaData(banco.db, fonte(), DATA)
+
+    // A fonte devolve o box score, mas não sabe dizer quem são os jogadores:
+    // aí a rejeição continua sendo a resposta certa.
+    const cega = new FonteFake(PROVEDOR, { ...FIXTURE, jogadores: [] })
+
     await expect(
-      sincronizarBoxScore(banco.db, fonte(), partidas[0]!, AGORA),
+      sincronizarBoxScore(banco.db, cega, partidas[0]!, AGORA),
     ).rejects.toThrow(/snapshot rejeitado.*sem identidade/)
 
     expect(await banco.db.select().from(estatisticasJogo)).toHaveLength(0)

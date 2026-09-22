@@ -67,3 +67,46 @@ export function calendarioDoRuleset(ruleset: {
     fuso: ruleset.rodada.fuso,
   }
 }
+
+/** Uma temporada e quanto dado encerrado ela tem. */
+export type TemporadaComDados = {
+  temporada: string
+  jogosEncerrados: number
+}
+
+/**
+ * A temporada que as telas de CONSULTA devem mostrar.
+ *
+ * `temporadaDe` responde "a que temporada esta DATA pertence" e continua certa.
+ * Esta responde outra pergunta: "que temporada esta TELA deve mostrar?". Entre
+ * o lançamento (~02/10) e a primeira bola (~03/11) as duas divergem — o
+ * calendário já diz 2026-27 enquanto o banco só tem 2025-26 — e sem esta função
+ * o assinante vê tela vazia sem erro nenhum.
+ *
+ * Regra: se a temporada do calendário já alcançou o piso, é ela. Senão, a mais
+ * recente que o tenha alcançado. Se nenhuma alcançou, devolve a do calendário —
+ * tela vazia honesta em vez de tela errada.
+ *
+ * A consulta anda para TRÁS do calendário, nunca para a frente: uma temporada
+ * futura com jogo gravado por acidente (pré-temporada com rótulo adiantado) não
+ * pode puxar a tela para uma temporada que ainda não começou.
+ *
+ * Função pura: o piso vem do ruleset e os fatos entram como argumento.
+ */
+export function temporadaExibida(
+  doCalendario: string,
+  comDados: TemporadaComDados[],
+  minimoJogos: number,
+): string {
+  const alcancaram = comDados.filter((t) => t.jogosEncerrados >= minimoJogos)
+
+  if (alcancaram.some((t) => t.temporada === doCalendario)) return doCalendario
+
+  // O rótulo começa pelo ano inicial com quatro dígitos ("2025-26", "2025"),
+  // então a ordem alfabética é a ordem cronológica.
+  const anteriores = alcancaram
+    .filter((t) => t.temporada < doCalendario)
+    .sort((a, b) => b.temporada.localeCompare(a.temporada))
+
+  return anteriores[0]?.temporada ?? doCalendario
+}

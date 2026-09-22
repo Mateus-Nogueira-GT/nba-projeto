@@ -16,8 +16,17 @@ describe('a abertura do app', () => {
   it('decide pelo 1º quarto, e não checa sessão — as telas de destino já têm portão', () => {
     const fonte = semComentarios(readFileSync('src/app/(app)/abrir/page.tsx', 'utf8'))
     expect(fonte).toContain("=== 'Q1'")
-    expect(fonte).toContain("redirect(temJogoNoPrimeiroQuarto ? '/fire-live' : '/')")
+    expect(fonte).toContain("if (temJogoNoPrimeiroQuarto) redirect('/fire-live')")
+    expect(fonte).toContain("redirect('/')")
     expect(fonte).not.toContain('exigirNivel')
+  })
+
+  it('no hiato entre temporadas abre em Estatísticas — a única aba com conteúdo', () => {
+    // Sem isto, o app abre num vazio de ~32 dias entre o lançamento e a volta
+    // da NBA: não há apito retroativo (decisão do parceiro, 22/09).
+    const fonte = semComentarios(readFileSync('src/app/(app)/abrir/page.tsx', 'utf8'))
+    expect(fonte).toContain('emHiato')
+    expect(fonte).toContain("redirect('/estatisticas')")
   })
 
   it('o PWA e o login apontam para ela', () => {

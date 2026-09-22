@@ -274,6 +274,15 @@ export class FonteApiSports implements FonteNBA {
     return jogadores.map(mapearJogadorApiSports)
   }
 
+  /**
+   * O plano não documenta busca de jogador por id incluindo quem saiu da liga.
+   * Inventar um endpoint na reserva é pior que não ter a capacidade: quem
+   * chama trata a ausência (`sincronizar/partida.ts`).
+   */
+  async jogadoresPorId(_idsExternos: string[]): Promise<JogadorExterno[]> {
+    throw new CapacidadeNaoSuportadaError(this.nome, 'busca de jogador por id no API-NBA v2')
+  }
+
   async listarJogos(dataIso: string): Promise<JogoExterno[]> {
     const data = z.iso.date().parse(dataIso)
     const jogos = await this.buscar('/games', { date: data }, jogoSchema)

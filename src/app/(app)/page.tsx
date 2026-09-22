@@ -33,6 +33,7 @@ import {
   rotaDaLista,
   type EstadoDaLista,
 } from '@/modules/entrega/lista-secreta-rotas'
+import { estadoDaTemporada } from '@/modules/entrega/estatisticas/temporadas'
 import { rulesetAtivo } from '@/modules/entrega/ruleset-ativo'
 import { dataDeReferencia } from '@/modules/dominio/rodada'
 import { dataHora, diaDaRodada, horaEmTexto } from '@/components/formato'
@@ -327,6 +328,11 @@ export default async function PaginaListaSecreta({
             primeiro.dataHoraUtc.getTime() -
               ruleset.publicacao.lista_secreta.antecedencia_minutos * 60_000,
           )
+    // Sem jogo hoje, a pergunta seguinte é "quando volta?". No hiato entre
+    // temporadas a resposta é um mês, não um dia — e dizer só "sem jogos hoje"
+    // faria a tela parecer quebrada por 32 dias seguidos.
+    const hiato =
+      primeiro === undefined ? await estadoDaTemporada(getDb(), ruleset, new Date()) : null
     return (
       <Moldura
         aba="lista"
@@ -360,12 +366,20 @@ export default async function PaginaListaSecreta({
               textTransform: 'uppercase',
             }}
           >
-            {saida ? `Próxima lista às ${horaEmTexto(saida, fuso)}` : 'Sem jogos hoje'}
+            {saida
+              ? `Próxima lista às ${horaEmTexto(saida, fuso)}`
+              : hiato?.emHiato === true
+                ? 'A temporada ainda não começou'
+                : 'Sem jogos hoje'}
           </p>
           <p style={{ margin: '8px 0 0', fontSize: 13, color: semantico.texto55 }}>
             {saida
               ? 'A lista sai antes do primeiro jogo da rodada. Enquanto isso, a noite passada:'
-              : 'Sem rodada hoje. Enquanto isso, a noite passada:'}
+              : hiato?.emHiato === true
+                ? hiato.proximoJogo
+                  ? `A NBA volta em ${hiato.proximoJogo}, e a Lista volta com ela. Até lá, as estatísticas da temporada ${hiato.exibida} estão na aba STATS:`
+                  : `A NBA está entre temporadas. Até lá, as estatísticas da temporada ${hiato.exibida} estão na aba STATS:`
+                : 'Sem rodada hoje. Enquanto isso, a noite passada:'}
           </p>
           <p style={{ margin: '12px 0 0', fontSize: 13 }}>
             <Link

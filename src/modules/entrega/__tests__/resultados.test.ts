@@ -377,6 +377,23 @@ describe('a última rodada com conferência', () => {
     expect(await ultimaRodadaConferida(banco.db, somarDias(HOJE, -60))).toBeNull()
   })
 
+  /**
+   * /resultados não precisou mudar na spec de 22/09, e este teste é a prova.
+   *
+   * A tela pergunta ao BANCO qual foi a última rodada conferida, não ao
+   * calendário — então ela atravessa a virada de temporada sozinha. Um ano
+   * depois da última rodada conferida, ela continua encontrando a mesma.
+   *
+   * O outro lado da moeda: no hiato não há apito retroativo (decisão 1 do
+   * parceiro), então quem nunca teve apito continua sem ter. A tela cai no dia
+   * de hoje e mostra o estado vazio — honesto, e coberto pela T7.
+   */
+  it('acha a última rodada conferida mesmo com o calendário já em outra temporada', async () => {
+    const umAnoDepois = somarDias(HOJE, 365)
+
+    expect(await ultimaRodadaConferida(banco.db, umAnoDepois)).toBe(ONTEM)
+  })
+
   it('um jogo de ontem que voltasse a AO_VIVO tira ontem da conta', async () => {
     const { jogos } = await import('../../dominio/db/schema')
     const ontem = await recapDaNoite(banco.db, ONTEM)

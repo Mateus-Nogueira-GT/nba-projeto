@@ -12,6 +12,14 @@ export type UltimaAtualizacaoProps = {
    * mostrava três horas a mais para o assinante brasileiro.
    */
   fuso: string
+  /**
+   * Temporada que a tela está mostrando — quando ela NÃO é a do calendário.
+   *
+   * Entre o lançamento e a primeira bola da temporada nova a consulta mostra a
+   * anterior (`temporadaExibida`). Sem dizê-lo, o assinante lê média de
+   * 2025-26 achando que é de hoje.
+   */
+  temporada?: string
 }
 
 /**
@@ -59,7 +67,7 @@ function decorrido(em: Date, agora: Date): string {
  * chamar o relógio aqui dentro tornaria o teste dependente do segundo em que
  * roda.
  */
-export function UltimaAtualizacao({ em, fonte, agora, fuso }: UltimaAtualizacaoProps) {
+export function UltimaAtualizacao({ em, fonte, agora, fuso, temporada }: UltimaAtualizacaoProps) {
   const vazio = semDado(em)
 
   return (
@@ -88,6 +96,12 @@ export function UltimaAtualizacao({ em, fonte, agora, fuso }: UltimaAtualizacaoP
           <time dateTime={em.toISOString()}>{formatar(em, fuso)}</time>
           <span aria-hidden>·</span>
           <span>{fonte}</span>
+        </>
+      )}
+      {temporada !== undefined && (
+        <>
+          <span aria-hidden>·</span>
+          <span data-testid="temporada-exibida">temporada {temporada}</span>
         </>
       )}
     </footer>

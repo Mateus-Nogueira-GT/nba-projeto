@@ -4,6 +4,7 @@ import jogadoresPagina1 from '../__fixtures__/balldontlie-active-players-page-1.
 import jogadoresPagina2 from '../__fixtures__/balldontlie-active-players-page-2.json'
 import jogos from '../__fixtures__/balldontlie-games.json'
 import jogoAoVivo from '../__fixtures__/balldontlie-live-game.json'
+import jogadoresPorId from '../__fixtures__/balldontlie-players-by-id.json'
 import classificacao from '../__fixtures__/balldontlie-standings.json'
 import stats from '../__fixtures__/balldontlie-stats.json'
 import times from '../__fixtures__/balldontlie-times.json'
@@ -232,6 +233,49 @@ describe('FonteBalldontlie — contrato oficial GOAT', () => {
     const { fonte } = fonteCom([json({ meta: { per_page: 25 } })])
 
     await expect(fonte.listarTimes()).rejects.toThrow(/resposta.*inválido/)
+  })
+
+  it('resolve jogadores por id e os marca como fora da liga', async () => {
+    const { fonte, chamadas } = fonteCom([json(jogadoresPorId)])
+
+    const resolvidos = await fonte.jogadoresPorId(['666969', '38017703'])
+
+    expect(resolvidos).toHaveLength(2)
+    expect(resolvidos[0]).toMatchObject({
+      idExterno: '666969',
+      nomeCompleto: 'Dennis Schroder',
+      timeSiglaProvedor: 'CHA',
+      numeroCamisa: 17,
+      // Foi preciso buscar por id justamente porque /players/active não o trouxe.
+      ativo: false,
+    })
+    expect(chamadas[0]?.url).toContain('player_ids[]=666969')
+    expect(chamadas[0]?.url).toContain('player_ids[]=38017703')
+  })
+
+  it('id que o provedor também não conhece some da resposta, sem lançar', async () => {
+    const { fonte } = fonteCom([json({ data: [], meta: { next_cursor: null, per_page: 100 } })])
+
+    await expect(fonte.jogadoresPorId(['999999999'])).resolves.toEqual([])
+  })
+
+  it('parte lote grande em páginas de 100 ids', async () => {
+    const vazio = { data: [], meta: { next_cursor: null, per_page: 100 } }
+    const { fonte, chamadas } = fonteCom([json(jogadoresPorId), json(vazio), json(vazio)])
+
+    const ids = Array.from({ length: 250 }, (_, i) => String(i + 1))
+    await fonte.jogadoresPorId(ids)
+
+    expect(chamadas).toHaveLength(3)
+    expect(chamadas[0]?.url.match(/player_ids\[\]=/g)).toHaveLength(100)
+    expect(chamadas[2]?.url.match(/player_ids\[\]=/g)).toHaveLength(50)
+  })
+
+  it('lista vazia não faz requisição nenhuma', async () => {
+    const { fonte, chamadas } = fonteCom([])
+
+    await expect(fonte.jogadoresPorId([])).resolves.toEqual([])
+    expect(chamadas).toHaveLength(0)
   })
 
   it('falha explicitamente nas duas capacidades que o contrato oficial não cobre', async () => {

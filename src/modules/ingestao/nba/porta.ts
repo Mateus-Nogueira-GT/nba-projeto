@@ -151,6 +151,14 @@ export interface FonteNBA {
   readonly nome: string
   listarTimes(): Promise<TimeExterno[]>
   listarJogadores(): Promise<JogadorExterno[]>
+  /**
+   * Resolve jogadores pelo id do provedor, inclusive quem já saiu da liga.
+   *
+   * `listarJogadores` traz só o elenco ATIVO de hoje, então um box score de
+   * temporada passada cita gente que aquele caminho nunca devolve. Sem isto a
+   * partida inteira é rejeitada por causa de um aposentado.
+   */
+  jogadoresPorId(idsExternos: string[]): Promise<JogadorExterno[]>
   listarJogos(dataIso: string): Promise<JogoExterno[]>
   boxScore(jogoIdExterno: string): Promise<LinhaBoxScore[]>
   boxScoreDoTime(jogoIdExterno: string): Promise<LinhaBoxScoreTimeExterna[]>

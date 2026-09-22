@@ -1,0 +1,54 @@
+{
+  "data": [
+    {
+      "id": 666969,
+      "first_name": "Dennis",
+      "last_name": "Schroder",
+      "position": "G",
+      "height": "6-1",
+      "weight": "172",
+      "jersey_number": "17",
+      "college": "None",
+      "country": "Germany",
+      "draft_year": 2013,
+      "draft_round": 1,
+      "draft_number": 17,
+      "team": {
+        "id": 4,
+        "conference": "East",
+        "division": "Southeast",
+        "city": "Charlotte",
+        "name": "Hornets",
+        "full_name": "Charlotte Hornets",
+        "abbreviation": "CHA"
+      }
+    },
+    {
+      "id": 38017703,
+      "first_name": "Danny",
+      "last_name": "Green",
+      "position": "F",
+      "height": "6-6",
+      "weight": "215",
+      "jersey_number": "14",
+      "college": "North Carolina",
+      "country": "USA",
+      "draft_year": 2009,
+      "draft_round": 2,
+      "draft_number": 46,
+      "team": {
+        "id": 20,
+        "conference": "East",
+        "division": "Atlantic",
+        "city": "Philadelphia",
+        "name": "76ers",
+        "full_name": "Philadelphia 76ers",
+        "abbreviation": "PHI"
+      }
+    }
+  ],
+  "meta": {
+    "next_cursor": null,
+    "per_page": 100
+  }
+}
