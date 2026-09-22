@@ -158,7 +158,7 @@ export async function simularAte(
   const config = calendarioDoRuleset(ruleset)
 
   const cadastro = await semearCadastro(db, agora)
-  const elencos = elencosDaLista(cadastro.analise.jogadores)
+  const elencos = elencosDaLista(cadastro.analise.jogadores, ruleset)
   const timeDoJogador = await timeDaLista(db)
   const siglas = [...elencos.keys()].sort()
 
@@ -446,17 +446,32 @@ async function registrarDesfalques(
       ),
     )
 
-  const chavePorId = new Map([...c.cadastro.jogadorPorChave].map(([chave, id]) => [id, chave]))
+  // A comparação é por UUID, nunca pela grafia. `jogadorPorChave` é
+  // muitos-para-um desde que a curadoria passou a fundir as grafias do mesmo
+  // jogador entre as listas ("Hart" em pontos, "Josh Hart" em rebotes): virar
+  // o Map deixava UMA chave por id — a última — e o elenco, que usa a grafia
+  // da lista de PONTOS, deixava de se reconhecer no desfalque. O jogador
+  // ficava FORA em `lesoes_escalacao` e ganhava linha de box assim mesmo.
+  const foraPorJogo = new Map<string, Set<string>>()
+  for (const g of gravados) {
+    const ids = foraPorJogo.get(g.jogoId) ?? new Set<string>()
+    ids.add(g.jogadorId)
+    foraPorJogo.set(g.jogoId, ids)
+  }
+
   const fora = new Map<string, string[]>()
   for (const a of agendados) {
+    const ids = foraPorJogo.get(a.jogoId) ?? new Set<string>()
     for (const sigla of [a.jogo.casa, a.jogo.visitante]) {
       const elenco = c.elencos.get(sigla) ?? []
-      const doJogo = gravados
-        .filter((g) => g.jogoId === a.jogoId)
-        .map((g) => chavePorId.get(g.jogadorId))
       fora.set(
         sigla,
-        elenco.filter((j) => doJogo.includes(chaveDeNome(j.nome))).map((j) => j.nome),
+        elenco
+          .filter((j) => {
+            const id = c.cadastro.jogadorPorChave.get(chaveDeNome(j.nome))
+            return id !== undefined && ids.has(id)
+          })
+          .map((j) => j.nome),
       )
     }
   }

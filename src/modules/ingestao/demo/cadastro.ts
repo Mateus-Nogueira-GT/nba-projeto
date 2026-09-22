@@ -89,10 +89,27 @@ async function cadastrar(db: Db, conteudo: string, agora: Date): Promise<Cadastr
     }
     jaExistentes.set(chave, vinculo.jogadorId)
   }
+  // Duas grafias que a CURADORIA resolve na mesma pessoa são um jogador só.
+  // O documento escreve "Cooper Fllag" na lista de pontos e "Cooper Flagg" nas
+  // de rebotes e assistências, e `identidades-nba.ts` dá o mesmo personId às
+  // duas. Sem esta memória nascem dois canônicos com o MESMO nome na tela — e,
+  // no dia em que os dois apitam, dois cards do mesmo humano lado a lado.
+  //
+  // O que não autorizava fundir continua não autorizando: a chave é o
+  // personId da curadoria, não a semelhança de nome. "Wiggins" (Andrew em
+  // Miami, Aaron em Atlanta) tem personId nulo na tabela e segue separado.
+  const porPersonIdCriado = new Map<number, string>()
   for (const j of analise.jogadores) {
     if (jaExistentes.has(chaveDeNome(j.nomeNaLista))) continue
-    const nomeOficial =
-      identidadeNbaPorAlias(j.nomeNaLista)?.nomeOficial ?? nomeDeExibicao(j.nomeNaLista)
+    const curada = identidadeNbaPorAlias(j.nomeNaLista)
+    const nomeOficial = curada?.nomeOficial ?? nomeDeExibicao(j.nomeNaLista)
+
+    const mesmaPessoa = curada?.personId == null ? undefined : porPersonIdCriado.get(curada.personId)
+    if (mesmaPessoa !== undefined) {
+      jaExistentes.set(chaveDeNome(j.nomeNaLista), mesmaPessoa)
+      continue
+    }
+
     // Nome igual sem vínculo não autoriza fundir canônicos ou duplicar o cadastro.
     if (
       canonicos.some((c) =>
@@ -112,7 +129,10 @@ async function cadastrar(db: Db, conteudo: string, agora: Date): Promise<Cadastr
         posicao: posicaoDe(j.nomeNaLista),
       })
       .returning()
-    if (novo) jaExistentes.set(chaveDeNome(j.nomeNaLista), novo.id)
+    if (novo) {
+      jaExistentes.set(chaveDeNome(j.nomeNaLista), novo.id)
+      if (curada?.personId != null) porPersonIdCriado.set(curada.personId, novo.id)
+    }
   }
 
   for (const j of analise.jogadores) {
@@ -142,12 +162,23 @@ async function cadastrar(db: Db, conteudo: string, agora: Date): Promise<Cadastr
   })
   await ativarVersaoNiveis(db, relatorio.versaoId)
 
-  // 1b · REBOTES e ASSISTÊNCIAS. O importador só sabe classificar PONTOS,
-  //      porque é o único atributo que o CJ enviou. Estas linhas são
-  //      INVENTADAS e entram na MESMA versão de níveis — o motor as trata
-  //      exatamente como trataria a lista real, sem saber a diferença.
-  //      Quando as listas verdadeiras chegarem, elas vêm pelo importador e
-  //      este bloco desaparece.
+  // 1b · REBOTES e ASSISTÊNCIAS — só o que a lista do CJ NÃO cobre.
+  //
+  //      O documento de 21/09 já traz as duas listas e o importador as grava
+  //      (118 jogadores em rebotes, 57 em assistências). Mas a de pontos tem
+  //      234: os demais ficariam sem nível nos outros dois atributos, e a demo
+  //      precisa de elenco cheio para ter o que mostrar. Estas linhas são
+  //      INVENTADAS e entram na MESMA versão de níveis, com
+  //      `onConflictDoNothing` — a chave única é (versão, jogador, atributo),
+  //      então quem já veio da lista real fica com o nível DELE; a derivação
+  //      só preenche buraco.
+  //
+  //      ⚠️  `semear.ts` e `ao-vivo.ts` ainda calculam com a derivação para
+  //      TODO MUNDO (`niveisDoJogador`), inclusive para quem tem nível real
+  //      gravado aqui. Nos dois atributos, o nível que a demo usa pode não ser
+  //      o que a tabela guarda — ex.: Shai é "All star" na lista de
+  //      assistências do CJ e MVP na derivação. Enquanto
+  //      `niveis.atributos: [PONTOS]` isso não sai do seed.
   const niveisDerivados: (typeof niveis.$inferInsert)[] = []
   for (const j of analise.jogadores) {
     const jogadorId = jaExistentes.get(chaveDeNome(j.nomeNaLista))

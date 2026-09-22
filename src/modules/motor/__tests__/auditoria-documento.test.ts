@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import yamlBruto from '../../../../config/ruleset.v1.yaml?raw'
 
 import { avaliar } from '../index'
-import { deltaOscilacao } from '../atributos'
+import { deltaOscilacao, faixaDeClassificacao } from '../atributos'
 import { avaliarFireLive } from '../fire-live/avaliar'
 import { blocoDeTopo } from '../fire-live/bloco-topo'
 import { avaliarOscilacao } from '../lista-secreta/oscilacao'
@@ -140,6 +140,88 @@ describe('auditoria da fonte nova · regras explícitas de rebotes', () => {
         resultado.filter((a) => a.atributo === 'REBOTES').map((a) => [a.jogadorId, a.nivelApito]),
       ),
     ).toEqual({ hart: 3, drummond: 2 })
+  })
+})
+
+describe('auditoria da fonte nova · seção de assistências', () => {
+  /** Um fato de assistências: nível, média e os jogos, do mais recente. */
+  function armador(nivel: Nivel, media: number, jogos: number[]): JogadorFato {
+    return {
+      id: 'armador',
+      nome: 'armador',
+      timeId: 'NYK',
+      posicaoHierarquia: 1,
+      classificacoes: { ASSISTENCIAS: nivel },
+      medias: { ASSISTENCIAS: media },
+      historico: jogos.map((assistencias, i) => ({
+        jogoId: `anterior-${i}`,
+        data: '2026-09-07',
+        jogou: true,
+        pontos: 0,
+        rebotes: 0,
+        assistencias,
+      })),
+    }
+  }
+
+  /**
+   * "Mvp - média de 8 em diante apita quando o jogador desse nível fizer 4
+   * assistências ou menos abaixo da média dele em algum jogo"; All Star e
+   * Suporte, 3.
+   *
+   * O bloco geral do mesmo documento diz "<=2 abaixo da média" para
+   * assistências, sem separar nível — e era de lá que estes deltas saíam.
+   * Vale a seção (decisão do parceiro, 22/09/2026). Se alguém voltar ao "<=2",
+   * este teste cai.
+   */
+  it('o delta por nível é o da seção, não o "<=2" do bloco geral', () => {
+    const delta = (nivel: Nivel) =>
+      deltaOscilacao(nivel, 'ASSISTENCIAS', 'jogador-sem-excecao', tresAtributos)
+    expect(delta('MVP')).toBe(4)
+    expect(delta('ALL_STAR')).toBe(3)
+    expect(delta('SUPORTE')).toBe(3)
+  })
+
+  it('MVP com 8 apg apita ao fazer 4 assistências, e não apita ao fazer 5', () => {
+    expect(avaliarOscilacao(armador('MVP', 8, [4]), 'ASSISTENCIAS', tresAtributos)).toEqual({
+      nivelApito: 1,
+      turbo: false,
+    })
+    expect(avaliarOscilacao(armador('MVP', 8, [5]), 'ASSISTENCIAS', tresAtributos)).toBeNull()
+  })
+
+  it('All Star com 6 apg apita ao fazer 3, e não apita ao fazer 4', () => {
+    expect(avaliarOscilacao(armador('ALL_STAR', 6, [3]), 'ASSISTENCIAS', tresAtributos)).toEqual({
+      nivelApito: 1,
+      turbo: false,
+    })
+    expect(avaliarOscilacao(armador('ALL_STAR', 6, [4]), 'ASSISTENCIAS', tresAtributos)).toBeNull()
+  })
+
+  /**
+   * As faixas de média que definem o nível, nas duas tabelas do documento:
+   * "Classificação de jogadores rebotes" e a abertura da seção de
+   * assistências. Nenhuma regra do motor classifica por média — o nível vem
+   * da lista curada —, mas os números são dele e o teste os trava no ruleset.
+   */
+  it('as faixas de classificação são as das tabelas do documento', () => {
+    const faixa = (nivel: Nivel, atributo: Atributo) =>
+      faixaDeClassificacao(nivel, atributo, tresAtributos)
+
+    expect(faixa('MVP', 'REBOTES')).toEqual({ min: 10 })
+    expect(faixa('ALL_STAR', 'REBOTES')).toEqual({ min: 7, max: 9.8 })
+    expect(faixa('SUPORTE', 'REBOTES')).toEqual({ min: 4, max: 6.9 })
+
+    expect(faixa('MVP', 'ASSISTENCIAS')).toEqual({ min: 8 })
+    expect(faixa('ALL_STAR', 'ASSISTENCIAS')).toEqual({ min: 6, max: 7.9 })
+    expect(faixa('SUPORTE', 'ASSISTENCIAS')).toEqual({ min: 4, max: 5.9 })
+
+    // O documento não classifica randola em nenhum dos dois, e PONTOS ele
+    // classifica por lista, sem faixa. Inventar qualquer uma seria inventar
+    // regra — ver as perguntas 2 e 4 de docs/05-perguntas-abertas.md.
+    expect(faixa('RANDOLA', 'REBOTES')).toBeUndefined()
+    expect(faixa('RANDOLA', 'ASSISTENCIAS')).toBeUndefined()
+    expect(faixa('MVP', 'PONTOS')).toBeUndefined()
   })
 })
 

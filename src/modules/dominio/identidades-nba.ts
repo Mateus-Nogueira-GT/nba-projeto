@@ -253,7 +253,20 @@ export const IDENTIDADES_NBA: readonly IdentidadeNBACurada[] = [
   { alias: 'Dieng', personId: 1631172, nomeOficial: 'Ousmane Dieng' },
 ]
 
-const porAlias = new Map(IDENTIDADES_NBA.map((i) => [normalizarTexto(i.alias), i]))
+/**
+ * Indexado pelo alias E pelo nome oficial: o documento do CJ escreve o mesmo
+ * jogador de duas formas em listas diferentes — "Cooper Fllag" em pontos e
+ * "Cooper Flagg" em rebotes e assistências —, e sem a segunda chave a grafia
+ * correta não encontrava a curadoria da errada. Conferido que nenhum nome
+ * oficial colide com o alias de OUTRA pessoa. Entrada ambígua (Wiggins) tem
+ * `nomeOficial: null` e continua de fora.
+ */
+const porAlias = new Map([
+  ...IDENTIDADES_NBA.filter((i) => i.nomeOficial !== null).map(
+    (i) => [normalizarTexto(i.nomeOficial!), i] as const,
+  ),
+  ...IDENTIDADES_NBA.map((i) => [normalizarTexto(i.alias), i] as const),
+])
 const porPersonId = new Map(
   IDENTIDADES_NBA.filter((i) => i.personId !== null).map((i) => [i.personId, i]),
 )

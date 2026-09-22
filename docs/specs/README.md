@@ -120,6 +120,7 @@ acrescentou duas:
 | Data | Pergunta | Resposta | Onde vive |
 | --- | --- | --- | --- |
 | 24/08/2026 | Qual timezone define a data de referência da rodada? | Fuso do horário de Brasília | `rodada.fuso` no ruleset |
+| 22/09/2026 | Oscilação de assistências: o "≤2 abaixo da média" do bloco geral ou o 4/3/3 por nível da seção de assistências? | A seção: MVP ≤4, All Star ≤3, Suporte ≤3 | `por_atributo.ASSISTENCIAS.oscilacao.delta` no ruleset |
 
 A resposta do fuso trouxe uma consequência que o cliente ainda não avaliou: no
 inverno americano — quase toda a temporada — o leste dos EUA está 2 horas atrás

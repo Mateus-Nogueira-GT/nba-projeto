@@ -12,6 +12,7 @@
  * ("hoje − 49 dias") desliza um dia a cada execução, então o calendário não
  * pode depender de onde a janela começa.
  */
+import type { Ruleset } from '../../motor/ruleset/schema'
 import type { Atributo, Nivel } from '../../motor/tipos'
 import type { JogadorNaLista } from '../niveis/parser'
 import { mediaDe, niveisDoJogador, semente } from './dados'
@@ -172,7 +173,10 @@ export type JogadorSim = {
  * assistências — nomes repetidos e `posicaoHierarquia` conflitante entre
  * as ocorrências do mesmo jogador.
  */
-export function elencosDaLista(jogadores: readonly JogadorNaLista[]): Map<string, JogadorSim[]> {
+export function elencosDaLista(
+  jogadores: readonly JogadorNaLista[],
+  ruleset: Ruleset,
+): Map<string, JogadorSim[]> {
   const elencos = new Map<string, JogadorSim[]>()
   for (const j of jogadores) {
     if (j.atributo !== 'PONTOS') continue
@@ -183,7 +187,7 @@ export function elencosDaLista(jogadores: readonly JogadorNaLista[]): Map<string
       nivel: j.nivel,
       posicaoHierarquia: j.posicaoHierarquia,
       niveis: niveisDoJogador(j.nomeNaLista, j.nivel),
-      medias: mediaDe(j.nomeNaLista, j.nivel),
+      medias: mediaDe(j.nomeNaLista, j.nivel, ruleset),
     })
     elencos.set(j.timeSigla, lista)
   }

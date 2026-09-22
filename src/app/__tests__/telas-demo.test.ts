@@ -180,7 +180,7 @@ describe('Lista Secreta', () => {
   }, 60_000)
 
   it('trocar a quantidade PRESERVA o recorte de atributo (regressão)', async () => {
-    // O usuário filtrou "Rebotes" e depois pediu "2 vítimas". Os chips de
+    // O usuário filtrou "Rebotes" e depois pediu "2 jogadores". Os chips de
     // quantidade montavam `/?quantidade=N` seco e devolviam a lista inteira,
     // sem aviso — o filtro que ele acabou de escolher sumia no clique.
     const { default: Pagina } = await import('../(app)/page')

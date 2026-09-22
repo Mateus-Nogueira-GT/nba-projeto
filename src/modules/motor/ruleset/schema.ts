@@ -30,6 +30,24 @@ const porNivel = <T extends z.ZodTypeAny>(valor: T) => z.record(nivel, valor)
  */
 const blocoAtributo = z.object({
   origem: z.enum(['homologado', 'demonstracao']),
+
+  /**
+   * Faixas de média que definem o NÍVEL DO JOGADOR no atributo — "Mvp: média
+   * de 10 rebotes em diante", do documento de 21/09.
+   *
+   * Nenhuma regra do motor classifica por média: o nível vem da lista curada
+   * do CJ. Isto registra o número DELE no lugar versionado e serve a quem
+   * precisa da faixa (a demo, para gerar média coerente com o nível).
+   *
+   * Parcial nos dois eixos, de propósito: o documento não dá faixa para
+   * RANDOLA em rebotes nem em assistências, e o nível mais alto é "em diante"
+   * — sem teto. Inventar qualquer um dos dois seria inventar regra
+   * (CLAUDE.md, regra 3).
+   */
+  classificacao: z
+    .partialRecord(nivel, z.object({ min: z.number(), max: z.number().optional() }))
+    .optional(),
+
   oscilacao: z
     .object({
       delta: porNivel(z.number()),

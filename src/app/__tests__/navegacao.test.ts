@@ -385,7 +385,7 @@ describe('filtros (identidade 05)', () => {
   it('o chip do grupo mostra o grupo E o que está filtrando: "Método: OPD"', () => {
     const html = renderToStaticMarkup(createElement(FolhaDeFiltros, { grupos }))
     expect(html).toContain('aria-label="Método: OPD"')
-    // Correções UX 19/09: só o valor ("G", "BOS", "5 vítimas") não dizia de
+    // Correções UX 19/09: só o valor ("G", "BOS", "5 jogadores") não dizia de
     // que grupo era.
     expect(html).toContain('>Método: OPD<')
     expect(html).not.toContain('>OPD<')

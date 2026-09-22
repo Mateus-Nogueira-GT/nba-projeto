@@ -35,6 +35,8 @@ import {
   nivelDoAtributo,
   posicaoDe,
 } from '../demo/dados'
+import { faixaDeClassificacao } from '../../motor/atributos'
+import { ATRIBUTOS, NIVEIS } from '../../motor/tipos'
 import type { Nivel } from '../../motor/tipos'
 
 describe('helpers determinísticos da demonstração', () => {
@@ -49,19 +51,19 @@ describe('helpers determinísticos da demonstração', () => {
 
   it('usa os números que o documento do CJ declara', () => {
     // "Shai Gilgeous-Alexander é nivel MVP em pontos, pois tem uma média de 31 ppg"
-    expect(mediaDe('Shai', 'MVP').ppg).toBe(31)
+    expect(mediaDe('Shai', 'MVP', ruleset).ppg).toBe(31)
     // "Nikola Jokic é nivel MVP em Rebotes, pois tem média de 12.9 RPG"
-    expect(mediaDe('Jokic', 'MVP').rpg).toBe(12.9)
+    expect(mediaDe('Jokic', 'MVP', ruleset).rpg).toBe(12.9)
     // "Karl Anthony towns é nivel all star em pontos... média de 20 ppg"
-    expect(mediaDe('Towns', 'ALL_STAR').ppg).toBe(20)
+    expect(mediaDe('Towns', 'ALL_STAR', ruleset).ppg).toBe(20)
     // "Aaron gordon é nivel suporte em pontos, pois tem média de 16 ppg"
-    expect(mediaDe('Gordon', 'SUPORTE').ppg).toBe(16)
+    expect(mediaDe('Gordon', 'SUPORTE', ruleset).ppg).toBe(16)
     // "Simone fontecchio é nivel randola pois tem media de 8,5 pontos"
-    expect(mediaDe('Fontenchhio', 'RANDOLA').ppg).toBe(8.5)
+    expect(mediaDe('Fontenchhio', 'RANDOLA', ruleset).ppg).toBe(8.5)
     // "Jamal murray é nivel all star em assistências pois tem uma média de 7 apg"
-    expect(mediaDe('Jamal Murray', 'ALL_STAR').apg).toBe(7)
+    expect(mediaDe('Jamal Murray', 'ALL_STAR', ruleset).apg).toBe(7)
     // "A média do lebron sendo 25,7 ppg"
-    expect(mediaDe('LeBron James', 'SUPORTE').ppg).toBe(25.7)
+    expect(mediaDe('LeBron James', 'SUPORTE', ruleset).ppg).toBe(25.7)
   })
 
   it('nome desconhecido cai na faixa do nível e é estável', () => {
@@ -72,10 +74,45 @@ describe('helpers determinísticos da demonstração', () => {
       ['RANDOLA', 5, 9],
     ]
     for (const [nivel, min, max] of faixas) {
-      const m = mediaDe('Jogador Inventado da Demo', nivel)
+      const m = mediaDe('Jogador Inventado da Demo', nivel, ruleset)
       expect(m.ppg).toBeGreaterThanOrEqual(min)
       expect(m.ppg).toBeLessThanOrEqual(max)
-      expect(mediaDe('Jogador Inventado da Demo', nivel)).toEqual(m)
+      expect(mediaDe('Jogador Inventado da Demo', nivel, ruleset)).toEqual(m)
+    }
+  })
+
+  /**
+   * Rebotes e assistências não usam a faixa de PONTOS: usam a tabela do
+   * documento do CJ ("Mvp - média de 10 rebotes em diante"), no nível que a
+   * demo dá ao jogador NAQUELE atributo. Antes disto o número contradizia o
+   * rótulo — um "MVP em rebotes" com 7,2 rpg.
+   */
+  it('rebotes e assistências caem na faixa que o documento dá ao nível do atributo', () => {
+    const inventados = ['Pivô Inventado', 'Armador Inventado', 'Ala Inventado', 'Reserva Inventado']
+    for (const nivelPontos of NIVEIS) {
+      for (const nome of inventados) {
+        const m = mediaDe(nome, nivelPontos, ruleset)
+        const niveis = niveisDoJogador(nome, nivelPontos)
+        const medido = { REBOTES: m.rpg, ASSISTENCIAS: m.apg, PONTOS: m.ppg }
+
+        for (const atributo of ATRIBUTOS) {
+          if (atributo === 'PONTOS') continue
+          const faixa = faixaDeClassificacao(niveis[atributo], atributo, ruleset)
+          const piso = faixaDeClassificacao('SUPORTE', atributo, ruleset)!
+
+          if (faixa === undefined) {
+            // RANDOLA: o documento não o classifica em rebotes nem em
+            // assistências (pergunta 2). A demo o põe abaixo do Suporte —
+            // nunca DENTRO de uma faixa que pertence a outro nível.
+            expect(niveis[atributo]).toBe('RANDOLA')
+            expect(medido[atributo]).toBeLessThan(piso.min)
+            continue
+          }
+
+          expect(medido[atributo]).toBeGreaterThanOrEqual(faixa.min)
+          if (faixa.max !== undefined) expect(medido[atributo]).toBeLessThanOrEqual(faixa.max)
+        }
+      }
     }
   })
 
@@ -183,6 +220,20 @@ describe('semearDemo (PGlite, banco vazio)', () => {
     expect(resumo.jogadores).toBeGreaterThan(200)
   })
 
+  /**
+   * O CJ escreve o mesmo jogador de dois jeitos em listas diferentes —
+   * "Cooper Fllag" em pontos, "Cooper Flagg" em rebotes e assistências. Antes
+   * da deduplicação por personId isso virava DOIS canônicos com o mesmo nome,
+   * invisível enquanto só a lista de pontos apitava: no dia em que os dois
+   * apitassem, a tela mostraria dois cards do mesmo humano.
+   */
+  it('nenhum nome canônico nasce duas vezes', async () => {
+    const lista = await banco.db.select({ nome: jogadores.nomeCompleto }).from(jogadores)
+    const vezes = new Map<string, number>()
+    for (const { nome } of lista) vezes.set(nome, (vezes.get(nome) ?? 0) + 1)
+    expect([...vezes].filter(([, n]) => n > 1)).toEqual([])
+  })
+
   it('todo time semeado nasce com conferência, e a classificação numera por conferência', async () => {
     const lista = await banco.db
       .select({ sigla: times.sigla, conferencia: times.conferencia })
@@ -250,8 +301,16 @@ describe('semearDemo (PGlite, banco vazio)', () => {
       .select()
       .from(feedSnapshot)
       .where(eq(feedSnapshot.estrategia, 'FIRE_LIVE'))
-    const conteudo = snapshot!.conteudoJson as { itens: { nome: string; modoFire: boolean }[] }
-    const shai = conteudo.itens.find((i) => i.nome === 'Shai Gilgeous-Alexander')
+    const conteudo = snapshot!.conteudoJson as {
+      itens: { nome: string; atributo: string; modoFire: boolean }[]
+    }
+    // FILTRA POR ATRIBUTO: modo fire é 75% da média DO ATRIBUTO no 1Q, e a
+    // demo só roteiriza a travessia em pontos (`cruzarMarco`, em ao-vivo.ts).
+    // Com as faixas de média do documento, o Shai também apita em
+    // assistências — e era esse o item que um `find` só pelo nome pegava.
+    const shai = conteudo.itens.find(
+      (i) => i.nome === 'Shai Gilgeous-Alexander' && i.atributo === 'PONTOS',
+    )
     expect(shai?.modoFire).toBe(true)
   })
 

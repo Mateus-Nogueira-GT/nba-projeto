@@ -46,6 +46,23 @@ export function origemDoAtributo(
   return bloco(atributo, ruleset)?.origem ?? null
 }
 
+/**
+ * Faixa de média que define o nível do jogador no atributo — "Mvp: média de 10
+ * rebotes em diante". `undefined` quando o documento não classifica aquele
+ * nível (RANDOLA, em rebotes e em assistências) ou o atributo (PONTOS, cuja
+ * lista o CJ monta sem declarar faixa).
+ *
+ * NÃO é usada para classificar ninguém: o nível vem da lista curada. É a
+ * definição dele, guardada no ruleset em vez de no código.
+ */
+export function faixaDeClassificacao(
+  nivel: Nivel,
+  atributo: Atributo,
+  ruleset: Ruleset,
+): { min: number; max?: number } | undefined {
+  return bloco(atributo, ruleset)?.classificacao?.[nivel]
+}
+
 /** Delta de oscilação. A exceção nominal do documento só vale para pontos. */
 export function deltaOscilacao(
   nivel: Nivel,

@@ -86,9 +86,9 @@ const ROTULO_LENTE: Record<Lente, string> = {
   HIERARQUIA: 'HIERARQUIA',
 }
 
-/** Quantas vítimas o usuário quer ver. `0` = lista inteira. */
+/** Quantos jogadores o usuário quer ver. `0` = lista inteira. */
 function rotuloQuantidade(n: number): string {
-  return n === 0 ? 'Lista inteira' : `${n} vítima${n === 1 ? '' : 's'}`
+  return n === 0 ? 'Lista inteira' : `${n} jogador${n === 1 ? '' : 'es'}`
 }
 
 /** O que "Ver todas" e o × do chip apagam: os seis recortes, nada mais. */

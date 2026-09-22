@@ -62,7 +62,7 @@ export async function semearJogoAoVivo(
   let pontosVisitante = 0
 
   for (const j of opcoes.elenco) {
-    const m = mediaDe(j.nome, j.nivel)
+    const m = mediaDe(j.nome, j.nivel, ruleset)
     const derivados = niveisDoJogador(j.nome, j.nivel)
     // Um quarto é um quarto do jogo: a média dividida pelos quartos é o
     // desempenho neutro. A variação vem do mesmo gerador do histórico.

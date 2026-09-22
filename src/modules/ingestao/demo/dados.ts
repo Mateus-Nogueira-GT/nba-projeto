@@ -1,3 +1,5 @@
+import { faixaDeClassificacao } from '../../motor/atributos'
+import type { Ruleset } from '../../motor/ruleset/schema'
 import { ATRIBUTOS, NIVEIS } from '../../motor/tipos'
 import type { Atributo, Nivel } from '../../motor/tipos'
 
@@ -147,17 +149,60 @@ export function naFaixa(nome: string, sufixo: string, [min, max]: [number, numbe
   return Math.round(v * 10) / 10
 }
 
-export function mediaDe(nome: string, nivel: Nivel): MediaDemo {
+/**
+ * Quanto a demo estica o nível mais alto, que no documento não tem teto
+ * ("média de 10 rebotes em diante"). Número da demo, não do CJ — por isso
+ * mora aqui e não no ruleset.
+ */
+const TOPO_ABERTO_DEMO = 3
+
+/**
+ * Quanto abaixo do piso do Suporte a demo põe o randola, que o documento não
+ * classifica em rebotes nem em assistências (pergunta 2 de
+ * docs/05-perguntas-abertas.md). Mesma natureza de TOPO_ABERTO_DEMO.
+ */
+const VAO_RANDOLA_DEMO = 3
+
+/**
+ * Em que intervalo de média cai um jogador deste nível NESTE atributo.
+ *
+ * Os limites são do CJ e vivem no ruleset (`por_atributo.X.classificacao`):
+ * MVP >= 10 rebotes, All Star 7–9,8, Suporte 4–6,9; em assistências, 8 / 6–7,9
+ * / 4–5,9. Sem isto a demo dizia "MVP em rebotes" de um jogador com 7,2 rpg —
+ * o número contradizia o rótulo na mesma tela.
+ *
+ * Só o que o documento NÃO diz é decidido aqui: o teto do nível mais alto e a
+ * faixa do randola. Atributo sem tabela no ruleset (hoje, PONTOS) cai no
+ * intervalo neutro — matéria-prima falsa de qualquer forma.
+ */
+function faixaDaMedia(atributo: Atributo, nivel: Nivel, ruleset: Ruleset): [number, number] {
+  const doNivel = faixaDeClassificacao(nivel, atributo, ruleset)
+  if (doNivel) return [doNivel.min, doNivel.max ?? doNivel.min + TOPO_ABERTO_DEMO]
+
+  const suporte = faixaDeClassificacao('SUPORTE', atributo, ruleset)
+  if (suporte) return [Math.max(0, suporte.min - VAO_RANDOLA_DEMO), Math.max(0, suporte.min - 0.1)]
+
+  return [1, 4]
+}
+
+/**
+ * As três médias de um jogador da demo.
+ *
+ * `nivelPontos` é o nível da lista de PONTOS — o único que os chamadores têm
+ * à mão. Rebotes e assistências não usam ele: usam o nível que a demo atribui
+ * ao jogador NAQUELE atributo (`niveisDoJogador`), porque é o rótulo que vai
+ * aparecer junto do número.
+ */
+export function mediaDe(nome: string, nivelPontos: Nivel, ruleset: Ruleset): MediaDemo {
   const chave = nome.toLowerCase().trim()
   const nominal = DO_DOCUMENTO[chave] ?? {}
-
-  const rpgFaixa: [number, number] = nivel === 'MVP' ? [7, 12] : nivel === 'ALL_STAR' ? [5, 9] : [2, 6]
-  const apgFaixa: [number, number] = nivel === 'MVP' ? [5, 9] : nivel === 'ALL_STAR' ? [3, 7] : [1, 4]
+  const niveis = niveisDoJogador(nome, nivelPontos)
 
   return {
-    ppg: nominal.ppg ?? naFaixa(nome, 'p', FAIXA_PPG[nivel]),
-    rpg: nominal.rpg ?? naFaixa(nome, 'r', rpgFaixa),
-    apg: nominal.apg ?? naFaixa(nome, 'a', apgFaixa),
+    ppg: nominal.ppg ?? naFaixa(nome, 'p', FAIXA_PPG[nivelPontos]),
+    rpg: nominal.rpg ?? naFaixa(nome, 'r', faixaDaMedia('REBOTES', niveis.REBOTES, ruleset)),
+    apg:
+      nominal.apg ?? naFaixa(nome, 'a', faixaDaMedia('ASSISTENCIAS', niveis.ASSISTENCIAS, ruleset)),
   }
 }
 

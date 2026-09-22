@@ -271,7 +271,7 @@ describe('simularAte — dias passados (PGlite)', () => {
      */
     const dia = somarDias(HOJE, -1)
     const analise = lerListaDeNiveis(readFileSync(ARQUIVO_LISTA, 'utf8'))
-    const elencos = elencosDaLista(analise.jogadores)
+    const elencos = elencosDaLista(analise.jogadores, ruleset)
     const janela: string[] = []
     for (let d = somarDias(HOJE, -DIAS); d <= HOJE; d = somarDias(d, 1)) janela.push(d)
     const calendario = gerarCalendario({
@@ -1019,7 +1019,7 @@ async function boxEsperado(
   jogo: typeof jogos.$inferSelect,
 ): Promise<Map<string, LinhaBox>> {
   const analise = lerListaDeNiveis(readFileSync(ARQUIVO_LISTA, 'utf8'))
-  const elencos = elencosDaLista(analise.jogadores)
+  const elencos = elencosDaLista(analise.jogadores, ruleset)
   const siglaPorId = new Map((await db.select().from(times)).map((t) => [t.id, t.sigla] as const))
   const idPorChave = new Map(
     (await db.select().from(mapaJogadores))

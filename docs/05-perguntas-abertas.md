@@ -163,10 +163,18 @@ virou código:
    depois. O que era para vir? Até vir, a lista de assistências pode estar velha.
 2. **Randola não existe** em rebotes nem em assistências — as duas tabelas só definem MVP,
    All Star e Suporte, e as listas confirmam. É esquecimento ou é regra?
-3. **Assistências: ≤2 ou 4/3/3?** A seção geral diz "≤2 abaixo da média"; a de assistências
-   diz MVP ≤4, All Star ≤3, Suporte ≤3.
+3. ~~**Assistências: ≤2 ou 4/3/3?**~~ **Respondida em 22/09/2026 pelo parceiro: vale a seção
+   de assistências** — MVP ≤4, All Star ≤3, Suporte ≤3. O "≤2 abaixo da média" do bloco
+   geral fica valendo só onde a seção não alcança, que é o randola (`RANDOLA: 1`, o ≤2
+   menos um degrau, como em pontos). Vive em `por_atributo.ASSISTENCIAS.oscilacao.delta`;
+   travada em `motor/__tests__/auditoria-documento.test.ts`. **Continua aberta a parte do
+   randola** — ver a pergunta 2.
 4. **Vãos nas faixas:** 9,9 rebotes não é MVP (≥10) nem All Star (7–9,8). Mesma coisa em
-   7,95 assistências e 6,95 rebotes.
+   7,95 assistências e 6,95 rebotes. As faixas estão registradas em
+   `por_atributo.<atributo>.classificacao`, exatamente como o documento as escreve, vãos
+   inclusive — nada as usa para classificar ninguém (o nível vem da lista curada), e por
+   isso o vão ainda não machuca. Machucaria no dia em que um jogador fora da lista
+   precisasse de nível (pergunta 8).
 5. **Modo Fire: 70% ou 75%?** O parágrafo diz 70, a OBS diz 75. Seguimos com 75 (P4).
 6. **Klay Thompson** aparece em Dallas e Miami; **Mathurin**, em Pelicans e Clippers. Qual
    vale? O import recusa os dois e reporta. (Wiggins em Miami e Atlanta são Andrew e Aaron,

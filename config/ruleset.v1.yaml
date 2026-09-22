@@ -357,6 +357,24 @@ por_atributo:
       janela: 2
       mapa_nivel: { 1: 3, 2: 2 }
 
+    # Faixas de média que definem o NÍVEL DO JOGADOR em rebotes — tabela
+    # "Classificação de jogadores rebotes" do documento de 21/09. São números
+    # dele, não nossos.
+    #
+    # Nenhuma regra do motor classifica por média: o nível vem da lista curada
+    # do CJ, nome por nome (ver a armadilha dos elencos em CLAUDE.md). Estas
+    # faixas existem para que o número viva no lugar versionado e para que a
+    # demo gere médias coerentes com o nível que ela atribui.
+    #
+    # Sem RANDOLA: o documento não dá faixa para ele em rebotes, e nenhum
+    # randola aparece na lista — é a pergunta 2 de docs/05-perguntas-abertas.md.
+    # ⚠️  As faixas têm vãos: 9,9 rebotes não é MVP (>=10) nem All Star (7–9,8).
+    # Pergunta 4 do mesmo documento.
+    classificacao:
+      MVP: { min: 10 }
+      ALL_STAR: { min: 7, max: 9.8 }
+      SUPORTE: { min: 4, max: 6.9 }
+
     # Delta do DOCUMENTO (versão de 21/09): "a oscilação é considerada em
     # rebotes quando o jogador faz <=4 abaixo da média". Não é mais estimativa
     # nossa. O `origem: demonstracao` do bloco continua valendo por causa de
@@ -392,8 +410,30 @@ por_atributo:
   ASSISTENCIAS:
     origem: demonstracao
 
+    # Faixas de média que definem o NÍVEL DO JOGADOR em assistências — seção
+    # "Assistências" do documento de 21/09. Mesma função e mesmas ressalvas das
+    # faixas de rebotes acima, inclusive a ausência de RANDOLA e o vão
+    # (7,95 assistências não é All Star nem MVP).
+    classificacao:
+      MVP: { min: 8 }
+      ALL_STAR: { min: 6, max: 7.9 }
+      SUPORTE: { min: 4, max: 5.9 }
+
+    # Delta da MESMA seção: "apita quando o jogador desse nível fizer 4 / 3 / 3
+    # assistências ou menos abaixo da média dele em algum jogo".
+    #
+    # ⚠️  O documento se contradiz. O bloco geral de oscilação, lá no fim, diz
+    # "a oscilação é considerada em assistências quando o jogador faz <=2
+    # abaixo da média", sem separar nível — e era dele que estes deltas saíam
+    # (3/2/2/1, o "<=2" com o mesmo degrau por nível que pontos usa).
+    # Decisão do parceiro em 22/09/2026: vale a SEÇÃO DE ASSISTÊNCIAS, que é
+    # específica por nível. Era a pergunta 3 de docs/05-perguntas-abertas.md.
+    #
+    # RANDOLA fica em 1, o único número que o documento permite derivar para
+    # ele: o "<=2" geral menos um degrau, como em pontos, onde randola é
+    # base-1. A seção não o cobre e a lista de assistências não tem randola.
     oscilacao:
-      delta: { MVP: 3, ALL_STAR: 2, SUPORTE: 2, RANDOLA: 1 }
+      delta: { MVP: 4, ALL_STAR: 3, SUPORTE: 3, RANDOLA: 1 }
 
     confianca:
       base:

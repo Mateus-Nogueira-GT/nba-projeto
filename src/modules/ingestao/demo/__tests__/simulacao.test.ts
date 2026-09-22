@@ -225,7 +225,7 @@ function alvoForaDaFaixa(j: JogadorSim): boolean {
 }
 
 describe('elencosDaLista', () => {
-  const elencos = elencosDaLista(analise.jogadores)
+  const elencos = elencosDaLista(analise.jogadores, ruleset)
 
   it('um elenco por sigla, 6 a 9 jogadores, ordenado por hierarquia', () => {
     expect(elencos.size).toBe(30)
@@ -262,7 +262,7 @@ describe('elencosDaLista', () => {
 
 type Registro = { dia: string; sigla: string; jogador: JogadorSim; linha: LinhaBox }
 
-const elencos = elencosDaLista(analise.jogadores)
+const elencos = elencosDaLista(analise.jogadores, ruleset)
 
 function simular(dias: readonly string[]): {
   calendario: ReturnType<typeof gerarCalendario>

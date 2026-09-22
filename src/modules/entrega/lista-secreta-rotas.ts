@@ -7,7 +7,7 @@ import type { FiltroLista } from './lista-secreta'
  * A tela tem SEIS recortes que combinam entre si (quantidade, atributo,
  * método, nível do jogador, time e posição). O requisito é que mexer em um
  * NUNCA apague os outros: quem filtrou "OPD · MVP · LAL" e depois pediu
- * "2 vítimas" quer duas vítimas DAQUELE recorte, não a lista inteira.
+ * "2 jogadores" quer dois jogadores DAQUELE recorte, não a lista inteira.
  *
  * Antes desta função, os chips de quantidade montavam a URL à mão
  * (`/?quantidade=N`) enquanto os demais preservavam o recorte — e a
@@ -43,7 +43,7 @@ export type EstadoDaLista = Recorte & {
 
 export type CampoDaLista = 'quantidade' | keyof FiltroLista | 'ordem' | 'lente' | 'aba'
 
-/** Quantas vítimas o usuário quer ver. `0` = lista inteira. */
+/** Quantos jogadores o usuário quer ver. `0` = lista inteira. */
 export const QUANTIDADES = [1, 2, 5, 0] as const
 export const METODOS = ['OSCILACAO', 'OPD', 'TURBO'] as const
 export const NIVEIS = ['MVP', 'ALL_STAR', 'SUPORTE', 'RANDOLA'] as const

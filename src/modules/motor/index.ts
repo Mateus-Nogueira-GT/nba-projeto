@@ -23,7 +23,7 @@ export type { Green, OpcoesFireLive, ResultadoFireLive } from './fire-live/avali
 export { marcosAtingidos } from './fire-live/green'
 export { emBlowout } from './avisos/blowout'
 export { agregar as agregarOdds } from './odds/agregar'
-export { origemDoAtributo, linhasDoNivel, faixaEstatica } from './atributos'
+export { origemDoAtributo, linhasDoNivel, faixaEstatica, faixaDeClassificacao } from './atributos'
 export { calcularConfianca, faixaDaConfianca } from './confianca'
 export type { FaixaConfianca } from './confianca'
 export type { FaixaOdds, OrigemOdds } from './odds/agregar'

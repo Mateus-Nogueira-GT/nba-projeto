@@ -128,7 +128,7 @@ export async function semearDemo(
   for (const [nome, jogadorId] of jaExistentes) {
     const nivel = nivelPorNome.get(nome)
     if (!nivel) continue
-    const m = mediaDe(nome, nivel)
+    const m = mediaDe(nome, nivel, ruleset)
     await db
       .insert(mediasJogador)
       .values({
@@ -270,7 +270,7 @@ export async function semearDemo(
       if (!nivelPontos) continue
 
       const derivados = niveisDoJogador(nome, nivelPontos)
-      const m = mediaDe(nome, nivelPontos)
+      const m = mediaDe(nome, nivelPontos, ruleset)
       const mediaDoAtributo: Record<Atributo, number> = {
         PONTOS: m.ppg,
         REBOTES: m.rpg,
