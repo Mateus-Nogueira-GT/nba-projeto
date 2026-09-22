@@ -25,3 +25,7 @@ vercel.json
 # 27/08/2026); este padrão fecha a porta.
 scripts/*.tmp.ts
 scripts/*.tmp.mjs
+
+# Playwright (e2e/, fora do CI)
+test-results/
+playwright-report/

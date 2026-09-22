@@ -55,3 +55,23 @@ Uma segunda execução deve responder `ADMIN já existe; nada alterado.`
 
 Se o comando recusar por `ADMIN já existe`, use o fluxo administrativo normal.
 Nunca apague ou rebaixe o administrador existente para repetir o bootstrap.
+
+## Depois do bootstrap: ver o app como assinante
+
+O ADMIN nasce **Grátis** no app consumidor. `papel = 'ADMIN'` abre o painel
+`/admin/*`; o nível de assinatura sai só de `direitos_acesso`, e o bootstrap não
+grava nada lá — de propósito: administrar o sistema e ter direito ao produto são
+duas coisas. Sem direito, `/gestao`, o Fire Live e as estatísticas pagas mostram
+a **silhueta** (o cadeado), que é inerte por CSS. Clicar nela não faz nada, e é
+assim que deve ser para quem não paga.
+
+Para testar como assinante, conceda cortesia à própria conta — com o **mesmo**
+arquivo de variáveis do bootstrap (`.env.bootstrap.local`, ou o que você baixou do
+ambiente-alvo), e conferindo antes o host do `DATABASE_URL`: a cortesia vale só
+no banco onde for gravada.
+
+    CORTESIA_EMAIL=<e-mail do admin> CORTESIA_ATE=2026-12-31 \
+      npx dotenv -e .env.bootstrap.local -- npm run cortesia
+
+Reexecutar atualiza a mesma cortesia; `CORTESIA_ATE` faz expirar sozinha.
+Detalhes em `cobranca-e-acesso.md`.

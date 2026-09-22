@@ -143,6 +143,9 @@ npx dotenv -e .env.local -- npm run demo:fotos       # headshots (toca rede)
 npx dotenv -e .env.local -- npm run demo:conferir    # o portão da apresentação
 ```
 
+Para conferir a Gestão botão a botão sobre essa temporada, ver
+[pente-fino-gestao.md](pente-fino-gestao.md).
+
 `demo:temporada` é o comando canônico; `demo:seed` é apelido do mesmo script.
 Idempotente e resumível: interrompido no meio, o próximo continua do último
 dia completo e não duplica nada. Ele termina em uma de duas frases, e só uma
