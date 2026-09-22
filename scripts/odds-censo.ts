@@ -20,7 +20,7 @@ import type { CensoDaCasa } from '../src/modules/ingestao/odds/porta'
  */
 async function principal() {
   const alvo = process.argv.find((a) => a.startsWith('--fonte='))?.slice('--fonte='.length)
-  if (!alvo) throw new Error('use --fonte=betmgm|altenar')
+  if (!alvo) throw new Error('use --fonte=betmgm|altenar|superbet')
   const fonte = fontesDeOdds().find((f) => f.nome === alvo)
   if (!fonte) {
     const incompleta = fontesIncompletas().find((f) => f.nome === alvo)

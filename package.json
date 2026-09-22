@@ -39,7 +39,8 @@
     "tokens": "vite-node scripts/gerar-tokens-css.mts",
     "pwa:assets": "vite-node scripts/gerar-assets-pwa.ts",
     "odds:censo": "vite-node scripts/odds-censo.ts",
-    "mp:conferir": "dotenv -e .env.local -- vite-node scripts/mp-conferir.ts"
+    "mp:conferir": "dotenv -e .env.local -- vite-node scripts/mp-conferir.ts",
+    "e2e": "playwright test"
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.1.0",
@@ -61,6 +62,7 @@
   },
   "devDependencies": {
     "@electric-sql/pglite": "^0.5.5",
+    "@playwright/test": "1.62.1",
     "@types/node": "^26.2.0",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.4",

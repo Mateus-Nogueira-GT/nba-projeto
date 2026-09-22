@@ -9,6 +9,7 @@ import { casasBetmgm, censoBetmgm, eventosDoDiaBetmgm } from './betmgm'
 import { agregarOddsDoDia, coletarOdds, garantirCasa } from './coletar'
 import type { FonteOdds, NomeDeFonte } from './fontes'
 import type { CasaDeAposta, CensoDaCasa, EventoDaCasa } from './porta'
+import { casasSuperbet, censoSuperbet, eventosDoDiaSuperbet } from './superbet'
 import { comTimeout } from './transporte'
 import { vincularEventosDoDia } from './vinculo-eventos'
 
@@ -93,6 +94,13 @@ export async function prepararFonte(
         censo: (id) => censoBetmgm(fonte.config, id, buscar),
         fabricaCasas: (id, atributoDoMercado) =>
           casasBetmgm(fonte.config, id, atributoDoMercado, buscar),
+      }
+    case 'superbet':
+      return {
+        eventos: await eventosDoDiaSuperbet(fonte.config, dia, buscar),
+        censo: (id) => censoSuperbet(fonte.config, id, buscar),
+        fabricaCasas: (id, atributoDoMercado) =>
+          casasSuperbet(fonte.config, id, atributoDoMercado, buscar),
       }
     default: {
       const nunca: never = fonte

@@ -29,12 +29,43 @@ export type ConfigAltenar = {
   champId: string | null
 }
 
+/**
+ * O offer server da Superbet é particionado POR MERCADO no host
+ * (`production-superbet-offer-br…`, `-ro`, `-pl`…). Por isso não existe env
+ * de "país": o país já está na `baseUrl`.
+ *
+ * Os dois caminhos foram confirmados contra o feed em 22/09/2026 e por isso
+ * têm padrão. Continuam configuráveis porque são a superfície que a casa pode
+ * mexer sem avisar ninguém — e trocar env é mais barato que soltar deploy.
+ */
+export type ConfigSuperbet = {
+  baseUrl: string
+  locale: string
+  sportId: string
+  champId: string | null
+  /** Template da lista (SSE): aceita {locale} {sportId} {champId} {dia} {diaSeguinte}. */
+  caminhoEventos: string
+  /** Template do evento avulso (JSON): aceita {locale} {id} {sportId}. */
+  caminhoEvento: string
+  /**
+   * Janela de leitura do SSE. A lista é uma ASSINATURA: não fecha sozinha.
+   * Lê-se o retrato inicial e para — sem isso a coleta penduraria e o cron
+   * estouraria o prazo.
+   */
+  janelaMs: number
+  /** O feed é aberto; se a conta vier com credencial, ela entra aqui. */
+  apiKey: string | null
+  authHeader: string
+  authPrefix: string
+}
+
 /** `process.env` visto como o que ele é aqui: um mapa de strings opcionais. */
 export type AmbienteDeOdds = Record<string, string | undefined>
 
 export type FonteOdds =
   | { nome: 'betmgm'; config: ConfigBetmgm }
   | { nome: 'altenar'; config: ConfigAltenar }
+  | { nome: 'superbet'; config: ConfigSuperbet }
 
 export type NomeDeFonte = FonteOdds['nome']
 
@@ -46,6 +77,7 @@ const OBRIGATORIAS: Record<NomeDeFonte, string[]> = {
     'ODDS_ALTENAR_INTEGRATION',
     'ODDS_ALTENAR_SPORT_ID',
   ],
+  superbet: ['ODDS_SUPERBET_BASE_URL', 'ODDS_SUPERBET_LOCALE', 'ODDS_SUPERBET_SPORT_ID'],
 }
 
 const limpo = (v: string | undefined): string | null => {
@@ -88,6 +120,31 @@ export function fontesDeOdds(ambiente: AmbienteDeOdds = process.env): FonteOdds[
         integration: limpo(ambiente.ODDS_ALTENAR_INTEGRATION)!,
         sportId: limpo(ambiente.ODDS_ALTENAR_SPORT_ID)!,
         champId: limpo(ambiente.ODDS_ALTENAR_CHAMP_ID),
+      },
+    })
+  }
+
+  if (faltando(ambiente, 'superbet').length === 0) {
+    fontes.push({
+      nome: 'superbet',
+      config: {
+        baseUrl: limpo(ambiente.ODDS_SUPERBET_BASE_URL)!.replace(/\/+$/, ''),
+        locale: limpo(ambiente.ODDS_SUPERBET_LOCALE)!,
+        sportId: limpo(ambiente.ODDS_SUPERBET_SPORT_ID)!,
+        champId: limpo(ambiente.ODDS_SUPERBET_CHAMP_ID),
+        caminhoEventos:
+          limpo(ambiente.ODDS_SUPERBET_EVENTOS_PATH) ??
+          '/v3/subscription/{locale}/prematch?sports={sportId}',
+        caminhoEvento:
+          limpo(ambiente.ODDS_SUPERBET_EVENTO_PATH) ??
+          '/v3/{locale}/events?events={id}&includeOnly=fixture,markets',
+        janelaMs: Number(limpo(ambiente.ODDS_SUPERBET_JANELA_MS) ?? '5000') || 5000,
+        apiKey: limpo(ambiente.ODDS_SUPERBET_API_KEY),
+        authHeader: limpo(ambiente.ODDS_SUPERBET_AUTH_HEADER) ?? 'Authorization',
+        authPrefix:
+          ambiente.ODDS_SUPERBET_AUTH_PREFIX === undefined
+            ? 'Bearer'
+            : ambiente.ODDS_SUPERBET_AUTH_PREFIX.trim(),
       },
     })
   }
