@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gte, lt, sql } from 'drizzle-orm'
+import { and, asc, desc, eq, gte, isNull, lt, sql } from 'drizzle-orm'
 
 import { chatMensagens, usuarios } from '../dominio/db/schema'
 import type { Db } from '../dominio/db/tipos'
@@ -37,11 +37,17 @@ import type { RankingDoDia } from './sugestao/tipos'
 // rota já conhecem.
 export {
   configuracaoChat,
+  FALHAS_DEVOLVIDAS_POR_DIA,
   LIMITE_PERGUNTA,
   LIMITE_POR_MINUTO,
   LIMITE_RESPOSTA,
 } from './chat-limites'
-import { LIMITE_PERGUNTA, LIMITE_POR_MINUTO, LIMITE_RESPOSTA } from './chat-limites'
+import {
+  FALHAS_DEVOLVIDAS_POR_DIA,
+  LIMITE_PERGUNTA,
+  LIMITE_POR_MINUTO,
+  LIMITE_RESPOSTA,
+} from './chat-limites'
 
 // RECUSA_FORA_DE_ESCOPO mora em `chat-prompt.ts` (motivo no comentário de
 // lá: um script fora deste agente precisa dela sem importar `responder`
@@ -71,7 +77,7 @@ export async function mensagensUsadasHoje(
   const { inicio, fim } = intervaloDoDia(dataReferencia, fuso)
 
   const linhas = await db
-    .select({ id: chatMensagens.id })
+    .select({ falhouEm: chatMensagens.falhouEm })
     .from(chatMensagens)
     .where(
       and(
@@ -81,7 +87,10 @@ export async function mensagensUsadasHoje(
         lt(chatMensagens.criadoEm, fim),
       ),
     )
-  return linhas.length
+  // Pergunta respondida conta; pergunta que falhou só conta da quarta falha
+  // do dia em diante (`FALHAS_DEVOLVIDAS_POR_DIA`).
+  const falhas = linhas.filter((l) => l.falhouEm !== null).length
+  return linhas.length - falhas + Math.max(0, falhas - FALHAS_DEVOLVIDAS_POR_DIA)
 }
 
 /** Mesmo COUNT da cota, janela de 60 segundos. Ver `LIMITE_POR_MINUTO`. */
@@ -129,6 +138,9 @@ export async function ultimasMensagens(
         eq(chatMensagens.usuarioId, usuarioId),
         gte(chatMensagens.criadoEm, inicio),
         lt(chatMensagens.criadoEm, fim),
+        // Pergunta que falhou não tem resposta: no prompt ela viraria um
+        // turno órfão, e no painel uma pergunta sem resposta.
+        isNull(chatMensagens.falhouEm),
       ),
     )
     // Pergunta e resposta do mesmo turno são gravadas com o MESMO instante
@@ -171,10 +183,16 @@ export type RespostaChat =
       motivo: 'cota-esgotada' | 'limite-por-minuto' | 'indisponivel' | 'vazio' | 'muito-longa'
     }
 
-/** Apaga a mensagem reservada. Nunca lança: é uma limpeza best-effort. */
-async function apagarReserva(db: Db, id: string): Promise<void> {
+/**
+ * Marca a pergunta reservada como falha. Nunca lança: é best-effort.
+ *
+ * Antes a reserva era APAGADA — e com ela sumia o que fazia a pergunta contar
+ * no limite por minuto (auditoria 23/09). Marcada, ela conta no minuto e só
+ * gasta a cota do dia depois de `FALHAS_DEVOLVIDAS_POR_DIA` falhas.
+ */
+async function marcarFalha(db: Db, id: string, agora: Date): Promise<void> {
   try {
-    await db.delete(chatMensagens).where(eq(chatMensagens.id, id))
+    await db.update(chatMensagens).set({ falhouEm: agora }).where(eq(chatMensagens.id, id))
   } catch {
     // engolido de propósito — a reserva ficar órfã é preferível a mascarar o
     // erro original que trouxe a função até aqui.
@@ -338,8 +356,9 @@ export async function responder(
     })
     if (!validado.ok) {
       // A reserva já contou a pergunta do assinante; o texto que voltou é
-      // que não presta. Apaga a reserva para a falha nossa não cobrar cota.
-      await apagarReserva(db, reservaId)
+      // que não presta. Marca a falha: ela conta no limite por minuto, e só
+      // as primeiras falhas do dia são devolvidas à cota.
+      await marcarFalha(db, reservaId, entrada.agora)
       return { ok: false, motivo: 'indisponivel' }
     }
 
@@ -365,8 +384,9 @@ export async function responder(
       duracaoMs: Date.now() - inicio,
     })
     // A reserva pode ter sido feita antes do erro (rede da LLM caiu depois de
-    // reservar a vaga, por exemplo). Falha nossa nunca consome cota.
-    if (reservaId) await apagarReserva(db, reservaId)
+    // reservar a vaga, por exemplo). As primeiras falhas do dia não
+    // consomem cota; todas contam no limite por minuto.
+    if (reservaId) await marcarFalha(db, reservaId, entrada.agora)
     return { ok: false, motivo: 'indisponivel' }
   }
 }

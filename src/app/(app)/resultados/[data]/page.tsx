@@ -22,7 +22,6 @@ import {
   recapDaNoite,
   rotaResultados,
   diasDaTemporada,
-  taxaDaTemporada,
 } from '@/modules/entrega/resultados'
 import type {
   JogadorConferido,
@@ -35,6 +34,7 @@ import { lateralPadrao } from '@/app/(app)/lateral/montar'
 import { atende } from '@/modules/plataforma/assinatura/nivel-do-plano'
 import type { Atributo, NivelApito } from '@/modules/motor/tipos'
 import '@/design-system/tokens/tokens.css'
+import { taxaDaTemporadaCacheada } from '../../estatisticas/temporada-cacheada'
 
 export const dynamic = 'force-dynamic'
 export const metadata = { title: 'Resultados' }
@@ -304,8 +304,7 @@ export default async function PaginaResultadosDaRodada({
   const [rodadaInteira, temporada, greensLidos, feed, fireLido] = await Promise.all([
     recapDaNoite(getDb(), data),
     // `ate` é EXCLUSIVO na entrega: +1 dia para a rodada em tela entrar na conta.
-    taxaDaTemporada(
-      getDb(),
+    taxaDaTemporadaCacheada(
       somarDias(data, 1),
       diasDaTemporada(data, calendarioDoRuleset(ruleset)),
     ),

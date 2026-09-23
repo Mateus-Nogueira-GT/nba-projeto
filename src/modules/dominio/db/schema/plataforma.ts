@@ -301,6 +301,7 @@ export const tentativasOperacaoConta = pgTable(
   },
   (t) => [
     index('tentativas_operacao_conta_janela_idx').on(t.operacao, t.identificadorHash, t.tentadoEm),
+    index('tentativas_operacao_conta_ip_idx').on(t.operacao, t.ip, t.tentadoEm),
   ],
 )
 
@@ -398,7 +399,10 @@ export const tentativasLogin = pgTable(
     sucesso: boolean('sucesso').notNull(),
     tentadoEm: timestamp('tentado_em', { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [index('tentativas_login_janela_idx').on(t.identificador, t.tentadoEm)],
+  (t) => [
+    index('tentativas_login_janela_idx').on(t.identificador, t.tentadoEm),
+    index('tentativas_login_ip_idx').on(t.ip, t.tentadoEm),
+  ],
 )
 
 /**
@@ -605,6 +609,12 @@ export const chatMensagens = pgTable(
     tokensEntrada: integer('tokens_entrada').notNull().default(0),
     tokensSaida: integer('tokens_saida').notNull().default(0),
     criadoEm: timestamp('criado_em', { withTimezone: true }).notNull().defaultNow(),
+    /**
+     * Quando a resposta desta pergunta falhou (LLM fora ou texto reprovado).
+     * Nulo = respondida. A linha FICA: ela conta no limite por minuto, e só
+     * as primeiras falhas do dia são devolvidas à cota (auditoria 23/09).
+     */
+    falhouEm: timestamp('falhou_em', { withTimezone: true }),
   },
   (t) => [index('chat_mensagens_usuario_dia_idx').on(t.usuarioId, t.criadoEm)],
 )

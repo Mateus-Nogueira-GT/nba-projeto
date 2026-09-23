@@ -24,6 +24,22 @@ const nextConfig: NextConfig = {
   async headers() {
     return [
       {
+        // Toda rota. Sem isto um site de fora embutia `/conta` num iframe e
+        // induzia o clique em "cancelar assinatura" (auditoria 23/09). A CSP
+        // leva SÓ `frame-ancestors`: uma política completa arrisca quebrar
+        // script e fica para quando houver como testá-la no navegador.
+        // Vem PRIMEIRO: quando duas regras batem, a última vence por chave —
+        // e `/redefinir/:token` precisa manter o `no-referrer` dela.
+        source: '/:path*',
+        headers: [
+          { key: 'X-Frame-Options', value: 'DENY' },
+          { key: 'Content-Security-Policy', value: "frame-ancestors 'none'" },
+          { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+          { key: 'X-Content-Type-Options', value: 'nosniff' },
+          { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=()' },
+        ],
+      },
+      {
         source: '/sw.js',
         headers: [
           { key: 'Cache-Control', value: 'public, max-age=0, must-revalidate' },

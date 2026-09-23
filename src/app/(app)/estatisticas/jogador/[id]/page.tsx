@@ -4,9 +4,8 @@ import { z } from 'zod'
 
 import { getDb } from '@/modules/dominio/db/cliente'
 import { calendarioDoRuleset } from '@/modules/dominio/temporada'
-import { temporadaParaExibir } from '@/modules/entrega/estatisticas/temporadas'
 import { estadoExperienciaDoUsuario } from '@/modules/plataforma/experiencia/servico'
-import { exigirNivel } from '@/modules/plataforma/assinatura/guarda'
+import { exigirCookieDeSessao, exigirNivel } from '@/modules/plataforma/assinatura/guarda'
 import { lateralPadrao } from '@/app/(app)/lateral/montar'
 import { atende } from '@/modules/plataforma/assinatura/nivel-do-plano'
 import { ConviteDoPlano } from '@/components/planos/ConviteDoPlano'
@@ -49,6 +48,7 @@ import {
   SOBRANCELHA_STATS,
 } from '../../moldura'
 import { SilhuetaPaga } from '@/components/planos/SilhuetaPaga'
+import { temporadaParaExibirCacheada } from '../../temporada-cacheada'
 
 export const dynamic = 'force-dynamic'
 
@@ -454,12 +454,14 @@ export default async function PaginaJogador({
   const { id } = await params
   if (!z.uuid().safeParse(id).success) notFound()
   if (!process.env.DATABASE_URL) return <SemBanco />
+  // Sem cookie de sessão, nem chega ao banco (auditoria 23/09).
+  await exigirCookieDeSessao(`/estatisticas/jogador/${id}`)
 
   const agora = new Date()
   const ruleset = await rulesetAtivo()
   const db = getDb()
   const calendario = calendarioDoRuleset(ruleset)
-  const temporada = await temporadaParaExibir(db, ruleset, agora)
+  const temporada = await temporadaParaExibirCacheada(ruleset, agora)
   // O calendário vai junto porque a tabela jogo a jogo NOMEIA a temporada:
   // `jogos` guarda a data, não o rótulo, e sem ele a leitura não teria como
   // recortar a janela — o auxiliar voltaria a afirmar "temporada 2025-26"

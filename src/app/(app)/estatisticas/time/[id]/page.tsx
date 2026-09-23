@@ -3,7 +3,6 @@ import { z } from 'zod'
 
 import { getDb } from '@/modules/dominio/db/cliente'
 import { dataDeReferencia } from '@/modules/dominio/rodada'
-import { temporadaParaExibir } from '@/modules/entrega/estatisticas/temporadas'
 import { estadoExperienciaDoUsuario } from '@/modules/plataforma/experiencia/servico'
 import { telaJogosDoDia } from '@/modules/entrega/estatisticas/jogos-do-dia'
 import { hierarquiaDoTime, telaDoTime } from '@/modules/entrega/estatisticas/time'
@@ -23,12 +22,13 @@ import type { Coluna } from '@/design-system/componentes'
 import { componente } from '@/design-system/tokens/componente'
 import { semantico } from '@/design-system/tokens/semantico'
 import { identidadeDoTime } from '@/design-system/times'
-import { exigirNivel } from '@/modules/plataforma/assinatura/guarda'
+import { exigirCookieDeSessao, exigirNivel } from '@/modules/plataforma/assinatura/guarda'
 import { atende } from '@/modules/plataforma/assinatura/nivel-do-plano'
 import { ConviteDoPlano } from '@/components/planos/ConviteDoPlano'
 import '@/design-system/tokens/tokens.css'
 import { Secao, SemBanco, SOBRANCELHA_STATS } from '../../moldura'
 import { SilhuetaPaga } from '@/components/planos/SilhuetaPaga'
+import { temporadaParaExibirCacheada } from '../../temporada-cacheada'
 
 /**
  * OS TRÊS ATRIBUTOS DA HIERARQUIA, na forma curta do rodapé do card (PTS ·
@@ -276,13 +276,15 @@ export default async function PaginaTime({
   if (!z.uuid().safeParse(id).success) notFound()
   const { atributo: atributoBruto } = await searchParams
   if (!process.env.DATABASE_URL) return <SemBanco />
+  // Sem cookie de sessão, nem chega ao banco (auditoria 23/09).
+  await exigirCookieDeSessao(rotaDoTime(id))
 
   const atributo = atributoPedido(atributoBruto)
   const agora = new Date()
   const ruleset = await rulesetAtivo()
   const { fuso } = ruleset.rodada
   const db = getDb()
-  const temporada = await temporadaParaExibir(db, ruleset, agora)
+  const temporada = await temporadaParaExibirCacheada(ruleset, agora)
   const tela = await telaDoTime(db, id, { temporada })
   if (tela === null) notFound()
 

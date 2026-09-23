@@ -44,9 +44,10 @@ beforeEach(async () => {
   ).id
 })
 
-async function tentativaDeTemporada(referencia: string) {
+async function tentativaDeTemporada(referencia: string, criadoEm = AGORA, dono = usuarioId) {
   await banco.db.insert(tentativasCheckout).values({
-    usuarioId,
+    usuarioId: dono,
+    criadoEm,
     produto: 'NBA_PRO',
     provedor: 'fake',
     referenciaExterna: referencia,
@@ -254,5 +255,100 @@ describe('eventoDoPagamentoUnico — tradução provedor → NIP', () => {
   ])('status do provedor "%s" vira tipo "%s"', (status, tipoEsperado) => {
     const evento = eventoDoPagamentoUnico(tentativaFake(), { ...COBRANCA_BASE, status })
     expect(evento.tipo).toBe(tipoEsperado)
+  })
+})
+
+/**
+ * A FILA QUE NUNCA ESVAZIAVA (auditoria 23/09).
+ *
+ * Pagas e abandonadas ficavam `CRIADA`/`AMBIGUA` para sempre, e o rodízio de
+ * 50 por rodada levava ~6–7 h para voltar a um pagamento perdido com 2 mil
+ * tentativas na fila.
+ */
+describe('a fila de reconciliação esvazia', () => {
+  const outroUsuario = async (email: string) =>
+    (await adicionarUsuario(banco.db, { email, senha: 'senha-segura-123', nome: 'Outro' })).id
+
+  it('temporada paga sai da fila', async () => {
+    const porta = new PagamentoFake()
+    await tentativaDeTemporada('ref-paga')
+    porta.registrarPagamento({
+      id: 'pay-paga',
+      assinaturaExternaId: null,
+      referenciaExterna: 'ref-paga',
+      status: 'approved',
+      valorCentavos: 59700,
+      moeda: 'BRL',
+      ocorridoEm: AGORA.toISOString(),
+      proximaCobranca: null,
+    })
+    await reconciliarPagamentos(banco.db, porta, AGORA, FIM_DA_TEMPORADA)
+    const [t] = await banco.db.select().from(tentativasCheckout)
+    expect(t?.status).toBe('ENCERRADA')
+    const segunda = await reconciliarPagamentos(banco.db, porta, AGORA, FIM_DA_TEMPORADA)
+    expect(segunda.examinadas).toBe(0)
+  })
+
+  it('tentativa sem pagamento há mais de 7 dias sai da fila; a de ontem continua', async () => {
+    const porta = new PagamentoFake()
+    await tentativaDeTemporada('ref-velha', new Date(AGORA.getTime() - 8 * 24 * 3600_000))
+    await tentativaDeTemporada(
+      'ref-nova',
+      new Date(AGORA.getTime() - 24 * 3600_000),
+      await outroUsuario('nova@exemplo.com'),
+    )
+    await reconciliarPagamentos(banco.db, porta, AGORA, FIM_DA_TEMPORADA)
+    const linhas = await banco.db.select().from(tentativasCheckout)
+    const status = Object.fromEntries(linhas.map((l) => [l.referenciaExterna, l.status]))
+    expect(status['ref-velha']).toBe('ENCERRADA')
+    expect(status['ref-nova']).toBe('AMBIGUA')
+  })
+
+  it('as tentativas recentes são examinadas primeiro', async () => {
+    const porta = new PagamentoFake()
+    await tentativaDeTemporada('ref-velha', new Date(AGORA.getTime() - 10 * 24 * 3600_000))
+    await banco.db
+      .update(tentativasCheckout)
+      .set({ atualizadoEm: new Date(AGORA.getTime() - 5 * 24 * 3600_000) })
+    await tentativaDeTemporada(
+      'ref-nova',
+      new Date(AGORA.getTime() - 24 * 3600_000),
+      await outroUsuario('nova@exemplo.com'),
+    )
+    await reconciliarPagamentos(banco.db, porta, AGORA, FIM_DA_TEMPORADA, 1)
+    const linhas = await banco.db.select().from(tentativasCheckout)
+    const status = Object.fromEntries(linhas.map((l) => [l.referenciaExterna, l.status]))
+    expect(status['ref-nova']).toBe('AMBIGUA')
+    expect(status['ref-velha']).toBe('CRIADA')
+  })
+
+  it('mensal autorizado NÃO sai da fila — as renovações dependem dela', async () => {
+    const porta = new PagamentoFake()
+    // Tentativa antiga de propósito: nem a idade tira o mensal da fila.
+    await banco.db.insert(tentativasCheckout).values({
+      usuarioId,
+      produto: 'NBA_PRO',
+      provedor: 'fake',
+      referenciaExterna: 'ref-mensal',
+      chaveIdempotencia: 'chave-ref-mensal',
+      nivelDoPlano: 'MVP',
+      modalidade: 'MENSAL',
+      status: 'CRIADA',
+      assinaturaExternaId: 'sub-mensal',
+      criadoEm: new Date(AGORA.getTime() - 30 * 24 * 3600_000),
+      atualizadoEm: AGORA,
+    })
+    porta.assinaturas.set('sub-mensal', {
+      id: 'sub-mensal',
+      referenciaExterna: 'ref-mensal',
+      status: 'authorized',
+      nomePlano: 'mensal',
+      urlCheckout: 'https://www.mercadopago.com.br/subscriptions/checkout?preapproval_id=sub-mensal',
+      proximaCobranca: new Date(AGORA.getTime() + 30 * 24 * 3600_000).toISOString(),
+      ocorridoEm: AGORA.toISOString(),
+    })
+    await reconciliarPagamentos(banco.db, porta, AGORA, FIM_DA_TEMPORADA)
+    const [t] = await banco.db.select().from(tentativasCheckout)
+    expect(t?.status).toBe('CRIADA')
   })
 })

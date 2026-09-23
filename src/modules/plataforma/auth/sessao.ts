@@ -1,10 +1,14 @@
 import { createHash, randomBytes } from 'node:crypto'
-import { and, asc, eq, gt, gte, inArray, isNull, ne, sql } from 'drizzle-orm'
+import { and, asc, eq, gt, gte, inArray, isNull, lt, ne, sql } from 'drizzle-orm'
 
 import { dispositivos, eventosConta, sessoes, usuarios } from '../../dominio/db/schema'
 import type { Db } from '../../dominio/db/tipos'
 import { conferirSenha } from './senha'
-import { excedeuTentativas, registrarTentativa, type PoliticaRateLimit } from './rate-limit'
+import {
+  marcarTentativaComoSucesso,
+  reservarTentativaDeLogin,
+  type PoliticaRateLimit,
+} from './rate-limit'
 import { invalidarInscricoesDoDispositivoNaTransacao } from '../push/inscricoes'
 
 /** Limite contratado: 2 dispositivos ativos por conta (proposta, p.8). */
@@ -12,6 +16,16 @@ export const MAX_DISPOSITIVOS = 2
 
 /** Janela para considerar dois acessos "simultâneos". */
 export const JANELA_USO_SIMULTANEO_MS = 5 * 60_000
+
+/**
+ * Com que frequência o "último uso" do dispositivo é regravado.
+ *
+ * Ele só alimenta `detectarUsoSimultaneo`, que olha uma janela de 5 min.
+ * Gravar a cada requisição era uma escrita por visualização — ~80 por
+ * segundo com 2 mil usuários (auditoria de 23/09) — para um dado que só
+ * precisa de resolução de minuto.
+ */
+export const INTERVALO_ULTIMO_USO_MS = 60_000
 
 export type DadosAcesso = {
   fingerprint: string
@@ -66,7 +80,15 @@ export async function autenticar(
 ): Promise<ResultadoLogin> {
   const email = credenciais.email.trim().toLowerCase()
 
-  if (await excedeuTentativas(db, email, agora, opcoes.politica)) {
+  // A tentativa é RESERVADA antes de conferir a senha (ver
+  // `reservarTentativaDeLogin`): é o que impede N logins paralelos de lerem
+  // a mesma contagem zerada. A reserva já é a falha registrada.
+  const reserva = await reservarTentativaDeLogin(
+    db,
+    { identificador: email, ip: acesso.ip, agora },
+    opcoes.politica,
+  )
+  if (reserva.excedeu) {
     await registrar(db, null, 'LOGIN_FALHOU', 'excesso de tentativas', acesso.ip, agora)
     return { ok: false, motivo: 'excesso-de-tentativas' }
   }
@@ -79,7 +101,6 @@ export async function autenticar(
   const senhaConfere = await conferirSenha(credenciais.senha, hashParaConferir)
 
   if (!usuario || !senhaConfere) {
-    await registrarTentativa(db, { identificador: email, ip: acesso.ip, sucesso: false, agora })
     await registrar(
       db,
       usuario?.id ?? null,
@@ -91,23 +112,34 @@ export async function autenticar(
     return { ok: false, motivo: 'credenciais' }
   }
 
-  if (usuario.status === 'BLOQUEADO') {
-    await registrarTentativa(db, { identificador: email, ip: acesso.ip, sucesso: false, agora })
-    return { ok: false, motivo: 'bloqueado' }
-  }
+  if (usuario.status === 'BLOQUEADO') return { ok: false, motivo: 'bloqueado' }
 
-  await registrarTentativa(db, { identificador: email, ip: acesso.ip, sucesso: true, agora })
+  await marcarTentativaComoSucesso(db, reserva.id)
+  return abrirSessao(db, usuario.id, acesso, agora, opcoes)
+}
 
+/**
+ * Abre a sessão de um usuário JÁ AUTENTICADO. Separada de `autenticar` para o
+ * cadastro não pagar um segundo scrypt conferindo a senha que acabou de gravar
+ * (auditoria 23/09).
+ */
+export async function abrirSessao(
+  db: Db,
+  usuarioId: string,
+  acesso: DadosAcesso,
+  agora: Date,
+  opcoes: { duracaoMs: number },
+): Promise<Extract<ResultadoLogin, { ok: true }>> {
   const token = randomBytes(32).toString('base64url')
   const criada = await db.transaction(async (tx) => {
     // Serializa logins da mesma conta. Sem esse lock, duas invocações podem
     // contar dois dispositivos e ambas criar o terceiro.
-    await tx.execute(sql`SELECT id FROM ${usuarios} WHERE id = ${usuario.id} FOR UPDATE`)
+    await tx.execute(sql`SELECT id FROM ${usuarios} WHERE id = ${usuarioId} FOR UPDATE`)
 
     const [dispositivo] = await tx
       .insert(dispositivos)
       .values({
-        usuarioId: usuario.id,
+        usuarioId: usuarioId,
         fingerprint: acesso.fingerprint,
         tipo: acesso.tipo,
         userAgent: acesso.userAgent,
@@ -126,7 +158,7 @@ export async function autenticar(
     const [sessao] = await tx
       .insert(sessoes)
       .values({
-        usuarioId: usuario.id,
+        usuarioId: usuarioId,
         dispositivoId: dispositivo.id,
         tokenHash: hashDoToken(token),
         criadaEm: agora,
@@ -139,7 +171,7 @@ export async function autenticar(
 
     const encerrouSessoes = await aplicarLimiteDeDispositivosNaTransacao(
       tx,
-      usuario.id,
+      usuarioId,
       sessao.id,
       agora,
     )
@@ -147,14 +179,14 @@ export async function autenticar(
     return { dispositivoId: dispositivo.id, sessaoId: sessao.id, encerrouSessoes }
   })
 
-  await db.update(usuarios).set({ ultimoAcesso: agora }).where(eq(usuarios.id, usuario.id))
-  await registrar(db, usuario.id, 'LOGIN', `dispositivo ${criada.dispositivoId}`, acesso.ip, agora)
-  await detectarUsoSimultaneo(db, usuario.id, agora)
+  await db.update(usuarios).set({ ultimoAcesso: agora }).where(eq(usuarios.id, usuarioId))
+  await registrar(db, usuarioId, 'LOGIN', `dispositivo ${criada.dispositivoId}`, acesso.ip, agora)
+  await detectarUsoSimultaneo(db, usuarioId, agora)
 
   return {
     ok: true,
     token,
-    usuarioId: usuario.id,
+    usuarioId: usuarioId,
     sessaoId: criada.sessaoId,
     dispositivoId: criada.dispositivoId,
     encerrouSessoes: criada.encerrouSessoes,
@@ -332,10 +364,16 @@ export async function validarSessao(
   if (linha.usuario.status === 'BLOQUEADO') return { ok: false, motivo: 'bloqueado' }
 
   if (linha.sessao.dispositivoId) {
+    // Gravação CONDICIONAL: o filtro no WHERE decide, sem leitura extra.
     await db
       .update(dispositivos)
       .set({ ultimoUso: agora, ...(acesso?.ip ? { ipUltimo: acesso.ip } : {}) })
-      .where(eq(dispositivos.id, linha.sessao.dispositivoId))
+      .where(
+        and(
+          eq(dispositivos.id, linha.sessao.dispositivoId),
+          lt(dispositivos.ultimoUso, new Date(agora.getTime() - INTERVALO_ULTIMO_USO_MS)),
+        ),
+      )
   }
 
   return {

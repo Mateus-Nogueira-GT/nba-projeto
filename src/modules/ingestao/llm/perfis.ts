@@ -35,8 +35,13 @@ export const PERFIS: Record<
     // O suporte é o perfil de MAIOR volume (uma chamada por mensagem) e o de
     // contexto mais gordo: o V4 Flash custa cerca de um quarentavo do
     // gpt-4o-mini por token de entrada, com 1M de janela.
-    modelos: ['deepseek/deepseek-v4-flash', 'openai/gpt-4o-mini', 'anthropic/claude-haiku-4.5'],
-    maxTokens: 700,
+    //
+    // Sem o Haiku na cadeia: no pico, uma queda do DeepSeek passaria o chat
+    // para um modelo 10–30× mais caro sem ninguém ver (auditoria 23/09).
+    // 350 tokens ≈ os 1.200 caracteres que o validador aceita: acima disso a
+    // resposta era paga inteira e reprovada por `muito-longo`.
+    modelos: ['deepseek/deepseek-v4-flash', 'openai/gpt-4o-mini'],
+    maxTokens: 350,
     temperatura: 0.4,
   },
   admin: {

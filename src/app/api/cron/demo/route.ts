@@ -1,7 +1,10 @@
 import { getDb } from '@/modules/dominio/db/cliente'
 import { executarCronProtegido } from '@/modules/entrega/cron/guarda'
 import { rulesetAtivo } from '@/modules/entrega/ruleset-ativo'
-import { autossemeaduraHabilitada } from '@/modules/ingestao/demo/autossemeadura'
+import {
+  autossemeaduraHabilitada,
+  motivoParaNaoSemear,
+} from '@/modules/ingestao/demo/autossemeadura'
 import { simularAte } from '@/modules/ingestao/demo/temporada'
 import { portaLLMDoAmbiente } from '@/modules/ingestao/llm'
 import { revalidateTag } from 'next/cache'
@@ -44,6 +47,13 @@ export async function GET(requisicao: Request): Promise<Response> {
     tarefa: async () => {
       if (!autossemeaduraHabilitada(process.env)) {
         return { executado: false, motivo: 'DEMO_AUTOSSEMEADURA_DESLIGADA' as const }
+      }
+      // A variável sozinha não basta: com dado real no banco (ou a ingestão
+      // real ligada), semear ficção por cima é o pior acidente possível aqui.
+      const bloqueio = await motivoParaNaoSemear(getDb(), process.env)
+      if (bloqueio) {
+        console.warn(JSON.stringify({ evento: 'demo_recusada', motivo: bloqueio }))
+        return { executado: false, motivo: bloqueio }
       }
       const ruleset = await rulesetAtivo()
       const resumo = await simularAte(getDb(), ruleset, new Date(), {

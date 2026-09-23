@@ -14,13 +14,25 @@ export const dynamic = 'force-dynamic'
 const SEM_CACHE = { 'Cache-Control': 'private, no-store, max-age=0', 'X-Robots-Tag': 'noindex' }
 
 async function resolver(request: Request, codigo: string, registrar: boolean): Promise<Response> {
+  let destino: string
   try {
     if (!process.env.DATABASE_URL) throw new Error('Banco indisponível')
-    const destino = registrar ? null : await resolverLinkSemRegistrar(getDb(), codigo)
-    if (destino) return NextResponse.redirect(new URL(destino, request.url), { headers: SEM_CACHE })
+    destino = await resolverLinkSemRegistrar(getDb(), codigo)
+  } catch {
+    return NextResponse.redirect(new URL('/oferta-indisponivel', request.url), {
+      status: 307,
+      headers: SEM_CACHE,
+    })
+  }
+  if (!registrar) return NextResponse.redirect(new URL(destino, request.url), { headers: SEM_CACHE })
 
-    const armario = await cookies()
-    const token = armario.get(COOKIE_VISITANTE_AFILIADO)?.value ?? novoTokenVisitante()
+  // O DESTINO JÁ ESTÁ RESOLVIDO: falhar ao REGISTRAR o clique (pool cheio,
+  // lock) não pode mandar o visitante para "oferta indisponível" — a
+  // comissão se perdia junto com o clique (auditoria 23/09). O erro vai para
+  // o log e o visitante segue para a casa.
+  const armario = await cookies()
+  const token = armario.get(COOKIE_VISITANTE_AFILIADO)?.value ?? novoTokenVisitante()
+  try {
     const sessao = await sessaoAtual()
     const clique = await registrarClique(getDb(), {
       codigo,
@@ -29,23 +41,21 @@ async function resolver(request: Request, codigo: string, registrar: boolean): P
       agora: new Date(),
       automatizado: false,
     })
-    const resposta = NextResponse.redirect(new URL(clique.destino, request.url), {
-      headers: SEM_CACHE,
-    })
-    resposta.cookies.set(COOKIE_VISITANTE_AFILIADO, token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      path: '/',
-      maxAge: 30 * 24 * 60 * 60,
-    })
-    return resposta
-  } catch {
-    return NextResponse.redirect(new URL('/oferta-indisponivel', request.url), {
-      status: 307,
-      headers: SEM_CACHE,
-    })
+    destino = clique.destino
+  } catch (erro) {
+    console.error(
+      JSON.stringify({ evento: 'afiliado_registro_falhou', codigo, mensagem: String(erro) }),
+    )
   }
+  const resposta = NextResponse.redirect(new URL(destino, request.url), { headers: SEM_CACHE })
+  resposta.cookies.set(COOKIE_VISITANTE_AFILIADO, token, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    path: '/',
+    maxAge: 30 * 24 * 60 * 60,
+  })
+  return resposta
 }
 
 export async function GET(request: Request, contexto: { params: Promise<{ codigo: string }> }) {

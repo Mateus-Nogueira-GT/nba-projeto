@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, isNotNull, isNull, ne } from 'drizzle-orm'
+import { and, desc, eq, inArray, isNotNull, isNull, ne, sql } from 'drizzle-orm'
 
 import {
   assinaturas,
@@ -461,6 +461,15 @@ export async function aplicarEventoPagamento(
   fimDaTemporada: Date | null,
 ): Promise<ResultadoWebhook> {
   return db.transaction(async (tx) => {
+    // SERIALIZA os eventos do MESMO pagamento. No primeiro evento de uma
+    // temporada não existe linha em `assinaturas`: duas notificações
+    // simultâneas (payment.created + payment.updated, ou webhook +
+    // reconciliação) passavam as duas pelo SELECT e a segunda estourava a
+    // UNIQUE de `referencia_externa` — 500 no webhook (auditoria 23/09).
+    const chaveDaTrava = evento.referenciaExterna ?? evento.assinaturaExternaId
+    if (chaveDaTrava) {
+      await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${`pagamento:${chaveDaTrava}`}))`)
+    }
     const ocorridoEmOrigem = dataDoProvedor(evento.ocorridoEm)
     const gravado = await tx
       .insert(eventosPagamento)

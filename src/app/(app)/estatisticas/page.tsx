@@ -1,5 +1,4 @@
 import { getDb } from '@/modules/dominio/db/cliente'
-import { temporadaParaExibir } from '@/modules/entrega/estatisticas/temporadas'
 import { buscar } from '@/modules/entrega/estatisticas/busca'
 import { dataValidaOuHoje, navegacaoDeDatas } from '@/modules/entrega/estatisticas/calendario'
 import { telaJogosDoDia } from '@/modules/entrega/estatisticas/jogos-do-dia'
@@ -20,6 +19,7 @@ import { lateralPadrao } from '@/app/(app)/lateral/montar'
 import { atende } from '@/modules/plataforma/assinatura/nivel-do-plano'
 import '@/design-system/tokens/tokens.css'
 import { Secao, SemBanco, SOBRANCELHA_STATS } from './moldura'
+import { temporadaParaExibirCacheada } from './temporada-cacheada'
 
 export const dynamic = 'force-dynamic'
 export const metadata = { title: 'Estatísticas' }
@@ -460,7 +460,7 @@ export default async function PaginaEstatisticas({
   const data = dataValidaOuHoje(bruta, hoje)
   // A temporada que TEM dado, não a do calendário: entre o lançamento e a
   // primeira bola as duas divergem por ~um mês (spec 22/09, §5.2).
-  const temporada = await temporadaParaExibir(db, ruleset, agora)
+  const temporada = await temporadaParaExibirCacheada(ruleset, agora)
 
   const [doDia, classificacao, resultados] = await Promise.all([
     telaJogosDoDia(db, data, fuso),

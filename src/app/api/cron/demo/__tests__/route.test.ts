@@ -35,6 +35,11 @@ const mocks = vi.hoisted(() => ({
   revalidateTag: vi.fn(),
 }))
 
+const guarda = vi.hoisted(() => ({ motivo: null as string | null }))
+vi.mock('@/modules/ingestao/demo/autossemeadura', async (importOriginal) => {
+  const real = await importOriginal<typeof import('@/modules/ingestao/demo/autossemeadura')>()
+  return { ...real, motivoParaNaoSemear: async () => guarda.motivo }
+})
 vi.mock('@/modules/dominio/db/cliente', () => ({ getDb: () => mocks.db }))
 vi.mock('@/modules/entrega/ruleset-ativo', () => ({ rulesetAtivo: async () => mocks.ruleset }))
 vi.mock('@/modules/ingestao/llm', () => ({ portaLLMDoAmbiente: () => mocks.porta }))
@@ -63,6 +68,7 @@ describe.sequential('/api/cron/demo', () => {
     mocks.simularAte.mockReset()
     mocks.simularAte.mockResolvedValue(RESUMO)
     mocks.revalidateTag.mockReset()
+    guarda.motivo = null
     process.env.CRON_SECRET = 'segredo'
   })
 
@@ -114,6 +120,18 @@ describe.sequential('/api/cron/demo', () => {
     expect(mocks.simularAte.mock.invocationCallOrder[0]!).toBeLessThan(
       mocks.revalidateTag.mock.invocationCallOrder[0]!,
     )
+  })
+
+  it('com dado real no banco, não chama simularAte — mesmo com a variável ligada', async () => {
+    process.env.DEMO_AUTOSSEMEADURA = 'true'
+    guarda.motivo = 'DADO_REAL_PRESENTE'
+
+    const resposta = await pedir()
+
+    expect(resposta.status).toBe(200)
+    expect(await resposta.json()).toEqual({ executado: false, motivo: 'DADO_REAL_PRESENTE' })
+    expect(mocks.simularAte).not.toHaveBeenCalled()
+    expect(mocks.revalidateTag).not.toHaveBeenCalled()
   })
 
   it('pular (sem a variável) não invalida nada', async () => {

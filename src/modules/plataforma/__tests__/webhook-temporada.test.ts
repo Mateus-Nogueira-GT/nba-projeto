@@ -1,7 +1,9 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { eq } from 'drizzle-orm'
+import { drizzle } from 'drizzle-orm/pglite'
 
 import { bancoDeTeste } from '../../dominio/__tests__/ajuda-banco'
+import * as schema from '../../dominio/db/schema'
 import {
   assinaturas,
   cobrancas,
@@ -354,5 +356,25 @@ describe('evento sem tentativa', () => {
 
     expect(resultado).toMatchObject({ liberou: false })
     expect(await banco.db.select().from(direitosAcesso)).toHaveLength(0)
+  })
+})
+
+describe('a corrida do primeiro pagamento de temporada (auditoria 23/09)', () => {
+  it('o evento trava a referência antes de gravar', async () => {
+    // PGlite serializa transações, então a corrida em si não se reproduz aqui;
+    // o que se fixa é a trava que a impede no Postgres de verdade: sem ela,
+    // duas notificações simultâneas passavam pelo SELECT e a segunda
+    // estourava a UNIQUE de `referencia_externa` — 500 no webhook.
+    await semear('ref-trava', 'ALL_STAR', 'TEMPORADA')
+    const consultas: string[] = []
+    const dbComLog = drizzle(banco.pg, {
+      schema,
+      logger: { logQuery: (q: string) => consultas.push(q) },
+    })
+    await aplicarEventoPagamento(dbComLog, 'fake', pagamentoAprovado('ref-trava'), AGORA, FIM_DA_TEMPORADA)
+    const trava = consultas.findIndex((q) => q.includes('pg_advisory_xact_lock'))
+    const insercao = consultas.findIndex((q) => q.includes('insert into "eventos_pagamento"'))
+    expect(trava).toBeGreaterThanOrEqual(0)
+    expect(trava).toBeLessThan(insercao)
   })
 })
