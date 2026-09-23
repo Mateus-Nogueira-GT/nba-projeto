@@ -9,6 +9,7 @@ import {
   registrarEventoExpiradoSemFalhar,
   registrarExpiradosSemFalhar,
   registrarFalhaOperacional,
+  registrarFalhaOperacionalSemFalhar,
 } from '../falhas-operacionais'
 import { NotificadorLog, NotificadorMemoria } from '../notificador'
 import { NotificadorWebhook, notificadorDoAmbiente } from '../notificador-webhook'
@@ -134,6 +135,60 @@ describe('registrarEventoExpiradoSemFalhar — push que vence na expansão (W2-2
       registrarEventoExpiradoSemFalhar(dbQuebrado, { expirado: true }, null, AGORA),
     ).resolves.toBeUndefined()
     expect(erro).toHaveBeenCalledWith(expect.stringContaining('falha_operacional_nao_registrada'))
+    erro.mockRestore()
+  })
+})
+
+describe('Fire Live falhando ciclo após ciclo (pós-merge da Onda 2)', () => {
+  it('duas falhas de ciclo em 10 min não alertam: um soluço não acorda ninguém', async () => {
+    for (const s of [60_000, 40_000]) {
+      await registrarFalhaOperacional(
+        banco.db,
+        'fire-live-ciclo-falhou',
+        { jogoId: 'j1' },
+        new Date(AGORA.getTime() - s),
+      )
+    }
+    expect(await avaliarFalhasOperacionais(banco.db, AGORA, new NotificadorMemoria())).toEqual([])
+  })
+
+  it('um soluço em vários jogos no mesmo ciclo não alerta: o limite é por jogo', async () => {
+    for (const jogoId of ['j1', 'j2', 'j3', 'j4']) {
+      await registrarFalhaOperacional(
+        banco.db,
+        'fire-live-ciclo-falhou',
+        { jogoId },
+        new Date(AGORA.getTime() - 30_000),
+      )
+    }
+    expect(await avaliarFalhasOperacionais(banco.db, AGORA, new NotificadorMemoria())).toEqual([])
+  })
+
+  it('três falhas de ciclo do mesmo jogo em 10 min alertam', async () => {
+    for (const s of [60_000, 40_000, 20_000]) {
+      await registrarFalhaOperacional(
+        banco.db,
+        'fire-live-ciclo-falhou',
+        { jogoId: 'j1' },
+        new Date(AGORA.getTime() - s),
+      )
+    }
+    const n = new NotificadorMemoria()
+    expect(await avaliarFalhasOperacionais(banco.db, AGORA, n)).toEqual([
+      { origem: 'fire-live-ciclo-falhou', quantidade: 3 },
+    ])
+    expect(n.enviados[0]?.severidade).toBe('ALTA')
+  })
+
+  it('registrar sem falhar: erro ao gravar não escapa', async () => {
+    const erro = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    const dbQuebrado = {
+      insert: () => ({ values: () => Promise.reject(new Error('timeout')) }),
+    } as unknown as Db
+    await expect(
+      registrarFalhaOperacionalSemFalhar(dbQuebrado, 'fire-live-ciclo-falhou', {}, AGORA),
+    ).resolves.toBeUndefined()
+    expect(erro).toHaveBeenCalled()
     erro.mockRestore()
   })
 })

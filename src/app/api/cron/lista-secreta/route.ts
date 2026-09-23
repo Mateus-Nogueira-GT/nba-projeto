@@ -81,11 +81,16 @@ export async function GET(requisicao: Request): Promise<Response> {
             },
             async ({ confirmarLease }) => {
               await confirmarLease()
-              return (
-                await coletarOddsDoDia(db, ruleset, dataReferencia, agora, fontes, {
-                  prazo: new Date(Date.now() + ORCAMENTO_ODDS_MS),
-                })
-              ).contagens
+              const coleta = await coletarOddsDoDia(db, ruleset, dataReferencia, agora, fontes, {
+                prazo: new Date(Date.now() + ORCAMENTO_ODDS_MS),
+              })
+              // Uma casa com erro não derruba as outras (não lança): sem esta
+              // linha, casa caída antes da Lista ficava silenciosa. Mesmo
+              // formato do cron da rodada.
+              for (const erro of coleta.erros) {
+                console.error(`[odds] fonte ${erro.fonte} falhou: ${erro.mensagem}`)
+              }
+              return coleta.contagens
             },
           )
         },

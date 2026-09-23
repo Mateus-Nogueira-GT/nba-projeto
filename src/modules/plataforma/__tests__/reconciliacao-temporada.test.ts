@@ -352,3 +352,141 @@ describe('a fila de reconciliação esvazia', () => {
     expect(t?.status).toBe('CRIADA')
   })
 })
+
+/**
+ * ABANDONO QUE O PROVEDOR CONHECE (decisão do parceiro, 23/09: "sai da fila").
+ *
+ * A regra dos 7 dias só pegava a tentativa SEM nada no provedor. O checkout
+ * mensal abandonado (preapproval `pending` para sempre) e o PIX gerado e não
+ * pago (`rejected`/`cancelled`, ou `pending` parado) voltavam a CRIADA a cada
+ * rodada. Passados 7 dias, saem. O webhook continua valendo: se o pagamento
+ * chegar depois, ele concede por conta própria.
+ */
+describe('abandono com registro no provedor', () => {
+  const OITO_DIAS = 8 * 24 * 3600_000
+  const outroUsuario = async (email: string) =>
+    (await adicionarUsuario(banco.db, { email, senha: 'senha-segura-123', nome: 'Outro' })).id
+
+  async function tentativaMensal(
+    referencia: string,
+    assinaturaId: string,
+    criadoEm: Date,
+    dono = usuarioId,
+  ) {
+    await banco.db.insert(tentativasCheckout).values({
+      usuarioId: dono,
+      produto: 'NBA_PRO',
+      provedor: 'fake',
+      referenciaExterna: referencia,
+      chaveIdempotencia: `chave-${referencia}`,
+      nivelDoPlano: 'MVP',
+      modalidade: 'MENSAL',
+      status: 'CRIADA',
+      assinaturaExternaId: assinaturaId,
+      criadoEm,
+      atualizadoEm: AGORA,
+    })
+  }
+
+  function assinatura(porta: PagamentoFake, id: string, referencia: string, status: string) {
+    porta.assinaturas.set(id, {
+      id,
+      referenciaExterna: referencia,
+      status,
+      nomePlano: 'mensal',
+      urlCheckout: `https://www.mercadopago.com.br/subscriptions/checkout?preapproval_id=${id}`,
+      proximaCobranca: null,
+      ocorridoEm: AGORA.toISOString(),
+    })
+  }
+
+  function pix(porta: PagamentoFake, referencia: string, status: string) {
+    porta.registrarPagamento({
+      id: `pay-${referencia}`,
+      assinaturaExternaId: null,
+      referenciaExterna: referencia,
+      status,
+      valorCentavos: 59700,
+      moeda: 'BRL',
+      ocorridoEm: AGORA.toISOString(),
+      proximaCobranca: null,
+    })
+  }
+
+  async function statusPorReferencia() {
+    const linhas = await banco.db.select().from(tentativasCheckout)
+    return Object.fromEntries(linhas.map((l) => [l.referenciaExterna, l.status]))
+  }
+
+  it('mensal pendente há mais de 7 dias sai da fila; o de ontem continua', async () => {
+    const porta = new PagamentoFake()
+    await tentativaMensal('ref-mensal-velha', 'sub-velha', new Date(AGORA.getTime() - OITO_DIAS))
+    await tentativaMensal(
+      'ref-mensal-nova',
+      'sub-nova',
+      new Date(AGORA.getTime() - 24 * 3600_000),
+      await outroUsuario('mensal-nova@exemplo.com'),
+    )
+    assinatura(porta, 'sub-velha', 'ref-mensal-velha', 'pending')
+    assinatura(porta, 'sub-nova', 'ref-mensal-nova', 'pending')
+
+    await reconciliarPagamentos(banco.db, porta, AGORA, FIM_DA_TEMPORADA)
+
+    const status = await statusPorReferencia()
+    expect(status['ref-mensal-velha']).toBe('ENCERRADA')
+    expect(status['ref-mensal-nova']).toBe('CRIADA')
+  })
+
+  it('mensal cancelado há mais de 7 dias sai da fila', async () => {
+    const porta = new PagamentoFake()
+    await tentativaMensal(
+      'ref-mensal-cancelada',
+      'sub-cancelada',
+      new Date(AGORA.getTime() - OITO_DIAS),
+    )
+    assinatura(porta, 'sub-cancelada', 'ref-mensal-cancelada', 'cancelled')
+
+    await reconciliarPagamentos(banco.db, porta, AGORA, FIM_DA_TEMPORADA)
+
+    expect((await statusPorReferencia())['ref-mensal-cancelada']).toBe('ENCERRADA')
+  })
+
+  it('PIX recusado, cancelado ou parado em pendente há mais de 7 dias sai da fila', async () => {
+    const porta = new PagamentoFake()
+    const velha = new Date(AGORA.getTime() - OITO_DIAS)
+    await tentativaDeTemporada('ref-pix-recusado', velha)
+    await tentativaDeTemporada('ref-pix-cancelado', velha, await outroUsuario('pix-c@exemplo.com'))
+    await tentativaDeTemporada('ref-pix-pendente', velha, await outroUsuario('pix-p@exemplo.com'))
+    pix(porta, 'ref-pix-recusado', 'rejected')
+    pix(porta, 'ref-pix-cancelado', 'cancelled')
+    pix(porta, 'ref-pix-pendente', 'pending')
+
+    await reconciliarPagamentos(banco.db, porta, AGORA, FIM_DA_TEMPORADA)
+
+    const status = await statusPorReferencia()
+    expect(status['ref-pix-recusado']).toBe('ENCERRADA')
+    expect(status['ref-pix-cancelado']).toBe('ENCERRADA')
+    expect(status['ref-pix-pendente']).toBe('ENCERRADA')
+    expect(await banco.db.select().from(direitosAcesso)).toHaveLength(0)
+  })
+
+  it('pagamento em análise há mais de 7 dias continua na fila: não é PIX abandonado', async () => {
+    const porta = new PagamentoFake()
+    await tentativaDeTemporada('ref-em-analise', new Date(AGORA.getTime() - OITO_DIAS))
+    pix(porta, 'ref-em-analise', 'in_process')
+
+    await reconciliarPagamentos(banco.db, porta, AGORA, FIM_DA_TEMPORADA)
+
+    expect((await statusPorReferencia())['ref-em-analise']).toBe('CRIADA')
+  })
+
+  it('PIX pendente de ontem continua na fila', async () => {
+    const porta = new PagamentoFake()
+    await tentativaDeTemporada('ref-pix-ontem', new Date(AGORA.getTime() - 24 * 3600_000))
+    pix(porta, 'ref-pix-ontem', 'pending')
+
+    await reconciliarPagamentos(banco.db, porta, AGORA, FIM_DA_TEMPORADA)
+
+    expect((await statusPorReferencia())['ref-pix-ontem']).toBe('CRIADA')
+  })
+})
