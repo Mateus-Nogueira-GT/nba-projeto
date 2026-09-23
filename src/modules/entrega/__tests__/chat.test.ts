@@ -9,7 +9,14 @@ import { carregarRuleset } from '../../motor/ruleset/carregar'
 import { calendarioDoRuleset, temporadaDe } from '../../dominio/temporada'
 import { intervaloDoDia } from '../../dominio/rodada'
 import { lerFeed } from '../lista-secreta'
-import { LIMITE_PERGUNTA, LIMITE_POR_MINUTO, mensagensUsadasHoje, responder } from '../chat'
+import {
+  FALHAS_DEVOLVIDAS_POR_DIA,
+  LIMITE_PERGUNTA,
+  LIMITE_POR_MINUTO,
+  mensagensUsadasHoje,
+  responder,
+  ultimasMensagens,
+} from '../chat'
 
 const ruleset = carregarRuleset(readFileSync('config/ruleset.v1.yaml', 'utf8'))
 const AGORA = new Date('2026-08-24T18:00:00.000Z')
@@ -188,8 +195,11 @@ describe('chat do assinante', () => {
     if (!r.ok) expect(r.motivo).toBe('indisponivel')
     expect(await mensagensUsadasHoje(banco.db, usuarioId, HOJE, FUSO)).toBe(0)
 
+    // A pergunta fica, MARCADA como falha: é o que faz ela contar no limite
+    // por minuto (auditoria 23/09) sem gastar a cota do dia.
     const linhas = await banco.db.select().from(chatMensagens)
-    expect(linhas).toHaveLength(0)
+    expect(linhas).toHaveLength(1)
+    expect(linhas[0]?.falhouEm).not.toBeNull()
   })
 
   it('pergunta vazia não gasta cota nem chamada', async () => {
@@ -381,5 +391,56 @@ describe('chat do assinante', () => {
       agora: AGORA,
     })
     expect(r.ok).toBe(true)
+  })
+  it('falhas seguidas param no limite por minuto — o laço pago fecha', async () => {
+    // Antes, a falha apagava a reserva: nem a cota nem o limite por minuto
+    // andavam, e um assinante fazia ~60 chamadas pagas por minuto.
+    await banco.db.delete(chatMensagens)
+    const porta = new LLMFake({ falhar: true })
+    const motivos: string[] = []
+    for (let i = 0; i < LIMITE_POR_MINUTO + 1; i++) {
+      const r = await responder(banco.db, porta, {
+        usuarioId,
+        texto: `pergunta ${i}`,
+        dataReferencia: HOJE,
+        fuso: FUSO,
+        temporada: TEMPORADA,
+        cotaDiaria: COTA_TESTE,
+        agora: AGORA,
+      })
+      if (!r.ok) motivos.push(r.motivo)
+    }
+    expect(motivos.at(-1)).toBe('limite-por-minuto')
+    expect(porta.chamadas).toHaveLength(LIMITE_POR_MINUTO)
+  })
+
+  it('só as três primeiras falhas do dia são devolvidas', async () => {
+    await banco.db.delete(chatMensagens)
+    const porta = new LLMFake({ falhar: true })
+    for (let i = 0; i < FALHAS_DEVOLVIDAS_POR_DIA + 1; i++) {
+      await responder(banco.db, porta, {
+        usuarioId,
+        texto: `pergunta ${i}`,
+        dataReferencia: HOJE,
+        fuso: FUSO,
+        temporada: TEMPORADA,
+        cotaDiaria: COTA_TESTE,
+        // Um minuto e pouco entre elas: este teste é sobre a cota do DIA.
+        agora: new Date(AGORA.getTime() + i * 61_000),
+      })
+    }
+    expect(await mensagensUsadasHoje(banco.db, usuarioId, HOJE, FUSO)).toBe(1)
+  })
+
+  it('a pergunta que falhou não entra no histórico', async () => {
+    await banco.db.delete(chatMensagens)
+    await banco.db.insert(chatMensagens).values({
+      usuarioId,
+      papel: 'USUARIO',
+      texto: 'pergunta sem resposta',
+      criadoEm: AGORA,
+      falhouEm: AGORA,
+    })
+    expect(await ultimasMensagens(banco.db, usuarioId, HOJE, FUSO)).toEqual([])
   })
 })

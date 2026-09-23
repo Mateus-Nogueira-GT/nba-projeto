@@ -281,13 +281,8 @@ export async function iniciarCheckout(
   })
 
   if ('pronta' in reserva) {
-    await registrarOperacao(db, {
-      operacao: 'CHECKOUT',
-      identificador: entrada.usuarioId,
-      ip: entrada.ip,
-      sucesso: true,
-      agora: entrada.agora,
-    })
+    // Reabrir a MESMA compra não é operação nova: quem volta do Mercado Pago
+    // e clica "Assinar" de novo não pode gastar o limite (auditoria 23/09).
     return {
       status: 'PRONTO',
       url: urlCheckoutSegura(reserva.tentativa.urlCheckout),

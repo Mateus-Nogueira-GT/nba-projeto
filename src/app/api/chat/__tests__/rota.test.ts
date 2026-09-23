@@ -86,6 +86,25 @@ const pedir = async (texto: string) => {
 }
 
 describe('POST /api/chat', () => {
+  it('POST de outra origem recebe 403 e não chega à LLM', async () => {
+    const { POST } = await import('../route')
+    const r = await POST(
+      new Request('http://local/api/chat', {
+        method: 'POST',
+        body: JSON.stringify({ texto: 'oi' }),
+        headers: { 'content-type': 'application/json', origin: 'https://evil.test' },
+      }),
+    )
+    expect(r.status).toBe(403)
+    expect(llmFake.chamadas).toHaveLength(0)
+  })
+
+  it('POST sem JSON recebe 415', async () => {
+    const { POST } = await import('../route')
+    const r = await POST(new Request('http://local/api/chat', { method: 'POST', body: 'texto=oi' }))
+    expect(r.status).toBe(415)
+  })
+
   it('sem sessão, 401', async () => {
     sessao = null
     expect((await pedir('oi')).status).toBe(401)

@@ -1,3 +1,4 @@
+import { cache } from 'react'
 import { cookies } from 'next/headers'
 import { getDb } from '../../dominio/db/cliente'
 import { validarSessao, type Sessao } from './sessao'
@@ -30,8 +31,11 @@ export async function tokenDaSessaoAtual(): Promise<string | null> {
  *
  * Consulta o banco a cada chamada de propósito: é o que faz o bloqueio pelo
  * painel valer na requisição seguinte, em vez de esperar o token expirar.
+ *
+ * `cache()` memoriza por REQUISIÇÃO: guarda, ações e rotas que chamam
+ * `sessaoAtual` na mesma renderização validam a sessão uma vez só.
  */
-export async function sessaoAtual(): Promise<Sessao | null> {
+export const sessaoAtual = cache(async (): Promise<Sessao | null> => {
   if (!process.env.DATABASE_URL) return null
 
   const token = await tokenDaSessaoAtual()
@@ -39,7 +43,7 @@ export async function sessaoAtual(): Promise<Sessao | null> {
 
   const r = await validarSessao(getDb(), token, new Date(), { ip: await ipDaRequisicao() })
   return r.ok ? r.sessao : null
-}
+})
 
 export async function exigirAdmin(): Promise<Sessao | null> {
   const sessao = await sessaoAtual()

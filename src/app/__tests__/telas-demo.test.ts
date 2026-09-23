@@ -57,6 +57,7 @@ let rulesetDaDemo: Ruleset
 
 const USUARIO_DEMO = '00000000-0000-4000-8000-000000000001'
 vi.mock('../../modules/plataforma/auth/cookies', () => ({
+  tokenDaSessaoAtual: async () => 'token-de-teste',
   sessaoAtual: async () => ({
     usuarioId: '00000000-0000-4000-8000-000000000001',
     email: 'demo@teste.com',

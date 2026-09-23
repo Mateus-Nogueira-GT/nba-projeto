@@ -12,7 +12,7 @@ import {
 } from '@/modules/plataforma/assinatura/configuracao'
 import { gravarCookieDeSessao } from '@/modules/plataforma/auth/cookies'
 import { ipDaRequisicao } from '@/modules/plataforma/auth/requisicao'
-import { autenticar } from '@/modules/plataforma/auth/sessao'
+import { abrirSessao } from '@/modules/plataforma/auth/sessao'
 import { COOKIE_VISITANTE_AFILIADO } from '@/modules/plataforma/afiliados/http'
 import { associarVisitanteAoUsuario } from '@/modules/plataforma/afiliados/servico'
 
@@ -46,9 +46,11 @@ export async function cadastrar(
     return 'Não foi possível criar a conta com esses dados.'
   }
 
-  const login = await autenticar(
+  // A conta acabou de ser criada com esta senha: conferir de novo seria um
+  // segundo scrypt por cadastro, no pico do lançamento (auditoria 23/09).
+  const login = await abrirSessao(
     getDb(),
-    { email, senha },
+    resultado.usuarioId,
     {
       fingerprint: String(formulario.get('dispositivo') ?? 'desconhecido'),
       tipo: /mobile|android|iphone/i.test(String(formulario.get('ua') ?? ''))
@@ -60,8 +62,6 @@ export async function cadastrar(
     agora,
     { duracaoMs: DURACAO_MS },
   )
-  if (!login.ok) return 'Conta criada. Entre novamente para continuar.'
-
   await gravarCookieDeSessao(login.token, new Date(agora.getTime() + DURACAO_MS))
   const visitante = (await cookies()).get(COOKIE_VISITANTE_AFILIADO)?.value
   if (visitante && login.usuarioId) {

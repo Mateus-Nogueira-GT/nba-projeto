@@ -1,7 +1,7 @@
 import { redirect } from 'next/navigation'
 
 import { getDb } from '../../dominio/db/cliente'
-import { sessaoAtual } from '../auth/cookies'
+import { sessaoAtual, tokenDaSessaoAtual } from '../auth/cookies'
 import { type AcessoComNivel, avaliarAcesso } from './direito'
 import { atende, type NivelDoPlano } from './nivel-do-plano'
 
@@ -56,4 +56,20 @@ export async function exigirNivel(
     redirect(`/assinar?nivel=${minimo}&voltar=${encodeURIComponent(destino)}`)
   }
   return { sessao, acesso }
+}
+
+/**
+ * PORTÃO BARATO, ANTES DO BANCO.
+ *
+ * As telas de estatística resolvem a tela (≈10 consultas) antes de pedir
+ * login, para um id inexistente responder 404. Sem cookie nenhum, esse
+ * trabalho era desperdício — e um robô ou link compartilhado virava carga
+ * de graça no banco (auditoria 23/09). Aqui só o cookie é lido; quem tem
+ * cookie segue o caminho de sempre, e `exigirNivel` valida de verdade.
+ *
+ * Consequência aceita: sem cookie, um id válido que não existe manda para
+ * /entrar em vez de 404.
+ */
+export async function exigirCookieDeSessao(destino: string): Promise<void> {
+  if (!(await tokenDaSessaoAtual())) redirect(`/entrar?destino=${encodeURIComponent(destino)}`)
 }

@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import { and, asc, eq, inArray, isNull, lt, or, sql } from 'drizzle-orm'
+import { and, asc, desc, eq, inArray, isNull, lt, or, sql } from 'drizzle-orm'
 
 import { tentativasCheckout } from '../../dominio/db/schema'
 import type { Db } from '../../dominio/db/tipos'
@@ -7,6 +7,30 @@ import type { AssinaturaExterna, CobrancaExterna, EventoPagamento, PortaCobranca
 import { aplicarEventoPagamento } from './webhook'
 
 const LEASE_RECONCILIACAO_MS = 60_000
+
+/** Sem pagamento encontrado depois disso, a tentativa foi abandonada. */
+export const JANELA_ABANDONO_MS = 7 * 24 * 3600_000
+
+/**
+ * Quem pagou há pouco espera na frente. Com ~2 mil tentativas e 50 por
+ * rodada a cada 10 min, o rodízio puro levava ~6–7 h para voltar a um
+ * pagamento perdido (auditoria 23/09).
+ */
+export const JANELA_PRIORIDADE_MS = 48 * 3600_000
+
+/**
+ * Tentativa sem pagamento no provedor: ainda AMBIGUA (pode ser só atraso do
+ * provedor) ou, passada a janela de abandono, ENCERRADA — sai da fila em vez
+ * de ocupar uma vaga a cada rodada para sempre.
+ */
+function statusSemPagamento(
+  tentativa: typeof tentativasCheckout.$inferSelect,
+  agora: Date,
+): 'AMBIGUA' | 'ENCERRADA' {
+  return tentativa.criadoEm.getTime() < agora.getTime() - JANELA_ABANDONO_MS
+    ? 'ENCERRADA'
+    : 'AMBIGUA'
+}
 
 function chaveEvento(partes: Array<string | null>): string {
   return `reconciliacao:${createHash('sha256').update(partes.join('|')).digest('base64url')}`
@@ -159,7 +183,12 @@ export async function reconciliarPagamentos(
         or(isNull(tentativasCheckout.leaseExpiraEm), lt(tentativasCheckout.leaseExpiraEm, agora)),
       ),
     )
-    .orderBy(asc(tentativasCheckout.atualizadoEm))
+    .orderBy(
+      desc(
+        sql`${tentativasCheckout.criadoEm} >= ${new Date(agora.getTime() - JANELA_PRIORIDADE_MS)}`,
+      ),
+      asc(tentativasCheckout.atualizadoEm),
+    )
     .limit(Math.min(Math.max(limite, 1), 100))
 
   const resultado = { examinadas: 0, encontradas: 0, eventos: 0, falhas: 0 }
@@ -177,7 +206,11 @@ export async function reconciliarPagamentos(
         if (!cobranca) {
           await db
             .update(tentativasCheckout)
-            .set({ status: 'AMBIGUA', leaseExpiraEm: null, atualizadoEm: agora })
+            .set({
+              status: statusSemPagamento(tentativa, agora),
+              leaseExpiraEm: null,
+              atualizadoEm: agora,
+            })
             .where(eq(tentativasCheckout.id, tentativa.id))
           continue
         }
@@ -190,9 +223,16 @@ export async function reconciliarPagamentos(
           fimDaTemporada,
         )
         if (efeito.aceito && !efeito.duplicado) resultado.eventos += 1
+        // Temporada paga é pagamento ÚNICO: não há renovação a vigiar, e ela
+        // sai da fila. Qualquer outro status continua sendo acompanhado.
         await db
           .update(tentativasCheckout)
-          .set({ status: 'CRIADA', leaseExpiraEm: null, erroCodigo: null, atualizadoEm: agora })
+          .set({
+            status: cobranca.status === 'approved' ? 'ENCERRADA' : 'CRIADA',
+            leaseExpiraEm: null,
+            erroCodigo: null,
+            atualizadoEm: agora,
+          })
           .where(eq(tentativasCheckout.id, tentativa.id))
         continue
       }
@@ -203,7 +243,11 @@ export async function reconciliarPagamentos(
       if (!assinatura) {
         await db
           .update(tentativasCheckout)
-          .set({ status: 'AMBIGUA', leaseExpiraEm: null, atualizadoEm: agora })
+          .set({
+            status: statusSemPagamento(tentativa, agora),
+            leaseExpiraEm: null,
+            atualizadoEm: agora,
+          })
           .where(eq(tentativasCheckout.id, tentativa.id))
         continue
       }

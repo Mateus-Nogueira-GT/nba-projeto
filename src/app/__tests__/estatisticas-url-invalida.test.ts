@@ -3,6 +3,16 @@ import { bancoDeTeste } from '../../modules/dominio/__tests__/ajuda-banco'
 
 let banco: Awaited<ReturnType<typeof bancoDeTeste>>
 vi.mock('../../modules/dominio/db/cliente', () => ({ getDb: () => banco.db }))
+// Com cookie de sessão presente: o portão de cookie (auditoria 23/09) manda
+// quem não tem cookie para /entrar ANTES do banco, e este teste é sobre o
+// caminho que chega ao banco — o id válido que não existe tem de ser 404.
+// O cache dos agregados da temporada só existe no runtime do Next; aqui ele
+// é a função crua, como nas outras suítes de tela.
+vi.mock('next/cache', () => ({ unstable_cache: (fn: unknown) => fn, revalidateTag: () => {} }))
+vi.mock('../../modules/plataforma/auth/cookies', () => ({
+  tokenDaSessaoAtual: async () => 'token-de-teste',
+  sessaoAtual: async () => null,
+}))
 
 beforeAll(async () => {
   vi.stubEnv('DATABASE_URL', 'postgres://teste-local')

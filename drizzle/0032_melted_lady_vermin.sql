@@ -1,0 +1,1 @@
+CREATE INDEX "tentativas_login_ip_idx" ON "tentativas_login" USING btree ("ip","tentado_em");

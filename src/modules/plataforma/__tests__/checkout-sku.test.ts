@@ -302,3 +302,15 @@ describe('trocar de SKU', () => {
     expect(abertas[0]?.nivelDoPlano).toBe('MVP')
   })
 })
+
+describe('reabrir um checkout pronto', () => {
+  it('não gasta o limite de checkout', async () => {
+    const porta = new PagamentoFake()
+    // Seis reaberturas da MESMA compra: o limite é 5, e só a primeira
+    // criação é uma operação nova (auditoria de 23/09).
+    for (let i = 0; i < 6; i++) {
+      const { resultado } = await comprar('MVP_MENSAL', porta)
+      expect(resultado.status).toBe('PRONTO')
+    }
+  })
+})

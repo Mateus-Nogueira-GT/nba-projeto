@@ -34,6 +34,7 @@ let jogoId: string
 let timeId: string
 
 vi.mock('../../modules/plataforma/auth/cookies', () => ({
+  tokenDaSessaoAtual: async () => 'token-de-teste',
   sessaoAtual: async () => ({ usuarioId: USUARIO, email: 'demo@teste.com' }),
 }))
 vi.mock('../../modules/plataforma/assinatura/direito', async () => {

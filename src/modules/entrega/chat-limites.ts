@@ -45,6 +45,16 @@ export const LIMITE_PERGUNTA = 500
  */
 export const LIMITE_POR_MINUTO = 5
 
+/**
+ * Quantas falhas por dia NÃO gastam cota.
+ *
+ * Falha nossa não deve cobrar o assinante — mas devolver TODA falha deixava
+ * um laço pago sem freio: a resposta reprovada apagava a reserva, e nem a
+ * cota nem o limite por minuto andavam (auditoria 23/09). Três por dia cobre
+ * o soluço do provedor; da quarta em diante, a pergunta conta.
+ */
+export const FALHAS_DEVOLVIDAS_POR_DIA = 3
+
 function cotaLida(bruta: string | undefined): number | null {
   const n = Number(bruta)
   // Só inteiro positivo vale. Zero trancaria todo mundo fora; NaN liberaria

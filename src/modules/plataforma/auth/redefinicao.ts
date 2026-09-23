@@ -57,6 +57,9 @@ export async function concluirRedefinicao(
   if (!r) return { ok: false, motivo: 'token' }
   if (r.expiraEm.getTime() < e.agora.getTime()) return { ok: false, motivo: 'expirada' }
 
+  // scrypt FORA da transação: dentro, segurava conexão e lock durante a CPU
+  // do hash (auditoria 23/09).
+  const senhaHash = await gerarHash(e.novaSenha)
   return db.transaction(async (tx): Promise<ResultadoRedefinicao> => {
     // A queima do token É a trava de concorrência, não uma gravação a mais.
     // O SELECT acima é leitura otimista, fora da transação — dois `POST`s
@@ -77,7 +80,7 @@ export async function concluirRedefinicao(
 
     await tx
       .update(usuarios)
-      .set({ senhaHash: await gerarHash(e.novaSenha) })
+      .set({ senhaHash })
       .where(eq(usuarios.id, r.usuarioId))
     // Senha nova, sessões antigas fora — pelo caminho que já corta o push
     // por dispositivo (o mesmo usado ao bloquear pelo painel, admin/usuarios.ts)

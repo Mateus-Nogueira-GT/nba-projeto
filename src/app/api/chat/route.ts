@@ -10,6 +10,11 @@ import { rulesetAtivo } from '@/modules/entrega/ruleset-ativo'
 import { avaliarAcesso } from '@/modules/plataforma/assinatura/direito'
 import { atende, type NivelPago } from '@/modules/plataforma/assinatura/nivel-do-plano'
 import { sessaoAtual } from '@/modules/plataforma/auth/cookies'
+import {
+  conteudoJson,
+  lerJsonLimitado,
+  origemDaMutacaoValida,
+} from '@/modules/plataforma/push/http'
 
 export const dynamic = 'force-dynamic'
 
@@ -65,7 +70,18 @@ export async function POST(requisicao: Request): Promise<Response> {
     return NextResponse.json({ erro: 'fora-do-ar' }, { status: 503 })
   }
 
-  const corpo = (await requisicao.json().catch(() => null)) as { texto?: unknown } | null
+  // As mesmas guardas das outras rotas que mudam estado (push, preferências):
+  // origem, tipo e tamanho do corpo ANTES de ler — o corpo antes era lido
+  // inteiro (até 4,5 MB) para depois descartar tudo acima de 500 caracteres.
+  if (!origemDaMutacaoValida(requisicao)) {
+    return NextResponse.json({ erro: 'origem-invalida' }, { status: 403 })
+  }
+  if (!conteudoJson(requisicao)) {
+    return NextResponse.json({ erro: 'tipo-invalido' }, { status: 415 })
+  }
+  const corpo = (await lerJsonLimitado(requisicao).catch(() => null)) as {
+    texto?: unknown
+  } | null
   const texto = typeof corpo?.texto === 'string' ? corpo.texto : ''
 
   // Sessão e acesso ficam DENTRO do try: os dois vão ao banco, e um banco fora

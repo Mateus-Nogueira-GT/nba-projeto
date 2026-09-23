@@ -1,0 +1,1 @@
+ALTER TABLE "chat_mensagens" ADD COLUMN "falhou_em" timestamp with time zone;

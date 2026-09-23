@@ -18,7 +18,7 @@ import { Avatar, LogoTime, NotaPartida, Tabela, UltimaAtualizacao } from '@/desi
 import type { Coluna } from '@/design-system/componentes'
 import { NIVEL_JOGADOR } from '@/design-system/tokens/css'
 import { semantico } from '@/design-system/tokens/semantico'
-import { exigirNivel } from '@/modules/plataforma/assinatura/guarda'
+import { exigirCookieDeSessao, exigirNivel } from '@/modules/plataforma/assinatura/guarda'
 import { lateralPadrao } from '@/app/(app)/lateral/montar'
 import { atende } from '@/modules/plataforma/assinatura/nivel-do-plano'
 import { ConviteDoPlano } from '@/components/planos/ConviteDoPlano'
@@ -246,6 +246,8 @@ export default async function PaginaDoJogo({
 
   const { id } = await params
   if (!z.uuid().safeParse(id).success) notFound()
+  // Sem cookie de sessão, nem chega ao banco (auditoria 23/09).
+  await exigirCookieDeSessao(rotaDoJogo(id))
 
   // Preserva a data que a lista de jogos passou na URL (`?data=`), para o
   // "voltar" pousar no MESMO dia navegado, não sempre em hoje — sem
