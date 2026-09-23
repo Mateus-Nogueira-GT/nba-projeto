@@ -15,7 +15,7 @@ import type {
   ItemFireLiveNaTela,
 } from '@/modules/entrega/fire-live/leitura'
 import { confrontoDoItem, estadoDoCiclo, jogosDoDiaResumo } from '@/modules/entrega/lista-por-jogo'
-import { lerFeed } from '@/modules/entrega/lista-secreta'
+import { lerFeedCacheado } from '../feed-cacheado'
 import { rulesetAtivo } from '@/modules/entrega/ruleset-ativo'
 import { rotaDoJogador } from '@/modules/entrega/estatisticas/rotas'
 import { estadoDaTemporada } from '@/modules/entrega/estatisticas/temporadas'
@@ -315,7 +315,7 @@ export default async function PaginaFireLive({
     // `jogo` escolhe o painel, não recorta a leitura. Assim o seletor mantém
     // a rodada disponível e um link antigo pode cair para um jogo válido.
     lerFeedFireLive(getDb(), hoje, quartoFireLive, { time: filtro.time }),
-    lerFeed(getDb(), hoje),
+    lerFeedCacheado(hoje),
     // Preferência por CONTA: recorte de LEITURA puro sobre o snapshot — o feed
     // é por evento e não sabe quem está olhando. Uma consulta só (id + nome).
     jogadoresOcultosComNome(getDb(), sessao.usuarioId),

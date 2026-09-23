@@ -46,6 +46,26 @@ describe('adapter OpenRouter', () => {
     expect(r.texto).toBe('Texto gerado.')
   })
 
+  it("finish_reason 'length' marca o texto como truncado — os demais, não", async () => {
+    // O teto de tokens corta a resposta no meio da frase; o chat precisa
+    // saber disso para não entregá-la (minor §8).
+    const cortada = vi.fn<typeof fetch>(async () =>
+      resposta({
+        ...OK,
+        choices: [{ message: { content: 'Texto cor' }, finish_reason: 'length' }],
+      }),
+    )
+    const inteira = vi.fn<typeof fetch>(async () =>
+      resposta({ ...OK, choices: [{ message: { content: 'Texto.' }, finish_reason: 'stop' }] }),
+    )
+    const pedido = { sistema: 's', usuario: 'u' }
+    expect((await new OpenRouter('chave', cortada).gerar('chat', pedido)).truncado).toBe(true)
+    expect((await new OpenRouter('chave', inteira).gerar('chat', pedido)).truncado).toBe(false)
+    // Sem o campo (provedor que não o manda), não há como afirmar corte.
+    const semCampo = vi.fn<typeof fetch>(async () => resposta(OK))
+    expect((await new OpenRouter('chave', semCampo).gerar('chat', pedido)).truncado).toBe(false)
+  })
+
   it('manda a credencial no cabeçalho Authorization', async () => {
     const fetchMock = vi.fn<typeof fetch>(async () => resposta(OK))
     await new OpenRouter('chave-secreta', fetchMock).gerar('chat', { sistema: 's', usuario: 'u' })

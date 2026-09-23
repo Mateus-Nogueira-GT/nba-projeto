@@ -328,17 +328,30 @@ async function dadosDeExibicao(
   })
 }
 
+/**
+ * Filtro das escritas de um run. Com `runId` conhecido, só o dono da linha
+ * escreve (W2-3): o passo em voo de um run já retomado não pode sobrescrever
+ * o estado nem encerrar uma linha entregue ao run novo. Sem `runId` (runs
+ * legados sem lease), vale o filtro antigo, só por jogo.
+ */
+function linhaDoRun(jogoId: string, runId: string | null) {
+  return runId === null
+    ? eq(fireLiveExecucoes.jogoId, jogoId)
+    : and(eq(fireLiveExecucoes.jogoId, jogoId), eq(fireLiveExecucoes.runId, runId))
+}
+
 /** Persiste o estado do loop, para observabilidade e para o próximo ciclo. */
 export async function registrarCiclo(
   db: Db,
   jogoId: string,
   estado: EstadoObservado,
   ciclos: number,
+  runId: string | null = null,
 ): Promise<void> {
   await db
     .update(fireLiveExecucoes)
     .set({ ultimoEstado: estado, ciclos, atualizadoEm: new Date() })
-    .where(eq(fireLiveExecucoes.jogoId, jogoId))
+    .where(linhaDoRun(jogoId, runId))
 }
 
 export async function encerrarExecucao(
@@ -346,6 +359,7 @@ export async function encerrarExecucao(
   jogoId: string,
   motivo: MotivoEncerramento,
   agora: Date,
+  runId: string | null = null,
 ): Promise<void> {
   await db
     .update(fireLiveExecucoes)
@@ -356,5 +370,5 @@ export async function encerrarExecucao(
       leaseExpiraEm: null,
       atualizadoEm: agora,
     })
-    .where(eq(fireLiveExecucoes.jogoId, jogoId))
+    .where(linhaDoRun(jogoId, runId))
 }

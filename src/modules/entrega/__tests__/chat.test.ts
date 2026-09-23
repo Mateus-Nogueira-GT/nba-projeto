@@ -392,6 +392,27 @@ describe('chat do assinante', () => {
     })
     expect(r.ok).toBe(true)
   })
+  it('resposta truncada pelo teto de tokens é falha — não chega pela metade ao assinante', async () => {
+    // `finish_reason = 'length'`: o modelo parou no `max_tokens`, no meio da
+    // frase. O texto passaria no validador (não cita número nem palavra
+    // proibida) e o assinante leria uma resposta cortada (minor §8).
+    await banco.db.delete(chatMensagens)
+    const r = await responder(banco.db, new LLMFake({ truncado: true }), {
+      usuarioId,
+      texto: 'pergunta',
+      dataReferencia: HOJE,
+      fuso: FUSO,
+      temporada: TEMPORADA,
+      cotaDiaria: COTA_TESTE,
+      agora: AGORA,
+    })
+    expect(r).toEqual({ ok: false, motivo: 'indisponivel' })
+    const linhas = await banco.db.select().from(chatMensagens)
+    expect(linhas).toHaveLength(1)
+    expect(linhas[0]?.papel).toBe('USUARIO')
+    expect(linhas[0]?.falhouEm).not.toBeNull()
+  })
+
   it('falhas seguidas param no limite por minuto — o laço pago fecha', async () => {
     // Antes, a falha apagava a reserva: nem a cota nem o limite por minuto
     // andavam, e um assinante fazia ~60 chamadas pagas por minuto.

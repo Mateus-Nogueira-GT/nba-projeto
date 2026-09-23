@@ -149,4 +149,25 @@ describe('lease do início do Fire Live', () => {
       .where(eq(fireLiveExecucoes.jogoId, jogoId))
     expect(linha).toMatchObject({ estado: 'INICIADA', runId: 'run-vencedor' })
   })
+  it('INICIADA sem batimento há mais de 3 ciclos é retomada; com batimento recente, não', async () => {
+    const intervaloMs = ruleset.fire_live.observacao.intervalo_segundos * 1000
+    await banco.db.insert(fireLiveExecucoes).values({
+      jogoId,
+      iniciadoEm: AGORA,
+      estado: 'INICIADA',
+      runId: 'run-velho',
+      workflowIniciadoEm: AGORA,
+      atualizadoEm: new Date(AGORA.getTime() - 3 * intervaloMs + 1_000),
+    })
+    expect(await reservarJogosParaObservar(banco.db, ruleset, AGORA)).toHaveLength(0)
+
+    await banco.db
+      .update(fireLiveExecucoes)
+      .set({ atualizadoEm: new Date(AGORA.getTime() - 3 * intervaloMs - 1_000) })
+      .where(eq(fireLiveExecucoes.jogoId, jogoId))
+    const disparos = await reservarJogosParaObservar(banco.db, ruleset, AGORA)
+    expect(disparos).toHaveLength(1)
+    const [linha] = await banco.db.select().from(fireLiveExecucoes)
+    expect(linha).toMatchObject({ estado: 'RESERVADA', runId: null, workflowIniciadoEm: null })
+  })
 })

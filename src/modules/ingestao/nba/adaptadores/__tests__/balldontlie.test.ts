@@ -135,8 +135,10 @@ describe('FonteBalldontlie — contrato oficial GOAT', () => {
     expect(() => mapearLinhaStatsBalldontlie(bruto, null)).toThrow(/três pontos/)
   })
 
-  it('durante o Q1 materializa total e split a partir do mesmo acumulado oficial', async () => {
-    const { fonte, chamadas } = fonteCom([json(jogoAoVivo), json(stats)])
+  it('durante o Q1 materializa total e split a partir do mesmo acumulado oficial (Q1 confirmado de novo depois das stats, W2-3)', async () => {
+    // Controle do W2-3: a segunda leitura do jogo (depois das estatísticas)
+    // continua em period 1 → o split de Q1 é mantido.
+    const { fonte, chamadas } = fonteCom([json(jogoAoVivo), json(stats), json(jogoAoVivo)])
 
     const linhas = await fonte.boxScore('18446820')
 
@@ -152,6 +154,25 @@ describe('FonteBalldontlie — contrato oficial GOAT', () => {
       saldoQuadra: 23,
     })
     expect(chamadas[1]?.url).toContain('/stats?game_ids[]=18446820&period=0&per_page=100')
+    // A conferência de novo é uma chamada real a /games, não um cache do
+    // primeiro resultado.
+    expect(chamadas).toHaveLength(3)
+    expect(chamadas[2]?.url).toBe('https://api.balldontlie.io/nba/v1/games/18446820')
+  })
+
+  it('se o Q2 começou entre a leitura do jogo e a das estatísticas, boxScore não rotula o acumulado como Q1 (W2-3)', async () => {
+    const jogoNoQ2 = structuredClone(jogoAoVivo)
+    jogoNoQ2.data.period = 2
+
+    const { fonte, chamadas } = fonteCom([json(jogoAoVivo), json(stats), json(jogoNoQ2)])
+
+    const linhas = await fonte.boxScore('18446820')
+
+    // Só os totais — nada rotulado como quarto 1, porque o acumulado já
+    // inclui o Q2 quando as stats voltaram.
+    expect(linhas).toHaveLength(1)
+    expect(linhas.map((linha) => linha.quarto)).toEqual([null])
+    expect(chamadas).toHaveLength(3)
   })
 
   it('rejeita stats que atravessem o namespace do ID de jogo solicitado', async () => {

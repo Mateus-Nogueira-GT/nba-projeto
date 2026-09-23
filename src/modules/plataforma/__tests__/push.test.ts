@@ -15,6 +15,7 @@ import type { Sessao } from '../auth/sessao'
 import { encerrarSessaoPorToken } from '../auth/sessao'
 import {
   atualizarPreferenciaPush,
+  invalidarInscricoes,
   invalidarInscricoesDoDispositivo,
   preferenciasPushDoUsuario,
   registrarInscricaoPush,
@@ -107,7 +108,36 @@ describe('inscrições Web Push', () => {
     })
 
     const auditoria = await banco.db.select().from(pushInscricoesAuditoria)
-    expect(auditoria.map((item) => item.acao)).toEqual(['CRIADA', 'ATUALIZADA', 'REASSOCIADA'])
+    expect(auditoria.map((item) => item.acao)).toEqual(['CRIADA', 'REASSOCIADA'])
+  })
+
+  it('reenviar a mesma inscrição, sem nada mudado, não grava nada', async () => {
+    const sessao = await criarSessao('mesma@example.com', 'mesma')
+    const agora = new Date('2026-08-21T15:00:00Z')
+    await registrarInscricaoPush(banco.db, sessao, entrada, agora)
+    const [antes] = await banco.db.select().from(pushInscricoes)
+
+    const depois = new Date('2026-08-21T16:00:00Z')
+    expect(await registrarInscricaoPush(banco.db, sessao, entrada, depois)).toMatchObject({
+      criada: false,
+      reassociada: false,
+    })
+
+    const [linha] = await banco.db.select().from(pushInscricoes)
+    expect(linha?.atualizadoEm).toEqual(antes?.atualizadoEm)
+    const auditoria = await banco.db.select().from(pushInscricoesAuditoria)
+    expect(auditoria.map((a) => a.acao)).toEqual(['CRIADA'])
+  })
+
+  it('a mesma inscrição INVALIDADA volta a valer ao ser reenviada', async () => {
+    const sessao = await criarSessao('volta@example.com', 'volta')
+    const agora = new Date('2026-08-21T15:00:00Z')
+    const { id } = await registrarInscricaoPush(banco.db, sessao, entrada, agora)
+    await invalidarInscricoes(banco.db, [id], 'serviço de Push respondeu 404/410', agora)
+
+    await registrarInscricaoPush(banco.db, sessao, entrada, new Date('2026-08-21T16:00:00Z'))
+    const [linha] = await banco.db.select().from(pushInscricoes)
+    expect(linha?.invalidadaEm).toBeNull()
   })
 
   it('serializa cadastros concorrentes do mesmo endpoint e preserva a auditoria', async () => {

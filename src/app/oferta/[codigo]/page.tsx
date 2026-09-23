@@ -18,7 +18,7 @@ export default async function PaginaOferta({ params }: { params: Promise<{ codig
   const { codigo } = await params
   if (!process.env.DATABASE_URL) notFound()
   try {
-    const destino = await resolverLinkSemRegistrar(getDb(), codigo)
+    const { destino } = await resolverLinkSemRegistrar(getDb(), codigo)
     if (destino !== `/oferta/${codigo}`) notFound()
     const visitanteToken = (await cookies()).get(COOKIE_VISITANTE_AFILIADO)?.value
     if (visitanteToken) {

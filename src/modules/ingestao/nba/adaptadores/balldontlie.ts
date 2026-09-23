@@ -604,6 +604,10 @@ export class FonteBalldontlie implements FonteNBA {
     if (jogo.status_state === 'in_progress' && jogo.period === 1) {
       // Durante o Q1 o acumulado do jogo é exatamente o split do primeiro
       // quarto. O endpoint `period=1` só é aceito depois do encerramento.
+      // O quarto é conferido DE NOVO depois das estatísticas: se o Q2
+      // começou entre as duas chamadas, o acumulado já não é Q1 (W2-3).
+      const depois = await this.buscarJogo(jogoIdExterno)
+      if (depois.status_state !== 'in_progress' || depois.period !== 1) return totais
       return [...totais, ...totais.map((linha) => ({ ...linha, quarto: 1 }))]
     }
 

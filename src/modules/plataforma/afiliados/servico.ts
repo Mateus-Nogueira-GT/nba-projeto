@@ -26,6 +26,7 @@ import {
   usuarios,
 } from '@/modules/dominio/db/schema'
 import type { Db } from '@/modules/dominio/db/tipos'
+import { TRAVA } from '@/modules/dominio/db/travas'
 import { dataDeReferencia } from '@/modules/dominio/rodada'
 
 import { decidirAtribuicao } from './atribuicao'
@@ -298,8 +299,12 @@ export async function associarVisitanteAoUsuario(
 ) {
   const visitanteHash = hashVisitante(visitanteToken)
   return db.transaction(async (tx) => {
-    await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${visitanteHash}))`)
-    await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${usuarioId}))`)
+    await tx.execute(
+      sql`select pg_advisory_xact_lock(${TRAVA.AFILIADO_VISITANTE}, hashtext(${visitanteHash}))`,
+    )
+    await tx.execute(
+      sql`select pg_advisory_xact_lock(${TRAVA.AFILIADO_USUARIO}, hashtext(${usuarioId}))`,
+    )
     const [atribuicao] = await tx
       .select()
       .from(atribuicoesAfiliados)
@@ -363,6 +368,8 @@ export async function associarVisitanteAoUsuario(
   })
 }
 
+export type ConfiguracaoDoLink = Awaited<ReturnType<typeof configuracaoDoLink>>
+
 async function configuracaoDoLink(db: Db, codigo: string) {
   const [link] = await db
     .select()
@@ -391,15 +398,25 @@ async function configuracaoDoLink(db: Db, codigo: string) {
   return { link, campanha, parceiro, oferta }
 }
 
-export async function resolverLinkSemRegistrar(db: Db, codigo: string): Promise<string> {
-  const { link, oferta } = await configuracaoDoLink(db, codigo)
-  if (link.tipoDestino === 'NIP') return caminhoNipSeguro(link.caminhoNip)
-  return destinoDaCasa(link, oferta)
+/**
+ * Devolve também a configuração lida: as rotas de redirect a repassam ao
+ * registro (`registrarClique`/`registrarSaidaParaCasa`), que assim não relê as
+ * mesmas 4 linhas por clique (minor da revisão final, §8).
+ */
+export async function resolverLinkSemRegistrar(
+  db: Db,
+  codigo: string,
+): Promise<{ destino: string; configuracao: ConfiguracaoDoLink }> {
+  const configuracao = await configuracaoDoLink(db, codigo)
+  const { link, oferta } = configuracao
+  const destino =
+    link.tipoDestino === 'NIP' ? caminhoNipSeguro(link.caminhoNip) : destinoDaCasa(link, oferta)
+  return { destino, configuracao }
 }
 
 function destinoDaCasa(
-  link: Awaited<ReturnType<typeof configuracaoDoLink>>['link'],
-  oferta: Awaited<ReturnType<typeof configuracaoDoLink>>['oferta'],
+  link: ConfiguracaoDoLink['link'],
+  oferta: ConfiguracaoDoLink['oferta'],
 ): string {
   return acrescentarParametrosComerciais(
     validarDestinoComercial(oferta.urlDestino, [oferta.hostDestino]),
@@ -407,9 +424,12 @@ function destinoDaCasa(
   )
 }
 
-export async function resolverDestinoDaCasaSemRegistrar(db: Db, codigo: string): Promise<string> {
-  const { link, oferta } = await configuracaoDoLink(db, codigo)
-  return destinoDaCasa(link, oferta)
+export async function resolverDestinoDaCasaSemRegistrar(
+  db: Db,
+  codigo: string,
+): Promise<{ destino: string; configuracao: ConfiguracaoDoLink }> {
+  const configuracao = await configuracaoDoLink(db, codigo)
+  return { destino: destinoDaCasa(configuracao.link, configuracao.oferta), configuracao }
 }
 
 export async function registrarClique(
@@ -420,14 +440,20 @@ export async function registrarClique(
     agora: Date
     automatizado: boolean
     usuarioId?: string | null
+    /** Já lida pelo resolvedor da rota; ausente, é lida aqui. */
+    configuracao?: ConfiguracaoDoLink
   },
 ) {
-  const configuracao = await configuracaoDoLink(db, entrada.codigo)
+  const configuracao = entrada.configuracao ?? (await configuracaoDoLink(db, entrada.codigo))
   const visitanteHash = hashVisitante(entrada.visitanteToken)
   return db.transaction(async (tx) => {
-    await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${visitanteHash}))`)
+    await tx.execute(
+      sql`select pg_advisory_xact_lock(${TRAVA.AFILIADO_VISITANTE}, hashtext(${visitanteHash}))`,
+    )
     if (entrada.usuarioId) {
-      await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${entrada.usuarioId}))`)
+      await tx.execute(
+        sql`select pg_advisory_xact_lock(${TRAVA.AFILIADO_USUARIO}, hashtext(${entrada.usuarioId}))`,
+      )
     }
     let [atual] = await tx
       .select()
@@ -607,9 +633,11 @@ export async function registrarSaidaParaCasa(
     agora: Date
     usuarioId?: string | null
     chaveDoApito?: string | null
+    /** Já lida pelo resolvedor da rota; ausente, é lida aqui. */
+    configuracao?: ConfiguracaoDoLink
   },
 ) {
-  const configuracao = await configuracaoDoLink(db, entrada.codigo)
+  const configuracao = entrada.configuracao ?? (await configuracaoDoLink(db, entrada.codigo))
   const visitanteHash = hashVisitante(entrada.visitanteToken)
   const atribuicao = await atribuicaoAtivaParaEvento(
     db,
@@ -962,7 +990,9 @@ export async function definirSaidaDoApito(
 ): Promise<void> {
   exigirAdmin(ator)
   await db.transaction(async (tx) => {
-    await tx.execute(sql`select pg_advisory_xact_lock(hashtext('saida_do_apito'))`)
+    await tx.execute(
+      sql`select pg_advisory_xact_lock(${TRAVA.SAIDA_DO_APITO}, hashtext('saida_do_apito'))`,
+    )
     if (linkId) {
       const [link] = await tx
         .select({ id: linksAfiliados.id })

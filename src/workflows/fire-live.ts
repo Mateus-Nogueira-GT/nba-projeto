@@ -1,11 +1,9 @@
 import { getWorkflowMetadata, sleep } from 'workflow'
-import { eq } from 'drizzle-orm'
 
 import { getDb } from '@/modules/dominio/db/cliente'
-import { jogos } from '@/modules/dominio/db/schema'
-import { encerrarExecucao, executarCiclo, registrarCiclo } from '@/modules/entrega/fire-live/ciclo'
 import type { EstadoObservado } from '@/modules/entrega/fire-live/ciclo'
 import { confirmarInicioWorkflow } from '@/modules/entrega/fire-live/inicio'
+import { executarPassoFireLive, type RetornoPasso } from '@/modules/entrega/fire-live/passo'
 import { FilaVercel } from '@/modules/entrega/fila/vercel-queues'
 import { rulesetAtivo } from '@/modules/entrega/ruleset-ativo'
 import { executarSnapshotAoVivoDoJogo } from '@/modules/ingestao/jobs/orquestradores'
@@ -34,9 +32,11 @@ export async function fireLiveDoJogo(jogoId: string, iniciadoEmIso: string, leas
   // Runs antigos, iniciados antes da migration do lease, não carregam token e
   // continuam compatíveis no deployment ao qual estão fixados. Todo run novo
   // precisa vencer o fencing antes de executar qualquer ciclo de produto.
-  if (leaseToken) {
-    const { workflowRunId } = getWorkflowMetadata()
-    const confirmou = await confirmarLeaseNoBanco(jogoId, leaseToken, workflowRunId)
+  // O runId também vai a todo passo, que bate na linha com fencing (W2-3);
+  // runs antigos passam null e pulam o batimento.
+  const runId = leaseToken ? getWorkflowMetadata().workflowRunId : null
+  if (leaseToken && runId !== null) {
+    const confirmou = await confirmarLeaseNoBanco(jogoId, leaseToken, runId)
     if (!confirmou) return { jogoId, ciclos: 0, motivo: 'lease-perdido' }
   }
 
@@ -45,7 +45,7 @@ export async function fireLiveDoJogo(jogoId: string, iniciadoEmIso: string, leas
   let ciclo = 0
 
   for (;;) {
-    const passo = await ciclarUmaVez(jogoId, estado, iniciadoEmIso, ciclo, motorEncerrado)
+    const passo = await ciclarUmaVez(jogoId, runId, estado, iniciadoEmIso, ciclo, motorEncerrado)
     if (passo.encerrar) return { jogoId, ciclos: ciclo, motivo: passo.motivo }
 
     estado = passo.estado
@@ -65,24 +65,19 @@ async function confirmarLeaseNoBanco(
   return confirmarInicioWorkflow(getDb(), { jogoId, leaseToken }, runId, new Date())
 }
 
-type RetornoPasso =
-  | { encerrar: true; motivo: string }
-  | {
-      encerrar: false
-      estado: EstadoObservado
-      motorEncerrado: boolean
-      intervaloSegundos: number
-    }
-
 /**
- * UM ciclo, como passo durável.
+ * UM ciclo, como passo durável — fino de propósito: a lógica vive em
+ * `executarPassoFireLive`, testável sem o runtime do workflow.
  *
  * Reexecução deste passo é segura por construção: `executarCiclo` só notifica
  * o que o banco aceitou, e a UNIQUE de `apitos`/`greens` rejeita o que já
- * passou. Retry não vira push duplicado — é o requisito 3 do Fire Live.
+ * passou. Retry não vira push duplicado — é o requisito 3 do Fire Live. E um
+ * erro transitório depois do batimento não lança (W2-3): vai ao log e o laço
+ * segue, em vez de esgotar as tentativas e matar o run.
  */
 async function ciclarUmaVez(
   jogoId: string,
+  runId: string | null,
   estadoAnterior: EstadoObservado | null,
   iniciadoEmIso: string,
   ciclo: number,
@@ -90,70 +85,20 @@ async function ciclarUmaVez(
 ): Promise<RetornoPasso> {
   'use step'
 
-  const ruleset = await rulesetAtivo()
   const db = getDb()
-  const agora = new Date()
-
-  if (agora.getTime() - new Date(iniciadoEmIso).getTime() >= 6 * 60 * 60_000) {
-    await encerrarExecucao(db, jogoId, 'limite-de-tempo', agora)
-    return { encerrar: true, motivo: 'limite-de-tempo' }
-  }
-
-  const config = configDoAmbiente()
-  if (!config || !config.habilitada) {
-    throw new Error('ingestão NBA indisponível durante o workflow')
-  }
-  await executarSnapshotAoVivoDoJogo(db, montarFontes(db, config), jogoId, agora)
-
-  const [jogo] = await db
-    .select({ status: jogos.status })
-    .from(jogos)
-    .where(eq(jogos.id, jogoId))
-    .limit(1)
-  if (!jogo) {
-    await encerrarExecucao(db, jogoId, 'jogo-nao-encontrado', agora)
-    return { encerrar: true, motivo: 'jogo-nao-encontrado' }
-  }
-  if (jogo.status === 'ENCERRADO') {
-    await encerrarExecucao(db, jogoId, 'jogo-encerrado', agora)
-    return { encerrar: true, motivo: 'jogo-encerrado' }
-  }
-
-  if (motorEncerrado) {
-    return {
-      encerrar: false,
-      estado: estadoAnterior ?? {},
-      motorEncerrado: true,
-      intervaloSegundos: ruleset.fire_live.observacao.intervalo_segundos,
-    }
-  }
-
-  const resultado = await executarCiclo(db, ruleset, new FilaVercel(), {
-    jogoId,
-    estadoAnterior,
-    iniciadoEm: new Date(iniciadoEmIso),
-    agora,
-  })
-
-  if (resultado.encerrar) {
-    if (resultado.motivo === 'fim-do-primeiro-quarto') {
-      return {
-        encerrar: false,
-        estado: estadoAnterior ?? {},
-        motorEncerrado: true,
-        intervaloSegundos: ruleset.fire_live.observacao.intervalo_segundos,
-      }
-    }
-    await encerrarExecucao(db, jogoId, resultado.motivo, agora)
-    return { encerrar: true, motivo: resultado.motivo }
-  }
-
-  await registrarCiclo(db, jogoId, resultado.estado, ciclo + 1)
-
-  return {
-    encerrar: false,
-    estado: resultado.estado,
-    motorEncerrado: false,
-    intervaloSegundos: ruleset.fire_live.observacao.intervalo_segundos,
-  }
+  return executarPassoFireLive(
+    {
+      db,
+      ruleset: await rulesetAtivo(),
+      fila: new FilaVercel(),
+      agora: new Date(),
+      ingerir: async (agora) => {
+        const config = configDoAmbiente()
+        if (!config || !config.habilitada)
+          throw new Error('ingestão NBA indisponível durante o workflow')
+        await executarSnapshotAoVivoDoJogo(db, montarFontes(db, config), jogoId, agora)
+      },
+    },
+    { jogoId, runId, estadoAnterior, iniciadoEmIso, ciclo, motorEncerrado },
+  )
 }

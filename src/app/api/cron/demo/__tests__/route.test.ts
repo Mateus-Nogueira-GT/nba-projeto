@@ -116,6 +116,7 @@ describe.sequential('/api/cron/demo', () => {
     await pedir()
 
     expect(mocks.revalidateTag).toHaveBeenCalledWith('lateral', 'max')
+    expect(mocks.revalidateTag).toHaveBeenCalledWith('feed', 'max')
     // depois de simular, não antes
     expect(mocks.simularAte.mock.invocationCallOrder[0]!).toBeLessThan(
       mocks.revalidateTag.mock.invocationCallOrder[0]!,

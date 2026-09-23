@@ -9,6 +9,7 @@ import {
   requisicaoAutomatizada,
 } from '@/modules/plataforma/afiliados/http'
 import {
+  type ConfiguracaoDoLink,
   registrarSaidaParaCasa,
   resolverDestinoDaCasaSemRegistrar,
 } from '@/modules/plataforma/afiliados/servico'
@@ -18,9 +19,10 @@ const SEM_CACHE = { 'Cache-Control': 'private, no-store, max-age=0', 'X-Robots-T
 
 async function resolver(request: Request, codigo: string, registrar: boolean): Promise<Response> {
   let destino: string
+  let configuracao: ConfiguracaoDoLink
   try {
     if (!process.env.DATABASE_URL) throw new Error('Banco indisponível')
-    destino = await resolverDestinoDaCasaSemRegistrar(getDb(), codigo)
+    ;({ destino, configuracao } = await resolverDestinoDaCasaSemRegistrar(getDb(), codigo))
   } catch {
     return NextResponse.redirect(new URL('/oferta-indisponivel', request.url), {
       status: 307,
@@ -40,6 +42,8 @@ async function resolver(request: Request, codigo: string, registrar: boolean): P
     const sessao = await sessaoAtual()
     destino = await registrarSaidaParaCasa(getDb(), {
       codigo,
+      // A mesma configuração que resolveu o destino: sem reler o link.
+      configuracao,
       visitanteToken: token,
       usuarioId: sessao?.usuarioId,
       agora: new Date(),

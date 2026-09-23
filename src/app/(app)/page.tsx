@@ -1,6 +1,7 @@
 import { getDb } from '@/modules/dominio/db/cliente'
 import Link from 'next/link'
-import { agruparPorJogador, filtrarItens, lerFeed } from '@/modules/entrega/lista-secreta'
+import { agruparPorJogador, filtrarItens } from '@/modules/entrega/lista-secreta'
+import { lerFeedCacheado } from './feed-cacheado'
 import {
   agruparPorJogo,
   cartoesPorJogador,
@@ -314,7 +315,7 @@ export default async function PaginaListaSecreta({
   // A tela lê o snapshot MATERIALIZADO. Nunca executa o motor: a avaliação
   // acontece uma vez por evento, não uma vez por usuário. E lê DEPOIS do
   // paywall, sempre — `paywall.test.ts` vigia esta ordem no próprio fonte.
-  const feed = await lerFeed(getDb(), hoje)
+  const feed = await lerFeedCacheado(hoje)
 
   if (feed === null) {
     // NUNCA tela em branco: antes da publicação a tela diz a HORA em que a
@@ -806,7 +807,7 @@ export default async function PaginaListaSecreta({
           (spec 04, §3.7). */}
       {pushDisponivel && (
         <div style={{ marginTop: 20 }}>
-          <AtivarAlertas />
+          <AtivarAlertas usuarioId={sessao.usuarioId} />
         </div>
       )}
 

@@ -33,8 +33,19 @@ describe('cabeçalhos de segurança', () => {
     )
   })
 
-  it('next corrigido (GHSA-2xp9-vwfh-vxw4)', () => {
+  it('next corrigido (GHSA-2xp9-vwfh-vxw4) — piso, não literal', () => {
+    // Achado Minor 4 da revisão: travar em '^16.3.6' quebrava o teste a cada
+    // patch de segurança seguinte. O que importa é nunca regredir abaixo da
+    // versão corrigida — por isso o piso >=, comparado numericamente.
     const pacote = JSON.parse(readFileSync('package.json', 'utf8'))
-    expect(pacote.dependencies.next).toBe('^16.3.6')
+    const versao = String(pacote.dependencies.next).replace(/^[\^~]/, '')
+    const partes = versao.split('.').map(Number)
+    const major = partes[0] ?? 0
+    const minor = partes[1] ?? 0
+    const patch = partes[2] ?? 0
+    const [pisoMajor, pisoMinor, pisoPatch] = [16, 3, 6]
+    const atual = major * 1_000_000 + minor * 1_000 + patch
+    const piso = pisoMajor * 1_000_000 + pisoMinor * 1_000 + pisoPatch
+    expect(atual).toBeGreaterThanOrEqual(piso)
   })
 })

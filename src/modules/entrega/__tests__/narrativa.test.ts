@@ -192,6 +192,24 @@ describe('enriquecer o snapshot com narrativas', () => {
     expect(r.conteudo.itens.every((i) => i.narrativa == null)).toBe(true)
   })
 
+  it('resposta TRUNCADA (finish_reason length) é reprovada — o card não mostra frase cortada', async () => {
+    // O texto padrão do LLMFake passa no validador; só o `truncado` o reprova.
+    await banco.db.delete(llmChamadas)
+    const feed = await lerFeed(banco.db, HOJE)
+    const r = await enriquecerComNarrativas(
+      banco.db,
+      new LLMFake({ truncado: true }),
+      feed!.conteudo,
+    )
+
+    expect(r.geradas).toBe(0)
+    expect(r.reprovadas).toBeGreaterThan(0)
+    expect(r.conteudo.itens.every((i) => i.narrativa == null)).toBe(true)
+    expect(r.conteudo.resumoDoDia ?? null).toBeNull()
+    const linhas = await banco.db.select().from(llmChamadas)
+    expect(linhas.every((l) => l.ok === false && l.erro === 'reprovado: truncada')).toBe(true)
+  })
+
   it('LLM fora do ar NÃO derruba o conteúdo — só falta narrativa', async () => {
     const feed = await lerFeed(banco.db, HOJE)
     const r = await enriquecerComNarrativas(banco.db, new LLMFake({ falhar: true }), feed!.conteudo)

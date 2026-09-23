@@ -8,7 +8,9 @@ import {
   ErroRetryPush,
   ErroVapidPush,
   politicaHomologacaoDoAmbiente,
+  PublicadorFanoutVercel,
 } from '@/modules/entrega/push/fanout'
+import { registrarExpiradosSemFalhar } from '@/modules/entrega/observabilidade/falhas-operacionais'
 import { criarEnvioWebPush } from '@/modules/entrega/push/web-push'
 
 export const dynamic = 'force-dynamic'
@@ -25,7 +27,23 @@ export const POST: (request: Request) => Promise<Response> = handleCallback(
       mensagem,
       politicaHomologacaoDoAmbiente(),
       configuracao,
+      new Date(),
+      // Com o publicador, retry vira um lote novo só com as que falharam, e esta
+      // mensagem é confirmada — sem reenviar a quem já recebeu (W2-2).
+      new PublicadorFanoutVercel(),
     )
+    if (contagens.vapidGlobal) {
+      // A VAPID recusada no lote todo não lança mais quando há publicador (W2-2):
+      // as recusadas voltam num lote novo em 60 s e esta mensagem é confirmada.
+      // O alarme continua saindo, com a mesma linha de antes.
+      console.error(
+        JSON.stringify({
+          evento: 'push_erro_vapid_global',
+          messageId: metadata.messageId,
+          entrega: metadata.deliveryCount,
+        }),
+      )
+    }
     console.info(
       JSON.stringify({
         evento: 'push_lote_processado',
@@ -35,6 +53,16 @@ export const POST: (request: Request) => Promise<Response> = handleCallback(
         ...contagens,
         duracaoMs: Date.now() - inicio,
       }),
+    )
+    // Ninguém via um apito vencer antes de chegar (W2-2 grava, W2-5 alerta):
+    // a saúde soma a janela de 10 min e avisa a equipe uma vez. Falha ao
+    // GRAVAR o alerta não pode derrubar a confirmação da mensagem (fix
+    // round 1) — `registrarExpiradosSemFalhar` nunca lança.
+    await registrarExpiradosSemFalhar(
+      getDb(),
+      contagens,
+      (mensagem as { evento?: { canal?: string } }).evento?.canal ?? null,
+      new Date(),
     )
   },
   {
@@ -58,7 +86,8 @@ export const POST: (request: Request) => Promise<Response> = handleCallback(
             entrega: metadata.deliveryCount,
           }),
         )
-        return { afterSeconds: 300 }
+        // 300 s era a validade inteira de um apito de Fire Live (W2-2).
+        return { afterSeconds: 60 }
       }
       if (erro instanceof ErroRetryPush) {
         console.warn(

@@ -31,6 +31,17 @@ import { useEffect } from 'react'
  * servidor, sem montar efeitos) provar que o componente foi montado — e só
  * quando devia.
  */
+const JITTER_MS = 10_000
+const MINIMO_MS = 5_000
+
+/**
+ * ±10 s sobre a base: 2 mil telas abertas no mesmo apito não batem todas no
+ * mesmo segundo (W2-6).
+ */
+export function proximoIntervalo(baseMs: number, aleatorio: () => number = Math.random): number {
+  return Math.max(MINIMO_MS, Math.round(baseMs - JITTER_MS + aleatorio() * 2 * JITTER_MS))
+}
+
 export function AtualizarAoVivo({ intervaloMs = 30_000 }: { intervaloMs?: number }) {
   const router = useRouter()
 
@@ -39,10 +50,19 @@ export function AtualizarAoVivo({ intervaloMs = 30_000 }: { intervaloMs?: number
       if (document.visibilityState === 'visible') router.refresh()
     }
 
-    const id = setInterval(atualizarSeVisivel, intervaloMs)
+    // setTimeout encadeado, não setInterval: cada disparo sorteia um novo
+    // intervalo (W2-6), o que um setInterval de período fixo não permite.
+    let id: ReturnType<typeof setTimeout>
+    const agendar = () => {
+      id = setTimeout(() => {
+        atualizarSeVisivel()
+        agendar()
+      }, proximoIntervalo(intervaloMs))
+    }
+    agendar()
     document.addEventListener('visibilitychange', atualizarSeVisivel)
     return () => {
-      clearInterval(id)
+      clearTimeout(id)
       document.removeEventListener('visibilitychange', atualizarSeVisivel)
     }
   }, [router, intervaloMs])

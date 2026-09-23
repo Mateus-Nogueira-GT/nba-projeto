@@ -40,7 +40,9 @@ export const config: VercelConfig = {
           topic: 'push-eventos',
           retryAfterSeconds: 30,
           maxDeliveries: 20,
-          maxConcurrency: 2,
+          // W2-2: o plano publica todas as faixas juntas (20 para 2 mil
+          // inscrições no lote de 100); 10 consumidores as varrem em duas levas.
+          maxConcurrency: 10,
         },
       ],
     },
@@ -51,7 +53,9 @@ export const config: VercelConfig = {
           topic: 'push-entregas',
           retryAfterSeconds: 30,
           maxDeliveries: 20,
-          maxConcurrency: 5,
+          // W2-2: cada faixa vira um lote; 20 lotes × 100 inscrições × 10
+          // envios paralelos cobrem 2 mil inscrições em uma rodada.
+          maxConcurrency: 20,
         },
       ],
     },
@@ -98,6 +102,11 @@ function cronsDoPlano(): VercelConfig['crons'] {
     { path: '/api/cron/lista-secreta', schedule: '*/15 * * * *' },
     { path: '/api/cron/reconciliar-pagamentos', schedule: '*/10 * * * *' },
     { path: '/api/cron/saude', schedule: '*/5 * * * *' },
+    // W2-6: limpeza semanal das tabelas que só crescem (tentativas de
+    // login/operação, sessões, inscrições de push). Segunda 08:00 UTC —
+    // fora da janela de jogos — e só no conjunto Pro: o Hobby já usa os
+    // dois diários que tem para sincronizar-rodada e o re-seed da demo.
+    { path: '/api/cron/limpeza', schedule: '0 8 * * 1' },
   ]
   if (process.env.CRON_COMPLETO === 'true') return cronsCompletos
 

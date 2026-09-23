@@ -12,7 +12,9 @@ export class LLMFake implements PortaLLM {
   readonly nome = 'fake'
   readonly chamadas: { perfil: PerfilLLM; pedido: PedidoGeracao }[] = []
 
-  constructor(private readonly opcoes: { falhar?: boolean; texto?: string } = {}) {}
+  constructor(
+    private readonly opcoes: { falhar?: boolean; texto?: string; truncado?: boolean } = {},
+  ) {}
 
   async gerar(perfil: PerfilLLM, pedido: PedidoGeracao): Promise<TextoGerado> {
     this.chamadas.push({ perfil, pedido })
@@ -26,6 +28,7 @@ export class LLMFake implements PortaLLM {
       modelo: `fake/${perfil}`,
       tokensEntrada: Math.ceil((pedido.sistema.length + pedido.usuario.length) / 4),
       tokensSaida: Math.ceil(texto.length / 4),
+      truncado: this.opcoes.truncado ?? false,
     }
   }
 }

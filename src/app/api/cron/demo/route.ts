@@ -9,6 +9,7 @@ import { simularAte } from '@/modules/ingestao/demo/temporada'
 import { portaLLMDoAmbiente } from '@/modules/ingestao/llm'
 import { revalidateTag } from 'next/cache'
 import { TAG_LATERAL } from '@/app/(app)/lateral/leitura'
+import { TAG_FEED } from '@/app/(app)/feed-cacheado'
 import { TAG_RANKING } from '@/app/api/chat/ranking'
 
 export const dynamic = 'force-dynamic'
@@ -70,6 +71,8 @@ export async function GET(requisicao: Request): Promise<Response> {
       // O ranking estatístico do assistente lê os mesmos box scores (ADR-0012):
       // a rodada que fecha muda a janela dos últimos dez de cada jogador.
       revalidateTag(TAG_RANKING, 'max')
+      // A demo publica vários dias: a tag geral, e não uma por data.
+      revalidateTag(TAG_FEED, 'max')
       return { executado: true, resumo }
     },
     /*

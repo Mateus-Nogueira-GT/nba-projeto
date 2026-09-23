@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import { send } from '@vercel/queue'
+import { DuplicateMessageError, send } from '@vercel/queue'
 import { and, asc, desc, eq, gt, inArray, isNull, lt, lte, or, sql } from 'drizzle-orm'
 import { z } from 'zod'
 
@@ -28,6 +28,14 @@ import type { InscricaoPush, PortaEnvioPush, ResultadoEnvioPush } from './porta'
 export const TOPICO_PUSH_EVENTOS = 'push-eventos'
 export const TOPICO_PUSH_ENTREGAS = 'push-entregas'
 
+// Teto de reenvios parciais de um mesmo lote (W2-2). Na prática a validade do
+// apito corta antes; o teto só impede um ciclo sem fim num evento de validade longa.
+const TENTATIVAS_MAXIMAS_DO_LOTE = 5
+
+// Espera antes de tentar de novo quando a VAPID é recusada no lote todo (W2-2).
+// Os 300 s de antes eram a validade inteira de um apito de Fire Live.
+const ATRASO_VAPID_GLOBAL_SEGUNDOS = 60
+
 const cursorSchema = z
   .object({ criadoEm: z.string().datetime({ offset: true }), id: z.string().uuid() })
   .strict()
@@ -39,6 +47,16 @@ export const mensagemExpansaoPushSchema = z
     cursor: cursorSchema.nullable(),
     limiteSuperior: cursorSchema.nullable(),
     pagina: z.number().int().nonnegative(),
+    // Faixa (W2-2): cobre só (cursor, limiteSuperior] em uma página e não
+    // continua. Ausente nas mensagens da cadeia antiga, que seguem valendo
+    // para o que estiver na fila durante o deploy.
+    faixa: z.boolean().optional(),
+    // Plano congelado (W2-2): os fins de cada faixa, calculados UMA vez na
+    // expansão inicial. Quem processa o plano só republica o que está aqui, e
+    // por isso a reentrega dá as mesmas faixas com as mesmas chaves. O teto
+    // cobre 50 mil inscrições no lote mínimo (10); cada fim tem ~80 bytes, bem
+    // abaixo do limite de payload da fila.
+    fins: z.array(cursorSchema).min(1).max(5000).optional(),
   })
   .strict()
 
@@ -48,6 +66,9 @@ export const mensagemLotePushSchema = z
     evento: mensagemPushV1Schema,
     inscricaoIds: z.array(z.string().uuid()).min(1).max(500),
     pagina: z.number().int().nonnegative(),
+    // Reenvio parcial (W2-2): ausente no lote original, 1..N nos lotes que
+    // carregam só as inscrições que pediram retry.
+    tentativa: z.number().int().nonnegative().optional(),
   })
   .strict()
 
@@ -135,16 +156,64 @@ export function politicaHomologacaoDoAmbiente(
 
 export interface PublicadorFanoutPush {
   publicarExpansao(mensagem: MensagemExpansaoPush, idempotencyKey: string): Promise<void>
-  publicarLote(mensagem: MensagemLotePush, idempotencyKey: string): Promise<void>
+  publicarLote(
+    mensagem: MensagemLotePush,
+    idempotencyKey: string,
+    atrasoSegundos?: number,
+  ): Promise<void>
+}
+
+/** O `send` da fila, injetável para teste sem rede. */
+export type EnvioFila = (
+  topico: string,
+  mensagem: unknown,
+  opcoes: { idempotencyKey: string; delaySeconds?: number },
+) => Promise<unknown>
+
+const envioReal: EnvioFila = (topico, mensagem, opcoes) => send(topico, mensagem, opcoes)
+
+/**
+ * Publica com chave de idempotência e trata a chave JÁ USADA como sucesso (W2-2).
+ *
+ * A fila responde 409 (`DuplicateMessageError`) quando a chave já foi aceita,
+ * e numa reentrega é exatamente isso que se espera: a mensagem já está lá. Se o
+ * erro subisse, um plano reentregue parava na 1ª faixa já publicada e as
+ * seguintes nunca saíam; a inicial reentregue ficaria em loop até
+ * `maxDeliveries`. Qualquer outro erro sobe, para a fila tentar de novo.
+ */
+export async function enviarIdempotente(
+  topico: string,
+  mensagem: unknown,
+  opcoes: { idempotencyKey: string; delaySeconds?: number },
+  enviar: EnvioFila = envioReal,
+): Promise<void> {
+  try {
+    await enviar(topico, mensagem, opcoes)
+  } catch (erro) {
+    if (erro instanceof DuplicateMessageError) return
+    throw erro
+  }
 }
 
 export class PublicadorFanoutVercel implements PublicadorFanoutPush {
+  constructor(private readonly enviar: EnvioFila = envioReal) {}
+
   async publicarExpansao(mensagem: MensagemExpansaoPush, idempotencyKey: string): Promise<void> {
-    await send(TOPICO_PUSH_EVENTOS, mensagem, { idempotencyKey })
+    await enviarIdempotente(TOPICO_PUSH_EVENTOS, mensagem, { idempotencyKey }, this.enviar)
   }
 
-  async publicarLote(mensagem: MensagemLotePush, idempotencyKey: string): Promise<void> {
-    await send(TOPICO_PUSH_ENTREGAS, mensagem, { idempotencyKey })
+  async publicarLote(
+    mensagem: MensagemLotePush,
+    idempotencyKey: string,
+    atrasoSegundos?: number,
+  ): Promise<void> {
+    // O atraso é o backoff do reenvio parcial (W2-2); o lote original sai sem ele.
+    await enviarIdempotente(
+      TOPICO_PUSH_ENTREGAS,
+      mensagem,
+      { idempotencyKey, ...(atrasoSegundos ? { delaySeconds: atrasoSegundos } : {}) },
+      this.enviar,
+    )
   }
 }
 
@@ -206,6 +275,40 @@ async function paginaDeInscricoes(
     )
     .orderBy(asc(pushInscricoes.criadoEm), asc(pushInscricoes.id))
     .limit(tamanho)
+}
+
+/**
+ * Fronteiras das faixas em UMA consulta: o (criadoEm, id) de cada
+ * `tamanho`-ésima inscrição ativa até o limite. Cada faixa vira uma
+ * mensagem independente — a fila as consome em paralelo, em vez de 20
+ * saltos em sequência para 2 mil inscrições (W2-2).
+ */
+async function fronteirasDasFaixas(
+  db: Db,
+  limite: CursorPush,
+  tamanho: number,
+  agora: Date,
+): Promise<CursorPush[]> {
+  const resultado = await db.execute(sql`
+    select criado_em, id from (
+      select criado_em, id, row_number() over (order by criado_em, id) as n
+      from ${pushInscricoes}
+      where invalidada_em is null
+        and (expira_em is null or expira_em > ${agora})
+        and (criado_em, id) <= (${new Date(limite.criadoEm)}, ${limite.id}::uuid)
+    ) t
+    where n % ${tamanho} = 0
+    order by criado_em, id
+  `)
+  // PGlite e o Pool do Neon (compatível com node-postgres) devolvem `.rows`;
+  // o tipo base do Drizzle não sabe qual driver é, daí a leitura defensiva.
+  const linhas = Array.isArray(resultado)
+    ? (resultado as unknown[])
+    : ((resultado as { rows?: unknown[] }).rows ?? [])
+  return (linhas as { criado_em: Date | string; id: string }[]).map((linha) => ({
+    criadoEm: new Date(linha.criado_em).toISOString(),
+    id: linha.id,
+  }))
 }
 
 type InscricaoElegivel = {
@@ -357,6 +460,56 @@ export async function expandirEventoPush(
   const limite = mensagem.limiteSuperior ?? (await capturarLimiteSuperior(db, agora))
   if (!limite) return { expirado: false, varridas: 0, elegiveis: 0, continuou: false }
 
+  // Plano (W2-2): publica TODAS as faixas de uma vez, a partir do CONTEÚDO da
+  // mensagem, sem recalcular nada. Recalcular a cada tentativa deslocava as
+  // fronteiras quando uma inscrição era invalidada entre elas, e a faixa de
+  // mesmo índice ganhava outra chave: a fila não deduplicava e o push saía
+  // duas vezes (regra 5 do CLAUDE.md).
+  if (mensagem.fins) {
+    let inicio: CursorPush | null = null
+    for (const [pagina, fim] of mensagem.fins.entries()) {
+      await publicador.publicarExpansao(
+        {
+          versao: 1,
+          evento: mensagem.evento,
+          cursor: inicio,
+          limiteSuperior: fim,
+          pagina,
+          faixa: true,
+        },
+        chaveFanout('faixa', mensagem.evento.chave, fim.criadoEm, fim.id),
+      )
+      inicio = fim
+    }
+    return { expirado: false, varridas: 0, elegiveis: 0, continuou: false }
+  }
+
+  // Expansão inicial (W2-2): captura o limite e as fronteiras UMA vez e as
+  // congela num plano com chave estável por evento. Se esta mensagem for
+  // reentregue, o plano novo (talvez diferente) tem a mesma chave e a fila o
+  // descarta — vale o primeiro. A primeira faixa também tem cursor nulo, mas
+  // chega com `faixa: true` e não entra aqui.
+  if (mensagem.cursor === null && !mensagem.faixa) {
+    const fronteiras = await fronteirasDasFaixas(db, limite, configuracao.tamanhoLote, agora)
+    // Quando o total é múltiplo do lote, a última fronteira É o limite.
+    const fins = [
+      ...fronteiras.filter((f) => f.id !== limite.id || f.criadoEm !== limite.criadoEm),
+      limite,
+    ]
+    await publicador.publicarExpansao(
+      {
+        versao: 1,
+        evento: mensagem.evento,
+        cursor: null,
+        limiteSuperior: limite,
+        pagina: 0,
+        fins,
+      },
+      chaveFanout('plano', mensagem.evento.chave),
+    )
+    return { expirado: false, varridas: 0, elegiveis: 0, continuou: false }
+  }
+
   const pagina = await paginaDeInscricoes(
     db,
     mensagem.cursor,
@@ -386,14 +539,34 @@ export async function expandirEventoPush(
         inscricaoIds: elegiveis.map((item) => item.id),
         pagina: mensagem.pagina,
       },
-      chaveFanout('lote', mensagem.evento.chave, cursorFinal.criadoEm, cursorFinal.id),
+      // Na faixa, a chave vem das fronteiras fixas dela, não da última linha
+      // da página: uma invalidação dentro da faixa entre duas entregas mudaria
+      // a última linha e, com ela, a chave (W2-2). A cadeia antiga mantém a sua.
+      mensagem.faixa
+        ? chaveFanout('lote', mensagem.evento.chave, 'faixa', limite.criadoEm, limite.id)
+        : chaveFanout('lote', mensagem.evento.chave, cursorFinal.criadoEm, cursorFinal.id),
     )
   }
 
   const cursorFinalMs = Date.parse(cursorFinal.criadoEm)
   const limiteMs = Date.parse(limite.criadoEm)
-  const continuou =
+  // Faixa não continua (W2-2): ela tem no máximo `tamanhoLote` inscrições, e
+  // uma inscrição só entra num intervalo passado com `criadoEm` novo (a
+  // reativação o renova), ou seja, depois do limite.
+  const antesDoLimite =
     cursorFinalMs < limiteMs || (cursorFinalMs === limiteMs && cursorFinal.id < limite.id)
+  // Se acontecer mesmo assim, o que passou do lote fica sem push: registra
+  // para a operação ver, sem mudar o comportamento.
+  if (mensagem.faixa && antesDoLimite && pagina.length === configuracao.tamanhoLote) {
+    console.warn(
+      JSON.stringify({
+        evento: 'push_faixa_truncada',
+        chave: mensagem.evento.chave,
+        pagina: mensagem.pagina,
+      }),
+    )
+  }
+  const continuou = !mensagem.faixa && antesDoLimite
   if (continuou) {
     await publicador.publicarExpansao(
       {
@@ -432,6 +605,24 @@ export class ErroVapidPush extends Error {
   }
 }
 
+/** Origem do serviço de Push; URL inválida vira a própria string (origem própria). */
+function origemDoEndpoint(endpoint: string): string {
+  try {
+    return new URL(endpoint).origin
+  } catch {
+    return endpoint
+  }
+}
+
+function contarPorOrigem(endpoints: string[]): Map<string, number> {
+  const contagem = new Map<string, number>()
+  for (const endpoint of endpoints) {
+    const origem = origemDoEndpoint(endpoint)
+    contagem.set(origem, (contagem.get(origem) ?? 0) + 1)
+  }
+  return contagem
+}
+
 async function mapearComConcorrencia<T>(
   itens: T[],
   concorrencia: number,
@@ -455,6 +646,7 @@ export async function enviarLotePush(
   politica: PoliticaComercialPush,
   configuracao = configuracaoOperacionalPush(),
   agora = new Date(),
+  publicador?: PublicadorFanoutPush,
 ): Promise<Record<string, number>> {
   const lote = mensagemLotePushSchema.parse(entrada)
   const contagens = {
@@ -463,6 +655,9 @@ export async function enviarLotePush(
     expirados: 0,
     invalidados: 0,
     permanentes: 0,
+    recusadas: 0,
+    reagendadas: 0,
+    vapidGlobal: 0,
   }
   if (mensagemPushExpirada(lote.evento, agora)) {
     contagens.expirados = lote.inscricaoIds.length
@@ -472,13 +667,13 @@ export async function enviarLotePush(
   const elegiveis = await inscricoesElegiveis(db, lote.inscricaoIds, lote.evento, politica, agora)
   contagens.elegiveis = elegiveis.length
   const invalidar: string[] = []
-  const retries: ResultadoEnvioPush[] = []
-  let erroVapid = false
+  const retries: { id: string; resultado: ResultadoEnvioPush }[] = []
+  const recusadas: { id: string; endpoint: string }[] = []
+  // 401/403 sem status é erro da própria biblioteca ao montar a VAPID (chave
+  // ausente ou malformada): é local e global por definição, nunca da inscrição.
+  let vapidLocal = false
 
   await mapearComConcorrencia(elegiveis, configuracao.paralelismo, async (linha) => {
-    // 401/403 indica problema global das credenciais VAPID. Depois do primeiro
-    // diagnóstico, não iniciamos novos envios do mesmo lote.
-    if (erroVapid) return
     const inscricao: InscricaoPush = {
       endpoint: linha.endpoint,
       expirationTime: linha.expiraEm?.getTime() ?? null,
@@ -488,27 +683,128 @@ export async function enviarLotePush(
     if (resultado.tipo === 'ENVIADO') contagens.enviados += 1
     else if (resultado.tipo === 'EXPIRADO') contagens.expirados += 1
     else if (resultado.tipo === 'INSCRICAO_INVALIDA') invalidar.push(linha.id)
-    else if (resultado.tipo === 'RETRY') retries.push(resultado)
-    else if (resultado.tipo === 'ERRO_VAPID') erroVapid = true
-    else contagens.permanentes += 1
+    else if (resultado.tipo === 'RETRY') retries.push({ id: linha.id, resultado })
+    else if (resultado.tipo === 'ERRO_VAPID') {
+      recusadas.push({ id: linha.id, endpoint: linha.endpoint })
+      if (resultado.statusCode === null) vapidLocal = true
+    } else contagens.permanentes += 1
   })
 
+  // 404/410 é da inscrição, qualquer que seja o estado da VAPID: invalida antes
+  // de decidir se o lote volta.
   contagens.invalidados = await invalidarInscricoes(
     db,
     invalidar,
     'serviço de Push respondeu 404/410',
     agora,
   )
-  if (erroVapid) throw new ErroVapidPush()
+
+  // Reenvio parcial (W2-2): só os ids passados viram um lote novo, atrasado, e
+  // o lote atual retorna normalmente (é confirmado na fila). Reentregar o lote
+  // inteiro duplicava o push para quem já tinha recebido. Fora do teto de
+  // tentativas contam como permanentes; se o atraso alcança a validade, como
+  // expirados — reenviar depois dela é entregar um apito que já não vale.
+  async function reagendar(
+    publicadorDoLote: PublicadorFanoutPush,
+    idsFalhos: string[],
+    atrasoMs: number,
+    prefixoChave: 'retry' | 'vapid',
+  ): Promise<void> {
+    const tentativa = (lote.tentativa ?? 0) + 1
+    if (tentativa > TENTATIVAS_MAXIMAS_DO_LOTE) {
+      contagens.permanentes += idsFalhos.length
+      return
+    }
+    if (mensagemPushExpirada(lote.evento, new Date(agora.getTime() + atrasoMs))) {
+      contagens.expirados += idsFalhos.length
+      return
+    }
+    const ids = [...idsFalhos].sort()
+    await publicadorDoLote.publicarLote(
+      { versao: 1, evento: lote.evento, inscricaoIds: ids, pagina: lote.pagina, tentativa },
+      chaveFanout(prefixoChave, lote.evento.chave, String(tentativa), ...ids),
+      Math.max(1, Math.ceil(atrasoMs / 1000)),
+    )
+    contagens.reagendadas = ids.length
+  }
+
+  // 401/403 em MAIS DA METADE das elegíveis de um SERVIÇO DE PUSH é a
+  // credencial VAPID (global para aquele provedor): ninguém dele é invalidado.
+  // Isolado, é a inscrição que o serviço recusa — invalida só ela (W2-2).
+  // Antes, um único 403 derrubava o lote inteiro por 5 min, a validade
+  // inteira de um apito.
+  //
+  // A maioria é contada POR ORIGEM do endpoint, não pelo lote: um lote mistura
+  // FCM, Mozilla e Apple, e a credencial pode ser recusada só por um deles
+  // (ex.: Apple 403 BadJwtToken por um VAPID_SUBJECT que ela não aceita).
+  // Contada no lote, a Apple é minoria e seus assinantes seriam INVALIDADOS em
+  // todo evento — o cliente só reenvia a inscrição depois de 24 h, e a base
+  // iOS ficaria sem push e sem alarme. `vapidLocal` (statusCode null) é da
+  // própria biblioteca, então vale para o lote todo.
+  contagens.recusadas = recusadas.length
+  const elegiveisPorOrigem = contarPorOrigem(elegiveis.map((linha) => linha.endpoint))
+  const recusadasPorOrigem = contarPorOrigem(recusadas.map((item) => item.endpoint))
+  const origemGlobal = (endpoint: string) => {
+    const origem = origemDoEndpoint(endpoint)
+    const doServico = elegiveisPorOrigem.get(origem) ?? 0
+    return (recusadasPorOrigem.get(origem) ?? 0) * 2 > doServico && doServico > 1
+  }
+  const recusadasGlobais = vapidLocal
+    ? recusadas
+    : recusadas.filter((item) => origemGlobal(item.endpoint))
+  const recusadasIsoladas = vapidLocal
+    ? []
+    : recusadas.filter((item) => !origemGlobal(item.endpoint))
+
+  if (recusadasIsoladas.length > 0) {
+    contagens.invalidados += await invalidarInscricoes(
+      db,
+      recusadasIsoladas.map((item) => item.id),
+      'serviço de Push respondeu 401/403',
+      agora,
+    )
+  }
+  if (recusadasGlobais.length > 0) {
+    // Sem publicador, o comportamento antigo: o lote inteiro volta pela fila.
+    if (!publicador) throw new ErroVapidPush()
+    // Com publicador, lançar reentregaria o lote inteiro a cada 60 s e a minoria
+    // que JÁ recebeu (ex.: rotação de chave pela metade) levaria uma cópia por
+    // reentrega até a validade — centenas numa Lista Secreta de 6 h. Então só
+    // as recusadas e as que pediram retry voltam, e o lote é confirmado.
+    contagens.vapidGlobal = 1
+    await reagendar(
+      publicador,
+      [...recusadasGlobais.map((item) => item.id), ...retries.map((item) => item.id)],
+      ATRASO_VAPID_GLOBAL_SEGUNDOS * 1000,
+      'vapid',
+    )
+    return contagens
+  }
+
   if (retries.length > 0) {
     const atrasos = retries
-      .map((item) => (item.tipo === 'RETRY' ? item.retryAfterMs : null))
+      .map(({ resultado }) => (resultado.tipo === 'RETRY' ? resultado.retryAfterMs : null))
       .filter((valor): valor is number => valor !== null)
-    const motivos = retries.reduce<Record<string, number>>((acumulado, item) => {
-      if (item.tipo === 'RETRY') acumulado[item.motivo] = (acumulado[item.motivo] ?? 0) + 1
+    const motivos = retries.reduce<Record<string, number>>((acumulado, { resultado }) => {
+      if (resultado.tipo === 'RETRY')
+        acumulado[resultado.motivo] = (acumulado[resultado.motivo] ?? 0) + 1
       return acumulado
     }, {})
-    throw new ErroRetryPush(atrasos.length > 0 ? Math.max(...atrasos) : null, motivos)
+    // Sem publicador, o comportamento antigo: o lote inteiro volta pela fila.
+    if (!publicador)
+      throw new ErroRetryPush(atrasos.length > 0 ? Math.max(...atrasos) : null, motivos)
+
+    const tentativa = (lote.tentativa ?? 0) + 1
+    const atrasoMs =
+      atrasos.length > 0
+        ? Math.max(...atrasos)
+        : configuracao.retryBaseSegundos * 1000 * 2 ** Math.min(tentativa - 1, 5)
+    await reagendar(
+      publicador,
+      retries.map((item) => item.id),
+      atrasoMs,
+      'retry',
+    )
   }
 
   return contagens

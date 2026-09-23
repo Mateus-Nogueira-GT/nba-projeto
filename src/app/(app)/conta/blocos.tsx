@@ -439,11 +439,13 @@ export function BlocoAssinatura({
  * (ela já barra com 403); isto aqui é a tela concordando com ela.
  */
 export function BlocoAlertas({
+  usuarioId,
   recebeAlertas,
   experiencia,
   jogadores,
   times,
 }: {
+  usuarioId: string
   recebeAlertas: boolean
   experiencia: EstadoExperiencia
   jogadores: { id: string; nome: string }[]
@@ -464,7 +466,7 @@ export function BlocoAlertas({
          * regra que a gestão segue (spec, decisão 8) — quem deixa de pagar não
          * perde o que é seu. */}
         {recebeAlertas ? (
-          <AtivarAlertas />
+          <AtivarAlertas usuarioId={usuarioId} />
         ) : (
           <SilhuetaPaga forma="formulario">
             <ConviteDoPlano minimo="MVP" recurso="Os alertas de apito" voltar="/conta" />

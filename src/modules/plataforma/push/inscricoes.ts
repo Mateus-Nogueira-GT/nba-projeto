@@ -7,6 +7,7 @@ import {
   pushInscricoesAuditoria,
 } from '../../dominio/db/schema'
 import type { Db } from '../../dominio/db/tipos'
+import { TRAVA } from '../../dominio/db/travas'
 import { endpointPushPermitido } from './endpoint'
 
 export const CANAIS_PUSH = ['FIRE_LIVE_APITO', 'GREEN', 'LISTA_SECRETA'] as const
@@ -77,7 +78,9 @@ export async function registrarInscricaoPush(
   return db.transaction(async (tx) => {
     // Serializa o mesmo endpoint inclusive antes de a primeira linha existir.
     // Assim, duas sessões concorrentes não perdem a trilha de reassociação.
-    await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${entrada.endpoint}))`)
+    await tx.execute(
+      sql`SELECT pg_advisory_xact_lock(${TRAVA.PUSH_ENDPOINT}, hashtext(${entrada.endpoint}))`,
+    )
 
     const [anterior] = await tx
       .select({
@@ -87,6 +90,8 @@ export async function registrarInscricaoPush(
         invalidadaEm: pushInscricoes.invalidadaEm,
         expiraEm: pushInscricoes.expiraEm,
         criadoEm: pushInscricoes.criadoEm,
+        chaveP256dh: pushInscricoes.chaveP256dh,
+        chaveAuth: pushInscricoes.chaveAuth,
       })
       .from(pushInscricoes)
       .where(eq(pushInscricoes.endpoint, entrada.endpoint))
@@ -101,6 +106,22 @@ export async function registrarInscricaoPush(
     )
     const criadoEm = reassociada || reativada ? agora : (anterior?.criadoEm ?? agora)
 
+    // Nada mudou: o cliente só reenviou o que já temos (toda montagem da home
+    // fazia isso — W2-2). Sem UPDATE e sem auditoria; `criadoEm` intocado,
+    // porque é o cursor do fan-out.
+    const expiraEmEntrada =
+      entrada.expirationTime === null ? null : new Date(entrada.expirationTime)
+    if (
+      anterior &&
+      !reassociada &&
+      !reativada &&
+      anterior.chaveP256dh === entrada.keys.p256dh &&
+      anterior.chaveAuth === entrada.keys.auth &&
+      (anterior.expiraEm?.getTime() ?? null) === (expiraEmEntrada?.getTime() ?? null)
+    ) {
+      return { id: anterior.id, criada: false, reassociada: false }
+    }
+
     const [inscricao] = await tx
       .insert(pushInscricoes)
       .values({
@@ -109,7 +130,7 @@ export async function registrarInscricaoPush(
         endpoint: entrada.endpoint,
         chaveP256dh: entrada.keys.p256dh,
         chaveAuth: entrada.keys.auth,
-        expiraEm: entrada.expirationTime === null ? null : new Date(entrada.expirationTime),
+        expiraEm: expiraEmEntrada,
         invalidadaEm: null,
         motivoInvalidacao: null,
         criadoEm,
@@ -122,7 +143,7 @@ export async function registrarInscricaoPush(
           dispositivoId: sessao.dispositivoId,
           chaveP256dh: entrada.keys.p256dh,
           chaveAuth: entrada.keys.auth,
-          expiraEm: entrada.expirationTime === null ? null : new Date(entrada.expirationTime),
+          expiraEm: expiraEmEntrada,
           invalidadaEm: null,
           motivoInvalidacao: null,
           criadoEm,

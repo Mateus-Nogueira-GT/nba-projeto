@@ -29,6 +29,7 @@ type Estado =
   | 'erro'
 
 export type AtivarAlertasProps = {
+  usuarioId: string
   chavePublicaVapid?: string
 }
 
@@ -39,6 +40,7 @@ function mensagemDeErro(erro: unknown): string {
 }
 
 export function AtivarAlertas({
+  usuarioId,
   chavePublicaVapid = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY,
 }: AtivarAlertasProps) {
   const [estado, setEstado] = useState<Estado>('carregando')
@@ -60,7 +62,7 @@ export function AtivarAlertas({
       } else if (atual.permissao === 'denied') {
         setEstado('negado')
       } else if (atual.permissao === 'granted') {
-        void inscreverPush(chavePublicaVapid)
+        void inscreverPush(chavePublicaVapid, usuarioId)
           .then(async () => {
             setPreferencias(await lerPreferenciasPush())
             setEstado('ativo')
@@ -74,7 +76,7 @@ export function AtivarAlertas({
     return () => {
       window.clearTimeout(timerInicial)
     }
-  }, [chavePublicaVapid])
+  }, [chavePublicaVapid, usuarioId])
 
   function demonstrarInteresse() {
     if (ambiente?.iosInstalavel && !ambiente.instalado) {
@@ -104,7 +106,7 @@ export function AtivarAlertas({
         return
       }
 
-      await inscreverPush(chavePublicaVapid)
+      await inscreverPush(chavePublicaVapid, usuarioId)
       setPreferencias(await lerPreferenciasPush())
       setEstado('ativo')
     } catch (causa) {
