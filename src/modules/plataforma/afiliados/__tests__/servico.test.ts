@@ -89,7 +89,7 @@ describe('operação de afiliados', () => {
       visitanteToken: 'visitante-primeiro-toque',
       agora: new Date('2026-09-12T00:01:00.000Z'),
     })
-    expect(await resolverDestinoDaCasaSemRegistrar(banco.db, c.linkB.codigo)).toContain(
+    expect((await resolverDestinoDaCasaSemRegistrar(banco.db, c.linkB.codigo)).destino).toContain(
       'https://ofertas.casa.test/nba',
     )
     expect(

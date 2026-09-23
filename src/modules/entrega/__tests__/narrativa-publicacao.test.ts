@@ -146,6 +146,7 @@ describe('narrativa na publicação', () => {
           modelo: `fake/${perfil}`,
           tokensEntrada: pedido.usuario.length,
           tokensSaida: 20,
+          truncado: false,
         }
       },
     }

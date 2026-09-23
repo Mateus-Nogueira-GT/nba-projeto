@@ -331,16 +331,21 @@ export async function responder(
       usuario: `${contexto.fatos}\n\n${conversa}Pergunta do usuário: ${pergunta}`,
     })
 
-    const validado = marcouOsNaoApitados(r.texto, entrada.sugestao?.ranking)
-      ? validarTexto(r.texto, {
-          numeros: contexto.numeros,
-          limiteCaracteres: LIMITE_RESPOSTA,
-        })
-      : // O guardrail mais importante desta feature (ADR-0012): citar alguém
-        // que a metodologia NÃO apitou sem dizer que está fora da lista faz
-        // ranking estatístico passar por apito do CJ. Reprovar aqui custa uma
-        // chamada, e é barato perto disso.
-        ({ ok: false, motivo: 'sem-marca-fora-da-lista' } as const)
+    // Resposta cortada pelo teto de tokens termina no meio da frase: passaria
+    // no validador e chegaria assim ao assinante (minor §8). Segue o mesmo
+    // caminho da reprovação — registrada, marcada como falha, `indisponivel`.
+    const validado = r.truncado
+      ? ({ ok: false, motivo: 'truncada' } as const)
+      : marcouOsNaoApitados(r.texto, entrada.sugestao?.ranking)
+        ? validarTexto(r.texto, {
+            numeros: contexto.numeros,
+            limiteCaracteres: LIMITE_RESPOSTA,
+          })
+        : // O guardrail mais importante desta feature (ADR-0012): citar alguém
+          // que a metodologia NÃO apitou sem dizer que está fora da lista faz
+          // ranking estatístico passar por apito do CJ. Reprovar aqui custa uma
+          // chamada, e é barato perto disso.
+          ({ ok: false, motivo: 'sem-marca-fora-da-lista' } as const)
     // Registra DEPOIS do validador, com `ok` sendo o desfecho do texto — a
     // tabela precisa separar "o provedor respondeu e o assinante leu" de "o
     // provedor respondeu e nós recusamos". Ver o mesmo trecho em

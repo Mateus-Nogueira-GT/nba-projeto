@@ -5,9 +5,11 @@ import {
   cobrancas,
   direitosAcesso,
   eventosPagamento,
+  logFalhas,
   tentativasCheckout,
 } from '../../dominio/db/schema'
 import type { Db } from '../../dominio/db/tipos'
+import { TRAVA } from '../../dominio/db/travas'
 import { PRODUTO_PAGO } from './configuracao'
 import type { Modalidade, NivelDoPlano, NivelPago } from './nivel-do-plano'
 import { atende, NIVEIS_PAGOS } from './nivel-do-plano'
@@ -375,16 +377,30 @@ async function aplicarEfeito(
       // existe alguém que pagou e não recebeu. Dois caminhos chegam aqui de
       // verdade: boleto ou Pix de temporada aprovado depois de `TEMPORADA_FIM`,
       // e `TEMPORADA_FIM` ausente do ambiente. Nada de cartão, nada de token.
-      console.warn(
-        JSON.stringify({
-          evento: 'pagamento_aprovado_sem_direito',
-          usuarioId,
-          cobrancaExternaId: cobrancaId,
-          modalidade: compra.modalidade,
-          inicio: inicio.toISOString(),
-          fim: fim ? fim.toISOString() : null,
-        }),
-      )
+      // Uma fonte só para os dois destinos (console.warn e log_falhas) —
+      // divergirem seria dois relatos diferentes do mesmo evento (fix round 1).
+      const contexto = {
+        usuarioId,
+        cobrancaExternaId: cobrancaId,
+        modalidade: compra.modalidade,
+        inicio: inicio.toISOString(),
+        fim: fim ? fim.toISOString() : null,
+      }
+      console.warn(JSON.stringify({ evento: 'pagamento_aprovado_sem_direito', ...contexto }))
+      // P3 (W2-5, D6: sem regra nova, só o alerta) — grava direto em
+      // `log_falhas` em vez de importar `entrega` (dependency-cruiser proíbe
+      // plataforma → entrega). Usa o MESMO `db` (aqui é o `tx` da chamada) de
+      // propósito: se a transação der rollback, o alerta cai junto com o
+      // evento que nunca aconteceu de verdade. A origem tem de bater
+      // caractere a caractere com `OrigemOperacional['pagamento-aprovado-sem-direito']`
+      // — quem lê essa fila (a saúde) usa essa mesma string.
+      await db.insert(logFalhas).values({
+        origem: 'pagamento-aprovado-sem-direito',
+        severidade: 'ERRO',
+        mensagem: 'Pagamento aprovado sem acesso liberado (P3)',
+        contextoJson: contexto,
+        ocorridoEm: agora,
+      })
       return { liberou: false, usuarioId }
     }
 
@@ -468,7 +484,9 @@ export async function aplicarEventoPagamento(
     // UNIQUE de `referencia_externa` — 500 no webhook (auditoria 23/09).
     const chaveDaTrava = evento.referenciaExterna ?? evento.assinaturaExternaId
     if (chaveDaTrava) {
-      await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${`pagamento:${chaveDaTrava}`}))`)
+      await tx.execute(
+        sql`select pg_advisory_xact_lock(${TRAVA.PAGAMENTO}, hashtext(${`pagamento:${chaveDaTrava}`}))`,
+      )
     }
     const ocorridoEmOrigem = dataDoProvedor(evento.ocorridoEm)
     const gravado = await tx

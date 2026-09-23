@@ -19,6 +19,9 @@ vi.mock('@/modules/plataforma/afiliados/servico', () => ({
 
 import { GET } from '../route'
 
+// Objeto opaco: a rota só repassa, então basta a identidade.
+const CONFIGURACAO = { link: { id: 'l1' } }
+
 const pedir = () =>
   GET(
     new Request('http://local/r/abc', {
@@ -36,7 +39,10 @@ beforeEach(() => {
 
 describe('/r/[codigo]', () => {
   it('registro falhou: o visitante ainda chega à casa', async () => {
-    estado.resolver.mockResolvedValue('https://casa.example/oferta')
+    estado.resolver.mockResolvedValue({
+      destino: 'https://casa.example/oferta',
+      configuracao: CONFIGURACAO,
+    })
     estado.registrar.mockRejectedValue(new Error('pool esgotado'))
     const r = await pedir()
     expect(r.headers.get('location')).toBe('https://casa.example/oferta')
@@ -47,5 +53,17 @@ describe('/r/[codigo]', () => {
     estado.registrar.mockRejectedValue(new Error('link inexistente'))
     const r = await pedir()
     expect(r.headers.get('location')).toBe('http://local/oferta-indisponivel')
+  })
+  it('minor §8: a configuração do link é lida uma vez — o registro reaproveita a do resolvedor', async () => {
+    estado.resolver.mockResolvedValue({
+      destino: 'https://casa.example/oferta',
+      configuracao: CONFIGURACAO,
+    })
+    estado.registrar.mockResolvedValue({ destino: 'https://casa.example/oferta' })
+    const r = await pedir()
+    expect(r.headers.get('location')).toBe('https://casa.example/oferta')
+    expect(estado.resolver).toHaveBeenCalledTimes(1)
+    expect(estado.registrar).toHaveBeenCalledTimes(1)
+    expect(estado.registrar.mock.calls[0]![1].configuracao).toBe(CONFIGURACAO)
   })
 })

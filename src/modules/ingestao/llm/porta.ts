@@ -25,6 +25,12 @@ export type TextoGerado = {
   modelo: string
   tokensEntrada: number
   tokensSaida: number
+  /**
+   * O modelo parou no teto de tokens (`finish_reason = 'length'`): o texto
+   * termina no meio da frase. Quem mostra o texto ao assinante trata como
+   * falha em vez de publicar a resposta cortada.
+   */
+  truncado: boolean
 }
 
 export type MotivoErroLLM =

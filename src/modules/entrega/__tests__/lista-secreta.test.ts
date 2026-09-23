@@ -2,7 +2,7 @@ import { readFileSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { createElement } from 'react'
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { eq } from 'drizzle-orm'
 
 import { bancoDeTeste } from '../../dominio/__tests__/ajuda-banco'
@@ -285,6 +285,71 @@ describe('job diário da Lista Secreta', () => {
     expect(doAlvo.every((i) => i.fotoUrl === FOTO)).toBe(true)
     // Os outros continuam sem foto: a leitura sobrescreve por jogador, não em bloco.
     expect(depois!.conteudo.itens.filter((i) => i.jogadorId !== alvo).every((i) => i.fotoUrl === null)).toBe(true)
+  })
+
+  it('coleta odds antes da PRIMEIRA publicação do dia, e só dela', async () => {
+    const gancho = vi.fn(async () => {})
+    await publicarListaSecreta(banco.db, ruleset, {
+      dataReferencia: HOJE,
+      agora: CEDO_DEMAIS,
+      antesDaPrimeiraPublicacao: gancho,
+    })
+    expect(gancho).not.toHaveBeenCalled()
+
+    await publicarListaSecreta(banco.db, ruleset, {
+      dataReferencia: HOJE,
+      agora: UMA_HORA_ANTES,
+      antesDaPrimeiraPublicacao: gancho,
+    })
+    await publicarListaSecreta(banco.db, ruleset, {
+      dataReferencia: HOJE,
+      agora: new Date(`${HOJE}T22:30:00.000Z`),
+      antesDaPrimeiraPublicacao: gancho,
+    })
+    expect(gancho).toHaveBeenCalledTimes(1)
+  })
+
+  it('sem lista ativa, o gancho de odds NÃO roda — nada de coleta e cota a cada 15 min (W2-4)', async () => {
+    await banco.db.update(niveisVersao).set({ ativa: false })
+    const gancho = vi.fn(async () => {})
+    const r = await publicarListaSecreta(banco.db, ruleset, {
+      dataReferencia: HOJE,
+      agora: UMA_HORA_ANTES,
+      antesDaPrimeiraPublicacao: gancho,
+    })
+    expect(r).toEqual({ publicou: false, motivo: 'sem-lista-ativa' })
+    expect(gancho).not.toHaveBeenCalled()
+  })
+
+  it('aoGravarSnapshot avisa logo depois de gravar, e só quando algo mudou (W2-1)', async () => {
+    const aoGravar = vi.fn()
+    await publicarListaSecreta(banco.db, ruleset, {
+      dataReferencia: HOJE,
+      agora: UMA_HORA_ANTES,
+      aoGravarSnapshot: aoGravar,
+    })
+    expect(aoGravar).toHaveBeenCalledTimes(1)
+
+    const segunda = await publicarListaSecreta(banco.db, ruleset, {
+      dataReferencia: HOJE,
+      agora: new Date(`${HOJE}T22:30:00.000Z`),
+      aoGravarSnapshot: aoGravar,
+    })
+    expect(segunda).toMatchObject({ publicou: true, mudou: false })
+    expect(aoGravar).toHaveBeenCalledTimes(1)
+  })
+
+  it('coleta de odds falhando não impede a publicação', async () => {
+    const erro = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    const r = await publicarListaSecreta(banco.db, ruleset, {
+      dataReferencia: HOJE,
+      agora: UMA_HORA_ANTES,
+      antesDaPrimeiraPublicacao: async () => {
+        throw new Error('casa fora')
+      },
+    })
+    expect(r.publicou).toBe(true)
+    erro.mockRestore()
   })
 })
 

@@ -13,7 +13,7 @@ import { dataDeReferencia, somarDias } from '@/modules/dominio/rodada'
 import { calendarioDoRuleset } from '@/modules/dominio/temporada'
 import { rotaDoJogador } from '@/modules/entrega/estatisticas/rotas'
 import { estadoDoCiclo } from '@/modules/entrega/lista-por-jogo'
-import { lerFeed, type ItemFeed } from '@/modules/entrega/lista-secreta'
+import type { ItemFeed } from '@/modules/entrega/lista-secreta'
 import {
   conferirFireLive,
   filtrosResultadosDaUrl,
@@ -35,6 +35,7 @@ import { atende } from '@/modules/plataforma/assinatura/nivel-do-plano'
 import type { Atributo, NivelApito } from '@/modules/motor/tipos'
 import '@/design-system/tokens/tokens.css'
 import { taxaDaTemporadaCacheada } from '../../estatisticas/temporada-cacheada'
+import { lerFeedCacheado } from '../../feed-cacheado'
 
 export const dynamic = 'force-dynamic'
 export const metadata = { title: 'Resultados' }
@@ -309,7 +310,7 @@ export default async function PaginaResultadosDaRodada({
       diasDaTemporada(data, calendarioDoRuleset(ruleset)),
     ),
     greensDoDia(getDb(), data),
-    lerFeed(getDb(), data),
+    lerFeedCacheado(data),
     conferirFireLive(getDb(), data),
   ])
   const recap = filtrarRecapDaNoite(rodadaInteira, filtros)

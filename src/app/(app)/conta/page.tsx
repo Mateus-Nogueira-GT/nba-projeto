@@ -201,6 +201,7 @@ export default async function PaginaConta({
           fuso={fuso}
         />
         <BlocoAlertas
+          usuarioId={sessao.usuarioId}
           recebeAlertas={atende(acesso.nivel, 'MVP')}
           experiencia={experiencia}
           jogadores={idsJogadores.map((id) => ({

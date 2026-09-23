@@ -81,6 +81,21 @@ export async function publicarListaSecreta(
     ignorarAntecedencia?: boolean
     /** Ausente = sem narrativas. A publicação nunca depende da LLM. */
     llm?: PortaLLM
+    /**
+     * Coleta de odds rodada uma vez por dia, antes da PRIMEIRA publicação
+     * (W2-4). O cron de odds bate às 11:00 UTC; a linha da noite ainda podia
+     * não existir quando a Lista publica pela primeira vez. Falha do gancho
+     * é registrada e NUNCA impede a publicação — ver o `.catch` abaixo.
+     */
+    antesDaPrimeiraPublicacao?: () => Promise<void>
+    /**
+     * Chamado logo depois do insert/upsert do snapshot, só quando `mudou`
+     * (W2-1). A rota passa `revalidateTag(tagDoFeed(data), 'max')`: se a
+     * função lançar nas narrativas, a invalidação do fim da rota não roda, e
+     * uma republicação que mudou ficaria atrás do cache. Não é chamado depois
+     * das gravações parciais de narrativa — ver o comentário na chamada.
+     */
+    aoGravarSnapshot?: () => void
   },
 ): Promise<ResultadoPublicacao> {
   const primeiro = await primeiroJogoDoDia(db, opcoes.dataReferencia, ruleset.rodada.fuso)
@@ -100,6 +115,33 @@ export async function publicarListaSecreta(
     ruleset.media.janela,
   )
   if (fatos.times.length === 0) return { publicou: false, motivo: 'sem-lista-ativa' }
+
+  // O gancho de odds roda DEPOIS de `montarFatos` e da checagem de lista
+  // ativa (W2-4): sem lista, o cron devolve `sem-lista-ativa` a cada 15 min, e
+  // chamar o gancho antes disso era uma coleta de até 100 s e cota de API das
+  // casas por nada, a cada tick. `montarFatos` não lê `odds_agregada` (só
+  // jogos, níveis, médias, estatísticas e escalação); quem lê é `enriquecer`,
+  // mais abaixo — por isso o gancho fica entre os dois.
+  if (opcoes.antesDaPrimeiraPublicacao) {
+    const [jaPublicada] = await db
+      .select({ id: feedSnapshot.id })
+      .from(feedSnapshot)
+      .where(
+        and(
+          eq(feedSnapshot.dataReferencia, opcoes.dataReferencia),
+          eq(feedSnapshot.estrategia, 'LISTA_SECRETA'),
+        ),
+      )
+      .limit(1)
+    if (!jaPublicada) {
+      // As odds do card são gravadas NA publicação (oddFaixa no snapshot).
+      // Colhidas só às 11:00 UTC, a linha da noite podia não existir ainda
+      // (W2-4). A publicação nunca depende disso.
+      await opcoes.antesDaPrimeiraPublicacao().catch((erro: unknown) => {
+        console.error(JSON.stringify({ evento: 'odds_antes_da_lista_falhou', erro: String(erro) }))
+      })
+    }
+  }
 
   const apitos = avaliar(fatos, ruleset).filter((a) => a.estrategia === 'LISTA_SECRETA')
 
@@ -185,6 +227,13 @@ export async function publicarListaSecreta(
         target: [feedSnapshot.dataReferencia, feedSnapshot.estrategia, feedSnapshot.jogoId],
         set: { conteudoJson: conteudo, geradoEm: opcoes.agora, hash },
       })
+    // A lista já está no banco: avisa agora, não só no fim da rota (W2-1).
+    // Só aqui, e não depois de cada gravação parcial de narrativa: numa Route
+    // Handler o `revalidateTag` só ENFILEIRA a tag, executada quando a rota
+    // devolve a resposta (app-route/module.js, `resolvePendingRevalidations`);
+    // chamá-lo de novo a cada lote não publica nada antes, só move o
+    // `revalidatedAt` — e a invalidação do fim da rota já cobre as narrativas.
+    opcoes.aoGravarSnapshot?.()
 
     if (opcoes.llm) {
       // O enriquecimento GRAVA PROGRESSO enquanto anda (ver `LOTE_DE_GRAVACAO`
@@ -381,7 +430,18 @@ export async function linhasDoJogador(
   jogadorId: string,
   atributo?: Atributo,
 ): Promise<LinhasDoJogador> {
-  const feed = await lerFeed(db, dataReferencia)
+  return recorteDoJogador(await lerFeed(db, dataReferencia), jogadorId, atributo)
+}
+
+/**
+ * O recorte do apito sobre um feed JÁ LIDO — puro, para a página filtrar o
+ * feed em cache sem ir ao banco (W2-1).
+ */
+export function recorteDoJogador(
+  feed: { conteudo: ConteudoFeed; geradoEm: Date } | null,
+  jogadorId: string,
+  atributo?: Atributo,
+): LinhasDoJogador {
   if (feed === null) return { itens: [], geradoEm: null }
 
   const doJogador = feed.conteudo.itens.filter((i) => i.jogadorId === jogadorId)

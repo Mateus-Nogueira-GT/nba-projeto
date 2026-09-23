@@ -25,7 +25,12 @@ import {
 const respostaSchema = z.object({
   model: z.string().optional(),
   choices: z
-    .array(z.object({ message: z.object({ content: z.string().nullish() }).partial() }))
+    .array(
+      z.object({
+        message: z.object({ content: z.string().nullish() }).partial(),
+        finish_reason: z.string().nullish(),
+      }),
+    )
     .default([]),
   usage: z
     .object({ prompt_tokens: z.number().nullish(), completion_tokens: z.number().nullish() })
@@ -110,6 +115,9 @@ export class OpenRouter implements PortaLLM {
         modelo: bruta.data.model ?? 'desconhecido',
         tokensEntrada: bruta.data.usage?.prompt_tokens ?? 0,
         tokensSaida: bruta.data.usage?.completion_tokens ?? 0,
+        // Não vira erro aqui: o texto veio e foi cobrado. Cada consumidor
+        // decide se texto cortado serve (o chat decide que não).
+        truncado: bruta.data.choices[0]?.finish_reason === 'length',
       }
     } catch (erro) {
       if (erro instanceof ErroLLM) throw erro

@@ -257,10 +257,15 @@ export async function enriquecerComNarrativas(
       const r = await porta.gerar(perfil, { sistema: prompt.sistema, usuario: prompt.usuario })
       // Saneia ANTES de validar: o travessão vira vírgula sem gastar uma
       // reprovação, e o texto que o validador mede é o que o assinante lê.
-      const validado = validarTexto(semTravessao(r.texto), {
-        numeros: prompt.numeros,
-        limiteCaracteres: limite,
-      })
+      // Resposta cortada pelo teto de tokens (`truncado`) é reprovada antes
+      // de tudo, como no chat: o validador mede números e tamanho, não se a
+      // frase terminou — e o card mostraria um texto parado no meio.
+      const validado = r.truncado
+        ? ({ ok: false, motivo: 'truncada' } as const)
+        : validarTexto(semTravessao(r.texto), {
+            numeros: prompt.numeros,
+            limiteCaracteres: limite,
+          })
       // O REGISTRO SÓ SAI DEPOIS DO VALIDADOR, e `ok` é o desfecho do TEXTO.
       //
       // Gravando `ok: true` antes de validar, a tabela não distinguia "o

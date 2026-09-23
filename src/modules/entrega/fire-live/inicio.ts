@@ -12,6 +12,13 @@ import type { Ruleset } from '../../motor/ruleset/schema'
  */
 export const DURACAO_LEASE_INICIO_MS = 2 * 60_000
 
+/**
+ * Quantos intervalos de observação sem batimento fazem uma linha INICIADA ser
+ * dada como órfã (W2-3). Três dá folga a um passo lento sem deixar o 1º
+ * quarto sem observador por mais de ~1 min.
+ */
+export const CICLOS_SEM_BATIMENTO_PARA_RETOMAR = 3
+
 export type Disparo = {
   jogoId: string
   iniciadoEm: Date
@@ -56,6 +63,11 @@ function paraDisparo(linha: {
  * sem `runId` deixam de ser sentenças permanentes: quando o lease vence (ou o
  * `start()` anterior falhou), um UPDATE condicional troca o fencing token e
  * entrega a tentativa a exatamente um reconciliador concorrente.
+ *
+ * `INICIADA` também é retomada quando o workflow para de bater (W2-3): o
+ * `run_id` volta a null, e o run antigo, se ainda vivo, perde o próximo
+ * batimento e para. Só vale para jogos ainda no quarto do Fire Live — o
+ * filtro `jogosNoQuarto` acima já garante isso.
  */
 export async function reservarJogosParaObservar(
   db: Db,
@@ -101,19 +113,40 @@ export async function reservarJogosParaObservar(
       tentativasInicio: sql`${fireLiveExecucoes.tentativasInicio} + 1`,
       ultimaTentativaEm: agora,
       erroInicio: null,
+      runId: null,
+      workflowIniciadoEm: null,
       atualizadoEm: agora,
     })
     .where(
       and(
         inArray(fireLiveExecucoes.jogoId, idsEmJogo),
-        isNull(fireLiveExecucoes.runId),
         or(
-          eq(fireLiveExecucoes.estado, 'FALHOU_AO_INICIAR'),
           and(
-            eq(fireLiveExecucoes.estado, 'RESERVADA'),
+            isNull(fireLiveExecucoes.runId),
             or(
-              isNull(fireLiveExecucoes.leaseExpiraEm),
-              lte(fireLiveExecucoes.leaseExpiraEm, agora),
+              eq(fireLiveExecucoes.estado, 'FALHOU_AO_INICIAR'),
+              and(
+                eq(fireLiveExecucoes.estado, 'RESERVADA'),
+                or(
+                  isNull(fireLiveExecucoes.leaseExpiraEm),
+                  lte(fireLiveExecucoes.leaseExpiraEm, agora),
+                ),
+              ),
+            ),
+          ),
+          // Run que parou de bater (W2-3): o workflow morreu com a linha
+          // INICIADA. Zera o run_id — o velho, se ainda vivo, perde o
+          // próximo batimento e para.
+          and(
+            eq(fireLiveExecucoes.estado, 'INICIADA'),
+            lte(
+              fireLiveExecucoes.atualizadoEm,
+              new Date(
+                agora.getTime() -
+                  CICLOS_SEM_BATIMENTO_PARA_RETOMAR *
+                    ruleset.fire_live.observacao.intervalo_segundos *
+                    1000,
+              ),
             ),
           ),
         ),

@@ -8,16 +8,21 @@ import {
   novoTokenVisitante,
   requisicaoAutomatizada,
 } from '@/modules/plataforma/afiliados/http'
-import { registrarClique, resolverLinkSemRegistrar } from '@/modules/plataforma/afiliados/servico'
+import {
+  type ConfiguracaoDoLink,
+  registrarClique,
+  resolverLinkSemRegistrar,
+} from '@/modules/plataforma/afiliados/servico'
 
 export const dynamic = 'force-dynamic'
 const SEM_CACHE = { 'Cache-Control': 'private, no-store, max-age=0', 'X-Robots-Tag': 'noindex' }
 
 async function resolver(request: Request, codigo: string, registrar: boolean): Promise<Response> {
   let destino: string
+  let configuracao: ConfiguracaoDoLink
   try {
     if (!process.env.DATABASE_URL) throw new Error('Banco indisponível')
-    destino = await resolverLinkSemRegistrar(getDb(), codigo)
+    ;({ destino, configuracao } = await resolverLinkSemRegistrar(getDb(), codigo))
   } catch {
     return NextResponse.redirect(new URL('/oferta-indisponivel', request.url), {
       status: 307,
@@ -36,6 +41,8 @@ async function resolver(request: Request, codigo: string, registrar: boolean): P
     const sessao = await sessaoAtual()
     const clique = await registrarClique(getDb(), {
       codigo,
+      // A mesma configuração que resolveu o destino: sem reler o link.
+      configuracao,
       visitanteToken: token,
       usuarioId: sessao?.usuarioId,
       agora: new Date(),

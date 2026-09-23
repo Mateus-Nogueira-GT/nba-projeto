@@ -279,3 +279,68 @@ só é invalidada pela rodada. Uma lacuna do plano está em aberto na §5.
 
 **Para a Onda 2 / fora deste commit:** o que está acima, além da §4. As pendências P3, G8 e reserva
 NBA (§5) e o checklist da §6 continuam com o parceiro.
+
+## 9. Achados da Onda 2 (23/09)
+
+Onda 2 executada inteira, com um subagente por tarefa, revisão por tarefa e uma revisão final da
+branch. Não há migração nesta onda. Nada foi implantado.
+
+**Para o deploy de 03/11** (além da §6)
+
+- `CRON_COMPLETO=true` no plano Pro. Sem isso, `ao-vivo`, `saude` e a limpeza nova não rodam.
+- `ALERTA_WEBHOOK_URL`, com o canal do G8 (Slack, Discord ou Zapier aceitam o JSON). Sem ela, os
+  alertas novos ficam só no log.
+- `VAPID_SUBJECT` real, e não `mailto:push@example.com`. A Apple recusa um `sub` de VAPID que não
+  aceita, e isso tira o push da base iOS.
+- **Implantar sem Fire Live em curso e sem push na fila.** Durante a troca de deployment, a
+  instância velha e a nova usam chaves de trava diferentes, e uma mensagem nova da fila
+  (`faixa`, `fins`, `tentativa`) que cair num consumidor velho é descartada. Na entressafra o
+  risco é praticamente nulo.
+
+**Onde o código divergiu do plano, e por quê**
+
+- **W2-1:** a meta da Lista é **17 → 12 consultas**, não ~6. As outras dez são por usuário
+  (sessão, acesso, preferências, experiência) e continuam dinâmicas.
+  - O `null` em cache nunca é confiado, e a marca de "calculado agora" só vale depois da leitura
+    do banco. Sem isso, a rajada logo depois da publicação via "Próxima lista às…".
+  - A invalidação sai também logo depois de gravar o snapshot. Se a função morrer por
+    `maxDuration`, porém, nenhuma invalidação roda, porque o Next só as executa quando a rota
+    responde. Nesse caso o `revalidate: 600` cobre, com até ~10 min de atraso numa republicação.
+- **W2-2, push:**
+  - Quando a recusa atinge a maioria (VAPID global), o lote **não é relançado inteiro**. Só as
+    recusadas e as que pediram retry voltam, em 60 s. Relançar tudo duplicava push para quem já
+    tinha recebido (regra 5).
+  - A maioria é contada **por serviço de push** (FCM, Mozilla, Apple), não por lote.
+  - A expansão publica um **plano congelado**, e as faixas saem do conteúdo desse plano. Chave de
+    fila já usada (`DuplicateMessageError`) conta como sucesso. Sem isso, uma reentrega recalculava
+    as fronteiras e duplicava push, ou perdia faixas.
+- **W2-3, Fire Live:**
+  - O erro de um ciclo não derruba mais o run.
+  - O batimento é renovado também no caminho de erro, porque uma pane lenta do provedor faria o
+    cron retomar um run vivo a cada minuto.
+  - As escritas do ciclo ganharam fencing por `run_id`.
+- **W2-4:** a coleta extra de odds acontece uma vez por dia, antes da primeira publicação, e só
+  quando há lista ativa.
+- **W2-5:** o canal é um webhook genérico, desligado sem a variável.
+  - O P3 grava o alerta na mesma transação do pagamento, sem regra nova (D6).
+  - Push que vence tanto na entrega quanto na expansão gera alerta.
+- **W2-6:** a limpeza semanal (segunda, 08:00 UTC, só no Pro) apaga:
+  - tentativas de login e de operação com mais de 7 dias;
+  - sessões encerradas ou expiradas com mais de 30 dias;
+  - inscrições de push invalidadas com mais de 30 dias.
+
+  A auditoria não é tocada. **Os prazos são operacionais: confirmar com o parceiro.**
+  - O `workflow` 4.8.9 trouxe no lockfile peers da própria árvore dele (`@nestjs` 12, `@aws-sdk`).
+- **Minors da §8:**
+  - O clique de afiliado lê a configuração uma vez.
+  - Resposta truncada por `maxTokens` conta como falha, tanto no chat quanto na narrativa da Lista.
+  - As travas ganharam namespace (`src/modules/dominio/db/travas.ts`).
+
+**Fica para depois do merge**
+
+- Alerta para `fire_live_ciclo_falhou` repetido. Hoje, uma configuração ausente vira log a cada
+  20 s, em silêncio.
+- Log dos erros por casa na coleta de odds antes da Lista.
+- Conferir a cota do plano da BallDontLie. Durante o 1º quarto, cada snapshot faz uma leitura a
+  mais do jogo.
+- Pendências que continuam com o parceiro: a §5 (P3, G8, reserva NBA e a fila da reconciliação).

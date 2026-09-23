@@ -7,7 +7,7 @@ import { dataDeReferencia } from '@/modules/dominio/rodada'
 import { getDb } from '@/modules/dominio/db/cliente'
 import { detalheDoApito, type Fator } from '@/modules/entrega/detalhe-apito'
 import { lerFeedFireLive } from '@/modules/entrega/fire-live/leitura'
-import { linhasDoJogador } from '@/modules/entrega/lista-secreta'
+import { recorteDoJogador } from '@/modules/entrega/lista-secreta'
 import { cotacoesPorCasa, faixasDoJogador } from '@/modules/entrega/odds/leitura'
 import { rotaDoJogador } from '@/modules/entrega/estatisticas/rotas'
 import { rulesetAtivo } from '@/modules/entrega/ruleset-ativo'
@@ -29,6 +29,7 @@ import {
 import type { CotacaoDeCasa } from '@/modules/entrega/odds/leitura'
 import { semantico } from '@/design-system/tokens/semantico'
 import { exigirNivel } from '@/modules/plataforma/assinatura/guarda'
+import { lerFeedCacheado } from '../../feed-cacheado'
 import '@/design-system/tokens/tokens.css'
 
 export const dynamic = 'force-dynamic'
@@ -226,7 +227,7 @@ export default async function PaginaApito({
 
   const ruleset = await rulesetAtivo()
   const hoje = dataDeReferencia(new Date(), ruleset.rodada.fuso)
-  let { itens, geradoEm } = await linhasDoJogador(getDb(), hoje, jogadorId, atributo)
+  let { itens, geradoEm } = recorteDoJogador(await lerFeedCacheado(hoje), jogadorId, atributo)
 
   // O apito do Fire Live abre ESTA página (spec §4.3): a análise é a mesma, o
   // 1º quarto é que entra no topo. Sem apito pré-live, o item ao vivo passa a
@@ -251,7 +252,7 @@ export default async function PaginaApito({
     const jogo = vivo.jogos.find((j) => j.id === aoVivo.jogoId)
     const rodada = jogo ? dataDeReferencia(jogo.dataHoraUtc, ruleset.rodada.fuso) : hoje
     if (rodada !== hoje) {
-      const anterior = await linhasDoJogador(getDb(), rodada, jogadorId, aoVivo.atributo)
+      const anterior = recorteDoJogador(await lerFeedCacheado(rodada), jogadorId, aoVivo.atributo)
       itens = anterior.itens.filter((i) => i.jogoId === aoVivo.jogoId)
       preLive = itens[0]
       if (preLive) geradoEm = anterior.geradoEm

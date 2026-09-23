@@ -59,7 +59,10 @@ describe('a forma do cache da lateral', () => {
     const semPerfil: string[] = []
     for (const arquivo of fontes) {
       const fonte = semComentarios(readFileSync(arquivo, 'utf8'))
-      for (const chamada of fonte.matchAll(/revalidateTag\(([^)]*)\)/g)) {
+      // O grupo tolera UM nível de parênteses aninhado — `tagDoFeed(data)` como
+      // primeiro argumento (W2-1) — sem isso o `[^)]*` antigo parava no `)`
+      // de dentro e nunca via o `'max'` que vem depois.
+      for (const chamada of fonte.matchAll(/revalidateTag\(((?:[^()]|\([^()]*\))*)\)/g)) {
         if (!/,\s*'max'\s*$/.test(chamada[1]!)) semPerfil.push(`${arquivo}: ${chamada[0]}`)
       }
     }
