@@ -1,7 +1,7 @@
 import type { MetadataRoute } from 'next'
 
-import { semantico } from '@/design-system/tokens/semantico'
-import { marcaNip } from '@/design-system/marca'
+import { FUNDO_DO_TEMA_PADRAO } from '@/features/shell/tema'
+import { marcaNip } from '@/ui/marca'
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
@@ -15,10 +15,13 @@ export default function manifest(): MetadataRoute.Manifest {
     start_url: '/abrir',
     scope: '/',
     display: 'standalone',
-    // A splash e a barra do sistema vestem o FUNDO do app (o `textoSobreCor`
-    // era escuro e servia por acaso, mas descreve texto sobre cor).
-    background_color: semantico.fundo,
-    theme_color: semantico.fundo,
+    // A splash e a barra do sistema vestem o FUNDO do app — o mesmo `--fundo`
+    // do Marinho que o `themeColor` do layout raiz usa: o HTML sai sempre nesse
+    // tema, e a splash não pode abrir numa cor que a primeira pintura troca.
+    // (Até a Tarefa 12 do front v2 era o `semantico.fundo` do design-system
+    // antigo, o navy de reserva do `:root`, que não é o tema em que o app abre.)
+    background_color: FUNDO_DO_TEMA_PADRAO,
+    theme_color: FUNDO_DO_TEMA_PADRAO,
     orientation: 'portrait-primary',
     icons: [
       { src: '/icons/app-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },

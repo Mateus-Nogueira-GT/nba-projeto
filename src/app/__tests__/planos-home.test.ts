@@ -110,7 +110,10 @@ describe('a home por nível (spec §5, linha 1)', () => {
     expect(semLateral(html)).not.toContain('começa no')
   })
 
-  it('Resultados é inteiro para o GRATIS — a prova social (decisão 9)', async () => {
+  it('a rodada que TERMINOU é inteira para o GRATIS — a prova social (decisão 9, refinada em 24/09)', async () => {
+    // 24/09: na rodada em curso o grátis só vê jogo ENCERRADO (fumaça de
+    // Resultados). Esta é a ÚLTIMA rodada conferida — toda encerrada — e nela
+    // a tela é a mesma do pago.
     nivelNoTeste = 'GRATIS'
     const { recapDaNoite, ultimaRodadaConferida } = await import('../../modules/entrega/resultados')
     const ruleset = await rulesetAtivo()
@@ -131,10 +134,15 @@ describe('a home por nível (spec §5, linha 1)', () => {
     expect(semLateral(html)).not.toContain('começa no')
     // O conteúdo da análise está inteiro: um card conferido por apitado
     // publicado, o mesmo que o pago veria (spec, decisão 9). Diferente da
-    // home, esta tela não linka para `/apito/` para nenhum nível — o card
-    // aqui é o `CardEntrada` sem `detalheHref` — então a prova de que está
-    // "inteira" é o conteúdo em si, não um link que nunca existiu aqui.
-    expect((html.match(/<article\b/g) ?? []).length).toBe(recap.publicados)
-    expect(html).toContain('APITOS')
+    // home, esta tela não linka para `/apito/` para nenhum nível, então a
+    // prova de que está "inteira" é o conteúdo em si. Front v2 (Tarefa 6): o
+    // card conferido é uma `<li data-v>` na seção da Lista Secreta.
+    const inicio = html.indexOf('id="titulo-lista"')
+    expect(inicio, 'seção da Lista ausente').toBeGreaterThan(-1)
+    // Sem a seção do Fire Live, a Lista vai até o fim — nunca um corte em -1.
+    const fim = html.indexOf('id="titulo-fire"', inicio)
+    const lista = html.slice(inicio, fim > -1 ? fim : undefined)
+    expect((lista.match(/<li\b[^>]*data-v=/g) ?? []).length).toBe(recap.publicados)
+    expect(html).toContain('>Apitos<')
   })
 })

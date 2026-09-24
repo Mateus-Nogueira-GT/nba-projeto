@@ -90,7 +90,7 @@ async function linhasGravadas() {
 describe('registrarEntrada — a ação por trás do botão "Registrei"', () => {
   it('GRATIS não registra: a ação redireciona para os planos e não grava nada', async () => {
     nivelNoTeste = 'GRATIS'
-    const { registrarEntrada } = await import('../(app)/gestao/acoes')
+    const { registrarEntrada } = await import('../../features/gestao/acoes')
 
     // FormData VÁLIDO — o mesmo que a tela enviaria — exatamente o caminho de
     // um POST direto no endpoint, sem passar pelo formulário escondido.
@@ -102,7 +102,7 @@ describe('registrarEntrada — a ação por trás do botão "Registrei"', () => 
 
   it('sem sessão: manda para /entrar e não grava nada', async () => {
     sessao = null
-    const { registrarEntrada } = await import('../(app)/gestao/acoes')
+    const { registrarEntrada } = await import('../../features/gestao/acoes')
 
     await expect(registrarEntrada(formularioValido())).rejects.toMatchObject({
       digest: expect.stringContaining('/entrar?destino=/gestao'),
@@ -114,7 +114,7 @@ describe('registrarEntrada — a ação por trás do botão "Registrei"', () => 
     ['zero', '0'],
     ['negativa', '-1'],
   ])('unidades %s: recusa com erro e não grava', async (_caso, unidades) => {
-    const { registrarEntrada } = await import('../(app)/gestao/acoes')
+    const { registrarEntrada } = await import('../../features/gestao/acoes')
 
     await expect(registrarEntrada(formularioValido({ unidades }))).rejects.toMatchObject({
       digest: expect.stringContaining('/gestao?erro='),
@@ -123,7 +123,7 @@ describe('registrarEntrada — a ação por trás do botão "Registrei"', () => 
   })
 
   it('odd abaixo de 1,01: recusa com erro e não grava', async () => {
-    const { registrarEntrada } = await import('../(app)/gestao/acoes')
+    const { registrarEntrada } = await import('../../features/gestao/acoes')
 
     await expect(registrarEntrada(formularioValido({ odd: '0.5' }))).rejects.toMatchObject({
       digest: expect.stringContaining('/gestao?erro='),
@@ -132,7 +132,7 @@ describe('registrarEntrada — a ação por trás do botão "Registrei"', () => 
   })
 
   it('linha fora do intervalo (zero): recusa com erro e não grava', async () => {
-    const { registrarEntrada } = await import('../(app)/gestao/acoes')
+    const { registrarEntrada } = await import('../../features/gestao/acoes')
 
     await expect(registrarEntrada(formularioValido({ linha: '0' }))).rejects.toMatchObject({
       digest: expect.stringContaining('/gestao?erro='),
@@ -141,7 +141,7 @@ describe('registrarEntrada — a ação por trás do botão "Registrei"', () => 
   })
 
   it('entrada válida grava com os valores digitados e manda para a visão Realizadas', async () => {
-    const { registrarEntrada } = await import('../(app)/gestao/acoes')
+    const { registrarEntrada } = await import('../../features/gestao/acoes')
 
     await expect(registrarEntrada(formularioValido())).rejects.toMatchObject({
       digest: expect.stringContaining('/gestao?ver=realizadas'),
@@ -161,7 +161,7 @@ describe('registrarEntrada — a ação por trás do botão "Registrei"', () => 
   })
 
   it('odd em branco é aceita como ausente (odd não é obrigatória)', async () => {
-    const { registrarEntrada } = await import('../(app)/gestao/acoes')
+    const { registrarEntrada } = await import('../../features/gestao/acoes')
 
     await expect(registrarEntrada(formularioValido({ odd: '' }))).rejects.toMatchObject({
       digest: expect.stringContaining('/gestao?ver=realizadas'),

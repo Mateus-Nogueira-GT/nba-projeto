@@ -1,17 +1,30 @@
+import { readdirSync } from 'node:fs'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
-import { resolve } from 'node:path'
+import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import type { Db } from '../../modules/dominio/db/tipos'
 
-const MODULOS_CSS_DA_CONFERENCIA = [
-  'src/components/ao-vivo/SeletorJogosAoVivo.module.css',
-  'src/components/ao-vivo/ExperienciaAoVivo.module.css',
-  'src/components/preferencias/BotaoAcompanharJogador.module.css',
-  'src/components/navegacao/Moldura.module.css',
-  'src/components/navegacao/FolhaDeFiltros.module.css',
-  'src/components/lateral/Lateral.module.css',
-  'src/components/planos/SilhuetaPaga.module.css',
-] as const
+/** Os tokens do v2 — a única fonte de cor do app. */
+const TOKENS_CSS = 'src/ui/tokens.css'
+
+/**
+ * Os módulos CSS que a conferência reaplica: TODOS os de `src/ui` e
+ * `src/features` (front v2, Tarefa 12). A lista escrita à mão do front antigo
+ * envelhecia a cada tela nova; aqui ela é lida do disco, e um módulo que a
+ * tela não renderizou simplesmente não casa com nenhum hash no HTML.
+ */
+function modulosCssDoV2(): string[] {
+  const saida: string[] = []
+  const varrer = (dir: string) => {
+    for (const entrada of readdirSync(dir, { withFileTypes: true })) {
+      const caminho = join(dir, entrada.name)
+      if (entrada.isDirectory()) varrer(caminho)
+      else if (entrada.name.endsWith('.module.css')) saida.push(caminho)
+    }
+  }
+  for (const raiz of ['src/ui', 'src/features']) varrer(raiz)
+  return saida.sort()
+}
 
 /** Os nomes dentro de `:global(...)`: são do documento, não do módulo. */
 function globaisDe(fonte: string): Set<string> {
@@ -93,9 +106,9 @@ export async function gravarConferencia(nome: string, html: string): Promise<voi
 
   const dir = process.env.CONFERENCIA_DIR ?? '.superpowers/conferencia'
   const [tokens, global, ...modulos] = await Promise.all([
-    readFile('src/design-system/tokens/tokens.css', 'utf8'),
+    readFile(TOKENS_CSS, 'utf8'),
     readFile('src/app/globals.css', 'utf8'),
-    ...MODULOS_CSS_DA_CONFERENCIA.map((arquivo) => readFile(arquivo, 'utf8')),
+    ...modulosCssDoV2().map((arquivo) => readFile(arquivo, 'utf8')),
   ])
   // Imagens locais do PWA continuam acessíveis sob file://; o next/image
   // otimizado não tem servidor neste arnês, então a imagem usa seu src original.

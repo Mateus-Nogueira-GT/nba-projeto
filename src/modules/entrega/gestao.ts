@@ -38,9 +38,15 @@ export async function planoDoDia(
   ruleset: Ruleset,
   dataReferencia: string,
   banca: number,
+  /**
+   * O feed do dia JÁ LIDO — a tela passa o do cache (`lerFeedCacheado`), e o
+   * plano não repete a leitura por visita. Omitido, lê do banco como sempre
+   * (a landing e os testes).
+   */
+  feedLido?: { conteudo: { itens: ItemFeed[] } } | null,
 ): Promise<PlanoDoDia> {
   const modelo = ruleset.gestao_banca
-  const feed = await lerFeed(db, dataReferencia)
+  const feed = feedLido === undefined ? await lerFeed(db, dataReferencia) : feedLido
 
   // Um card por jogador e atributo, na mesma ordem da Lista Secreta: o plano
   // de banca precisa espelhar a tela que o usuário acabou de ver.

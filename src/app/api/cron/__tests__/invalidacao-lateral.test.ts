@@ -77,7 +77,7 @@ describe('invalidação da lateral', () => {
     '%s invalida TAG_LATERAL com o perfil max',
     (caminho) => {
       const fonte = semComentarios(readFileSync(caminho, 'utf8'))
-      expect(fonte).toContain("import { TAG_LATERAL } from '@/app/(app)/lateral/leitura'")
+      expect(fonte).toContain("import { TAG_LATERAL } from '@/app/_cache/lateral'")
       expect(fonte).toContain("revalidateTag(TAG_LATERAL, 'max')")
     },
   )

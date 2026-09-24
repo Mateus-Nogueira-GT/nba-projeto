@@ -1,0 +1,559 @@
+.tela {
+  container-type: inline-size;
+  display: flex;
+  flex-direction: column;
+  gap: var(--e-5);
+  max-width: 1200px;
+}
+
+.cabecalho {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--e-4);
+}
+.titulo {
+  font-size: var(--t-28);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  line-height: 1.15;
+}
+.subtitulo {
+  margin-top: 4px;
+  color: var(--texto-2);
+}
+.erro {
+  padding: var(--e-3) var(--e-4);
+  border: 1px solid var(--ao-vivo-solido);
+  border-radius: var(--raio-controle);
+  background: color-mix(in srgb, var(--ao-vivo-solido) 8%, transparent);
+  color: var(--ao-vivo);
+  font-size: var(--t-13);
+  font-weight: 600;
+}
+.rotulo {
+  color: var(--texto-3);
+  font-size: var(--t-13);
+  font-weight: 500;
+}
+.apoio {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--texto-3);
+  font-size: var(--t-12);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* ---------- Nota de demonstração ---------- */
+.nota {
+  display: flex;
+  gap: var(--e-3);
+  padding: var(--e-3) var(--e-4);
+  border: 1px solid color-mix(in srgb, var(--ao-vivo-solido) 55%, transparent);
+  border-radius: var(--raio);
+  background: color-mix(in srgb, var(--ao-vivo-solido) 8%, transparent);
+  color: var(--texto-2);
+  font-size: var(--t-13);
+  line-height: 1.5;
+}
+.nota svg {
+  flex-shrink: 0;
+  margin-top: 1px;
+  color: var(--ao-vivo);
+}
+.nota strong {
+  color: var(--texto);
+}
+
+/* ---------- Banca + números ---------- */
+.painelBanca {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--borda);
+  border-radius: var(--raio);
+  background: var(--superficie);
+  overflow: hidden;
+}
+.banca {
+  display: flex;
+  flex-direction: column;
+  gap: var(--e-3);
+  padding: var(--e-5);
+  border-bottom: 1px solid var(--borda);
+}
+.bancaTopo {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--e-3);
+}
+.bancaValor {
+  font-family: var(--fonte-heroi);
+  font-size: var(--t-28);
+  line-height: 1;
+}
+.bancaControles {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--e-3);
+}
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--e-2);
+}
+.bancaForm {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-left: auto;
+}
+.bancaLinha {
+  display: flex;
+  gap: var(--e-2);
+}
+.bancaLinha .entrada {
+  width: 160px;
+}
+.rotuloCampo {
+  color: var(--texto-2);
+  font-size: var(--t-12);
+  font-weight: 600;
+}
+.opcional {
+  color: var(--texto-3);
+  font-weight: 500;
+}
+.entrada {
+  height: 52px;
+  padding: 0 var(--e-3);
+  border: 1px solid var(--borda-forte);
+  border-radius: var(--raio-controle);
+  background: var(--campo);
+  outline: none;
+  color: var(--texto);
+  font-size: var(--t-16);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.entrada:focus {
+  border-color: var(--texto-2);
+}
+.entrada[aria-invalid='true'] {
+  border-color: var(--ao-vivo-solido);
+}
+.primario {
+  height: 52px;
+  padding: 0 var(--e-5);
+  border: 0;
+  border-radius: var(--raio-controle);
+  background: var(--acento);
+  color: var(--texto-sobre-acento);
+  font-size: var(--t-14);
+  font-weight: 700;
+}
+.primario:hover {
+  background: var(--acento-hover);
+}
+.numeros {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  margin: 0;
+  padding: var(--e-5) 0;
+}
+.numeros > div + div {
+  border-left: 1px solid var(--borda);
+}
+.numeros dd:nth-child(2) {
+  font-size: 28px;
+}
+.numerosCurtos {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  max-width: 360px;
+  margin: 0;
+  padding: var(--e-4) 0;
+  border: 1px solid var(--borda);
+  border-radius: var(--raio);
+  background: var(--superficie);
+}
+.numerosCurtos > div + div {
+  border-left: 1px solid var(--borda);
+}
+
+/* ---------- Seções / tabela ---------- */
+.secao {
+  display: flex;
+  flex-direction: column;
+  gap: var(--e-3);
+}
+.secaoTopo {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.secaoTitulo {
+  font-size: var(--t-18);
+  font-weight: 700;
+}
+.secaoApoio {
+  color: var(--texto-3);
+  font-size: var(--t-13);
+}
+.tabela {
+  border: 1px solid var(--borda);
+  border-radius: var(--raio);
+  background: var(--superficie);
+  overflow: hidden;
+}
+.grupo + .grupo {
+  border-top: 1px solid var(--borda-forte);
+}
+.grupoCabecalho {
+  display: flex;
+  align-items: center;
+  gap: var(--e-2);
+  min-height: 44px;
+  padding: 0 var(--e-4) 0 var(--e-5);
+  background: color-mix(in srgb, var(--fundo) 55%, transparent);
+}
+.grupoNome {
+  font-weight: 700;
+}
+.grupoTotal {
+  margin-left: auto;
+  color: var(--texto-2);
+  font-size: var(--t-13);
+  font-weight: 700;
+}
+.linhas {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.linha {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    'jogador valor'
+    'registro registro';
+  align-items: center;
+  gap: var(--e-3) var(--e-4);
+  min-height: 72px;
+  padding: var(--e-2) var(--e-4) var(--e-2) var(--e-5);
+  border-top: 1px solid var(--borda);
+}
+.linha::before {
+  content: '';
+  position: absolute;
+  inset: 12px auto 12px 0;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background: var(--cor-apito);
+}
+.linha .jogador {
+  grid-area: jogador;
+}
+.linha .valor {
+  grid-area: valor;
+}
+.linha .registro,
+.linha .semLinha {
+  grid-area: registro;
+  padding-left: 52px;
+}
+.jogador {
+  display: flex;
+  align-items: center;
+  gap: var(--e-3);
+  min-width: 0;
+  border-radius: var(--raio-controle);
+}
+.jogador:hover .nome {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.identidade {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+}
+.nome {
+  overflow: hidden;
+  font-weight: 700;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px var(--e-3);
+}
+.valor {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+}
+.valor strong {
+  font-size: var(--t-16);
+  font-weight: 700;
+}
+.teto {
+  padding: 1px 6px;
+  border: 1px solid var(--borda-forte);
+  border-radius: 4px;
+  color: var(--texto-2);
+}
+.registro {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--e-2);
+}
+.campo {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.campo .entrada {
+  width: 88px;
+}
+.registrei {
+  height: 52px;
+  padding: 0 var(--e-4);
+  border: 1px solid var(--borda-forte);
+  border-radius: var(--raio-controle);
+  background: var(--campo);
+  font-size: var(--t-14);
+  font-weight: 700;
+  transition: background var(--rapido) var(--curva);
+}
+.registrei:hover {
+  background: var(--campo-hover);
+}
+.erroCampo {
+  flex-basis: 100%;
+  color: var(--ao-vivo);
+  font-size: var(--t-13);
+  font-weight: 600;
+}
+.semLinha {
+  color: var(--texto-3);
+  font-size: var(--t-12);
+}
+
+.realizadaCabecalho,
+.realizada {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) 1fr 1fr 0.8fr 0.8fr;
+  align-items: center;
+  gap: var(--e-4);
+  padding: 0 var(--e-5);
+}
+.realizadaCabecalho {
+  height: 40px;
+  background: var(--fundo);
+  color: var(--texto-3);
+  font-size: var(--t-12);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.realizada {
+  min-height: 52px;
+  border-top: 1px solid var(--borda);
+  font-size: var(--t-13);
+  font-weight: 600;
+}
+
+/* ---------- Grátis ---------- */
+.convite {
+  display: flex;
+  flex-direction: column;
+  gap: var(--e-2);
+  padding: var(--e-5);
+  border: 1px solid var(--acento);
+  border-radius: var(--raio);
+  background: linear-gradient(135deg, var(--acento-veu), transparent 60%), var(--superficie);
+}
+.conviteTitulo {
+  font-size: var(--t-18);
+  font-weight: 700;
+}
+.conviteTexto {
+  max-width: 60ch;
+  color: var(--texto-2);
+}
+.conviteAcao {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  height: 40px;
+  margin-top: var(--e-2);
+  padding: 0 var(--e-5);
+  border-radius: var(--raio-controle);
+  background: var(--acento);
+  color: var(--texto-sobre-acento);
+  font-weight: 700;
+}
+.silhueta {
+  margin-top: var(--e-3);
+  border: 1px solid var(--borda);
+  border-radius: var(--raio);
+}
+.silhuetaLinha {
+  display: flex;
+  align-items: center;
+  gap: var(--e-4);
+  height: 60px;
+  padding: 0 var(--e-4);
+}
+.silhuetaLinha + .silhuetaLinha {
+  border-top: 1px solid var(--borda);
+}
+.sCirculo {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--campo);
+}
+.sBarra {
+  height: 12px;
+  border-radius: 6px;
+  background: var(--campo);
+}
+
+.rodape {
+  padding-top: var(--e-3);
+  border-top: 1px solid var(--borda);
+  color: var(--texto-3);
+  font-size: var(--t-12);
+  line-height: 1.6;
+}
+
+/* ---------- Estreito ---------- */
+@container (max-width: 860px) {
+  .numeros {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    row-gap: var(--e-5);
+  }
+  .numeros > div:nth-child(odd) {
+    border-left: 0;
+  }
+  .numeros > div:last-child {
+    grid-column: 1 / -1;
+    padding-top: var(--e-4);
+    border-top: 1px solid var(--borda);
+  }
+  .linha {
+    padding-block: var(--e-3);
+  }
+  .realizadaCabecalho {
+    display: none;
+  }
+  .realizada {
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    grid-template-areas:
+      'nome un odd'
+      'linha hora hora';
+    row-gap: 2px;
+    padding-block: var(--e-3);
+  }
+  .realizada > :nth-child(1) {
+    grid-area: nome;
+  }
+  .realizada > :nth-child(2) {
+    grid-area: linha;
+    color: var(--texto-3);
+    font-size: var(--t-12);
+  }
+  .realizada > :nth-child(3) {
+    grid-area: un;
+  }
+  .realizada > :nth-child(4) {
+    grid-area: odd;
+  }
+  .realizada > :nth-child(5) {
+    grid-area: hora;
+    justify-self: end;
+  }
+}
+@container (max-width: 520px) {
+  .bancaForm {
+    margin-left: 0;
+    width: 100%;
+  }
+  .bancaLinha .entrada {
+    flex: 1;
+    width: auto;
+  }
+  .linha .registro,
+  .linha .semLinha {
+    padding-left: 0;
+  }
+  .campo {
+    flex: 1;
+  }
+  .campo .entrada {
+    width: 100%;
+  }
+  .registrei {
+    flex: 1 1 100%;
+  }
+  .titulo {
+    font-size: var(--t-22);
+  }
+}
+
+/* O registro abre sob demanda: a lista de sugestões não vira parede de campos. */
+.registrar {
+  grid-column: 1 / -1;
+}
+.registrarGatilho {
+  display: inline-flex;
+  align-items: center;
+  height: 36px;
+  padding: 0 var(--e-3);
+  border: 1px solid var(--borda-forte);
+  border-radius: var(--raio-controle);
+  color: var(--texto-2);
+  font-size: var(--t-13);
+  font-weight: 600;
+  list-style: none;
+  cursor: pointer;
+}
+.registrarGatilho::-webkit-details-marker {
+  display: none;
+}
+.registrarGatilho:hover {
+  background: var(--campo);
+  color: var(--texto);
+}
+.registrar[open] > .registrarGatilho {
+  margin-bottom: var(--e-3);
+  color: var(--texto);
+}
+
+/* Já registrada: o gatilho vira confirmação, e o formulário abre mostrando. */
+.registradaMarca {
+  color: var(--bateu-texto);
+  font-weight: 700;
+}
+.registrar[open] > .registrarGatilho .registradaMarca {
+  color: var(--bateu-texto);
+}
+
+/* ---------- Retrospectiva do mês ---------- */
+.retrospectiva {
+  display: flex;
+  flex-direction: column;
+  gap: var(--e-3);
+}

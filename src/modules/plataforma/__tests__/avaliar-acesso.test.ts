@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs'
+
 import { eq } from 'drizzle-orm'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
@@ -147,6 +149,26 @@ describe('avaliarAcesso — o nível, não um booleano', () => {
       nivel: null,
       motivo: 'bloqueio-administrativo',
     })
+  })
+})
+
+describe('avaliarAcesso — memorizado por requisição, nunca entre requisições', () => {
+  it('a exportação é `cache(` do React, com o nome e a assinatura de sempre', () => {
+    // Mesmo padrão de `sessaoAtual` (sessao-ultimo-uso.test.ts): o cache por
+    // requisição só existe dentro de uma renderização do React, que o vitest
+    // não monta — a forma é travada pela fonte.
+    const fonte = readFileSync('src/modules/plataforma/assinatura/direito.ts', 'utf8')
+    expect(fonte).toMatch(/import \{ cache \} from 'react'/)
+    expect(fonte).toMatch(/export const avaliarAcesso = cache\(async function avaliarAcesso\(/)
+  })
+
+  it('fora de uma renderização é chamada direta: mudar o banco entre duas chamadas iguais aparece', async () => {
+    // O que NÃO pode acontecer é o cache virar memória do processo: um
+    // bloqueio pelo painel tem que valer na requisição seguinte.
+    const id = await criarUsuario('cache-por-requisicao@teste.com')
+    expect((await avaliarAcesso(banco.db, id))).toMatchObject({ nivel: 'GRATIS' })
+    await banco.db.update(usuarios).set({ status: 'BLOQUEADO' }).where(eq(usuarios.id, id))
+    expect(await avaliarAcesso(banco.db, id)).toEqual({ nivel: null, motivo: 'bloqueio-administrativo' })
   })
 })
 

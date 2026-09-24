@@ -1,0 +1,291 @@
+.tela {
+  container-type: inline-size;
+  display: flex;
+  flex-direction: column;
+  gap: var(--e-8);
+  max-width: 1400px;
+}
+
+.identidade {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: var(--t-13);
+}
+.times {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  color: var(--texto);
+  font-weight: 600;
+}
+.rotuloTime {
+  color: var(--texto-3);
+  font-size: var(--t-13);
+  font-weight: 500;
+}
+.linkTime {
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.ponto {
+  color: var(--texto-3);
+}
+.nivel {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--texto-2);
+  font-weight: 500;
+}
+.alerta {
+  padding: var(--e-3) var(--e-4);
+  border: 1px solid var(--ao-vivo);
+  border-radius: var(--raio-controle);
+  background: var(--ao-vivo-veu);
+  color: var(--texto);
+  font-size: var(--t-13);
+}
+
+.recorte {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--e-3) var(--e-4);
+  margin-top: calc(var(--e-4) * -1);
+}
+.amostra {
+  color: var(--texto-3);
+  font-size: var(--t-12);
+}
+
+.numeros {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin: 0;
+  padding: var(--e-5) 0;
+  border: 1px solid var(--borda);
+  border-radius: var(--raio);
+  background: var(--superficie);
+}
+.numeros > div + div {
+  border-left: 1px solid var(--borda);
+}
+
+.aoVivo {
+  display: flex;
+  flex-direction: column;
+  gap: var(--e-2);
+  padding: var(--e-4);
+  border: 1px solid var(--ao-vivo);
+  border-radius: var(--raio);
+  background: var(--superficie);
+}
+.aoVivoTopo {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--e-3);
+  color: var(--texto-2);
+  font-size: var(--t-13);
+  font-weight: 600;
+}
+.aoVivoNumeros {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--e-6);
+  color: var(--texto-3);
+  font-size: var(--t-12);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+}
+.aoVivoNumeros strong {
+  margin-right: 4px;
+  color: var(--texto);
+  font-family: var(--fonte-heroi);
+  font-size: var(--t-28);
+  font-weight: 400;
+  letter-spacing: 0;
+}
+.porQuarto {
+  color: var(--texto-3);
+  font-size: var(--t-12);
+}
+
+.colunas {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--e-8);
+}
+.lateral {
+  display: flex;
+  flex-direction: column;
+  gap: var(--e-8);
+  min-width: 0;
+}
+
+/* Apitos */
+.nada {
+  padding: var(--e-5);
+  border: 1px dashed var(--borda-forte);
+  border-radius: var(--raio);
+  color: var(--texto-2);
+  font-size: var(--t-13);
+  text-align: center;
+}
+.apitos {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border: 1px solid var(--borda);
+  border-radius: var(--raio);
+  background: var(--superficie);
+  overflow: hidden;
+}
+.apito {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--e-3);
+  min-height: 52px;
+  padding: var(--e-2) var(--e-4);
+}
+.apito + .apito {
+  border-top: 1px solid var(--borda);
+}
+.apitoData {
+  color: var(--texto-3);
+  font-size: var(--t-12);
+  font-weight: 600;
+}
+.apitoMercado {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  color: var(--texto-3);
+  font-size: var(--t-12);
+}
+.apitoMercado strong {
+  color: var(--texto);
+  font-size: var(--t-13);
+}
+.veredito {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--falhou-texto);
+  font-size: var(--t-13);
+  font-weight: 700;
+  white-space: nowrap;
+}
+.veredito[data-bateu='true'] {
+  color: var(--bateu-texto);
+}
+.vereditoIcone {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--falhou);
+  color: var(--texto);
+  font-size: var(--t-12);
+}
+.veredito[data-bateu='true'] .vereditoIcone {
+  background: var(--bateu);
+}
+.pendente {
+  color: var(--texto-3);
+  font-size: var(--t-12);
+  font-weight: 600;
+  text-align: right;
+}
+
+/* Jogo a jogo */
+.jogoLink {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  font-weight: 600;
+}
+.jogoLink:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.jogoData {
+  color: var(--texto-3);
+  font-size: var(--t-12);
+}
+.resultado {
+  font-weight: 700;
+}
+.resultado span {
+  color: var(--texto-3);
+  font-weight: 500;
+}
+.resultado[data-r='V'] {
+  color: var(--bateu-texto);
+}
+.resultado[data-r='D'] {
+  color: var(--falhou-texto);
+}
+
+/* Números completos */
+.grupos {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: var(--e-2);
+}
+.grupo {
+  padding: var(--e-4);
+  border: 1px solid var(--borda);
+  border-radius: var(--raio);
+  background: var(--superficie);
+}
+.grupoTitulo {
+  margin-bottom: var(--e-2);
+  font-size: var(--t-16);
+  font-weight: 700;
+  color: var(--texto);
+}
+.grupoLista {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  font-size: var(--t-13);
+}
+.grupoLista div {
+  display: flex;
+  justify-content: space-between;
+}
+.grupoLista dt {
+  color: var(--texto-2);
+}
+.grupoLista dd {
+  margin: 0;
+  font-weight: 700;
+}
+
+@container (min-width: 1080px) {
+  .colunas {
+    grid-template-columns: minmax(0, 1.6fr) minmax(320px, 1fr);
+    align-items: start;
+  }
+  .grupos {
+    grid-template-columns: 1fr;
+  }
+}
+@container (max-width: 600px) {
+  .numeros {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    row-gap: var(--e-5);
+  }
+  .numeros > div:nth-child(3) {
+    border-left: 0;
+  }
+}

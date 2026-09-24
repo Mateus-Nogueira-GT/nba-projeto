@@ -8,8 +8,8 @@ import {
 import { simularAte } from '@/modules/ingestao/demo/temporada'
 import { portaLLMDoAmbiente } from '@/modules/ingestao/llm'
 import { revalidateTag } from 'next/cache'
-import { TAG_LATERAL } from '@/app/(app)/lateral/leitura'
-import { TAG_FEED } from '@/app/(app)/feed-cacheado'
+import { TAG_LATERAL } from '@/app/_cache/lateral'
+import { TAG_FEED } from '@/app/_cache/feed'
 import { TAG_RANKING } from '@/app/api/chat/ranking'
 
 export const dynamic = 'force-dynamic'

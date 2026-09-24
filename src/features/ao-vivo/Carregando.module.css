@@ -1,0 +1,78 @@
+.tela {
+  display: flex;
+  flex-direction: column;
+  gap: var(--e-3);
+  min-width: 0;
+  max-width: 1400px;
+}
+.titulo,
+.subtitulo,
+.jogo,
+.placar,
+.barra,
+.circulo {
+  border-radius: 6px;
+  background: var(--superficie);
+  animation: pulsar 1.4s ease-in-out infinite;
+}
+.titulo {
+  width: 260px;
+  height: 40px;
+}
+.subtitulo {
+  width: 320px;
+  height: 16px;
+  margin-bottom: var(--e-2);
+}
+.seletor {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: var(--e-3);
+}
+.jogo {
+  height: 96px;
+  border-radius: var(--raio);
+}
+.placar {
+  height: 180px;
+  border-radius: var(--raio);
+}
+.tabela {
+  border: 1px solid var(--borda);
+  border-radius: var(--raio);
+  overflow: hidden;
+}
+.linha {
+  display: flex;
+  align-items: center;
+  gap: var(--e-5);
+  height: 72px;
+  padding: 0 var(--e-5);
+  border-top: 1px solid var(--borda);
+}
+.linha:first-child {
+  border-top: 0;
+}
+.circulo {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+}
+.barra {
+  height: 12px;
+}
+@keyframes pulsar {
+  50% {
+    opacity: 0.5;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .titulo,
+  .subtitulo,
+  .jogo,
+  .placar,
+  .barra,
+  .circulo {
+    animation: none;
+  }
+}

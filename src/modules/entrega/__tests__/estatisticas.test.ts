@@ -1,7 +1,5 @@
 import { readFileSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
-import { renderToStaticMarkup } from 'react-dom/server'
-import { createElement } from 'react'
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 
 import { bancoDeTeste } from '../../dominio/__tests__/ajuda-banco'
@@ -15,7 +13,6 @@ import {
   mediasJogador,
   times,
 } from '../../dominio/db/schema'
-import { CardEntrada, UltimaAtualizacao } from '../../../design-system/componentes'
 import { buscar, listarTimes } from '../estatisticas/busca'
 import { telaDoJogador } from '../estatisticas/jogador'
 import { telaJogosDoDia } from '../estatisticas/jogos-do-dia'
@@ -33,7 +30,6 @@ const TEMPORADA = '2026'
 const CALENDARIO = { mesInicio: 1, formato: 'ano_inicial', fuso: 'UTC' } as const
 const RECORTE = { temporada: TEMPORADA, calendario: CALENDARIO }
 const HOJE = '2026-08-19'
-const AGORA = new Date('2026-08-19T23:30:00.000Z')
 
 let banco: Awaited<ReturnType<typeof bancoDeTeste>>
 let idPorNome: Map<string, string>
@@ -218,30 +214,17 @@ beforeEach(semear)
 // ===========================================================================
 
 describe('os dois caminhos chegam na mesma tela', () => {
-  it('a busca do menu e o nome no card produzem a MESMA rota', async () => {
+  it('a busca do menu monta a rota do jogador achado', async () => {
     const lukaId = idPorNome.get('Luka Dončić')!
 
     // Caminho 1 — menu: o usuário busca e clica no resultado.
     const [achado] = await buscar(banco.db, 'Doncic', { apenas: 'JOGADOR' })
     expect(achado).toBeDefined()
     expect(achado!.id).toBe(lukaId)
-    const rotaPeloMenu = rotaDoJogador(achado!.id)
-
-    // Caminho 2 — card: o nome do jogador dentro da entrada sugerida.
-    const html = renderToStaticMarkup(
-      createElement(CardEntrada, {
-        nome: 'Luka Dončić',
-        jogadorHref: rotaDoJogador(lukaId),
-        timeSigla: 'LAL',
-        posicao: 'PG',
-        atributo: 'PONTOS' as const,
-        nivelJogador: 'MVP' as const,
-        nivelApito: 1 as const,
-      }),
-    )
-    const href = /href="([^"]+)"/.exec(html)?.[1]
-
-    expect(href).toBe(rotaPeloMenu)
+    expect(rotaDoJogador(achado!.id)).toBe(rotaDoJogador(lukaId))
+    // Caminho 2 — o nome do jogador nas telas do v2 passa pela MESMA
+    // `rotaDoJogador`: prova de fonte em `features/__tests__/links-de-jogador.test.ts`
+    // (Tarefa 12, fix round 2). Aqui fica só a entrega.
   })
 
   it('a rota dos dois caminhos resolve numa tela que existe', async () => {
@@ -264,21 +247,6 @@ describe('os dois caminhos chegam na mesma tela', () => {
     expect(tela!.perfilNumeros.ataque.lancePercentual).toBe(85.7)
   })
 
-  it('o card sem href não vira link — a galeria não tem para onde navegar', () => {
-    const html = renderToStaticMarkup(
-      createElement(CardEntrada, {
-        nome: 'Luka Dončić',
-        timeSigla: 'LAL',
-        posicao: null,
-        atributo: 'PONTOS' as const,
-        nivelJogador: 'MVP' as const,
-        nivelApito: 1 as const,
-      }),
-    )
-    // `<a` sozinho casaria com `<article` — o que interessa é a âncora.
-    expect(html).not.toMatch(/<a\s+href=/)
-    expect(html).toContain('Luka Dončić')
-  })
 })
 
 // ===========================================================================
@@ -570,35 +538,13 @@ describe('horário da última atualização', () => {
     expect(tela!.atualizacao.fonte).toBe('classificação')
   })
 
-  it('sem dado nenhum, admite que não há dado em vez de datar 1970', async () => {
+  it('sem dado nenhum, a leitura devolve o instante zero — e a tela o lê como "sem dado"', async () => {
+    // A metade da TELA ("sem dado para exibir", nunca 1970; o tempo decorrido
+    // e o horário absoluto) mora em `features/estatisticas/__tests__/comum.test.tsx`
+    // desde a Tarefa 12 do front v2. Aqui fica o contrato do dado.
     const tela = await telaJogosDoDia(banco.db, '2020-01-01', 'America/Sao_Paulo')
     expect(tela.jogos).toHaveLength(0)
     expect(tela.atualizacao.em.getTime()).toBe(0)
-
-    const html = renderToStaticMarkup(
-      createElement(UltimaAtualizacao, {
-        fuso: 'America/Sao_Paulo',
-        em: tela.atualizacao.em,
-        fonte: tela.atualizacao.fonte,
-        agora: AGORA,
-      }),
-    )
-    expect(html).toContain('sem dado para exibir')
-    expect(html).not.toContain('1970')
-  })
-
-  it('o componente mostra o tempo decorrido e o horário absoluto', () => {
-    const html = renderToStaticMarkup(
-      createElement(UltimaAtualizacao, {
-        fuso: 'America/Sao_Paulo',
-        em: new Date('2026-08-19T23:27:00.000Z'),
-        fonte: 'ao vivo',
-        agora: AGORA,
-      }),
-    )
-    expect(html).toContain('há 3 min')
-    expect(html).toContain('ao vivo')
-    expect(html).toContain('2026-08-19T23:27:00.000Z')
   })
 
   /**
@@ -621,14 +567,25 @@ describe('horário da última atualização', () => {
     const encontradas = paginas(raiz)
     expect(encontradas.length).toBeGreaterThanOrEqual(3)
 
+    // Front v2: a página só monta a tela de `features/estatisticas`; é a TELA
+    // que desenha o rodapé. A página tem de montar uma `Tela*`, e a tela que
+    // ela monta, informar a última atualização.
     for (const caminho of encontradas) {
       const fonte = readFileSync(caminho, 'utf8')
-      expect(fonte, `${caminho} não informa a última atualização`).toContain('<UltimaAtualizacao')
+      const tela = /import \{ (Tela\w+) \} from '@\/features\/estatisticas\/(Tela\w+)'/.exec(fonte)
+      expect(tela, `${caminho} não monta uma tela da aba`).not.toBeNull()
+      expect(fonte, `${caminho} importa ${tela![1]} e não o desenha`).toContain(`<${tela![1]} `)
+      const componente = readFileSync(`src/features/estatisticas/${tela![2]}.tsx`, 'utf8')
+      expect(componente, `${tela![2]} não informa a última atualização`).toContain('<UltimaAtualizacao')
     }
   })
 
   it('nenhum arquivo da aba importa o motor', () => {
-    const raizes = ['src/app/(app)/estatisticas', 'src/modules/entrega/estatisticas']
+    const raizes = [
+      'src/app/(app)/estatisticas',
+      'src/features/estatisticas',
+      'src/modules/entrega/estatisticas',
+    ]
 
     function arquivos(dir: string): string[] {
       return readdirSync(dir, { withFileTypes: true }).flatMap((e) => {

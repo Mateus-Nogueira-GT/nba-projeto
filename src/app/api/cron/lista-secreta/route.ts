@@ -6,7 +6,7 @@ import { publicarListaSecreta } from '@/modules/entrega/lista-secreta'
 import { rulesetAtivo } from '@/modules/entrega/ruleset-ativo'
 import { dataDeReferencia } from '@/modules/dominio/rodada'
 import { portaLLMDoAmbiente } from '@/modules/ingestao/llm'
-import { tagDoFeed } from '@/app/(app)/feed-cacheado'
+import { tagDoFeed } from '@/app/_cache/feed'
 import { contextoDoJob } from '@/modules/ingestao/jobs/contexto'
 import { executarJobComLease } from '@/modules/ingestao/jobs/execucao'
 import { coletarOddsDoDia } from '@/modules/ingestao/odds/coleta-do-dia'
@@ -55,7 +55,7 @@ export async function GET(requisicao: Request): Promise<Response> {
         // LANÇAR nas narrativas, a invalidação abaixo não roda; esta sim — o
         // `executarCronProtegido` devolve 500 e o Next executa as tags
         // enfileiradas ao responder. Morte por `maxDuration` não responde, e
-        // aí vale o `revalidate: 600` do feed (feed-cacheado.ts).
+        // aí vale o `revalidate: 600` do feed (_cache/feed.ts).
         aoGravarSnapshot: () => revalidateTag(tagDoFeed(dataReferencia), 'max'),
         // W2-4: uma coleta de odds extra, só antes da PRIMEIRA publicação do
         // dia (o gancho decide isso, não aqui). O cron de odds de 11:00 UTC

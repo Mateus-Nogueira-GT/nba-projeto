@@ -86,6 +86,18 @@ const semEntidades = (t: string) =>
   t.replace(/&#x27;/g, "'").replace(/&quot;/g, '"').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&')
 const textoDaTela = (html: string) => semEntidades(html.replace(/<[^>]+>/g, ''))
 
+/**
+ * Front v2 (Tarefa 6): a visão Realizadas é uma tabela — uma `<li>` por
+ * registro, com as células jogador · linha · unidades · odd · hora. Devolve
+ * as células da linha de quem tem este nome (o sujeito vem do feed).
+ */
+function celulasDe(html: string, nome: string): string[] {
+  const linhas = [...html.matchAll(/<li\b[^>]*>([\s\S]*?)<\/li>/g)].map((m) => m[1]!)
+  const linha = linhas.find((l) => textoDaTela(l).includes(nome))
+  expect(linha, `nenhuma linha registrada para ${nome}`).toBeDefined()
+  return [...linha!.matchAll(/<span\b[^>]*>([^<]*)<\/span>/g)].map((m) => semEntidades(m[1]!).trim())
+}
+
 function formulario(item: ItemFeed, unidades: string, odd: string): FormData {
   const f = new FormData()
   f.set('dataReferencia', HOJE)
@@ -98,7 +110,7 @@ function formulario(item: ItemFeed, unidades: string, odd: string): FormData {
 }
 
 async function acionar(f: FormData): Promise<string> {
-  const { registrarEntrada } = await import('../(app)/gestao/acoes')
+  const { registrarEntrada } = await import('../../features/gestao/acoes')
   try {
     await registrarEntrada(f)
   } catch (erro) {
@@ -120,10 +132,9 @@ describe('registrar → redirecionar → ver', () => {
     expect(destino).toContain('/gestao?ver=realizadas')
 
     const html = await renderizar({ ver: 'realizadas' })
-    const texto = textoDaTela(html)
-    expect(texto).toContain(itens[0]!.nome)
-    expect(texto).toContain('1.5 unidades')
-    expect(texto).toContain('odd 1.62')
+    const celulas = celulasDe(html, itens[0]!.nome)
+    expect(celulas).toContain('1,5 un.')
+    expect(celulas).toContain('1,62')
 
     const linhas = await linhasDe(usuarioA)
     expect(linhas).toHaveLength(1)
@@ -134,10 +145,11 @@ describe('registrar → redirecionar → ver', () => {
     como(usuarioA, 'a@teste.com')
     await acionar(formulario(itens[0]!, '3', '2.10'))
 
-    const texto = textoDaTela(await renderizar({ ver: 'realizadas' }))
-    expect(texto).toContain('3 unidades')
-    expect(texto).toContain('odd 2.10')
-    expect(texto).not.toContain('1.5 unidades')
+    const html = await renderizar({ ver: 'realizadas' })
+    const celulas = celulasDe(html, itens[0]!.nome)
+    expect(celulas).toContain('3 un.')
+    expect(celulas).toContain('2,10')
+    expect(textoDaTela(html)).not.toContain('1,5 un.')
 
     const linhas = await linhasDe(usuarioA)
     expect(linhas).toHaveLength(1)
@@ -171,16 +183,16 @@ describe('o que a visão Realizadas NÃO mostra', () => {
       agora: AGORA,
     })
     const texto = textoDaTela(await renderizar({ ver: 'realizadas' }))
-    expect(texto).not.toContain('9.5 unidades')
+    expect(texto).not.toContain('9,5 un.')
   })
 
   it('a entrada de OUTRO usuário não aparece — e aparece para ele', async () => {
     como(usuarioB, 'b@teste.com')
     await acionar(formulario(itens[3]!, '7.5', ''))
-    expect(textoDaTela(await renderizar({ ver: 'realizadas' }))).toContain('7.5 unidades')
+    expect(textoDaTela(await renderizar({ ver: 'realizadas' }))).toContain('7,5 un.')
 
     como(usuarioA, 'a@teste.com')
-    expect(textoDaTela(await renderizar({ ver: 'realizadas' }))).not.toContain('7.5 unidades')
+    expect(textoDaTela(await renderizar({ ver: 'realizadas' }))).not.toContain('7,5 un.')
   })
 
   it('N entradas saem da mais recente para a mais antiga', async () => {
@@ -214,7 +226,8 @@ describe('banca', () => {
     for (const banca of ['abc', '0', '-5']) {
       const html = await renderizar({ banca })
       expect(html).not.toContain('NaN')
-      expect(html).toMatch(/aria-current="page"[^>]*>R\$\s?1\.000,00</)
+      // Front v2: o chip ativo anuncia `aria-current="true"` e escreve sem centavos.
+      expect(html).toMatch(/aria-current="true"[^>]*>R\$\s?1\.000</)
     }
   })
 
@@ -222,16 +235,18 @@ describe('banca', () => {
     como(usuarioA, 'a@teste.com')
     const padrao = await renderizar({ banca: '1000' })
     const html = await renderizar({ banca: '500' })
-    expect(html).toMatch(/aria-current="page"[^>]*>R\$\s?500,00</)
-    expect(html).not.toMatch(/aria-current="page"[^>]*>R\$\s?1\.000,00</)
+    expect(html).toMatch(/aria-current="true"[^>]*>R\$\s?500</)
+    expect(html).not.toMatch(/aria-current="true"[^>]*>R\$\s?1\.000</)
 
     // O valor que vem logo depois de cada rótulo, e a exposição total (a soma
     // das entradas dos cards). Compara as duas bancas em vez de cravar número:
     // o `gestao_banca` do ruleset é de demonstração e vai mudar, e "R$ 5,00"
     // solto na página também é o valor de um card — não provava a unidade.
+    // Front v2: cada número é um par `<dt>rótulo</dt><dd>valor</dd>`, e a
+    // exposição total virou um desses números.
     const valor = (h: string, rotulo: string) =>
-      h.match(new RegExp(`>${rotulo}</p><p[^>]*>([^<]+)<`))?.[1]
-    const exposicao = (h: string) => textoDaTela(h).match(/exposição total de ([^(]+)\(/)?.[1]?.trim()
+      h.match(new RegExp(`>${rotulo}</dt><dd[^>]*>([^<]+)<`))?.[1]
+    const exposicao = (h: string) => valor(h, 'Exposição total')
     for (const rotulo of ['1 unidade', 'Teto por entrada', 'Parar no lucro', 'Parar no prejuízo']) {
       const antes = valor(padrao, rotulo)
       const depois = valor(html, rotulo)

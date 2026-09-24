@@ -1,9 +1,9 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { ConviteDoPlano } from '../../components/planos/ConviteDoPlano'
-import { JogosDoDia } from '../../components/planos/JogosDoDia'
-import { BENEFICIOS_POR_NIVEL } from '../../components/planos/matriz'
+// Front v2 (Tarefa 7): a vitrine de /assinar é `features/assinatura/TelaPlanos`,
+// que lê a matriz de `features/assinatura/matriz`.
+import { BENEFICIOS_POR_NIVEL } from '@/features/assinatura/matriz'
 
 let nivelNoTeste: 'GRATIS' | 'MVP' | 'ALL_STAR' = 'GRATIS'
 let modalidadeNoTeste: 'MENSAL' | 'TEMPORADA' | null = null
@@ -27,49 +27,11 @@ afterAll(() => {
   vi.unstubAllEnvs()
 })
 
-describe('ConviteDoPlano', () => {
-  it('diz o recurso, o nível que libera, e leva para /assinar com nível e volta', () => {
-    const html = renderToStaticMarkup(
-      <ConviteDoPlano minimo="MVP" recurso="A Lista Secreta" voltar="/" />,
-    )
-    expect(html).toContain('A Lista Secreta')
-    expect(html).toContain('MVP')
-    expect(html).toMatch(/href="\/assinar\?nivel=MVP&(amp;)?voltar=%2F"/)
-    expect(html).not.toContain('ALL_STAR')
-    expect(html.toLowerCase()).not.toContain('probabilidade')
-  })
-})
-
-describe('JogosDoDia', () => {
-  it('lista cada confronto com as siglas e a hora no fuso — e nada de apito', () => {
-    const html = renderToStaticMarkup(
-      <JogosDoDia
-        fuso="America/Sao_Paulo"
-        jogos={[
-          {
-            id: 'j1',
-            casaSigla: 'AAA',
-            visitanteSigla: 'BBB',
-            dataHoraUtc: new Date('2026-01-15T23:30:00.000Z'),
-            status: 'AGENDADO',
-            quartoAtual: null,
-            placarCasa: null,
-            placarVisitante: null,
-          },
-        ]}
-      />,
-    )
-    expect(html).toContain('AAA')
-    expect(html).toContain('BBB')
-    expect(html).toContain('20:30') // 23:30Z em Brasília
-    expect(html).not.toMatch(/confian|nível do apito|turbo/i)
-  })
-
-  it('sem jogos, diz que não há rodada — nunca uma lista vazia muda', () => {
-    const html = renderToStaticMarkup(<JogosDoDia fuso="America/Sao_Paulo" jogos={[]} />)
-    expect(html).toContain('Sem jogos hoje')
-  })
-})
+// Front v2 (Tarefa 12): `ConviteDoPlano` e `JogosDoDia` eram peças da home
+// antiga do grátis. O que eles garantiam vive na fumaça da Lista do v2
+// (`features/lista/__tests__/fumaca.test.tsx`): o convite volta para a tela de
+// origem com `?nivel=…&voltar=…`, e o grátis recebe só os jogos do dia — nenhum
+// campo de item do feed no dado, nenhum jogadorId no HTML.
 
 describe('a página /assinar como comparação', () => {
   it('lista os três níveis com os benefícios da matriz e destaca o pedido em ?nivel=', async () => {
@@ -78,11 +40,22 @@ describe('a página /assinar como comparação', () => {
     const html = renderToStaticMarkup(
       await Pagina({ searchParams: Promise.resolve({ nivel: 'ALL_STAR', voltar: '/fire-live' }) }),
     )
-    for (const beneficio of BENEFICIOS_POR_NIVEL.MVP) expect(html).toContain(beneficio)
-    for (const beneficio of BENEFICIOS_POR_NIVEL.ALL_STAR) expect(html).toContain(beneficio)
+    // Front v2 (Tarefa 7): o "(em breve)" do texto vira uma etiqueta "em breve"
+    // colada no benefício — a promessa continua dizendo a verdade.
+    for (const beneficio of [...BENEFICIOS_POR_NIVEL.MVP, ...BENEFICIOS_POR_NIVEL.ALL_STAR]) {
+      const emBreve = beneficio.endsWith(' (em breve)')
+      const textoVisivel = beneficio.replace(' (em breve)', '')
+      expect(html).toContain(emBreve ? `${textoVisivel}<span` : textoVisivel)
+      if (emBreve) expect(html).toMatch(new RegExp(`${textoVisivel.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}<span[^>]*>em breve<`))
+    }
     expect(html).toContain('Grátis')
     expect(html).toContain('All Star')
-    expect(html).toMatch(/aria-current="true"[^>]*>[^<]*All Star|All Star[^<]*<[^>]*aria-current="true"/)
+    // Front v2 (Tarefa 7): o plano PEDIDO em ?nivel= é o destacado
+    // (`data-destaque`); `aria-current` passou a marcar o plano ATUAL da pessoa
+    // ("Seu plano") — que é o que o atributo significa.
+    expect(html).toMatch(/data-destaque="true"[^>]*aria-labelledby="plano-ALL_STAR"/)
+    expect(html.match(/data-destaque="true"/g) ?? []).toHaveLength(1)
+    expect(html).toMatch(/aria-current="true"[^>]*>Grátis</)
     expect(html).toMatch(/href="\/fire-live"/)
     expect(html.toLowerCase()).not.toContain('probabilidade')
   })
@@ -112,6 +85,17 @@ describe('o link "Voltar" — só caminho interno volta', () => {
     ['/\\evil.com', '/'], // barra invertida: o caso que a validação por prefixo deixava passar
     ['\\\\evil.com', '/'],
     ['/../admin', '/admin'],
+    // Fix round 1 da Tarefa 7: a normalização do caminho acontece DEPOIS da
+    // checagem de origem — `/.//evil.com` resolve para o pathname `//evil.com`
+    // com a origem ainda "interna", e o `href` sairia protocol-relative.
+    ['/.//evil.com', '/'],
+    ['/..//evil.com', '/'],
+    ['/a/..//evil.com', '/'],
+    ['x/..//evil.com', '/'],
+    ['/./\\evil.com', '/'],
+    ['/a\\b', '/'],
+    ['/a\u0000b', '/'],
+    ['/a\tb', '/'],
     ['', '/'],
     [undefined, '/'],
   ]

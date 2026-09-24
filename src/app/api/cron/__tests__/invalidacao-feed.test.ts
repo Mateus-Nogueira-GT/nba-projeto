@@ -25,11 +25,16 @@ describe('o feed em cache é invalidado por quem publica', () => {
   })
 
   it('as telas leem o feed pelo cache, nunca por lerFeed/linhasDoJogador direto', () => {
+    // Front v2 (Tarefa 3): a Lista e o detalhe do apito leem nas `carregar.ts`
+    // de `src/features`, e a coluna da Lista (turbos do dia) no resumo. O Ao
+    // Vivo (Tarefa 4) lê a Lista do dia em `features/ao-vivo/carregar.ts`.
     for (const p of [
-      'src/app/(app)/page.tsx',
-      'src/app/(app)/fire-live/page.tsx',
-      'src/app/(app)/resultados/[data]/page.tsx',
-      'src/app/(app)/apito/[jogadorId]/page.tsx',
+      'src/features/lista/carregar.ts',
+      'src/features/lista/ResumoDaRodada.tsx',
+      'src/features/apito/carregar.ts',
+      'src/features/ao-vivo/carregar.ts',
+      // Resultados (Tarefa 6): o carregador do v2.
+      'src/features/resultados/carregar.ts',
     ]) {
       const fonte = ler(p)
       expect(fonte, p).toContain('lerFeedCacheado(')

@@ -36,7 +36,7 @@ test.describe('Gestão de banca — botão a botão', () => {
 
   test('assinante vê o formulário, não a silhueta', async ({ page }) => {
     await expect(page.locator('input[name="unidades"]').first()).toBeVisible()
-    await expect(page.getByText('Registrar entradas começa no')).toHaveCount(0)
+    await expect(page.getByText('Registrar entradas é do plano MVP')).toHaveCount(0)
   })
 
   test('chips e Aplicar mudam a banca pela URL', async ({ page }) => {

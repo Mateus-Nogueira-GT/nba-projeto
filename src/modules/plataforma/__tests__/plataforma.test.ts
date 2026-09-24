@@ -814,16 +814,17 @@ describe('credenciais fora do código', () => {
 // ===========================================================================
 
 describe('toda rota do painel exige ADMIN', () => {
+  // Desde o front v2 as telas moram em `(app)/admin` e as ações em
+  // `features/admin`. A varredura COMPLETA (toda página, toda ação) está em
+  // `features/admin/__tests__/portao.test.ts`; aqui ficam as três telas e as
+  // duas ações que este teste sempre vigiou.
   const paginas = [
-    'src/app/(admin)/admin/usuarios/page.tsx',
-    'src/app/(admin)/admin/mapeamento/page.tsx',
-    'src/app/(admin)/admin/galeria/page.tsx',
+    'src/app/(app)/admin/usuarios/page.tsx',
+    'src/app/(app)/admin/mapeamento/page.tsx',
+    'src/app/(app)/admin/galeria/page.tsx',
   ]
 
-  const acoes = [
-    'src/app/(admin)/admin/usuarios/acoes.ts',
-    'src/app/(admin)/admin/mapeamento/acoes.ts',
-  ]
+  const acoes = ['src/features/admin/usuarios/acoes.ts', 'src/features/admin/mapeamento/acoes.ts']
 
   // Procura a CHAMADA, não o identificador: a linha de import sozinha
   // satisfazia a versão anterior deste teste, e uma mutação que trocava a
@@ -847,14 +848,14 @@ describe('toda rota do painel exige ADMIN', () => {
   })
 
   it('a confirmação de vínculo registra QUEM confirmou, não a string "admin"', () => {
-    const fonte = readFileSync('src/app/(admin)/admin/mapeamento/acoes.ts', 'utf8')
+    const fonte = readFileSync('src/features/admin/mapeamento/acoes.ts', 'utf8')
     expect(fonte).not.toMatch(/confirmadoPor:\s*'admin'/)
     expect(fonte).toContain('sessao.email')
   })
 
   it('a curadoria envia e persiste o id externo real do provedor', () => {
-    const pagina = readFileSync('src/app/(admin)/admin/mapeamento/page.tsx', 'utf8')
-    const acao = readFileSync('src/app/(admin)/admin/mapeamento/acoes.ts', 'utf8')
+    const pagina = readFileSync('src/app/(app)/admin/mapeamento/page.tsx', 'utf8')
+    const acao = readFileSync('src/features/admin/mapeamento/acoes.ts', 'utf8')
 
     expect(pagina).toContain('name="provedorPlayerId"')
     expect(pagina).toContain('value={c.idExterno}')

@@ -1,0 +1,146 @@
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--e-4);
+}
+.campo {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.rotulo {
+  color: var(--texto-2);
+  font-size: var(--t-14);
+  font-weight: 600;
+}
+.linhaRotulo {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--e-3);
+}
+.entrada {
+  width: 100%;
+  min-height: 52px;
+  padding: 0 var(--e-4);
+  border: 1px solid var(--borda-forte);
+  border-radius: var(--raio-controle);
+  background: var(--campo);
+  color: var(--texto);
+  font-size: var(--t-16);
+  transition: border-color var(--rapido) var(--curva);
+}
+.entrada::placeholder {
+  color: var(--texto-3);
+}
+.entrada:hover {
+  border-color: var(--texto-3);
+}
+.entrada:focus-visible {
+  outline: none;
+  border-color: var(--acento-texto);
+  box-shadow: 0 0 0 3px var(--acento-veu);
+}
+.comBotao {
+  position: relative;
+}
+.comBotao .entrada {
+  padding-right: 52px;
+}
+.olho {
+  position: absolute;
+  top: 50%;
+  right: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  margin-top: -19px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--texto-3);
+}
+.olho:hover {
+  color: var(--texto);
+}
+.ajuda {
+  color: var(--texto-2);
+  font-size: var(--t-13);
+  line-height: 1.5;
+}
+.linkPequeno {
+  display: inline-flex;
+  align-items: center;
+  min-height: 40px;
+  color: var(--acento-texto);
+  font-size: var(--t-14);
+  font-weight: 600;
+}
+.linkPequeno:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.primario {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 52px;
+  margin-top: var(--e-2);
+  border: 0;
+  border-radius: var(--raio-controle);
+  background: var(--acento);
+  color: var(--texto-sobre-acento);
+  font-size: var(--t-16);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  transition: background var(--rapido) var(--curva);
+}
+.primario:hover {
+  background: var(--acento-hover);
+}
+.primario:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+.erro,
+.aviso {
+  padding: var(--e-3) var(--e-4);
+  border-radius: var(--raio-controle);
+  font-size: var(--t-14);
+  line-height: 1.45;
+}
+.erro {
+  border: 1px solid color-mix(in srgb, var(--ao-vivo) 45%, transparent);
+  background: var(--ao-vivo-veu);
+  color: var(--ao-vivo);
+}
+.aviso {
+  border: 1px solid color-mix(in srgb, var(--bateu-texto) 35%, transparent);
+  background: var(--apito-3-veu);
+  color: var(--bateu-texto);
+}
+.rodape {
+  margin-top: var(--e-6);
+  padding-top: var(--e-5);
+  border-top: 1px solid var(--borda);
+  color: var(--texto-2);
+  font-size: var(--t-14);
+  line-height: 1.6;
+}
+.rodape a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 40px;
+  color: var(--acento-texto);
+  font-weight: 600;
+}
+
+.regra {
+  color: var(--texto-3);
+  font-size: var(--t-12);
+  line-height: 1.5;
+}

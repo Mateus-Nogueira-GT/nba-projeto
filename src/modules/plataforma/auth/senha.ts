@@ -4,7 +4,7 @@ import { z } from 'zod'
 
 /**
  * Política de senha da NIP — uma só, para o cadastro (`assinatura/cadastro.ts`)
- * e para a troca de senha no perfil (`app/(app)/conta/acoes.ts`). Duas
+ * e para a troca de senha no perfil (`features/conta/acoes.ts`). Duas
  * políticas deixaria alguém entrar com senha forte e trocar por doze letras
  * iguais. Mora aqui, ao lado de `gerarHash`/`conferirSenha`, porque é sobre a
  * mesma coisa: o que conta como senha válida nesta conta.

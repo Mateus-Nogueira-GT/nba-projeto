@@ -1,0 +1,84 @@
+.folha {
+  width: min(480px, 100vw);
+  max-width: 100vw;
+  max-height: min(80dvh, 720px);
+  margin: auto;
+  padding: 0;
+  border: 1px solid var(--borda-forte);
+  border-radius: 16px;
+  background: var(--superficie);
+  color: var(--texto);
+}
+.folha::backdrop {
+  background: color-mix(in srgb, var(--breu) 72%, transparent);
+}
+.folha[open] {
+  animation: entrar var(--medio) var(--curva);
+}
+.conteudo {
+  display: flex;
+  flex-direction: column;
+  max-height: inherit;
+}
+.cabecalho {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--e-5) var(--e-5) var(--e-3);
+}
+.alca {
+  display: none;
+}
+.titulo {
+  font-size: var(--t-16);
+  font-weight: 700;
+}
+.fechar {
+  display: inline-flex;
+  padding: 6px;
+  border: 0;
+  border-radius: var(--raio-controle);
+  background: var(--campo);
+  color: var(--texto-2);
+}
+.corpo {
+  overflow-y: auto;
+  padding: var(--e-2) var(--e-5) calc(var(--e-6) + env(safe-area-inset-bottom));
+}
+
+@keyframes entrar {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+}
+
+@media (max-width: 1023px) {
+  .folha {
+    width: 100vw;
+    margin: auto 0 0;
+    border-radius: 20px 20px 0 0;
+    border-bottom: 0;
+  }
+  .folha[open] {
+    animation-name: subir;
+  }
+  .alca {
+    display: block;
+    position: absolute;
+    top: 8px;
+    left: 50%;
+    width: 36px;
+    height: 4px;
+    margin-left: -18px;
+    border-radius: 2px;
+    background: var(--borda-forte);
+  }
+  @keyframes subir {
+    from {
+      transform: translateY(40%);
+      opacity: 0;
+    }
+  }
+}

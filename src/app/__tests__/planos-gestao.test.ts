@@ -20,7 +20,7 @@ import type { NivelDoPlano } from '../../modules/plataforma/assinatura/nivel-do-
  * formulário na tela não é o portão (isso é a Task 8 do `acoes.ts`), aqui só
  * se prova o que a TELA mostra.
  *
- * Mesmo arnês de `telas-05-gestao.test.ts` (temporada simulada, uma entrada
+ * Mesmo arnês da antiga `telas-05-gestao.test.ts` (temporada simulada, uma entrada
  * realizada semeada) mais o ACESSO MUTÁVEL de `planos-home.test.ts` /
  * `planos-fire-live.test.ts`: um banco só, `nivelNoTeste` alterna a
  * renderização entre GRATIS e MVP no mesmo arquivo. NENHUMA asserção nomeia
@@ -63,7 +63,7 @@ beforeAll(async () => {
 
   // A aba Realizadas é histórico e precisa de UMA linha semeada para provar
   // que o grátis continua vendo o que já registrou. `unidadesEmTexto` é a
-  // mesma afirmação que `telas-05-gestao.test.ts` já faz sobre esta linha.
+  // mesma afirmação que a fumaça da Gestão (`features/gestao`) faz sobre esta linha.
   const feed = await lerFeed(banco.db, HOJE)
   const item = feed!.conteudo.itens.find((i) => i.linha !== null)!
   await registrarEntradaRealizada(banco.db, {
@@ -76,7 +76,8 @@ beforeAll(async () => {
     odd: null,
     agora: AGORA,
   })
-  entradaSemeada = { unidadesEmTexto: '1 unidade' }
+  // Front v2 (Tarefa 6): a coluna de unidades da visão Realizadas escreve "1 un.".
+  entradaSemeada = { unidadesEmTexto: '1 un.' }
 
   // A tela calcula "hoje" com `new Date()` — sem congelar o relógio no
   // instante semeado, ela nunca acharia a rodada de 15/01.
@@ -98,7 +99,8 @@ describe('a gestão por nível (spec §5, linha 7)', () => {
   it('GRATIS em ?ver=sugeridas: o convite no lugar das sugestões, sem formulário nem sinal', async () => {
     nivelNoTeste = 'GRATIS'
     const html = await renderizarGestao({ ver: 'sugeridas' })
-    expect(html).toContain('começa no')
+    // Front v2 (Tarefa 6): o convite da Gestão do v2 diz o plano por extenso.
+    expect(html).toContain('Registrar entradas é do plano MVP')
     expect(html).not.toContain('name="unidades"')
     expect(html).not.toMatch(/<form[^>]*action=/)
 
@@ -110,7 +112,8 @@ describe('a gestão por nível (spec §5, linha 7)', () => {
     // são inseparáveis dentro de `LinhaSugerida`, mas nada aqui provava
     // isso; um refactor reabre em silêncio. Mesmo padrão de varredura de
     // `planos-home.test.ts`/`planos-fire-live.test.ts`: percorrer TODAS as
-    // entradas do plano, não só a primeira.
+    // entradas do plano, não só a primeira. (Front v2: o carregador nem LÊ o
+    // plano para o grátis — a varredura continua, calculando o plano aqui.)
     const { planoDoDia, BANCA_PADRAO } = await import('../../modules/entrega/gestao')
     const plano = await planoDoDia(banco.db, await rulesetAtivo(), HOJE, BANCA_PADRAO)
     expect(plano.entradas.length).toBeGreaterThan(0)
@@ -129,7 +132,7 @@ describe('a gestão por nível (spec §5, linha 7)', () => {
   it('MVP em ?ver=sugeridas: as sugestões e o formulário', async () => {
     nivelNoTeste = 'MVP'
     const html = await renderizarGestao({ ver: 'sugeridas' })
-    expect(html).not.toContain('começa no')
+    expect(html).not.toContain('Registrar entradas é do plano MVP')
     expect(html).toContain('name="unidades"')
   })
 })

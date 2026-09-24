@@ -1,7 +1,7 @@
 import { and, eq, isNull } from 'drizzle-orm'
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { AVATARES_PRONTOS } from '../../design-system/componentes'
+import { AVATARES_PRONTOS } from '@/features/conta/avatares'
 import { bancoDeTeste } from '../../modules/dominio/__tests__/ajuda-banco'
 import { dispositivos, eventosConta, sessoes, usuarios } from '../../modules/dominio/db/schema'
 import { adicionarUsuario } from '../../modules/plataforma/admin/usuarios'
@@ -19,7 +19,7 @@ import { conferirSenha, gerarHash } from '../../modules/plataforma/auth/senha'
  * `redirect()`, em Next, NUNCA retorna — lança um erro especial cujo
  * `digest` carrega o destino (`NEXT_REDIRECT;tipo;url;status;`). Por isso o
  * teste usa o `redirect` de VERDADE (não mocado) e afirma pelo `.rejects`,
- * como `telas-04-resultados.test.ts` já faz para a tela de Resultados.
+ * como a fumaça de Resultados (`features/resultados`) faz para a data inválida.
  */
 
 let banco: Awaited<ReturnType<typeof bancoDeTeste>>
@@ -83,7 +83,7 @@ async function usuarioAtual() {
 
 describe('escolherAvatar — só um caminho do catálogo vira foto_url', () => {
   it('avatar do catálogo persiste e redireciona com o aviso de sucesso', async () => {
-    const { escolherAvatar } = await import('../(app)/conta/acoes')
+    const { escolherAvatar } = await import('@/features/conta/acoes')
     const formulario = new FormData()
     formulario.set('fotoUrl', AVATARES_PRONTOS[2]!)
 
@@ -94,7 +94,7 @@ describe('escolherAvatar — só um caminho do catálogo vira foto_url', () => {
   })
 
   it('caminho fora do catálogo é recusado: não grava e redireciona para erro', async () => {
-    const { escolherAvatar } = await import('../(app)/conta/acoes')
+    const { escolherAvatar } = await import('@/features/conta/acoes')
     const formulario = new FormData()
     formulario.set('fotoUrl', 'https://evil.example.com/avatar.png')
 
@@ -105,7 +105,7 @@ describe('escolherAvatar — só um caminho do catálogo vira foto_url', () => {
   })
 
   it('campo vazio LIMPA um avatar já escolhido', async () => {
-    const { escolherAvatar } = await import('../(app)/conta/acoes')
+    const { escolherAvatar } = await import('@/features/conta/acoes')
 
     const escolhe = new FormData()
     escolhe.set('fotoUrl', AVATARES_PRONTOS[0]!)
@@ -123,7 +123,7 @@ describe('escolherAvatar — só um caminho do catálogo vira foto_url', () => {
 
 describe('atualizarNome — tamanho depois de trim, sempre em português', () => {
   it('nome válido (com espaço nas pontas) persiste JÁ com trim, e redireciona com aviso', async () => {
-    const { atualizarNome } = await import('../(app)/conta/acoes')
+    const { atualizarNome } = await import('@/features/conta/acoes')
     const formulario = new FormData()
     formulario.set('nome', '  Nova Pessoa  ')
 
@@ -138,7 +138,7 @@ describe('atualizarNome — tamanho depois de trim, sempre em português', () =>
     ['só espaços (some no trim)', '   '],
     ['ausente do formulário', null],
   ])('nome %s é recusado com a MESMA mensagem em português, e não grava', async (_caso, valor) => {
-    const { atualizarNome } = await import('../(app)/conta/acoes')
+    const { atualizarNome } = await import('@/features/conta/acoes')
     const antes = await usuarioAtual()
     const formulario = new FormData()
     if (valor !== null) formulario.set('nome', valor)
@@ -197,7 +197,7 @@ describe('trocarSenha / trocarEmail — exigem a senha atual (Task 5)', () => {
   })
 
   it('senha atual correta e nova válida trocam o hash e redirecionam com aviso', async () => {
-    const { trocarSenha } = await import('../(app)/conta/acoes')
+    const { trocarSenha } = await import('@/features/conta/acoes')
     const formulario = new FormData()
     formulario.set('senhaAtual', SENHA_ATUAL)
     formulario.set('novaSenha', 'nova-senha-456')
@@ -215,7 +215,7 @@ describe('trocarSenha / trocarEmail — exigem a senha atual (Task 5)', () => {
   // deslogado no MESMO gesto) e derrubar só as outras, com a troca gravada
   // na trilha para o admin.
   it('troca de senha mantém a sessão ATUAL viva, encerra as OUTRAS e grava a trilha', async () => {
-    const { trocarSenha } = await import('../(app)/conta/acoes')
+    const { trocarSenha } = await import('@/features/conta/acoes')
     const formulario = new FormData()
     formulario.set('senhaAtual', SENHA_ATUAL)
     formulario.set('novaSenha', 'nova-senha-456')
@@ -239,7 +239,7 @@ describe('trocarSenha / trocarEmail — exigem a senha atual (Task 5)', () => {
 
   it('senha atual errada recusa a troca de senha, e não altera o hash', async () => {
     const antes = await usuarioAtual()
-    const { trocarSenha } = await import('../(app)/conta/acoes')
+    const { trocarSenha } = await import('@/features/conta/acoes')
     const formulario = new FormData()
     formulario.set('senhaAtual', 'senha-errada')
     formulario.set('novaSenha', 'nova-senha-456')
@@ -252,7 +252,7 @@ describe('trocarSenha / trocarEmail — exigem a senha atual (Task 5)', () => {
 
   it('nova senha fora da política (mesma regra do cadastro) é recusada, e não altera nada', async () => {
     const antes = await usuarioAtual()
-    const { trocarSenha } = await import('../(app)/conta/acoes')
+    const { trocarSenha } = await import('@/features/conta/acoes')
     const formulario = new FormData()
     formulario.set('senhaAtual', SENHA_ATUAL)
     formulario.set('novaSenha', 'letrassemnumero') // 15 letras, mas sem dígito
@@ -264,7 +264,7 @@ describe('trocarSenha / trocarEmail — exigem a senha atual (Task 5)', () => {
   })
 
   it('e-mail novo e disponível troca na hora, protegido pela senha atual', async () => {
-    const { trocarEmail } = await import('../(app)/conta/acoes')
+    const { trocarEmail } = await import('@/features/conta/acoes')
     const formulario = new FormData()
     formulario.set('senhaAtual', SENHA_ATUAL)
     formulario.set('novoEmail', 'novo-email-teste@exemplo.com')
@@ -278,7 +278,7 @@ describe('trocarSenha / trocarEmail — exigem a senha atual (Task 5)', () => {
   // Mesmo cuidado de trocarSenha, pelo mesmo motivo: quem troca o
   // identificador de login é quem mais precisa que as OUTRAS sessões caiam.
   it('troca de e-mail mantém a sessão ATUAL viva, encerra as OUTRAS e grava a trilha', async () => {
-    const { trocarEmail } = await import('../(app)/conta/acoes')
+    const { trocarEmail } = await import('@/features/conta/acoes')
     const formulario = new FormData()
     formulario.set('senhaAtual', SENHA_ATUAL)
     formulario.set('novoEmail', 'email-com-outras-sessoes@exemplo.com')
@@ -302,7 +302,7 @@ describe('trocarSenha / trocarEmail — exigem a senha atual (Task 5)', () => {
 
   it('novoEmail ausente do formulário é recusado em português (nunca a mensagem genérica do Zod)', async () => {
     const antes = await usuarioAtual()
-    const { trocarEmail } = await import('../(app)/conta/acoes')
+    const { trocarEmail } = await import('@/features/conta/acoes')
     const formulario = new FormData()
     formulario.set('senhaAtual', SENHA_ATUAL)
     // Sem `.set('novoEmail', ...)`: simula um POST forjado direto à server
@@ -319,7 +319,7 @@ describe('trocarSenha / trocarEmail — exigem a senha atual (Task 5)', () => {
     await banco.db.insert(usuarios).values({ email: emailOcupado, senhaHash: 'x' })
     const antes = await usuarioAtual()
 
-    const { trocarEmail } = await import('../(app)/conta/acoes')
+    const { trocarEmail } = await import('@/features/conta/acoes')
     const formulario = new FormData()
     formulario.set('senhaAtual', SENHA_ATUAL)
     formulario.set('novoEmail', emailOcupado)
@@ -332,7 +332,7 @@ describe('trocarSenha / trocarEmail — exigem a senha atual (Task 5)', () => {
 
   it('senha atual errada recusa a troca de e-mail, e não altera nada', async () => {
     const antes = await usuarioAtual()
-    const { trocarEmail } = await import('../(app)/conta/acoes')
+    const { trocarEmail } = await import('@/features/conta/acoes')
     const formulario = new FormData()
     formulario.set('senhaAtual', 'senha-errada')
     formulario.set('novoEmail', 'outro-endereco@exemplo.com')
@@ -392,7 +392,7 @@ describe('encerrarDispositivo — escopo por usuário, e o aparelho em uso vai p
   })
 
   it('encerra a sessão do próprio dispositivo e redireciona para /conta com aviso', async () => {
-    const { encerrarDispositivo } = await import('../(app)/conta/acoes')
+    const { encerrarDispositivo } = await import('@/features/conta/acoes')
     const formulario = new FormData()
     formulario.set('dispositivoId', dispositivoId)
 
@@ -407,7 +407,7 @@ describe('encerrarDispositivo — escopo por usuário, e o aparelho em uso vai p
   })
 
   it('id de dispositivo de outra pessoa não encerra a sessão dela, e a ação não finge sucesso — escopo por usuário travado', async () => {
-    const { encerrarDispositivo } = await import('../(app)/conta/acoes')
+    const { encerrarDispositivo } = await import('@/features/conta/acoes')
     const formulario = new FormData()
     formulario.set('dispositivoId', dispositivoDeOutro)
 
@@ -427,7 +427,7 @@ describe('encerrarDispositivo — escopo por usuário, e o aparelho em uso vai p
   })
 
   it('dispositivoId mal formado é recusado sem tocar no banco', async () => {
-    const { encerrarDispositivo } = await import('../(app)/conta/acoes')
+    const { encerrarDispositivo } = await import('@/features/conta/acoes')
     const formulario = new FormData()
     formulario.set('dispositivoId', 'nao-e-um-uuid')
 
@@ -446,7 +446,7 @@ describe('encerrarDispositivo — escopo por usuário, e o aparelho em uso vai p
     // campo que `validarSessao` preenche de verdade a partir do cookie.
     sessao!.dispositivoId = dispositivoId
 
-    const { encerrarDispositivo } = await import('../(app)/conta/acoes')
+    const { encerrarDispositivo } = await import('@/features/conta/acoes')
     const formulario = new FormData()
     formulario.set('dispositivoId', dispositivoId)
 

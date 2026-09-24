@@ -119,7 +119,8 @@ describe.each([
     expect(html).toContain(`${cards.length} apito${cards.length === 1 ? '' : 's'} na lista`)
 
     const siglas = new Set(itens.map((i) => i.timeSigla))
-    const grupos = (html.match(/<section style="display:grid;gap:8px"/g) ?? []).length
+    // Front v2 (Tarefa 6): um `<section aria-label="<time>">` com cabeçalho por grupo.
+    const grupos = (html.match(/<section[^>]*aria-label="[^"]+"[^>]*><header/g) ?? []).length
     expect(grupos).toBe(siglas.size)
   })
 
@@ -136,7 +137,8 @@ describe.each([
     if (!semLinha) return skip('a simulação não produziu card sem linha nesta semente')
     const html = await renderizar()
     expect(html).toContain(`href="/apito/${semLinha.jogadorId}?atributo=${semLinha.atributo}"`)
-    const trecho = html.slice(html.indexOf(`/apito/${semLinha.jogadorId}`), html.indexOf('</div>', html.indexOf(`/apito/${semLinha.jogadorId}`) + 400))
+    // Front v2: o card é uma `<li>` — o trecho vai do link dele até o fim dela.
+    const trecho = html.slice(html.indexOf(`/apito/${semLinha.jogadorId}`), html.indexOf('</li>', html.indexOf(`/apito/${semLinha.jogadorId}`)))
     expect(trecho).not.toContain('>Registrei<')
   })
 })
@@ -147,8 +149,9 @@ describe('rodada SEM lista publicada', () => {
     // Amanhã ainda não foi produzido: o feed de amanhã não existe.
     vi.setSystemTime(new Date(a.agora.getTime() + 24 * 60 * 60 * 1000))
     const html = await renderizar()
-    expect(html).toContain('A lista de hoje ainda não foi publicada.')
-    expect(html).toContain('Ver a Lista Secreta')
+    // Front v2 (Tarefa 6): a aba da Lista se chama "Entradas" no v2.
+    expect(html).toContain('A lista de hoje ainda não foi publicada')
+    expect(html).toMatch(/<a[^>]*href="\/"[^>]*>Ver as Entradas<\/a>/)
     expect(html).not.toContain('>Registrei<')
     vi.setSystemTime(a.agora)
   })

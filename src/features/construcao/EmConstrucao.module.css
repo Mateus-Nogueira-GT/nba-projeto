@@ -1,0 +1,16 @@
+.tela {
+  display: flex;
+  flex-direction: column;
+  gap: var(--e-6);
+  max-width: 960px;
+}
+.titulo {
+  font-size: var(--t-28);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+@media (max-width: 1023px) {
+  .titulo {
+    font-size: var(--t-22);
+  }
+}

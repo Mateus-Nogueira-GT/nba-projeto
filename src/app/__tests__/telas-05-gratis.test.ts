@@ -6,7 +6,6 @@ import { dataDeReferencia } from '../../modules/dominio/rodada'
 import { rulesetAtivo } from '../../modules/entrega/ruleset-ativo'
 import { simularAte } from '../../modules/ingestao/demo/temporada'
 import { LLMFake } from '../../modules/ingestao/llm'
-import { gravarConferencia } from './conferencia'
 
 /**
  * O QUE O GRÁTIS VÊ — a vestimenta do paywall (identidade 05, §8).
@@ -75,11 +74,6 @@ async function renderizarLista(): Promise<string> {
   return renderToStaticMarkup(await Pagina({ searchParams: Promise.resolve({}) }))
 }
 
-async function renderizarFireLive(): Promise<string> {
-  const { default: Pagina } = await import('../(app)/fire-live/page')
-  return renderToStaticMarkup(await Pagina({ searchParams: Promise.resolve({}) }))
-}
-
 /** Os nomes dos jogadores que a lista de hoje publicou. */
 async function nomesDoFeed(): Promise<string[]> {
   const { lerFeed } = await import('../../modules/entrega/lista-secreta')
@@ -88,29 +82,10 @@ async function nomesDoFeed(): Promise<string[]> {
 }
 
 describe('o grátis na identidade 05', () => {
-  it('a Lista tem a moldura do assinante, a faixa e um cabeçalho REAL por jogo', async () => {
-    const html = await renderizarLista()
-    await gravarConferencia('identidade-05-gratis-lista', html)
-
-    expect(html).toContain('LISTA SECRETA')
-    expect(html).toContain('LISTA DO DIA')
-    expect(html).toContain('PRÉ-LIVE')
-    expect(html).toContain('COMEÇA NO')
-
-    const { jogosDoDiaResumo } = await import('../../modules/entrega/lista-por-jogo')
-    const jogos = await jogosDoDiaResumo(banco.db, HOJE, FUSO)
-    expect(jogos.length).toBeGreaterThan(0)
-    expect((html.match(/class="jogo-frio"/g) ?? []).length).toBe(jogos.length)
-  }, 60_000)
-
-  it('uma silhueta por jogo, e nenhum card de verdade', async () => {
-    const html = await renderizarLista()
-    const { jogosDoDiaResumo } = await import('../../modules/entrega/lista-por-jogo')
-    const jogos = await jogosDoDiaResumo(banco.db, HOJE, FUSO)
-    expect((html.match(/_silhueta_/g) ?? []).length).toBe(jogos.length)
-    expect(html).not.toContain('<article')
-  }, 60_000)
-
+  // Front v2 (Tarefa 3): os casos que liam a marcação da Lista ANTIGA do grátis
+  // (moldura, silhuetas, faixa da lateral) saíram com ela; o portão da Lista
+  // nova está em `src/features/lista/__tests__/fumaca.test.tsx`. Ficam os que
+  // valem para qualquer marcação.
   it('NENHUM nome do feed pago entra no HTML do grátis', async () => {
     // A garantia de fundo do paywall. A silhueta é forma pura: se um dia
     // alguém a alimentar com o conteúdo real e só borrá-lo, este teste fica
@@ -121,56 +96,11 @@ describe('o grátis na identidade 05', () => {
     for (const nome of nomes) expect(html).not.toContain(nome)
   }, 60_000)
 
-  it('a silhueta é forma pura: aria-hidden e sem número nenhum dentro', async () => {
-    const html = await renderizarLista()
-    const silhuetas = [...html.matchAll(/<div class="[^"]*_silhueta_[^"]*"[^>]*>([\s\S]*?)<\/div>/g)]
-    expect(silhuetas.length).toBeGreaterThan(0)
-    for (const [inteiro, dentro] of silhuetas) {
-      expect(inteiro).toContain('aria-hidden="true"')
-      expect(dentro!.replace(/<[^>]+>/g, '')).toBe('')
-    }
-  }, 60_000)
+  // Front v2 (Tarefa 4): o Fire Live do grátis (convite e silhueta sem o
+  // universo quente) migrou para `src/features/ao-vivo/__tests__/fumaca.test.tsx`.
 
-  it('o Fire Live do grátis nunca veste o universo QUENTE nas silhuetas', async () => {
-    const html = await renderizarFireLive()
-    await gravarConferencia('identidade-05-gratis-firelive', html)
-    expect(html).toContain('COMEÇA NO')
-    // O gradiente quente é o modo fire, e o modo fire é o sinal. Ele pode
-    // vestir o cabeçalho do jogo (a tela é a do ao vivo), nunca a silhueta.
-    const { componente } = await import('../../design-system/tokens/componente')
-    const dentroDasSilhuetas = [
-      ...html.matchAll(/<div class="[^"]*_silhueta_[^"]*"[\s\S]*?<\/div>/g),
-    ]
-      .map((m) => m[0]!)
-      .join('')
-    expect(dentroDasSilhuetas).not.toContain(componente.contextoQuente.cardGradiente)
-  }, 60_000)
-
-  it('o assistente não existe para o grátis, nem na lateral nem flutuando', async () => {
-    const html = await renderizarLista()
-    expect(html).not.toContain('Pergunte sobre a lista de hoje')
-    expect(html).not.toContain('Abrir o assistente')
-  }, 60_000)
-
-  it('a faixa da lateral concorda: "começam", porque são três recursos (correções UX 19/09)', async () => {
-    const html = await renderizarLista()
-    const aside = /<aside[\s\S]*?<\/aside>/.exec(html)?.[0] ?? ''
-    expect(aside).toContain('LISTA, FIRE LIVE E ASSISTENTE COMEÇAM NO MVP')
-    expect(aside).not.toContain('ASSISTENTE COMEÇA NO')
-  }, 60_000)
-
-  it('a chamada para assinar volta no meio da rolagem (auditoria de UX para web)', async () => {
-    // Oito pares de silhueta idênticos e nenhuma chamada à vista: a faixa do
-    // topo sai da tela e a da lateral vai junto, porque a coluna é mais alta
-    // que a viewport. UMA repetição, depois do terceiro jogo.
-    const html = await renderizarLista()
-    const corpo = html.replace(/<aside[\s\S]*?<\/aside>/g, '')
-    const faixas = [...corpo.matchAll(/A LISTA SECRETA COMEÇA NO MVP/g)]
-    expect(faixas.length).toBe(2)
-    const terceiroJogo = corpo.split('jogo-times-frio')[3]
-    expect(terceiroJogo, 'a semente precisa de pelo menos três jogos').toBeDefined()
-    expect(corpo.lastIndexOf('A LISTA SECRETA COMEÇA NO MVP')).toBeGreaterThan(
-      corpo.indexOf('jogo-times-frio'),
-    )
-  }, 60_000)
+  // Front v2 (Tarefa 12): "o assistente não existe para o grátis" saiu daqui —
+  // a página não desenha a casca, e é a casca quem decide o assistente:
+  // `features/shell/__tests__/layout-do-app.test.tsx` › "o assistente é do MVP
+  // para cima e só com o chat ligado".
 })

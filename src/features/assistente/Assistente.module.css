@@ -1,0 +1,239 @@
+/* No desktop o assistente abre pela sidebar; o botão flutuante é do celular. */
+.flutuante {
+  display: none;
+  position: fixed;
+  right: var(--e-6);
+  bottom: calc(var(--e-6) + env(safe-area-inset-bottom));
+  z-index: 35;
+  align-items: center;
+  justify-content: center;
+  width: 56px;
+  height: 56px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--acento);
+  color: var(--texto-sobre-acento);
+  box-shadow: 0 8px 24px color-mix(in srgb, var(--sombra-azul) 55%, transparent);
+  transition: background var(--rapido) var(--curva);
+}
+.flutuante:hover {
+  background: var(--acento-hover);
+}
+
+.veu {
+  position: fixed;
+  inset: 0;
+  z-index: 44;
+  background: color-mix(in srgb, var(--breu) 60%, transparent);
+}
+.gaveta {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 45;
+  display: flex;
+  flex-direction: column;
+  width: min(420px, 100vw);
+  padding-top: env(safe-area-inset-top);
+  border-left: 1px solid var(--borda-forte);
+  background: var(--superficie);
+  animation: entrar var(--medio) var(--curva);
+}
+@keyframes entrar {
+  from {
+    opacity: 0;
+    transform: translateX(24px);
+  }
+}
+.topo {
+  display: flex;
+  align-items: center;
+  gap: var(--e-3);
+  padding: var(--e-4) var(--e-4) var(--e-4) var(--e-5);
+  border-bottom: 1px solid var(--borda);
+}
+.selo {
+  display: inline-flex;
+  padding: 8px;
+  border-radius: 10px;
+  background: var(--acento);
+  color: var(--texto-sobre-acento);
+}
+.topoTexto {
+  flex: 1;
+  min-width: 0;
+}
+.topoTexto h2 {
+  font-size: var(--t-16);
+  font-weight: 700;
+}
+.topoTexto p {
+  color: var(--texto-3);
+  font-size: var(--t-12);
+}
+.fechar {
+  display: inline-flex;
+  padding: 8px;
+  border: 1px solid var(--borda-forte);
+  border-radius: var(--raio-controle);
+  background: var(--campo);
+  color: var(--texto-2);
+}
+.conversa {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: var(--e-3);
+  overflow-y: auto;
+  padding: var(--e-5);
+}
+.inicio {
+  display: flex;
+  flex-direction: column;
+  gap: var(--e-3);
+}
+.convite {
+  color: var(--texto-2);
+  font-size: var(--t-14);
+}
+.sugestoes {
+  display: flex;
+  flex-direction: column;
+  gap: var(--e-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.sugestoes button {
+  width: 100%;
+  min-height: 44px;
+  padding: var(--e-2) var(--e-3);
+  border: 1px solid var(--borda-forte);
+  border-radius: var(--raio-controle);
+  background: var(--fundo);
+  color: var(--texto);
+  font-size: var(--t-14);
+  text-align: left;
+}
+.sugestoes button:hover {
+  background: var(--campo);
+}
+.meu,
+.dele {
+  max-width: 85%;
+  padding: var(--e-3) var(--e-4);
+  border-radius: 14px;
+  font-size: var(--t-14);
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+.meu {
+  align-self: flex-end;
+  border-bottom-right-radius: 4px;
+  background: var(--acento);
+  color: var(--texto-sobre-acento);
+}
+.dele {
+  align-self: flex-start;
+  border-bottom-left-radius: 4px;
+  background: var(--campo);
+}
+.pensando {
+  color: var(--texto-3);
+}
+.erro {
+  padding: var(--e-3) var(--e-4);
+  border: 1px solid color-mix(in srgb, var(--ao-vivo-solido) 50%, transparent);
+  border-radius: var(--raio-controle);
+  background: color-mix(in srgb, var(--ao-vivo-solido) 10%, transparent);
+  color: var(--texto);
+  font-size: var(--t-13);
+}
+.envio {
+  display: flex;
+  flex-direction: column;
+  gap: var(--e-2);
+  padding: var(--e-3) var(--e-4) calc(var(--e-4) + env(safe-area-inset-bottom));
+  border-top: 1px solid var(--borda);
+}
+.caixa {
+  min-height: 52px;
+  padding: var(--e-3);
+  border: 1px solid var(--borda-forte);
+  border-radius: var(--raio-controle);
+  background: var(--campo);
+  font-size: var(--t-14);
+  resize: none;
+}
+.caixa::placeholder {
+  color: var(--texto-3);
+}
+.rodape {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.contador {
+  color: var(--texto-3);
+  font-size: var(--t-12);
+}
+.enviar {
+  height: 44px;
+  padding: 0 var(--e-5);
+  border: 0;
+  border-radius: var(--raio-controle);
+  background: var(--acento);
+  color: var(--texto-sobre-acento);
+  font-weight: 700;
+}
+.enviar:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* Campo do resumo da rodada */
+.campo {
+  display: flex;
+  align-items: center;
+  gap: var(--e-2);
+  height: 52px;
+  padding: 0 var(--e-4);
+  border: 1px solid var(--borda-forte);
+  border-radius: var(--raio);
+  background: var(--superficie);
+  color: var(--acento-texto);
+}
+.campo:focus-within {
+  border-color: var(--acento);
+}
+.campo input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  outline: none;
+  color: var(--texto);
+  font-size: var(--t-14);
+}
+.campo input::placeholder {
+  color: var(--texto-3);
+}
+
+@media (max-width: 1023px) {
+  .flutuante:not([hidden]) {
+    display: inline-flex;
+  }
+  /* Com o detalhe do apito aberto em tela cheia, o botão sai do caminho do
+     botão fixo do rodapé do detalhe. */
+  :global(body:has([data-painel-nip='detalhe'])) .flutuante {
+    display: none;
+  }
+  .flutuante {
+    right: var(--e-4);
+    bottom: calc(var(--barra-inferior) + var(--e-3) + env(safe-area-inset-bottom));
+    width: 48px;
+    height: 48px;
+    box-shadow: 0 8px 20px -6px rgba(0, 0, 0, 0.55);
+  }
+}

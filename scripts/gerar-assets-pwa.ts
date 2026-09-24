@@ -1,10 +1,32 @@
+import { readFileSync } from 'node:fs'
 import { mkdir, writeFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import sharp from 'sharp'
 
-import { primitivo } from '../src/design-system/tokens/primitivo'
-
 const pasta = resolve(process.cwd(), 'public/icons')
+
+/**
+ * As cores do ícone saem de `src/ui/tokens.css` — a única fonte de cor do app
+ * desde a Tarefa 12 do front v2 (antes vinham de `design-system/tokens/primitivo.ts`).
+ * O PNG não lê CSS, então o script lê o hex do token pelo nome, no bloco base
+ * do `:root`: um hex escrito aqui à mão envelheceria no dia em que a marca
+ * mudasse.
+ */
+function tokenHex(nome: string): string {
+  const css = readFileSync(resolve(process.cwd(), 'src/ui/tokens.css'), 'utf8')
+  const valor = css.match(new RegExp(`${nome}\\s*:\\s*(#[0-9a-fA-F]{6})\\s*;`))?.[1]
+  if (!valor) throw new Error(`token ${nome} sem hex em src/ui/tokens.css`)
+  return valor
+}
+
+const cor = {
+  /** A tinta escura do Manual sobre cor cheia — o fundo do ícone (era `tinta900`). */
+  fundo: tokenHex('--tinta-escura'),
+  /** O ponto de destaque no canto: o amarelo do apito nível 1 (era `ambar400`). */
+  ponto: tokenHex('--apito-1'),
+  /** Branco do texto principal (era `branco`). */
+  branco: tokenHex('--texto'),
+}
 
 function marcaSvg(tamanho: number, escala: number, raioCanto = 0.22): string {
   const centro = tamanho / 2
@@ -12,16 +34,16 @@ function marcaSvg(tamanho: number, escala: number, raioCanto = 0.22): string {
   const fonte = Math.round(raio * 0.9)
 
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${tamanho}" height="${tamanho}" viewBox="0 0 ${tamanho} ${tamanho}">
-  <rect width="${tamanho}" height="${tamanho}" rx="${tamanho * raioCanto}" fill="${primitivo.tinta900}"/>
-  <circle cx="${centro + raio * 0.9}" cy="${centro - raio * 0.7}" r="${Math.max(5, tamanho * 0.03)}" fill="${primitivo.ambar400}"/>
-  <text x="50%" y="54%" text-anchor="middle" dominant-baseline="middle" fill="white" font-family="Arial, Helvetica, sans-serif" font-size="${fonte}" font-weight="800" letter-spacing="${Math.max(2, tamanho * 0.015)}">NIP</text>
+  <rect width="${tamanho}" height="${tamanho}" rx="${tamanho * raioCanto}" fill="${cor.fundo}"/>
+  <circle cx="${centro + raio * 0.9}" cy="${centro - raio * 0.7}" r="${Math.max(5, tamanho * 0.03)}" fill="${cor.ponto}"/>
+  <text x="50%" y="54%" text-anchor="middle" dominant-baseline="middle" fill="${cor.branco}" font-family="Arial, Helvetica, sans-serif" font-size="${fonte}" font-weight="800" letter-spacing="${Math.max(2, tamanho * 0.015)}">NIP</text>
 </svg>`
 }
 
 function badgeSvg(tamanho: number): string {
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${tamanho}" height="${tamanho}" viewBox="0 0 ${tamanho} ${tamanho}">
-  <circle cx="${tamanho / 2}" cy="${tamanho / 2}" r="${tamanho * 0.36}" fill="${primitivo.branco}"/>
-  <text x="50%" y="53%" text-anchor="middle" dominant-baseline="middle" fill="${primitivo.tinta900}" font-family="Arial, Helvetica, sans-serif" font-size="${tamanho * 0.32}" font-weight="800">N</text>
+  <circle cx="${tamanho / 2}" cy="${tamanho / 2}" r="${tamanho * 0.36}" fill="${cor.branco}"/>
+  <text x="50%" y="53%" text-anchor="middle" dominant-baseline="middle" fill="${cor.fundo}" font-family="Arial, Helvetica, sans-serif" font-size="${tamanho * 0.32}" font-weight="800">N</text>
 </svg>`
 }
 

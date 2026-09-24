@@ -1,0 +1,379 @@
+/* Paleta da nota da partida — a mesma do front atual (primitivo.ts: notaFundo*, notaTexto*). */
+.notaExcepcional {
+  background: var(--nota-excepcional-fundo);
+  color: var(--nota-excepcional-texto);
+}
+.notaOtima {
+  background: var(--nota-otima-fundo);
+  color: var(--nota-otima-texto);
+}
+.notaBoa {
+  background: var(--nota-boa-fundo);
+  color: var(--nota-boa-texto);
+}
+.notaMediana {
+  background: var(--nota-mediana-fundo);
+  color: var(--nota-mediana-texto);
+}
+.notaFraca {
+  background: var(--nota-fraca-fundo);
+  color: var(--nota-fraca-texto);
+}
+.nota {
+  display: inline-block;
+  min-width: 36px;
+  padding: 2px 6px;
+  border-radius: 6px;
+  font-size: var(--t-12);
+  font-weight: 700;
+  text-align: center;
+}
+.notaDestaque {
+  min-width: 0;
+  padding: 4px 10px;
+  font-family: var(--fonte-heroi);
+  font-size: var(--t-28);
+  font-weight: 400;
+  line-height: 1;
+}
+
+.fraco {
+  color: var(--texto-3);
+}
+
+/* ---------- Cabeçalho ---------- */
+.cabecalho {
+  display: flex;
+  flex-direction: column;
+  gap: var(--e-3);
+}
+.sobrancelhaLinha {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--e-2) var(--e-4);
+}
+.voltar {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  min-height: 40px;
+  color: var(--texto-2);
+  font-size: var(--t-13);
+  font-weight: 600;
+}
+.voltar:hover {
+  color: var(--texto);
+}
+.sobrancelha {
+  display: none;
+}
+.tituloLinha {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--e-4);
+}
+.tituloTexto {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.titulo {
+  font-size: var(--t-28);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  line-height: 1.15;
+}
+.apoio {
+  color: var(--texto-2);
+  font-size: var(--t-14);
+}
+.acoes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--e-2);
+}
+
+/* ---------- Seção ---------- */
+.secao {
+  display: flex;
+  flex-direction: column;
+  gap: var(--e-3);
+  min-width: 0;
+}
+.secaoTopo {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--e-2) var(--e-3);
+}
+.secaoTitulo {
+  font-size: var(--t-16);
+  font-weight: 700;
+  color: var(--texto);
+}
+.secaoAux {
+  margin-left: auto;
+  color: var(--texto-3);
+  font-size: var(--t-12);
+  font-weight: 600;
+}
+
+/* ---------- Forma V/D ---------- */
+.forma {
+  display: inline-flex;
+  gap: 3px;
+}
+.formaPonto {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  background: var(--falhou);
+  color: var(--texto);
+  font-size: var(--t-12);
+  font-weight: 700;
+}
+.formaPonto[data-r='V'] {
+  background: var(--bateu);
+}
+
+/* ---------- Atualização ---------- */
+.atualizacao {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding-top: var(--e-3);
+  border-top: 1px solid var(--borda);
+  color: var(--texto-3);
+  font-size: var(--t-12);
+}
+.atualizacao strong {
+  color: var(--texto-2);
+}
+
+/* ---------- Acompanhar ---------- */
+.acompanhar {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.botaoAcompanhar {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 48px;
+  padding: 0 var(--e-4);
+  border: 1px solid var(--borda-forte);
+  border-radius: var(--raio-controle);
+  background: transparent;
+  font-size: var(--t-13);
+  font-weight: 600;
+  white-space: nowrap;
+  transition: background var(--rapido) var(--curva);
+}
+.botaoAcompanhar:hover {
+  background: var(--campo);
+}
+.botaoAcompanhar[aria-pressed='true'] {
+  border-color: var(--acento);
+  background: var(--acento-veu);
+}
+.botaoAcompanhar[aria-pressed='true'] svg {
+  color: var(--nivel-mvp);
+}
+.botaoAcompanhar:disabled {
+  opacity: 0.7;
+}
+.erro {
+  color: var(--falhou-texto);
+  font-size: var(--t-12);
+}
+
+/* ---------- Silhueta paga ---------- */
+.silhueta {
+  position: relative;
+  min-height: 200px;
+  border: 1px solid var(--borda);
+  border-radius: var(--raio);
+  background: var(--superficie);
+  overflow: hidden;
+}
+.silhuetaForma {
+  display: grid;
+  gap: 10px;
+  padding: var(--e-4);
+  opacity: 0.55;
+}
+.forma_tabela .silhuetaBloco {
+  height: 22px;
+}
+.forma_cards .silhuetaBloco {
+  height: 52px;
+}
+.forma_numeros {
+  grid-template-columns: repeat(3, 1fr);
+}
+.forma_numeros .silhuetaBloco {
+  height: 56px;
+}
+.silhuetaBloco {
+  border-radius: 6px;
+  background: var(--campo);
+}
+.convite {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--e-2);
+  padding: var(--e-4);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--fundo) 20%, transparent), color-mix(in srgb, var(--fundo) 85%, transparent) 55%);
+  color: var(--texto-2);
+  text-align: center;
+}
+.conviteTitulo {
+  max-width: 36ch;
+  color: var(--texto);
+  font-size: var(--t-14);
+  font-weight: 700;
+}
+.conviteAcao {
+  display: inline-flex;
+  align-items: center;
+  height: 48px;
+  margin-top: 4px;
+  padding: 0 var(--e-5);
+  border-radius: var(--raio-controle);
+  background: var(--acento);
+  color: var(--texto-sobre-acento);
+  font-size: var(--t-13);
+  font-weight: 700;
+}
+.conviteAcao:hover {
+  background: var(--acento-hover);
+}
+
+/* ---------- Tabela ---------- */
+.tabelaMoldura {
+  container-type: inline-size;
+  border: 1px solid var(--borda);
+  border-radius: var(--raio);
+  background: var(--superficie);
+  overflow: hidden;
+}
+.rolagem {
+  overflow-x: auto;
+}
+.rolagem:focus-visible {
+  outline-offset: -2px;
+}
+.tabela {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: var(--t-13);
+}
+.tabela th,
+.tabela td {
+  height: 44px;
+  padding: 0 var(--e-3);
+  border-bottom: 1px solid var(--borda);
+  text-align: left;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+.tabela tbody tr:last-child th,
+.tabela tbody tr:last-child td {
+  border-bottom: 0;
+}
+.tabela thead th {
+  height: 36px;
+  background: var(--fundo);
+  color: var(--texto-3);
+  font-size: var(--t-12);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.tabela tbody th {
+  font-weight: 600;
+}
+.tabela tbody tr:hover th,
+.tabela tbody tr:hover td {
+  background: var(--campo);
+}
+.tabela tbody tr[aria-current='true'] th,
+.tabela tbody tr[aria-current='true'] td {
+  background: var(--acento-veu);
+}
+.direita {
+  text-align: right !important;
+}
+.centro {
+  text-align: center !important;
+}
+.fixa {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  background: var(--superficie);
+}
+.tabela thead .fixa {
+  background: var(--fundo);
+}
+.destaque {
+  color: var(--texto);
+  font-weight: 700;
+}
+.tabela thead .destaque {
+  color: var(--acento-texto);
+}
+.separador th,
+.separador td {
+  border-bottom: 1px dashed var(--texto-3) !important;
+}
+.vazioTexto {
+  padding: var(--e-5);
+  border: 1px dashed var(--borda-forte);
+  border-radius: var(--raio);
+  color: var(--texto-2);
+  font-size: var(--t-13);
+  text-align: center;
+}
+@container (max-width: 719px) {
+  .secundaria {
+    display: none;
+  }
+}
+
+@media (max-width: 1023px) {
+  .titulo {
+    font-size: var(--t-22);
+  }
+}
+
+/* Celular: foto + nome lado a lado, e o botão (acompanhar) numa linha própria,
+   na largura toda — antes o botão espremia o nome numa coluna de 3 palavras. */
+@media (max-width: 640px) {
+  .tituloLinha {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: center;
+    gap: var(--e-3) var(--e-4);
+  }
+  .acoes {
+    grid-column: 1 / -1;
+  }
+  .acoes > * {
+    flex: 1;
+    justify-content: center;
+  }
+}

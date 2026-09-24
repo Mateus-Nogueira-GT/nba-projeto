@@ -1,0 +1,157 @@
+.numero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+  margin: 0;
+}
+.numeroRotulo {
+  color: var(--texto-3);
+  font-size: var(--t-13);
+  font-weight: 500;
+}
+.numeroValor {
+  margin: 0;
+  color: var(--texto);
+  font-family: var(--fonte-heroi);
+  font-size: var(--t-40);
+  line-height: 1;
+  letter-spacing: 0.01em;
+}
+.numeroValor[data-tom='bom'] {
+  color: var(--bateu-texto);
+}
+.numeroValor[data-tom='ruim'] {
+  color: var(--falhou-texto);
+}
+.numeroApoio {
+  margin: 0;
+  color: var(--texto-3);
+  font-size: var(--t-12);
+}
+
+.secao {
+  display: flex;
+  flex-direction: column;
+  gap: var(--e-4);
+}
+.secaoCabecalho {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--e-3);
+}
+.secaoTitulo {
+  font-size: var(--t-16);
+  font-weight: 700;
+  color: var(--texto);
+}
+.secaoApoio {
+  margin-top: 4px;
+  color: var(--texto-3);
+  font-size: var(--t-13);
+}
+
+.vazio {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--e-2);
+  padding: var(--e-8) var(--e-6);
+  border: 1px dashed var(--borda-forte);
+  border-radius: var(--raio);
+  text-align: center;
+}
+.vazioIcone {
+  display: inline-flex;
+  padding: 12px;
+  border: 1px solid var(--borda);
+  border-radius: var(--raio);
+  background: var(--superficie);
+  color: var(--texto-2);
+}
+.vazioTitulo {
+  font-size: var(--t-16);
+  font-weight: 700;
+}
+.vazioTexto {
+  max-width: 44ch;
+  color: var(--texto-2);
+  font-size: var(--t-13);
+}
+.vazioAcao {
+  margin-top: var(--e-2);
+  color: var(--acento-texto);
+  font-size: var(--t-13);
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.faixa {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--e-4);
+  min-height: 44px;
+  padding: 8px var(--e-6);
+  border-bottom: 1px solid var(--borda);
+  background: var(--superficie);
+}
+.faixa[data-tom='convite'] {
+  background: linear-gradient(90deg, var(--acento-veu), transparent 70%), var(--superficie);
+}
+.faixaTexto {
+  color: var(--texto-2);
+  font-size: var(--t-13);
+}
+.faixaTexto strong {
+  color: var(--texto);
+}
+.faixaAcao {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  height: 32px;
+  padding: 0 14px;
+  border-radius: var(--raio-controle);
+  background: var(--acento);
+  color: var(--texto-sobre-acento);
+  font-size: var(--t-13);
+  font-weight: 700;
+}
+
+.primario,
+.secundario {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 48px;
+  padding: 0 20px;
+  border-radius: var(--raio-controle);
+  font-size: var(--t-14);
+  font-weight: 700;
+  transition: background var(--rapido) var(--curva);
+}
+.primario {
+  background: var(--acento);
+  color: var(--texto-sobre-acento);
+}
+.primario:hover {
+  background: var(--acento-hover);
+}
+.secundario {
+  border: 1px solid var(--borda-forte);
+  background: var(--campo);
+}
+.secundario:hover {
+  background: var(--campo-hover);
+}
+
+@media (max-width: 1023px) {
+  .faixa {
+    padding: 8px var(--e-4);
+  }
+}

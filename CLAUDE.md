@@ -74,7 +74,8 @@ src/modules/dominio/         L1 · modelo canônico
 src/modules/motor/           L2 · funções puras — SEM I/O
 src/modules/entrega/         L3 · feed, push, API
 src/modules/plataforma/      L4 · auth, dispositivos, assinatura, afiliados, admin
-src/design-system/           tokens em 3 camadas + componentes
+src/ui/                      tokens (tokens.css, a única fonte de cor) + peças de tela do front v2
+src/features/<área>/         telas do front v2, uma pasta por área, ligadas ao back por carregar.ts
 src/workflows/               Vercel Workflow — loop do 1Q
 ```
 

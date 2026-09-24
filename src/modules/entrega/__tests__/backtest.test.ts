@@ -218,9 +218,9 @@ describe('painel do backtest (spec 07, fatia 6)', () => {
 
 describe('guarda do painel de backtest', () => {
   it('página e ações exigem admin', () => {
-    const pagina = readFileSync('src/app/(admin)/admin/backtest/page.tsx', 'utf8')
+    const pagina = readFileSync('src/app/(app)/admin/backtest/page.tsx', 'utf8')
     expect(pagina).toContain('negarSeNaoForAdmin')
-    const acoes = readFileSync('src/app/(admin)/admin/backtest/acoes.ts', 'utf8')
+    const acoes = readFileSync('src/features/admin/backtest/acoes.ts', 'utf8')
     expect(acoes).toContain('exigirAdmin')
   })
 })
