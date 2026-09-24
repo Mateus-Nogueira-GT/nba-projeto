@@ -23,14 +23,32 @@ export const JANELA_PRIORIDADE_MS = 48 * 3600_000
  * provedor) ou, passada a janela de abandono, ENCERRADA — sai da fila em vez
  * de ocupar uma vaga a cada rodada para sempre.
  */
+function abandonada(tentativa: typeof tentativasCheckout.$inferSelect, agora: Date): boolean {
+  return tentativa.criadoEm.getTime() < agora.getTime() - JANELA_ABANDONO_MS
+}
+
 function statusSemPagamento(
   tentativa: typeof tentativasCheckout.$inferSelect,
   agora: Date,
 ): 'AMBIGUA' | 'ENCERRADA' {
-  return tentativa.criadoEm.getTime() < agora.getTime() - JANELA_ABANDONO_MS
-    ? 'ENCERRADA'
-    : 'AMBIGUA'
+  return abandonada(tentativa, agora) ? 'ENCERRADA' : 'AMBIGUA'
 }
+
+/**
+ * Mensal cujo preapproval está `pending` (checkout abandonado: ele nasce no
+ * checkout) ou `cancelled` (abandonado ou cancelado depois de ativo). Com a
+ * tentativa criada há mais de 7 dias, sai da fila (decisão do parceiro,
+ * 23/09); estorno ou contestação posteriores seguem pelo webhook.
+ * `authorized` e `paused` ficam — as renovações dependem da rede de segurança.
+ */
+const STATUS_MENSAL_ABANDONAVEL = new Set(['pending', 'cancelled', 'canceled'])
+
+/**
+ * PIX gerado e não pago (decisão do parceiro, 23/09): recusado, cancelado ou
+ * parado em pendente. `in_process` (cartão em análise) e os demais ficam na
+ * fila — não são abandono.
+ */
+const STATUS_TEMPORADA_ABANDONAVEL = new Set(['rejected', 'cancelled', 'canceled', 'pending'])
 
 function chaveEvento(partes: Array<string | null>): string {
   return `reconciliacao:${createHash('sha256').update(partes.join('|')).digest('base64url')}`
@@ -223,12 +241,18 @@ export async function reconciliarPagamentos(
           fimDaTemporada,
         )
         if (efeito.aceito && !efeito.duplicado) resultado.eventos += 1
-        // Temporada paga é pagamento ÚNICO: não há renovação a vigiar, e ela
-        // sai da fila. Qualquer outro status continua sendo acompanhado.
+        // Temporada é pagamento ÚNICO: paga, não há renovação a vigiar e ela
+        // sai da fila. Não paga (PIX recusado, cancelado ou parado em
+        // pendente) e com mais de 7 dias, também sai (decisão do parceiro,
+        // 23/09); se o pagamento chegar depois, o webhook concede sozinho.
         await db
           .update(tentativasCheckout)
           .set({
-            status: cobranca.status === 'approved' ? 'ENCERRADA' : 'CRIADA',
+            status:
+              cobranca.status === 'approved' ||
+              (STATUS_TEMPORADA_ABANDONAVEL.has(cobranca.status) && abandonada(tentativa, agora))
+                ? 'ENCERRADA'
+                : 'CRIADA',
             leaseExpiraEm: null,
             erroCodigo: null,
             atualizadoEm: agora,
@@ -277,7 +301,10 @@ export async function reconciliarPagamentos(
       await db
         .update(tentativasCheckout)
         .set({
-          status: 'CRIADA',
+          status:
+            STATUS_MENSAL_ABANDONAVEL.has(assinatura.status) && abandonada(tentativa, agora)
+              ? 'ENCERRADA'
+              : 'CRIADA',
           assinaturaExternaId: assinatura.id,
           urlCheckout: assinatura.urlCheckout,
           leaseExpiraEm: null,

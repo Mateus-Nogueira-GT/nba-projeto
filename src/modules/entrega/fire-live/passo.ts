@@ -4,6 +4,7 @@ import { fireLiveExecucoes, jogos } from '../../dominio/db/schema'
 import type { Db } from '../../dominio/db/tipos'
 import type { Ruleset } from '../../motor'
 import { encerrarExecucao, executarCiclo, registrarCiclo, type EstadoObservado } from './ciclo'
+import { registrarFalhaOperacionalSemFalhar } from '../observabilidade/falhas-operacionais'
 
 export type RetornoPasso =
   | { encerrar: true; motivo: string }
@@ -115,13 +116,22 @@ export async function executarPassoFireLive(
     await registrarCiclo(db, e.jogoId, resultado.estado, e.ciclo + 1, e.runId)
     return continuar(resultado.estado, false)
   } catch (erro) {
+    const mensagem = erro instanceof Error ? erro.message.slice(0, 500) : String(erro)
     console.error(
       JSON.stringify({
         evento: 'fire_live_ciclo_falhou',
         jogoId: e.jogoId,
         ciclo: e.ciclo,
-        erro: erro instanceof Error ? erro.message.slice(0, 500) : String(erro),
+        erro: mensagem,
       }),
+    )
+    // Uma falha é soluço; três do mesmo jogo em 10 min viram alerta (pós-merge
+    // da Onda 2). Nunca lança: registrar não pode derrubar o run.
+    await registrarFalhaOperacionalSemFalhar(
+      db,
+      'fire-live-ciclo-falhou',
+      { jogoId: e.jogoId, ciclo: e.ciclo, erro: mensagem },
+      agora,
     )
     // Renova o batimento com o relógio do FIM do passo (W2-3). No caminho
     // feliz `registrarCiclo` já faz isso; aqui, sem a renovação, um provedor

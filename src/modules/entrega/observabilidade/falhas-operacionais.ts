@@ -12,8 +12,13 @@ import type { NotificadorOperacional } from './notificador'
  * soma a janela e avisa uma vez por origem, sem realerta por 30 min.
  * Janelas operacionais, não regra de estratégia: ficam aqui.
  */
-export type OrigemOperacional = 'push-expirado' | 'pagamento-aprovado-sem-direito'
-const ORIGENS: OrigemOperacional[] = ['push-expirado', 'pagamento-aprovado-sem-direito']
+export type OrigemOperacional =
+  'push-expirado' | 'pagamento-aprovado-sem-direito' | 'fire-live-ciclo-falhou'
+const ORIGENS: OrigemOperacional[] = [
+  'push-expirado',
+  'pagamento-aprovado-sem-direito',
+  'fire-live-ciclo-falhou',
+]
 const ORIGEM_DO_ALERTA = 'alerta-operacional'
 const JANELA_MS = 10 * 60_000
 const REALERTA_MS = 30 * 60_000
@@ -21,6 +26,34 @@ const REALERTA_MS = 30 * 60_000
 const TITULOS: Record<OrigemOperacional, string> = {
   'push-expirado': 'Push vencendo antes de chegar',
   'pagamento-aprovado-sem-direito': 'Pagamento aprovado sem acesso liberado (P3)',
+  'fire-live-ciclo-falhou': 'Fire Live falhando ciclo após ciclo',
+}
+
+/**
+ * Quantas ocorrências na janela de 10 min disparam o alerta. Push vencido e
+ * P3 alertam na primeira. O Fire Live tolera o soluço (o ciclo seguinte, 20 s
+ * depois, tenta de novo): três falhas DO MESMO JOGO são um minuto de pane —
+ * configuração ausente ou provedor fora do ar, que antes virava um log a cada
+ * 20 s sem ninguém ver. Por jogo, e não somadas: numa noite de dez jogos, um
+ * único soluço do provedor no mesmo ciclo daria dez linhas.
+ */
+const MINIMO_PARA_ALERTAR: Record<OrigemOperacional, number> = {
+  'push-expirado': 1,
+  'pagamento-aprovado-sem-direito': 1,
+  'fire-live-ciclo-falhou': 3,
+}
+const AGRUPAR_POR: Partial<Record<OrigemOperacional, string>> = {
+  'fire-live-ciclo-falhou': 'jogoId',
+}
+
+function maiorGrupo(linhas: { contextoJson: unknown }[], chave: string | undefined): number {
+  if (!chave) return linhas.length
+  const contagem = new Map<unknown, number>()
+  for (const l of linhas) {
+    const k = (l.contextoJson as Record<string, unknown> | null)?.[chave] ?? null
+    contagem.set(k, (contagem.get(k) ?? 0) + 1)
+  }
+  return Math.max(0, ...contagem.values())
 }
 
 export async function registrarFalhaOperacional(
@@ -36,6 +69,26 @@ export async function registrarFalhaOperacional(
     contextoJson: contexto,
     ocorridoEm: agora,
   })
+}
+
+/**
+ * Registrar uma falha nunca pode virar uma segunda falha: quem registra (um
+ * passo do workflow, uma rota da fila) segue o próprio caminho se o INSERT
+ * cair. Loga e segue.
+ */
+export async function registrarFalhaOperacionalSemFalhar(
+  db: Db,
+  origem: OrigemOperacional,
+  contexto: Record<string, unknown>,
+  agora: Date,
+): Promise<void> {
+  try {
+    await registrarFalhaOperacional(db, origem, contexto, agora)
+  } catch (erro) {
+    console.error(
+      JSON.stringify({ evento: 'falha_operacional_nao_registrada', origem, erro: String(erro) }),
+    )
+  }
 }
 
 /**
@@ -128,7 +181,7 @@ export async function avaliarFalhasOperacionais(
     const recentes = linhas.filter(
       (l) => l.origem === origem && l.ocorridoEm.getTime() > agora.getTime() - JANELA_MS,
     )
-    if (recentes.length === 0) continue
+    if (maiorGrupo(recentes, AGRUPAR_POR[origem]) < MINIMO_PARA_ALERTAR[origem]) continue
     const quantidade = recentes.reduce(
       (soma, l) => soma + ((l.contextoJson as { quantidade?: number } | null)?.quantidade ?? 1),
       0,

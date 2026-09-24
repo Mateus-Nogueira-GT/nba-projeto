@@ -183,8 +183,19 @@ O `%` não commitado em `apito/[jogadorId]/page.tsx` é de outra entrega e fica 
 3. **Reserva NBA:** chave da API-Sports, ou aceitar `NBA_RESERVA_OBRIGATORIA=false`.
 4. **Fila da reconciliação** (achado da revisão final): a 3.6 só encerra tentativa **sem nada no
    provedor**. Na prática, o checkout mensal abandonado (preapproval `pending` para sempre) e o
-   PIX gerado e não pago (`rejected`/`cancelled`) continuam na fila indefinidamente. Falta
-   decidir se, passados 7 dias, esses dois casos também saem.
+   PIX gerado e não pago (`rejected`/`cancelled`) continuam na fila indefinidamente.
+   **Decidido pelo parceiro em 23/09: saem.** Passados 7 dias, saem da fila o mensal `pending` ou
+   `cancelled` e a temporada com PIX recusado, cancelado ou parado em pendente. Pagamento em
+   análise (`in_process`) e mensal `authorized`/`paused` ficam. O webhook continua concedendo
+   acesso se o pagamento chegar depois. Consequência aceita: um mensal concluído depois dos 7 dias não volta à fila, porque
+   reabrir esbarraria no índice de uma tentativa aberta por usuário e produto, e as renovações
+   dele dependem só do webhook.
+5. **Preapproval antigo continua pagável** (achado da revisão de 23/09). Com o mensal pendente
+   encerrado, quem volta ao checkout recebe um preapproval NOVO; o antigo segue `pending` no
+   Mercado Pago, sem cancelamento. Se a pessoa concluir os dois (link antigo no histórico e o
+   novo), são duas recorrências cobrando, e o webhook concede nas duas. O mesmo risco já existia
+   na troca de SKU. **Pergunta ao parceiro:** cancelar no provedor o preapproval pendente ao
+   encerrar a tentativa? Até a resposta, nada é cancelado.
 
 ## 6. Checklist de configuração (fora do código, com o parceiro)
 
@@ -336,11 +347,15 @@ branch. Não há migração nesta onda. Nada foi implantado.
   - Resposta truncada por `maxTokens` conta como falha, tanto no chat quanto na narrativa da Lista.
   - As travas ganharam namespace (`src/modules/dominio/db/travas.ts`).
 
-**Fica para depois do merge**
+**Depois da revisão, na branch `prontidao-pendencias`**
 
-- Alerta para `fire_live_ciclo_falhou` repetido. Hoje, uma configuração ausente vira log a cada
-  20 s, em silêncio.
-- Log dos erros por casa na coleta de odds antes da Lista.
+- A regra da fila da reconciliação decidida na §5, item 4.
+- `fire_live_ciclo_falhou` vai para `log_falhas`, e três falhas do MESMO jogo em 10 min viram
+  alerta (uma sozinha é soluço; somadas, uma noite de dez jogos alertaria a cada soluço).
+- A coleta de odds antes da Lista registra no log o erro de cada casa, como faz o cron da rodada.
+
+**Fica para depois**
+
 - Conferir a cota do plano da BallDontLie. Durante o 1º quarto, cada snapshot faz uma leitura a
   mais do jogo.
-- Pendências que continuam com o parceiro: a §5 (P3, G8, reserva NBA e a fila da reconciliação).
+- Pendências que continuam com o parceiro: a §5 (P3, G8, reserva NBA e o preapproval antigo).

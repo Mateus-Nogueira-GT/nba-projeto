@@ -3,7 +3,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vites
 import { eq } from 'drizzle-orm'
 
 import { bancoDeTeste } from '../../dominio/__tests__/ajuda-banco'
-import { fireLiveExecucoes, jogos, times } from '../../dominio/db/schema'
+import { fireLiveExecucoes, jogos, logFalhas, times } from '../../dominio/db/schema'
 import { carregarRuleset } from '../../motor/ruleset/carregar'
 import { encerrarExecucao, executarCiclo, registrarCiclo } from '../fire-live/ciclo'
 import { executarPassoFireLive } from '../fire-live/passo'
@@ -82,6 +82,25 @@ describe('passo do Fire Live', () => {
       entrada({ motorEncerrado: false }),
     )
     expect(r).toMatchObject({ encerrar: false, estado: { x: 1 }, motorEncerrado: false })
+  })
+
+  it('falha de ciclo vai para log_falhas, para a saúde alertar quando se repete', async () => {
+    await banco.db.delete(logFalhas)
+    await executarPassoFireLive(
+      {
+        db: banco.db,
+        ruleset,
+        fila: filaMuda,
+        agora: AGORA,
+        ingerir: async () => {
+          throw new Error('BDL 502')
+        },
+      },
+      entrada({ motorEncerrado: false }),
+    )
+    const linhas = await banco.db.select().from(logFalhas)
+    expect(linhas.map((l) => l.origem)).toEqual(['fire-live-ciclo-falhou'])
+    expect(linhas[0]?.contextoJson).toMatchObject({ jogoId, erro: 'BDL 502' })
   })
 
   it('todo passo grava o batimento, mesmo depois do fim do 1Q', async () => {
