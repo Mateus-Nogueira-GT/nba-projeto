@@ -17,7 +17,7 @@ module.exports = {
         'Fatos entram como argumento — o motor nunca vai buscar nada.',
       from: { path: '^src/modules/motor' },
       to: {
-        path: '^src/(modules/(ingestao|dominio|entrega|plataforma)|app|design-system|workflows)',
+        path: '^src/(modules/(ingestao|dominio|entrega|plataforma)|app|features|ui|workflows)',
       },
     },
     {
@@ -55,7 +55,7 @@ module.exports = {
         'O gerador da temporada simulada não pode depender de domínio, entrega, plataforma ' +
         'nem app. O que ele precisa saber entra como argumento.',
       from: { path: '^src/modules/ingestao/demo/simulacao\\.ts$' },
-      to: { path: '^src/(modules/(dominio|entrega|plataforma)|app|design-system|workflows)' },
+      to: { path: '^src/(modules/(dominio|entrega|plataforma)|app|features|ui|workflows)' },
     },
     {
       name: 'simulacao-sem-builtin-node',
@@ -84,7 +84,10 @@ module.exports = {
         'apito numa tela de consulta — e o número mostrado deixa de ser o que a ' +
         'liga registrou para virar o que a estratégia deduziu. Nem tipo: aqui a ' +
         'proibição é total, ao contrário da regra do app.',
-      from: { path: '^src/(modules/entrega/estatisticas|app/\\(app\\)/estatisticas)' },
+      // `features/estatisticas` é a mesma tela no front v2 (spec 23/09, §3).
+      from: {
+        path: '^src/(modules/entrega/estatisticas|app/\\(app\\)/estatisticas|features/estatisticas)',
+      },
       to: { path: '^src/modules/motor' },
     },
     {
@@ -102,14 +105,44 @@ module.exports = {
       },
     },
     {
-      name: 'componente-nao-usa-token-primitivo',
+      name: 'tela-v2-nao-chama-o-motor',
       severity: 'error',
       comment:
-        'Componente que importa a paleta crua pulou duas camadas de token. ' +
-        'Use semantico/componente — trocar a marca tem que ser um diff só no primitivo. ' +
-        'Ver docs/04-design-system.md > Camadas de token.',
-      from: { path: '^src/(design-system/componentes|app)' },
-      to: { path: '^src/design-system/tokens/primitivo' },
+        '`src/features` e `src/ui` são as telas e peças do front v2 (spec ' +
+        '2026-09-23-front-v2-integracao, §3): mesma camada que `src/app`, mesma ' +
+        'proibição — sem esta regra a tela do v2 escaparia da guarda só por morar ' +
+        'fora de `app/`. A única diferença: `motor/tipos.ts` pode entrar como ' +
+        'VALOR. Esse arquivo tem as constantes de vocabulário (ATRIBUTOS, NIVEIS, ' +
+        'NIVEIS_APITO) e dois auxiliares puros e pequenos (`montarChave`, ' +
+        '`valorDoAtributo`: montar a chave do apito e ler o número do atributo), ' +
+        'sem nenhuma lógica de avaliação de estratégia. O v2 usa ATRIBUTOS e ' +
+        'NIVEIS; qualquer outro módulo do motor segue proibido.',
+      from: { path: '^src/(features|ui)' },
+      to: {
+        path: '^src/modules/motor',
+        pathNot: '^src/modules/motor/tipos\\.ts$',
+        dependencyTypesNot: ['type-only'],
+      },
+    },
+    /*
+     * O front v2 não tem paleta em TypeScript: a única fonte de cor é
+     * `src/ui/tokens.css`, e a regra "componente não usa token primitivo"
+     * (que vigiava `design-system/tokens/primitivo.ts`) virou o teste de fonte
+     * `src/ui/__tests__/marca-e-vocabulario.test.ts` — nenhum hex fora do
+     * tokens.css em `src/ui`, `src/features` e `src/app`. O que sobra para a
+     * guarda de dependência é impedir o front antigo de voltar pela porta dos
+     * fundos: `src/components` e `src/design-system` foram aposentados na
+     * Tarefa 12 do front v2, e um import para lá é um arquivo ressuscitado.
+     */
+    {
+      name: 'front-antigo-aposentado',
+      severity: 'error',
+      comment:
+        '`src/components` e `src/design-system` (o front antigo) foram aposentados na ' +
+        'Tarefa 12 do front v2. Peças de tela moram em `src/ui`; telas, em `src/features`. ' +
+        'Ver docs/04-design-system.md.',
+      from: { path: '^src' },
+      to: { path: '^src/(components|design-system)/' },
     },
     {
       name: 'sem-dependencia-circular',

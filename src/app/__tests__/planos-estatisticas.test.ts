@@ -117,17 +117,14 @@ afterAll(async () => {
 })
 
 /**
- * O HTML de UMA seção, do título dela até o título da seguinte.
- *
- * Sem isso a asserção casa em qualquer lugar da página. Ver o mesmo helper em
- * `telas-04-estatisticas.test.ts` — aqui ele lança em vez de usar `expect`
- * porque roda dentro de `beforeAll` em algumas chamadas auxiliares.
+ * O HTML de UMA seção. Front v2: `SecaoStats` escreve
+ * `<section aria-label="título">`, e a ordem das seções mudou (jogo a jogo
+ * antes dos apitos) — recortar pelo rótulo da seção não depende da ordem.
  */
-function trecho(html: string, de: string, ate: string): string {
-  const i = html.indexOf(de)
-  const f = html.indexOf(ate, i)
-  if (i < 0 || f < 0) throw new Error(`trecho não encontrado: ${de} … ${ate}`)
-  return html.slice(i, f)
+function secao(html: string, titulo: string): string {
+  const i = html.search(new RegExp(`<section[^>]*aria-label="${titulo}"`))
+  if (i < 0) throw new Error(`seção não encontrada: ${titulo}`)
+  return html.slice(i, html.indexOf('</section>', i))
 }
 
 async function renderizarJogador(id: string): Promise<string> {
@@ -137,10 +134,18 @@ async function renderizarJogador(id: string): Promise<string> {
   )
 }
 
-async function renderizarJogo(id: string): Promise<string> {
+/**
+ * A partida do v2 tem abas: box score e confrontos anteriores moram em
+ * `?aba=box` e `?aba=confrontos`, a visão geral (quartos, líderes,
+ * desfalques) na aba padrão.
+ */
+async function renderizarJogo(id: string, aba?: 'box' | 'confrontos'): Promise<string> {
   const { default: Pagina } = await import('../(app)/estatisticas/jogo/[id]/page')
   return renderToStaticMarkup(
-    await Pagina({ params: Promise.resolve({ id }), searchParams: Promise.resolve({}) }),
+    await Pagina({
+      params: Promise.resolve({ id }),
+      searchParams: Promise.resolve(aba ? { aba } : {}),
+    }),
   )
 }
 
@@ -156,64 +161,51 @@ async function renderizarClassificacao(): Promise<string> {
   return renderToStaticMarkup(await Pagina({ searchParams: Promise.resolve({}) }))
 }
 
-/** O HTML sem a coluna da direita. */
-function semLateral(html: string): string {
-  return html.replace(/<aside[\s\S]*?<\/aside>/g, '')
-}
-
 describe('estatísticas por nível (spec §5, linhas 5-6)', () => {
   it('GRATIS: o jogador tem o resumo, e as três seções fundas viram convite', async () => {
     nivelNoTeste = 'GRATIS'
     const html = await renderizarJogador(jogadorId)
 
-    // O resumo (hero: PTS · REB · AST · NOTA) é o que "grátis vê o resumo"
-    // (spec, decisão 10) descreve — não "Ataque/Defesa/Posse", que só existem
-    // DENTRO de "Números completos" e ficam atrás do mesmo portão dessa
-    // seção (Step 4 do brief é explícito: ela vira convite por inteiro).
-    expect(html).toContain('PTS')
-    for (const secao of ['Apitos da estratégia', 'Jogo a jogo', 'Números completos']) {
-      expect(html).toContain(secao)
+    // O resumo (pontos, rebotes, assistências, nota) é o que "grátis vê o
+    // resumo" (spec, decisão 10) descreve.
+    expect(html).toContain('Pontos')
+    for (const titulo of ['Apitos da estratégia', 'Jogo a jogo', 'Números completos']) {
+      const s = secao(html, titulo)
+      expect(s, titulo).not.toContain('<table')
+      expect(s, titulo).not.toContain('<ul')
+      expect(s, titulo).toContain('começa no')
     }
-    expect(trecho(html, 'Apitos da estratégia', 'Jogo a jogo')).not.toContain('<table')
-    expect(trecho(html, 'Apitos da estratégia', 'Jogo a jogo')).not.toContain('<ul')
-    expect(trecho(html, 'Apitos da estratégia', 'Jogo a jogo')).toContain('começa no')
-    expect(trecho(html, 'Jogo a jogo', 'Números completos')).not.toContain('<table')
-    expect(trecho(html, 'Jogo a jogo', 'Números completos')).toContain('começa no')
-    expect(trecho(html, 'Números completos', 'Última atualização')).toContain('começa no')
   })
 
   it('MVP: as três seções fundas têm conteúdo e nenhum convite', async () => {
     nivelNoTeste = 'MVP'
     const html = await renderizarJogador(jogadorId)
 
-    expect(trecho(html, 'Jogo a jogo', 'Números completos')).toContain('<table')
-    // A LATERAL fica de fora: o banner de plano mora nela para o grátis
-    // (identidade 05, §8) e não bloqueia nada — o que esta asserção prova é
-    // que o CONTEÚDO da tela vem inteiro, sem convite no lugar dele.
-    expect(semLateral(html)).not.toContain('começa no')
+    expect(secao(html, 'Jogo a jogo')).toContain('<table')
+    for (const titulo of ['Apitos da estratégia', 'Jogo a jogo', 'Números completos']) {
+      expect(secao(html, titulo), titulo).not.toContain('começa no')
+    }
   })
 
-  it('GRATIS: o jogo tem líderes e desfalques; box score e confrontos viram convite', async () => {
+  it('GRATIS: o jogo tem líderes; box score e confrontos viram convite', async () => {
     nivelNoTeste = 'GRATIS'
-    const html = await renderizarJogo(jogoId)
+    expect(await renderizarJogo(jogoId)).toContain('Líderes da partida')
 
-    expect(html).toContain('Líderes da partida')
-    expect(trecho(html, 'Box score', 'Confrontos anteriores')).not.toContain('<table')
-    expect(trecho(html, 'Box score', 'Confrontos anteriores')).toContain('começa no')
+    const box = await renderizarJogo(jogoId, 'box')
+    expect(box).not.toContain('<caption')
+    expect(box).toContain('começa no')
     // "Confrontos anteriores" é seção fechada também — o portão não termina
     // no box score.
-    expect(trecho(html, 'Confrontos anteriores', 'Última atualização')).toContain('começa no')
+    const confrontos = await renderizarJogo(jogoId, 'confrontos')
+    expect(confrontos).toContain('começa no')
   })
 
   it('MVP: o jogo tem box score e confrontos anteriores, sem convite', async () => {
     nivelNoTeste = 'MVP'
-    const html = await renderizarJogo(jogoId)
-
-    expect(trecho(html, 'Box score', 'Confrontos anteriores')).toContain('<table')
-    // A LATERAL fica de fora: o banner de plano mora nela para o grátis
-    // (identidade 05, §8) e não bloqueia nada — o que esta asserção prova é
-    // que o CONTEÚDO da tela vem inteiro, sem convite no lugar dele.
-    expect(semLateral(html)).not.toContain('começa no')
+    const box = await renderizarJogo(jogoId, 'box')
+    expect(box).toContain('<table')
+    expect(box).not.toContain('começa no')
+    expect(await renderizarJogo(jogoId, 'confrontos')).not.toContain('começa no')
   })
 
   it('GRATIS: o time tem campanha e elenco; box score por jogo vira convite', async () => {
@@ -222,33 +214,29 @@ describe('estatísticas por nível (spec §5, linhas 5-6)', () => {
 
     expect(html).toContain('Campanha')
     expect(html).toContain('Elenco')
-    expect(trecho(html, 'Box score por jogo', 'Elenco')).not.toContain('<table')
-    expect(trecho(html, 'Box score por jogo', 'Elenco')).toContain('começa no')
+    expect(secao(html, 'Box score por jogo')).not.toContain('<table')
+    expect(secao(html, 'Box score por jogo')).toContain('começa no')
   })
 
   it('MVP: o time tem box score por jogo, sem convite', async () => {
     nivelNoTeste = 'MVP'
     const html = await renderizarTime(timeId)
 
-    // "começa no" não pode ser buscado na página inteira aqui: a Hierarquia
-    // NIP (grátis, sempre aberta) tem uma frase estática sobre a OPD que
-    // contém a MESMA substring ("...quando começa no topo..."), sem ser
-    // convite nenhum — daí o recorte na seção fechada.
-    expect(trecho(html, 'Box score por jogo', 'Elenco')).toContain('<table')
-    expect(trecho(html, 'Box score por jogo', 'Elenco')).not.toContain('começa no')
+    // Recortado na seção fechada: a Hierarquia NIP (grátis, sempre aberta)
+    // tem uma frase estática sobre a OPD com a MESMA substring ("...quando
+    // começa no topo..."), sem ser convite nenhum.
+    expect(secao(html, 'Box score por jogo')).toContain('<table')
+    expect(secao(html, 'Box score por jogo')).not.toContain('começa no')
   })
 
   it('a Hierarquia NIP do time continua grátis (decisão 10b) — vitrine, não profundidade', async () => {
     nivelNoTeste = 'GRATIS'
     const html = await renderizarTime(timeId)
 
-    // O título é montado por extenso ("Hierarquia NIP · PONTOS"); a régua não
-    // classificava esta seção e o parceiro decidiu em 16/09 que ela fica
-    // aberta para todo mundo — é vitrine da curadoria humana. "Ver os
-    // planos" é o marcador do CONVITE (não "começa no": a própria seção tem
-    // uma frase estática sobre a OPD com essa substring, sem ser portão).
-    const secao = trecho(html, 'Hierarquia NIP', 'Box score por jogo')
-    expect(secao).not.toContain('Ver os planos')
+    // "Ver planos" é o marcador do CONVITE (não "começa no": a própria seção
+    // tem uma frase estática sobre a OPD com essa substring, sem ser portão).
+    const hierarquia = secao(html, 'Hierarquia NIP · Pontos')
+    expect(hierarquia).not.toContain('Ver planos')
   })
 
   it('a classificação é inteira para o GRATIS', async () => {
@@ -256,10 +244,7 @@ describe('estatísticas por nível (spec §5, linhas 5-6)', () => {
     const html = await renderizarClassificacao()
 
     expect(html).toContain('<table')
-    // A LATERAL fica de fora: o banner de plano mora nela para o grátis
-    // (identidade 05, §8) e não bloqueia nada — o que esta asserção prova é
-    // que o CONTEÚDO da tela vem inteiro, sem convite no lugar dele.
-    expect(semLateral(html)).not.toContain('começa no')
+    expect(html).not.toContain('começa no')
   })
 })
 
@@ -270,8 +255,7 @@ describe('identidade 05 · as seções pagas viram silhueta', () => {
     // Três seções pagas (apitos, jogo a jogo, números completos), três
     // silhuetas — e nenhuma tabela de verdade.
     expect((html.match(/_silhueta_/g) ?? []).length).toBe(3)
-    expect(semLateral(html)).not.toContain('<table')
-    // O convite continua sendo o nome acessível do conjunto.
+    expect(html).not.toContain('<table')
     expect(html).toContain('começa no')
   })
 })

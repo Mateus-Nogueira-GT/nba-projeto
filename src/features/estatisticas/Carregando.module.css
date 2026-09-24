@@ -1,0 +1,35 @@
+.tela {
+  display: flex;
+  flex-direction: column;
+  gap: var(--e-6);
+  max-width: 1400px;
+}
+.titulo,
+.faixa,
+.bloco {
+  border-radius: var(--raio);
+  background: var(--superficie);
+  animation: pulsar 1.4s ease-in-out infinite;
+}
+.titulo {
+  width: 240px;
+  height: 36px;
+}
+.faixa {
+  height: 52px;
+}
+.bloco {
+  height: 220px;
+}
+@keyframes pulsar {
+  50% {
+    opacity: 0.5;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .titulo,
+  .faixa,
+  .bloco {
+    animation: none;
+  }
+}

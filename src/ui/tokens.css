@@ -1,0 +1,343 @@
+/*
+ * TOKENS DO NIP v2.
+ *
+ * As cores são as MESMAS que o design-system antigo declarava em
+ * `primitivo.ts` (aposentado na Tarefa 12 do front v2; os nomes dele ficam nos
+ * comentários ao lado de cada hex): nenhuma nova, nenhuma removida. O que muda
+ * é a regra de uso, escrita aqui nos nomes — cada grupo diz ONDE a cor pode
+ * aparecer. Este arquivo é a ÚNICA fonte de cor do app
+ * (`src/ui/__tests__/marca-e-vocabulario.test.ts`).
+ */
+:root {
+  color-scheme: dark;
+
+  /* Superfícies — três níveis, do fundo para o controle. */
+  --fundo: #071426; /* fundoNip */
+  --superficie: #101c30; /* cartaoNip */
+  --campo: #18243a; /* campoNip */
+  --campo-hover: #1b2740; /* tinta600 */
+  --borda: rgba(42, 56, 82, 0.7); /* tinta500 */
+  --borda-forte: #2a3852; /* tinta500 */
+  --veu-escuro: rgba(7, 20, 38, 0.7); /* fundoNipVeu70 */
+
+  /* Texto. */
+  --texto: #ffffff;
+  --texto-2: #a6abb4; /* cinzaNip — 8.0:1 sobre --superficie */
+  --texto-3: rgba(255, 255, 255, 0.55); /* 5.6:1 sobre --superficie */
+
+  /* Destaque de interface: o azul NIP, SÓ como preenchimento. */
+  --acento: #0057b8; /* azulNip */
+  --acento-hover: #1f6bc1; /* azulNipHover */
+  --acento-veu: rgba(0, 87, 184, 0.16);
+  --acento-texto: #8cc4ff; /* azul300 — quando o azul precisa ser texto */
+
+  /* SIGNIFICADO — cada cor só onde significa. */
+  /* Nível do apito: indicador e borda da linha. */
+  --apito-1: #ffdd00; /* ambar400 */
+  --apito-2: #ffa31f; /* laranja400 */
+  --apito-3: #2be884; /* verde400 */
+  --apito-turbo: #4da3ff; /* azul400 */
+  --apito-1-veu: rgba(255, 221, 0, 0.12);
+  --apito-2-veu: rgba(255, 163, 31, 0.12);
+  --apito-3-veu: rgba(43, 232, 132, 0.12);
+  --apito-turbo-veu: rgba(77, 163, 255, 0.14);
+  --modo-fire: #ff6b35; /* coralFogo */
+
+  /* Nível do jogador: só o selo. */
+  --nivel-mvp: #f2ae1c; /* ouro */
+  --nivel-all-star: #a9b6c9; /* prata */
+  --nivel-suporte: #f08040; /* bronze */
+  --nivel-randola: rgba(255, 255, 255, 0.7);
+  --nivel-mvp-veu: rgba(242, 174, 28, 0.12);
+  --nivel-all-star-veu: rgba(169, 182, 201, 0.12);
+  --nivel-suporte-veu: rgba(240, 128, 64, 0.12);
+  --nivel-randola-veu: rgba(255, 255, 255, 0.08);
+
+  /* Bateu / não bateu: barras e deltas. */
+  --bateu: #2fbf71; /* verdeBarrinha */
+  --falhou: #cc3b3b; /* vermelhoBarrinha */
+  --bateu-texto: #2be884; /* verde400 — texto sobre superfície escura */
+  --falhou-texto: #ff5c70; /* vermelhoNipClaro */
+
+  /* Ao vivo: só o vermelho NIP. */
+  --ao-vivo: #ff5c70; /* vermelhoNipClaro — texto (AA) */
+  --ao-vivo-solido: #c8102e; /* vermelhoNip — preenchimento */
+  --ao-vivo-veu: rgba(255, 92, 112, 0.14);
+
+  /* Confiança: só a pílula. Grau 1 → 5. */
+  --confianca-1: #2fa093;
+  --confianca-2: #3ab5a6;
+  --confianca-3: #47cbba;
+  --confianca-4: #5ce0ce;
+  --confianca-5: #79f2e1;
+
+  /*
+   * O que vem abaixo até "Tipografia" é FIXO: igual nos três temas. São as
+   * cores que o v2 escrevia à mão nas telas (Tarefa 11b) e que não devem
+   * acompanhar o tema — ilustração, placa de metal, moldura, medição.
+   */
+  /* Manual — as cores do logo, fixas. */
+  --fundo-nip: #071426; /* fundoNip — o herói da entrada */
+  --azul-nip: #0057b8; /* azulNip — quadra, brilho das telas de acesso */
+  --breu: #030810; /* o escuro mais fundo: véu de fundo e sombra */
+  --tinta-escura: #080d16; /* a tinta escura do Manual sobre cor cheia (galeria) */
+  --sombra-azul: #001d3d; /* a sombra azulada da doca do assistente */
+
+  /* Quadra ilustrativa — cenário do placar ao vivo (Quadra.tsx). */
+  --quadra-piso: #0b1830;
+  --quadra-meio: #0e223e;
+  --quadra-azul: var(--azul-nip);
+  --quadra-vermelho: var(--ao-vivo-solido);
+  --quadra-linha: var(--texto-sobre-acento);
+
+  /* Selo metálico — nível do jogador em placa de metal com letra escura. */
+  --selo-mvp-texto: #2a1a00;
+  --selo-mvp-fundo: linear-gradient(135deg, #fff1b8 0%, #f5c542 38%, #d99a12 70%, #fbe08a 100%);
+  --selo-mvp-brilho: #f2ae1c; /* ouro — o brilho em volta da placa */
+  --selo-all-star-texto: #141b27;
+  --selo-all-star-fundo: linear-gradient(135deg, #ffffff 0%, #cfd8e6 40%, #93a1b8 72%, #e8eef7 100%);
+  --selo-suporte-texto: #2b1305;
+  --selo-suporte-fundo: linear-gradient(135deg, #ffc9a1 0%, #f08040 45%, #b5561f 75%, #f7a56f 100%);
+
+  /* Turbo — raio + fogo: o selo (marcas) e a barra da linha (Tabela). */
+  --turbo-azul: #4da3ff; /* azul400 */
+  --turbo-laranja: #ff6b35; /* coralFogo */
+  --turbo-fundo: linear-gradient(120deg, #0b3a8c 0%, #1d6fe0 35%, var(--turbo-laranja) 75%, #ffb020 100%);
+  --turbo-barra: linear-gradient(180deg, var(--turbo-azul) 0%, #1d6fe0 40%, var(--turbo-laranja) 80%, #ffb020 100%);
+  --turbo-texto: var(--texto-sobre-acento);
+  --turbo-raio-traco: #fffbe0;
+  --turbo-raio-miolo: #ffe45c;
+  --turbo-fogo-traco: #fff3e0;
+  --turbo-fogo-miolo: #ffd166;
+
+  /* Nota da partida — a paleta do front antigo (primitivo.ts: notaFundo*, notaTexto*). */
+  --nota-excepcional-fundo: #1f6f4a;
+  --nota-excepcional-texto: #eafbf2;
+  --nota-otima-fundo: #2e7d62;
+  --nota-otima-texto: #eafbf2;
+  --nota-boa-fundo: #3d5a80;
+  --nota-boa-texto: #e8eff7;
+  --nota-mediana-fundo: #4a4e69;
+  --nota-mediana-texto: #e9e9f0;
+  --nota-fraca-fundo: #5c3a3a;
+  --nota-fraca-texto: #f7e9e9;
+
+  /*
+   * A amostra de cada tema no menu (BotaoTema): fundo, cartão e destaque. Os
+   * três temas aparecem juntos, por isso o nome carrega o tema em vez de ser
+   * `--fundo`. O cartão do Claro é mais escuro que o `--campo` dele de
+   * propósito: num quadrado de 30px o `--campo` some no fundo. O teste de
+   * marca trava fundo e destaque iguais aos do bloco do tema.
+   */
+  /* Amostra dos temas — o menu de tema. */
+  --amostra-marinho-fundo: #0b1a36;
+  --amostra-marinho-campo: #182e5a;
+  --amostra-marinho-acento: #1f6fe8;
+  --amostra-aco-fundo: #101c2e;
+  --amostra-aco-campo: #1f3352;
+  --amostra-aco-acento: #2d7ff0;
+  --amostra-claro-fundo: #f3f5f9;
+  --amostra-claro-campo: #c9d2e0;
+  --amostra-claro-acento: var(--azul-nip);
+
+  /* Tipografia. */
+  --fonte: var(--fonte-montserrat), system-ui, sans-serif;
+  --fonte-heroi: var(--fonte-bebas), 'Arial Narrow', sans-serif;
+  --t-12: 0.75rem;
+  --t-13: 0.8125rem;
+  --t-14: 0.875rem;
+  --t-16: 1rem;
+  --t-18: 1.125rem;
+  --t-22: 1.375rem;
+  --t-28: 1.75rem;
+  --t-40: 2.5rem;
+
+  /* Forma. */
+  --raio: 12px;
+  --raio-controle: 8px;
+  --raio-pilula: 999px;
+  --e-1: 4px;
+  --e-2: 8px;
+  --e-3: 12px;
+  --e-4: 16px;
+  --e-5: 20px;
+  --e-6: 24px;
+  --e-8: 32px;
+
+  /* Movimento. */
+  --rapido: 150ms;
+  --medio: 250ms;
+  --curva: cubic-bezier(0.2, 0, 0, 1);
+
+  /* Esqueleto do app. */
+  --sidebar: 240px;
+  --sidebar-recolhida: 72px;
+  --topo: 56px;
+  --topo-celular: 52px;
+  --barra-inferior: 64px;
+  --painel: 520px;
+}
+
+/*
+ * TEMAS — reunião com os sócios (23/09/2026) + escolha do Yago no mesmo dia:
+ * a pessoa escolhe o tema no topo, como no GPM. Três opções:
+ *   marinho (padrão) · aço · claro.
+ * Os valores do :root acima são o navy original e ficam só de reserva.
+ * Nos temas escuros muda superfície, borda, apoio e destaque; as cores de
+ * significado são as mesmas. No claro elas escurecem para passar AA no branco.
+ */
+:root {
+  --texto-sobre-acento: #ffffff;
+}
+
+/* Marinho: o azul do logo, sóbrio. */
+:root[data-tema='marinho'] {
+  --fundo: #0b1a36;
+  --superficie: #11244a;
+  --campo: #182e5a;
+  --campo-hover: #1d3566;
+  --borda: rgba(150, 180, 240, 0.16);
+  --borda-forte: #27427a;
+  --veu-escuro: rgba(11, 26, 54, 0.72);
+  --texto-2: #b3bfd4;
+  --texto-3: rgba(255, 255, 255, 0.6);
+  --acento: #1f6fe8;
+  --acento-hover: #3a82f2;
+  --acento-veu: rgba(31, 111, 232, 0.22);
+  --acento-texto: #9cc3ff;
+}
+
+/* Aço: cinza-azulado, o mais neutro. */
+:root[data-tema='aco'] {
+  --fundo: #101c2e;
+  --superficie: #172841;
+  --campo: #1f3352;
+  --campo-hover: #253b5e;
+  --borda: rgba(170, 190, 220, 0.14);
+  --borda-forte: #2f4668;
+  --veu-escuro: rgba(16, 28, 46, 0.72);
+  --texto-2: #b4bfcf;
+  --texto-3: rgba(255, 255, 255, 0.6);
+  --acento: #2d7ff0;
+  --acento-hover: #4690f5;
+  --acento-veu: rgba(45, 127, 240, 0.2);
+  --acento-texto: #a3c8ff;
+}
+
+/* Claro: fundo branco, azul NIP no destaque. */
+:root[data-tema='claro'] {
+  color-scheme: light;
+  --fundo: #f3f5f9;
+  --superficie: #ffffff;
+  --campo: #eef1f6;
+  --campo-hover: #e4e9f1;
+  --borda: rgba(16, 32, 64, 0.1);
+  --borda-forte: #d3dae6;
+  --veu-escuro: rgba(243, 245, 249, 0.8);
+
+  --texto: #0d1b33;
+  --texto-2: #4b5870; /* 7.4:1 sobre branco */
+  --texto-3: #6b7689; /* 4.7:1 sobre branco */
+
+  --acento: #0057b8;
+  --acento-hover: #0a64c9;
+  --acento-veu: rgba(0, 87, 184, 0.1);
+  --acento-texto: #0057b8;
+
+  --apito-1: #a07a00;
+  --apito-2: #c25e00;
+  --apito-3: #128a4a;
+  --apito-turbo: #1560d4;
+  --apito-1-veu: rgba(160, 122, 0, 0.12);
+  --apito-2-veu: rgba(194, 94, 0, 0.12);
+  --apito-3-veu: rgba(18, 138, 74, 0.12);
+  --apito-turbo-veu: rgba(21, 96, 212, 0.12);
+  --modo-fire: #d9480f;
+
+  --nivel-mvp: #9a6b00;
+  --nivel-all-star: #56647a;
+  --nivel-suporte: #b4501a;
+  --nivel-randola: #4b5870;
+  --nivel-randola-veu: rgba(16, 32, 64, 0.06);
+
+  --bateu: #1f9d5c;
+  --falhou: #d23b3b;
+  --bateu-texto: #13804a;
+  --falhou-texto: #c0263a;
+
+  --ao-vivo: #c8102e;
+  --ao-vivo-veu: rgba(200, 16, 46, 0.1);
+
+  --confianca-1: #2b8c80;
+  --confianca-2: #1f8a7d;
+  --confianca-3: #13877a;
+  --confianca-4: #0a8476;
+  --confianca-5: #007f70;
+}
+
+/* -------------------------------------------------------------------------
+ * LANDING (/conheca) — paleta própria, mais escura que a do app, no padrão
+ * das LPs Plus Mídia. Os valores são os que o v2 trazia em
+ * features/landing/Landing.module.css; vieram para cá para a marca ter uma
+ * fonte só (fix round 1 da Tarefa 11). Prefixo `--l-` para não colidir com
+ * os tokens do app; a landing não troca de tema, por isso um bloco só.
+ * ---------------------------------------------------------------------- */
+:root {
+  --l-fundo: #060b14;
+  --l-faixa: #09101c;
+  --l-card: #0c1523;
+  --l-card-2: #101b2d;
+  --l-azul: #1767d6;
+  --l-azul-hover: #2476e6;
+  --l-azul-claro: #5aa9ff;
+  --l-texto: #f4f6f9;
+  --l-texto-2: #a3abb8;
+  --l-texto-3: #6f7888;
+  --l-branco: #ffffff; /* botões e títulos em branco cheio */
+  --l-preto: #000000; /* a tela do celular e a máscara da faixa corrida */
+  --l-texto-sobre-branco: #07142a; /* o botão branco e o plano em destaque */
+  --l-verde: #2fbf71; /* verdeBarrinha — o "incluso" do comparativo */
+  --l-vidro: #181f2c; /* cartões translúcidos do herói e do notebook */
+  --l-vidro-2: #101826;
+  /* Molduras dos aparelhos: celular, notebook e navegador. */
+  --l-aparelho: #1b2433;
+  --l-aparelho-borda: #0b1019;
+  --l-tela: #0a0e15;
+  --l-base: linear-gradient(180deg, #2a3240 0%, #131922 100%);
+  --l-navegador: #0a0f18;
+  --l-navegador-barra: #101722;
+  --l-navegador-ponto: #353d4b;
+  /*
+   * Seis cinzas de texto que o v2 trouxe quase iguais entre si (selo, checks
+   * do herói, aviso, faixa, lista e critério). Vieram como estavam para não
+   * mudar cor; unificar é decisão visual, não desta migração.
+   */
+  --l-texto-selo: #dfe5ee;
+  --l-texto-checks: #cdd4de;
+  --l-texto-aviso: #c9d0da;
+  --l-texto-faixa: #d7dde6;
+  --l-texto-lista: #d3d9e2;
+  --l-texto-criterio: #dfe4ec;
+  /*
+   * Os oito ícones da faixa corrida do herói (features/landing/conteudo.ts).
+   * O v2 os escrevia em hex: são as cores dos tokens do app no Marinho
+   * (azul400, vermelhoNipClaro, verde400…), mas aqui FIXAS. Apontar para os
+   * tokens do app (`--apito-turbo`, `--ao-vivo`…) deixava o Claro escurecê-los
+   * — ícone escuro sobre o fundo escuro que a landing tem nos três temas.
+   */
+  --l-icone-lista: #4da3ff;
+  --l-icone-ao-vivo: #ff5c70;
+  --l-icone-alvo: #5ce0ce;
+  --l-icone-tendencia: #2be884;
+  --l-icone-carteira: #f2ae1c;
+  --l-icone-sino: #a9b6c9;
+  --l-icone-robo: #8cc4ff;
+  --l-icone-trofeu: #ffa31f;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --rapido: 0ms;
+    --medio: 0ms;
+  }
+}

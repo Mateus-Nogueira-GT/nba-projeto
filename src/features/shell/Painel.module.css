@@ -1,0 +1,109 @@
+/*
+ * ≥ 1280px  resumo = coluna de 340px; detalhe = coluna de 520px (empurra a lista)
+ * 1024–1279 sem resumo; detalhe = gaveta de 480px por cima da lista
+ * < 1024px  sem resumo; detalhe = tela cheia vinda de baixo
+ */
+.painel {
+  position: sticky;
+  top: var(--topo);
+  flex-shrink: 0;
+  width: var(--painel);
+  height: calc(100dvh - var(--topo));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border-left: 1px solid var(--borda);
+  background: var(--superficie);
+  outline: none;
+}
+.painel[data-modo='resumo'] {
+  width: 340px;
+  background: var(--fundo);
+}
+.painel[data-modo='detalhe'] {
+  animation: entrar var(--medio) var(--curva);
+}
+.barra {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  justify-content: flex-end;
+  height: 0;
+}
+.alca {
+  display: none;
+}
+.fechar {
+  display: inline-flex;
+  height: fit-content;
+  margin: var(--e-4) var(--e-4) 0 0;
+  padding: 7px;
+  border: 1px solid var(--borda-forte);
+  border-radius: var(--raio-controle);
+  background: var(--campo);
+  color: var(--texto-2);
+}
+.fechar:hover {
+  color: var(--texto);
+}
+
+@keyframes entrar {
+  from {
+    opacity: 0;
+    transform: translateX(16px);
+  }
+}
+
+@media (max-width: 1279px) {
+  .painel[data-modo='resumo'] {
+    display: none;
+  }
+  .painel[data-modo='detalhe'] {
+    position: fixed;
+    top: var(--topo);
+    right: 0;
+    bottom: 0;
+    z-index: 25;
+    width: 480px;
+    height: auto;
+    box-shadow: -24px 0 48px color-mix(in srgb, var(--breu) 55%, transparent);
+  }
+}
+
+@media (max-width: 1023px) {
+  .painel[data-modo='detalhe'] {
+    inset: 0;
+    z-index: 40;
+    width: 100%;
+    height: 100dvh;
+    padding-top: env(safe-area-inset-top);
+    border: 0;
+    box-shadow: none;
+    animation-name: subir;
+  }
+  .barra {
+    height: auto;
+    justify-content: space-between;
+    align-items: center;
+    padding: var(--e-2) var(--e-3);
+    border-bottom: 1px solid var(--borda);
+    background: var(--superficie);
+  }
+  .alca {
+    display: block;
+    width: 36px;
+    height: 4px;
+    margin-left: calc(50% - 18px);
+    border-radius: 2px;
+    background: var(--borda-forte);
+  }
+  .fechar {
+    margin: 0;
+  }
+  @keyframes subir {
+    from {
+      transform: translateY(24px);
+      opacity: 0;
+    }
+  }
+}

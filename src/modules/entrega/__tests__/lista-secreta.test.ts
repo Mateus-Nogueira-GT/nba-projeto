@@ -1,7 +1,5 @@
 import { readFileSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
-import { renderToStaticMarkup } from 'react-dom/server'
-import { createElement } from 'react'
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { eq } from 'drizzle-orm'
 
@@ -21,7 +19,6 @@ import {
 import { carregarRuleset } from '../../motor/ruleset/carregar'
 import type { Nivel, StatusEscalacao } from '../../motor/tipos'
 import { montarFatos } from '../../dominio/fatos'
-import { CardEntrada } from '../../../design-system/componentes'
 import {
   agruparPorJogador,
   filtrarItens,
@@ -143,18 +140,6 @@ async function escalar(nome: string, status: StatusEscalacao) {
       set: { status },
     })
 }
-
-function semEntidades(texto: string): string {
-  return texto
-    .replace(/&#x27;/g, "'")
-    .replace(/&quot;/g, '"')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&amp;/g, '&')
-}
-
-/** O texto que o assinante lê, sem marcação e sem entidade — nunca o CSS. */
-const textoDaTela = (html: string) => semEntidades(html.replace(/<[^>]+>/g, ''))
 
 async function apitosDeOpd() {
   const feed = await lerFeed(banco.db, HOJE)
@@ -403,11 +388,13 @@ describe('o card carrega contexto materializado (identidade 03)', () => {
   })
 
   /**
-   * A FORMA DA ODD ATRAVESSA A CADEIA: agregada → materialização → card.
+   * A FORMA DA ODD ATRAVESSA A CADEIA: agregada → materialização → linha.
    *
    * Quem escolhe é `odds.exibicao` no YAML (regra 1). Desde 19/09 o produto
    * trabalha com UMA casa e a forma é `casa_unica`; os testes abaixo cobrem as
-   * três saídas possíveis a partir da MESMA linha agregada.
+   * três saídas possíveis a partir da MESMA linha agregada. A ponta da TELA
+   * (o que a linha escreve para cada forma) mora em `src/ui/__tests__/odd.test.ts`
+   * desde a Tarefa 12 do front v2; aqui fica o que a materialização grava.
    */
   const publicarECarregar = async (chave: string, rulesetUsado = ruleset) => {
     await publicarListaSecreta(banco.db, rulesetUsado, {
@@ -418,24 +405,7 @@ describe('o card carrega contexto materializado (identidade 03)', () => {
     return depois!.conteudo.itens.find((i) => i.chave === chave)!
   }
 
-  const cardDoItem = (item: { oddFaixa?: unknown } & Record<string, unknown>) =>
-    renderToStaticMarkup(
-      createElement(CardEntrada, {
-        nome: item.nome, timeSigla: item.timeSigla, posicao: item.posicao,
-        atributo: item.atributo, nivelJogador: item.nivelJogador,
-        nivelApito: item.nivelApito, linha: item.linha,
-        oddFaixa: item.oddFaixa,
-      } as Parameters<typeof CardEntrada>[0]),
-    )
-
-  /**
-   * O texto que o card mostra, sem marcação. Desde a identidade 06 a odd é
-   * rótulo pequeno + número grande, dois elementos IRMÃOS — procurar
-   * "ODD 1,85" no HTML cru não acha, porque há uma tag no meio.
-   */
-  const textoDoCard = (html: string) => html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ')
-
-  it('com UMA casa, o item leva a odd sozinha — e o card escreve ODD 1,85', async () => {
+  it('com UMA casa, o item leva a odd sozinha (`unica`), sem média nem faixa', async () => {
     const feed = await lerFeed(banco.db, HOJE)
     const item = feed!.conteudo.itens.find((i) => i.linha !== null)!
 
@@ -454,12 +424,8 @@ describe('o card carrega contexto materializado (identidade 03)', () => {
     })
 
     const comOdd = await publicarECarregar(item.chave)
+    // Nem `media` (não há o que promediar): o item diz que é uma casa só.
     expect(comOdd.oddFaixa).toEqual({ min: 1.85, max: 1.85, qtdCasas: 1, unica: 1.85 })
-    const texto = textoDoCard(cardDoItem(comOdd))
-    expect(texto).toContain('ODD 1,85')
-    // Nem "MÉDIA" (não há o que promediar) nem "1,85–1,85".
-    expect(texto).not.toContain('ODD MÉDIA')
-    expect(texto).not.toContain('1,85–1,85')
   })
 
   it('com VÁRIAS casas sob casa_unica, a faixa volta: escolher um número seria inventar a casa', async () => {
@@ -480,8 +446,8 @@ describe('o card carrega contexto materializado (identidade 03)', () => {
     })
 
     const comFaixa = await publicarECarregar(item.chave)
+    // Sem `unica` nem `media`: o que existe é a faixa.
     expect(comFaixa.oddFaixa).toEqual({ min: 1.47, max: 1.62, qtdCasas: 8 })
-    expect(textoDoCard(cardDoItem(comFaixa))).toContain('ODD 1,47–1,62')
   })
 
   it('trocar odds.exibicao no YAML muda a forma sem tocar código (regra 1)', async () => {
@@ -507,9 +473,6 @@ describe('o card carrega contexto materializado (identidade 03)', () => {
     comMedia.odds.exibicao = 'media'
     const item06 = await publicarECarregar(item.chave, comMedia)
     expect(item06.oddFaixa).toEqual({ min: 1.47, max: 1.62, qtdCasas: 8, media: 1.55 })
-    // No TEXTO: na identidade 06 a odd subiu para o canto do card e virou
-    // rótulo pequeno + número grande, dois elementos irmãos.
-    expect(textoDoCard(cardDoItem(item06))).toContain('ODD MÉDIA 1,55')
   })
 
   it('a janela da média vem do RULESET, não de um literal (regra 1)', async () => {
@@ -692,34 +655,10 @@ describe('a tela consome o feed materializado', () => {
     expect(ordenados.length).toBeGreaterThan(2)
   })
 
-  it('os itens do feed renderizam no CardEntrada sem adaptação', async () => {
-    const feed = await lerFeed(banco.db, HOJE)
-    const item = ordenarPorConfianca(feed!.conteudo.itens)[0]!
-
-    const html = renderToStaticMarkup(
-      createElement(CardEntrada, {
-        nome: item.nome,
-        timeSigla: item.timeSigla,
-        posicao: null,
-        atributo: item.atributo,
-        nivelJogador: item.nivelJogador,
-        nivelApito: item.nivelApito,
-        turbo: item.turbo,
-        modoFire: item.modoFire,
-        opdOrigemNivel: item.opdOrigemNivel,
-      }),
-    )
-
-    // `toContain` compara com o HTML escapado; nomes com apóstrofo (a NBA
-    // tem vários) viram `&#x27;` em `renderToStaticMarkup` — decodifica antes
-    // de comparar, senão o teste falha sempre que o sorteio calhar num
-    // desses nomes.
-    expect(textoDaTela(html)).toContain(item.nome)
-    expect(html).toContain('LAL')
-    expect(html).toContain(`N${item.nivelApito}`)
-    // A palavra proibida não pode aparecer na saída renderizada (P12).
-    expect(html.toLowerCase()).not.toContain('probabilidade')
-  })
+  // Front v2 (Tarefa 12): "os itens do feed renderizam no CardEntrada sem
+  // adaptação" saiu com o card antigo. Que a tabela do v2 mostra um apito do
+  // feed, com nome e nível, e sem a palavra proibida, é o que a fumaça da
+  // Lista prova (`features/lista/__tests__/fumaca.test.tsx`).
 
   it('o snapshot carrega o horário de geração — a tela sempre mostra o quão recente é', async () => {
     const feed = await lerFeed(banco.db, HOJE)
@@ -776,9 +715,13 @@ describe('o grau da confiança é calculado UMA vez, na materialização', () =>
 describe('fronteira da tela', () => {
   it('nenhuma rota importa o motor em tempo de execução', () => {
     const rotas = [
+      // A `carregar.ts` da Lista do v2 (`src/features`) fica de fora: ela
+      // importa `NIVEIS` de `motor/tipos` como VALOR (vocabulário, não
+      // execução) — a exceção única que a regra `tela-v2-nao-chama-o-motor`
+      // do dependency-cruiser concede e continua vigiando.
       'src/app/(app)/page.tsx',
       'src/app/api/cron/lista-secreta/route.ts',
-      'src/app/(admin)/admin/mapeamento/page.tsx',
+      'src/app/(app)/admin/mapeamento/page.tsx',
     ]
 
     for (const rota of rotas) {
@@ -807,7 +750,8 @@ describe('fronteira da tela', () => {
   })
 
   it('o feed é lido do snapshot, não recalculado', async () => {
-    const fonte = readFileSync('src/app/(app)/page.tsx', 'utf8')
+    // Front v2: quem lê é a `carregar.ts` da Lista (pelo cache do feed).
+    const fonte = readFileSync('src/features/lista/carregar.ts', 'utf8')
 
     expect(fonte).toContain('lerFeed')
     expect(fonte).not.toContain('avaliar(')

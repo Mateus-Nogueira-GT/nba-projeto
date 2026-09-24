@@ -1,7 +1,7 @@
 import { revalidateTag } from 'next/cache'
 import { start } from 'workflow/api'
 
-import { TAG_LATERAL } from '@/app/(app)/lateral/leitura'
+import { TAG_LATERAL } from '@/app/_cache/lateral'
 import { getDb } from '@/modules/dominio/db/cliente'
 import { executarCronProtegido } from '@/modules/entrega/cron/guarda'
 import {

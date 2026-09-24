@@ -1,0 +1,434 @@
+/*
+ * A tabela se adapta à PRÓPRIA largura (container query), não à da tela: com
+ * o painel de detalhe aberto ela fica mais estreita no mesmo monitor.
+ *   < 640px  linha compacta em duas camadas (celular / coluna estreita)
+ *   ≥ 640px  tabela: jogador, linha, confiança, odd, últimos 5
+ *   ≥ 860px  + apito e média
+ *   ≥ 1060px + jogo
+ */
+.tabela {
+  container-type: inline-size;
+  border: 1px solid var(--borda);
+  border-radius: var(--raio);
+  background: var(--superficie);
+  overflow: hidden;
+}
+
+.cabecalho,
+.linha {
+  display: grid;
+  align-items: center;
+  column-gap: var(--e-4);
+  padding: 0 var(--e-4) 0 var(--e-5);
+}
+
+/* ---------- Compacto (padrão) ---------- */
+.cabecalho {
+  display: none;
+}
+.linha {
+  position: relative;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    'jogador lente'
+    'mercado confianca';
+  row-gap: var(--e-2);
+  padding-block: var(--e-3);
+  border-top: 1px solid var(--borda);
+  transition: background var(--rapido) var(--curva);
+}
+/* Linha TURBO: barra de raio e fogo à esquerda e um véu azul-laranja. */
+.linha[data-destaque]::before {
+  content: '';
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 4px;
+  background: var(--turbo-barra);
+  box-shadow: 0 0 12px color-mix(in srgb, var(--turbo-azul) 80%, transparent);
+}
+.linha[data-destaque] {
+  background:
+    linear-gradient(90deg, color-mix(in srgb, var(--turbo-azul) 16%, transparent), color-mix(in srgb, var(--turbo-laranja) 6%, transparent) 30%, transparent 60%);
+}
+.linha:hover {
+  background: var(--campo);
+}
+.linha[data-destaque]:hover {
+  background: linear-gradient(90deg, color-mix(in srgb, var(--turbo-azul) 14%, transparent), var(--campo) 45%);
+}
+.linha[aria-current='true'] {
+  background: var(--acento-veu);
+  box-shadow: inset 0 0 0 1px var(--acento);
+}
+
+.cJogador {
+  grid-area: jogador;
+}
+.cMercadoCurto {
+  grid-area: mercado;
+  display: flex;
+  align-items: center;
+  gap: var(--e-3);
+  padding-left: 52px;
+}
+.cLente {
+  grid-area: lente;
+  justify-self: end;
+}
+.cConfianca {
+  grid-area: confianca;
+  justify-self: end;
+}
+.cMercado,
+.cApito,
+.cOdd,
+.cMedia,
+.cUltimos,
+.cJogo {
+  display: none;
+}
+
+/* ---------- Tabela ---------- */
+@container (min-width: 640px) {
+  .cabecalho,
+  .linha {
+    grid-template-columns: minmax(200px, 2fr) minmax(128px, 1fr) 84px 104px 112px;
+    grid-template-areas: none;
+  }
+  .cabecalho {
+    display: grid;
+    height: 40px;
+    border-bottom: 1px solid var(--borda);
+    background: var(--fundo);
+  }
+  .linha {
+    min-height: 68px;
+    padding-block: var(--e-2);
+  }
+  .cJogador,
+  .cMercado,
+  .cConfianca,
+  .cOdd,
+  .cUltimos {
+    display: flex;
+    grid-area: auto;
+    justify-self: stretch;
+  }
+  .cConfianca {
+    justify-content: center;
+  }
+  .cMercadoCurto,
+  .cLente {
+    display: none;
+  }
+  /* 640–859px: não há coluna de apito, e o nível não pode sumir da linha. */
+  .apitoNoJogador {
+    display: inline-flex;
+  }
+}
+@container (min-width: 860px) {
+  .cabecalho,
+  .linha {
+    grid-template-columns: minmax(200px, 2fr) minmax(128px, 1fr) 76px 84px 104px 96px 112px;
+  }
+  .cApito,
+  .cMedia {
+    display: flex;
+  }
+  /* A partir daqui existe coluna de apito: o indicador sai de junto do nome. */
+  .apitoNoJogador {
+    display: none;
+  }
+}
+@container (min-width: 1060px) {
+  .cabecalho,
+  .linha {
+    grid-template-columns: minmax(220px, 2fr) minmax(120px, 1fr) 76px 84px 104px 104px 168px minmax(104px, 1fr);
+  }
+  .cJogo {
+    display: flex;
+  }
+  /* Onde a coluna comporta, a fileira mostra o VALOR de cada jogo. */
+  .ultimosBarras {
+    display: none;
+  }
+  .ultimosValores {
+    display: inline-flex;
+  }
+  .narrativa {
+    display: block;
+  }
+}
+
+/* ---------- Cabeçalho ---------- */
+.titulo {
+  align-items: center;
+  gap: 4px;
+  color: var(--texto-3);
+  font-size: var(--t-12);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+a.titulo:hover {
+  color: var(--texto);
+}
+.titulo[aria-current='true'] {
+  color: var(--texto);
+}
+
+/* ---------- Grupos ---------- */
+.bloco + .bloco {
+  border-top: 1px solid var(--borda-forte);
+}
+.grupo {
+  display: flex;
+  align-items: center;
+  gap: var(--e-3);
+  min-height: 48px;
+  padding: var(--e-2) var(--e-4) var(--e-2) var(--e-5);
+  background: color-mix(in srgb, var(--fundo) 55%, transparent);
+}
+.confronto {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--e-2);
+}
+.grupoTitulo {
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+.arroba {
+  color: var(--texto-3);
+  font-weight: 600;
+}
+.placar {
+  padding: 0 6px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.grupoHora {
+  color: var(--texto-2);
+  font-weight: 600;
+}
+.grupoConta {
+  margin-left: auto;
+  white-space: nowrap;
+  color: var(--texto-3);
+  font-size: var(--t-12);
+  font-weight: 600;
+}
+.grupo > .grupoConta ~ .grupoConta {
+  margin-left: 0;
+}
+.linhas {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.bloco .linhas li:first-child .linha {
+  border-top: 1px solid var(--borda);
+}
+
+/* ---------- Células ---------- */
+.cJogador {
+  display: flex;
+  align-items: center;
+  gap: var(--e-3);
+  min-width: 0;
+}
+.identidade {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.nome {
+  overflow: hidden;
+  font-size: var(--t-14);
+  font-weight: 700;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px var(--e-2);
+  color: var(--texto-3);
+  font-size: var(--t-12);
+  font-weight: 600;
+  white-space: nowrap;
+}
+.apitoNoJogador {
+  display: none;
+}
+/* A hierarquia do CJ, quando a lente pede: não tem coluna própria. */
+.hierarquia {
+  color: var(--acento-texto);
+  font-weight: 700;
+}
+/* A narrativa da materialização, uma linha só e só onde há largura. */
+.narrativa {
+  display: none;
+  overflow: hidden;
+  max-width: 52ch;
+  color: var(--texto-3);
+  font-size: var(--t-12);
+  font-style: italic;
+  font-weight: 500;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.pilha {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  line-height: 1.25;
+}
+.pilha strong {
+  font-size: var(--t-14);
+  font-weight: 700;
+}
+.cLente .pilha {
+  align-items: flex-end;
+}
+.apoio {
+  color: var(--texto-3);
+  font-size: var(--t-12);
+  font-weight: 600;
+  white-space: nowrap;
+}
+.apoio[data-tom='bom'] {
+  color: var(--bateu-texto);
+}
+.apoio[data-tom='ruim'] {
+  color: var(--falhou-texto);
+}
+.fraco {
+  color: var(--texto-3);
+}
+.ultimos {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--e-2);
+}
+.ultimosBarras {
+  display: inline-flex;
+  align-items: flex-end;
+}
+.ultimosValores {
+  display: none;
+}
+.jogo {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--e-2);
+  min-width: 0;
+}
+.jogoConfronto {
+  font-size: var(--t-13);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+@container (max-width: 639px) {
+  .grupo {
+    flex-wrap: wrap;
+    padding-left: var(--e-4);
+    gap: var(--e-2);
+  }
+  .grupoConta {
+    display: none;
+  }
+  .grupo > :last-child:not(.grupoConta),
+  .grupo > .grupoHora {
+    margin-left: auto;
+  }
+}
+
+/* ---------- Legenda da nota de confiança ---------- */
+.tituloComLegenda {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.legendaBotao {
+  display: inline-grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 1px solid var(--borda-forte);
+  border-radius: 50%;
+  background: transparent;
+  color: var(--texto-2);
+  font-size: var(--t-12);
+  font-weight: 700;
+  font-style: italic;
+  line-height: 1;
+}
+.legendaBotao:hover {
+  color: var(--texto);
+  border-color: var(--texto-3);
+}
+.legenda {
+  width: min(300px, calc(100vw - 32px));
+  margin: auto;
+  padding: var(--e-4);
+  border: 1px solid var(--borda-forte);
+  border-radius: var(--raio);
+  background: var(--superficie);
+  color: var(--texto);
+  box-shadow: 0 24px 60px -16px rgba(0, 0, 0, 0.55);
+  text-transform: none;
+  letter-spacing: normal;
+}
+.legenda::backdrop {
+  background: rgba(0, 0, 0, 0.35);
+}
+.legendaTitulo {
+  font-size: var(--t-16);
+  font-weight: 700;
+}
+.legendaTexto {
+  margin-top: 6px;
+  color: var(--texto-2);
+  font-size: var(--t-13);
+  font-weight: 500;
+  line-height: 1.5;
+}
+.legendaFaixas {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: var(--e-3) 0 0;
+  padding: var(--e-3) 0 0;
+  border-top: 1px solid var(--borda);
+  list-style: none;
+}
+.legendaFaixas li {
+  display: grid;
+  grid-template-columns: 56px 1fr;
+  font-size: var(--t-13);
+  font-weight: 600;
+}
+.legendaFaixas li span:first-child {
+  font-weight: 800;
+}
+
+/* ---------- Estrela de seguir na linha ---------- */
+.itemLinha {
+  position: relative;
+}
+.itemLinha > a {
+  padding-right: 48px;
+}
+.estrelaLinha {
+  position: absolute;
+  top: 50%;
+  right: 4px;
+  z-index: 1;
+  transform: translateY(-50%);
+}

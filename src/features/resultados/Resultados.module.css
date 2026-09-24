@@ -1,0 +1,666 @@
+.tela {
+  container-type: inline-size;
+  display: flex;
+  flex-direction: column;
+  gap: var(--e-6);
+  max-width: 1200px;
+}
+.fraco {
+  color: var(--texto-3);
+  font-size: var(--t-13);
+}
+.apoio {
+  color: var(--texto-3);
+  font-size: var(--t-12);
+  font-weight: 600;
+}
+
+/* ---------- Cabeçalho ---------- */
+.cabecalho {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--e-4);
+}
+.cabecalhoTexto {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.sobrancelha {
+  color: var(--texto-3);
+  font-size: var(--t-13);
+  font-weight: 500;
+}
+.titulo {
+  font-size: var(--t-28);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  line-height: 1.15;
+}
+.titulo::first-letter {
+  text-transform: uppercase;
+}
+.setas {
+  display: flex;
+  align-items: center;
+  gap: var(--e-2);
+}
+.seta {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border: 1px solid var(--borda-forte);
+  border-radius: var(--raio-controle);
+  background: var(--superficie);
+  color: var(--texto-2);
+  transition: background var(--rapido) var(--curva);
+}
+a.seta:hover {
+  background: var(--campo);
+  color: var(--texto);
+}
+.seta[aria-disabled='true'] {
+  opacity: 0.35;
+}
+.hoje {
+  display: inline-flex;
+  align-items: center;
+  height: 40px;
+  margin-left: var(--e-2);
+  padding: 0 var(--e-4);
+  border: 1px solid var(--borda-forte);
+  border-radius: var(--raio-controle);
+  font-size: var(--t-13);
+  font-weight: 600;
+}
+.hoje:hover {
+  background: var(--campo);
+}
+
+/* ---------- Filtros ---------- */
+.filtros {
+  display: flex;
+  flex-direction: column;
+  gap: var(--e-4);
+}
+.formFiltros {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--e-3);
+}
+.campo {
+  display: flex;
+  flex: 1 1 200px;
+  flex-direction: column;
+  gap: 6px;
+  max-width: 320px;
+}
+.campo label {
+  color: var(--texto-2);
+  font-size: var(--t-12);
+  font-weight: 600;
+}
+.campo select {
+  height: 52px;
+  padding: 0 var(--e-3);
+  border: 1px solid var(--borda-forte);
+  border-radius: var(--raio-controle);
+  background: var(--campo);
+  outline: none;
+  font-size: var(--t-14);
+  font-weight: 600;
+}
+.campo select:focus {
+  border-color: var(--texto-2);
+}
+.acoesFiltro {
+  display: flex;
+  align-items: center;
+  gap: var(--e-3);
+}
+.primario {
+  height: 52px;
+  padding: 0 var(--e-6);
+  border: 0;
+  border-radius: var(--raio-controle);
+  background: var(--acento);
+  color: var(--texto-sobre-acento);
+  font-size: var(--t-14);
+  font-weight: 700;
+}
+.primario:hover {
+  background: var(--acento-hover);
+}
+.limpar {
+  color: var(--texto-2);
+  font-size: var(--t-13);
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+/* ---------- Seções ---------- */
+.secao {
+  display: flex;
+  flex-direction: column;
+  gap: var(--e-4);
+}
+.secaoTopo {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.secaoTitulo {
+  font-size: var(--t-18);
+  font-weight: 700;
+}
+.secaoApoio {
+  color: var(--texto-3);
+  font-size: var(--t-13);
+}
+
+.numeros {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin: 0;
+  padding: var(--e-5) 0;
+  border: 1px solid var(--borda);
+  border-radius: var(--raio);
+  background: var(--superficie);
+}
+.numeros > div + div {
+  border-left: 1px solid var(--borda);
+}
+
+/* ---------- Apito da noite ---------- */
+.destaque {
+  display: flex;
+  align-items: center;
+  gap: var(--e-4);
+  padding: var(--e-4) var(--e-5);
+  border: 1px solid color-mix(in srgb, var(--bateu-texto) 45%, transparent);
+  border-radius: var(--raio);
+  background: linear-gradient(90deg, var(--apito-3-veu), transparent 70%), var(--superficie);
+}
+.destaqueTexto {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.destaqueRotulo {
+  color: var(--bateu-texto);
+  font-size: var(--t-13);
+  font-weight: 500;
+}
+.destaqueNome {
+  font-size: var(--t-18);
+  font-weight: 700;
+}
+.destaqueNome:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.destaqueNumero {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+.destaqueNumero .num {
+  color: var(--bateu-texto);
+  font-family: var(--fonte-heroi);
+  font-size: var(--t-40);
+  line-height: 1;
+}
+
+/* ---------- Jogos ---------- */
+.jogos {
+  display: flex;
+  flex-direction: column;
+  gap: var(--e-4);
+}
+.blocoJogo,
+.caixa {
+  border: 1px solid var(--borda);
+  border-radius: var(--raio);
+  background: var(--superficie);
+  overflow: hidden;
+}
+.jogo {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--e-3) var(--e-5);
+  padding: var(--e-3) var(--e-5);
+  background: color-mix(in srgb, var(--fundo) 55%, transparent);
+}
+.confronto {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--e-2);
+}
+.placar {
+  padding: 0 6px;
+  color: var(--texto-3);
+  font-family: var(--fonte-heroi);
+  font-size: var(--t-22);
+  line-height: 1;
+  white-space: nowrap;
+}
+.placar span[data-vencedor] {
+  color: var(--texto);
+}
+.quartos {
+  border-collapse: collapse;
+  font-size: var(--t-12);
+}
+.quartos th,
+.quartos td {
+  min-width: 30px;
+  padding: 1px 6px;
+  text-align: center;
+}
+.quartos thead th {
+  color: var(--texto-3);
+  font-weight: 600;
+}
+.quartos tbody th {
+  color: var(--texto-2);
+  font-weight: 700;
+  text-align: left;
+}
+.quartos td {
+  color: var(--texto-2);
+  font-weight: 600;
+}
+.jogoEstado {
+  margin-left: auto;
+  color: var(--texto-2);
+  font-size: var(--t-13);
+  font-weight: 700;
+}
+.aguardando {
+  padding: var(--e-2) var(--e-5);
+  border-top: 1px solid var(--borda);
+  color: var(--texto-2);
+  font-size: var(--t-12);
+  font-weight: 600;
+}
+.linhas {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* Linha conferida: jogador · linha · linhas ✓/✕ · realizado · últimos · veredito */
+.linha {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(180px, 2fr) 130px minmax(110px, 1fr) 96px 104px 150px 128px;
+  align-items: center;
+  gap: var(--e-4);
+  min-height: 72px;
+  padding: var(--e-2) var(--e-4) var(--e-2) var(--e-5);
+  border-top: 1px solid var(--borda);
+}
+.linhaFire {
+  grid-template-columns: minmax(200px, 2fr) 140px minmax(160px, 1.5fr) 180px;
+}
+.linha::before {
+  content: '';
+  position: absolute;
+  inset: 12px auto 12px 0;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background: var(--borda-forte);
+}
+.linha[data-v='bateu']::before {
+  background: var(--bateu);
+}
+.linha[data-v='falhou']::before {
+  background: var(--falhou);
+}
+.jogador {
+  display: flex;
+  align-items: center;
+  gap: var(--e-3);
+  min-width: 0;
+}
+.jogador:hover .nome {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.identidade {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.nome {
+  overflow: hidden;
+  font-weight: 700;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px var(--e-2);
+  color: var(--texto-3);
+  font-size: var(--t-12);
+  font-weight: 600;
+}
+.cLinha,
+.cLinhas,
+.cOdd,
+.cFez,
+.cUltimos {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+.apoioCelula {
+  color: var(--texto-3);
+  font-size: var(--t-12);
+  font-weight: 600;
+  white-space: nowrap;
+}
+.odd {
+  color: var(--texto);
+  font-size: var(--t-16);
+  font-weight: 700;
+}
+.cVeredito {
+  display: flex;
+  justify-content: flex-end;
+}
+.rotuloCelula {
+  color: var(--texto-3);
+  font-size: var(--t-12);
+  font-weight: 600;
+  white-space: nowrap;
+}
+.chipsLinha {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.chipLinha {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 24px;
+  padding: 0 7px;
+  border: 1px solid var(--borda-forte);
+  border-radius: 6px;
+  color: var(--texto-2);
+  font-size: var(--t-12);
+  font-weight: 700;
+}
+.chipLinha[data-bateu='true'] {
+  border-color: color-mix(in srgb, var(--bateu) 50%, transparent);
+  background: color-mix(in srgb, var(--bateu) 12%, transparent);
+  color: var(--bateu-texto);
+}
+.chipLinha[data-bateu='false'] {
+  border-color: color-mix(in srgb, var(--falhou) 50%, transparent);
+  background: color-mix(in srgb, var(--falhou) 12%, transparent);
+  color: var(--falhou-texto);
+}
+.fez {
+  font-family: var(--fonte-heroi);
+  font-size: var(--t-28);
+  font-weight: 400;
+  line-height: 1;
+}
+.fez small {
+  color: var(--texto-3);
+  font-family: var(--fonte);
+  font-size: var(--t-12);
+  font-weight: 600;
+}
+.linha[data-v='bateu'] .fez {
+  color: var(--bateu-texto);
+}
+.linha[data-v='falhou'] .fez {
+  color: var(--falhou-texto);
+}
+.veredito {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid var(--borda-forte);
+  border-radius: var(--raio-pilula);
+  color: var(--texto-2);
+  font-size: var(--t-12);
+  font-weight: 700;
+  white-space: nowrap;
+}
+.veredito[data-v='bateu'] {
+  border-color: color-mix(in srgb, var(--bateu) 55%, transparent);
+  background: color-mix(in srgb, var(--bateu) 14%, transparent);
+  color: var(--bateu-texto);
+}
+.veredito[data-v='falhou'] {
+  border-color: color-mix(in srgb, var(--falhou) 55%, transparent);
+  background: color-mix(in srgb, var(--falhou) 14%, transparent);
+  color: var(--falhou-texto);
+}
+
+/* ---------- Greens ---------- */
+.green {
+  display: flex;
+  align-items: center;
+  gap: var(--e-3);
+  min-height: 64px;
+  padding: var(--e-2) var(--e-5);
+}
+.green + .green {
+  border-top: 1px solid var(--borda);
+}
+.greenMarca {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--bateu) 14%, transparent);
+  color: var(--bateu-texto);
+  font-weight: 700;
+}
+.greenValor {
+  margin-left: auto;
+  color: var(--bateu-texto);
+  font-size: var(--t-14);
+  font-weight: 700;
+  text-align: right;
+}
+.greenValor small {
+  display: block;
+  color: var(--texto-3);
+  font-size: var(--t-12);
+  font-weight: 600;
+}
+
+/* ---------- Estreito ---------- */
+@container (max-width: 1080px) {
+  .linha {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      'jogador veredito'
+      'detalhes detalhes';
+    row-gap: var(--e-3);
+    padding-block: var(--e-3);
+  }
+  .linhaFire {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .jogador {
+    grid-area: jogador;
+  }
+  .cVeredito {
+    grid-area: veredito;
+  }
+  .cLinha,
+  .cLinhas,
+  .cOdd,
+  .cFez,
+  .cUltimos {
+    grid-column: 1 / -1;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--e-3);
+    padding-left: 52px;
+  }
+  /* A média vira apoio na mesma linha da linha prevista. */
+  .cLinha .apoioCelula {
+    order: 3;
+  }
+  .fez {
+    font-size: var(--t-22);
+  }
+}
+@container (max-width: 640px) {
+  .numeros {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    row-gap: var(--e-5);
+  }
+  .numeros > div:nth-child(3) {
+    border-left: 0;
+  }
+  .titulo {
+    font-size: var(--t-22);
+  }
+  .cLinha,
+  .cLinhas,
+  .cOdd,
+  .cFez,
+  .cUltimos {
+    padding-left: 0;
+  }
+  .quartos {
+    order: 3;
+    width: 100%;
+  }
+  .campo {
+    max-width: none;
+  }
+  .acoesFiltro {
+    flex: 1 1 100%;
+  }
+  .primario {
+    flex: 1;
+  }
+  .destaque {
+    padding: var(--e-3) var(--e-4);
+  }
+}
+
+/* ---------- Placar do NIP (acerto por faixa) ---------- */
+.nipPlacar {
+  display: flex;
+  flex-direction: column;
+  gap: var(--e-4);
+  padding: var(--e-5);
+  border: 1px solid var(--borda);
+  border-radius: var(--raio);
+  background: var(--superficie);
+}
+.nipCabecalho h2 {
+  font-size: var(--t-18);
+  font-weight: 700;
+}
+.nipCabecalho p {
+  margin-top: 4px;
+  color: var(--texto-2);
+  font-size: var(--t-13);
+}
+.nipGrade {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--e-6);
+}
+.nipBloco {
+  display: flex;
+  flex-direction: column;
+  gap: var(--e-3);
+}
+.nipTitulo {
+  color: var(--texto-3);
+  font-size: var(--t-12);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.nipVazio {
+  color: var(--texto-3);
+  font-size: var(--t-13);
+}
+.nipLista {
+  display: flex;
+  flex-direction: column;
+  gap: var(--e-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.nipLista li {
+  display: grid;
+  grid-template-columns: minmax(96px, 1.2fr) minmax(60px, 2fr) auto;
+  align-items: center;
+  gap: var(--e-3);
+  font-size: var(--t-13);
+}
+.nipRotulo {
+  font-weight: 700;
+}
+.nipTrilho {
+  height: 8px;
+  overflow: hidden;
+  border-radius: var(--raio-pilula);
+  background: var(--campo);
+}
+.nipTrilho span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--texto-3);
+}
+.nipTrilho span[data-tom='bom'] {
+  background: var(--bateu);
+}
+.nipTrilho span[data-tom='ruim'] {
+  background: var(--falhou);
+}
+.nipValor {
+  color: var(--texto-2);
+  white-space: nowrap;
+}
+.nipValor strong {
+  color: var(--texto);
+}
+@media (max-width: 720px) {
+  .nipGrade {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  /* Celular: o rótulo da faixa em cima, barra e número embaixo. */
+  .nipLista li {
+    grid-template-columns: minmax(0, 1fr) auto;
+    row-gap: 6px;
+  }
+  .nipRotulo {
+    grid-column: 1 / -1;
+  }
+}

@@ -101,18 +101,25 @@ describe('conta sem direito — o que o ADMIN do bootstrap vê', () => {
     const html = await renderizar()
     expect(html).not.toContain('name="unidades"')
     expect(html).not.toContain('>Registrei<')
-    expect(html).toContain('Registrar entradas começa no')
+    // Front v2 (Tarefa 6): o convite da Gestão do v2 diz o plano por extenso.
+    expect(html).toContain('Registrar entradas é do plano MVP')
     expect(html).toContain('href="/assinar?nivel=MVP&amp;voltar=%2Fgestao"')
   })
 
-  it('a silhueta é inerte por CSS — é a razão do "clico e nada acontece"', () => {
-    const css = readFileSync('src/components/planos/SilhuetaPaga.module.css', 'utf8')
-    const bloco = css.slice(css.indexOf('.silhueta {'), css.indexOf('}', css.indexOf('.silhueta {')))
-    expect(bloco).toContain('pointer-events: none')
+  it('a silhueta é inerte — é a razão do "clico e nada acontece"', async () => {
+    // Front v2 (Tarefa 6): a silhueta da Gestão deixou de ser o `SilhuetaPaga`
+    // (inerte por `pointer-events: none`) e virou blocos de forma dentro do
+    // convite (`features/gestao/TelaGestao.tsx`). A trava continua a mesma
+    // ideia: nada ali dentro é clicável — o único controle é "Ver planos".
+    const html = await renderizar()
+    const inicio = html.indexOf('aria-hidden="true"', html.indexOf('Ver planos'))
+    expect(inicio).toBeGreaterThan(-1)
+    const silhueta = html.slice(inicio, html.indexOf('</div></div>', inicio))
+    expect(silhueta).not.toMatch(/<(a|button|input|form|select)\b/)
   })
 
   it('a AÇÃO recusa no servidor, pelo caminho real, e não grava nada', async () => {
-    const { registrarEntrada } = await import('../(app)/gestao/acoes')
+    const { registrarEntrada } = await import('../../features/gestao/acoes')
     await expect(registrarEntrada(formularioValido())).rejects.toMatchObject({
       digest: expect.stringContaining('/assinar?nivel=MVP'),
     })
@@ -138,7 +145,7 @@ describe('a mesma conta, depois de `npm run cortesia`', () => {
     expect(html).toContain('name="odd"')
     expect(html).toContain('>Registrei<')
     expect(html).toContain('href="/gestao?banca=500"')
-    expect(html).not.toContain('Registrar entradas começa no')
+    expect(html).not.toContain('Registrar entradas é do plano MVP')
   })
 
   it('e a ação passa a gravar — a mesma cortesia libera tela e servidor', async () => {
@@ -148,7 +155,7 @@ describe('a mesma conta, depois de `npm run cortesia`', () => {
     f.set('jogadorId', item.jogadorId)
     f.set('atributo', item.atributo)
     f.set('linha', String(item.linha))
-    const { registrarEntrada } = await import('../(app)/gestao/acoes')
+    const { registrarEntrada } = await import('../../features/gestao/acoes')
     await expect(registrarEntrada(f)).rejects.toMatchObject({
       digest: expect.stringContaining('/gestao?ver=realizadas'),
     })

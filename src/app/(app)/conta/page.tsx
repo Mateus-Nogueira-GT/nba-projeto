@@ -1,32 +1,16 @@
-import { desc, eq, inArray, sql } from 'drizzle-orm'
 import Link from 'next/link'
-
-import { CabecalhoTela, Moldura } from '@/components/navegacao'
-import { rulesetAtivo } from '@/modules/entrega/ruleset-ativo'
-import { AvatarUsuario, Selo } from '@/design-system/componentes'
-import { semantico } from '@/design-system/tokens/semantico'
-import { getDb } from '@/modules/dominio/db/cliente'
-import { assinaturas, times, usuarios } from '@/modules/dominio/db/schema'
-import { dispositivosDoUsuario } from '@/modules/plataforma/admin/usuarios'
-import { exigirNivel } from '@/modules/plataforma/assinatura/guarda'
 import { atende, ROTULO_DO_NIVEL } from '@/modules/plataforma/assinatura/nivel-do-plano'
 import { MENSAGEM_REGRA_SENHA } from '@/modules/plataforma/auth/senha'
-import { sair } from '../entrar/acoes'
-import { BlocoAlertas, BlocoAssinatura, BlocoConta, BlocoDispositivos } from './blocos'
-import { estadoExperienciaDoUsuario } from '@/modules/plataforma/experiencia/servico'
-import { identidadesDeApresentacao } from '@/modules/dominio/identidade-apresentacao'
-import { identidadeDoTime } from '@/design-system/times'
-import { lateralPadrao } from '@/app/(app)/lateral/montar'
+import { sair } from '@/features/publico/acoes'
+import { parametro } from '@/features/publico/destino'
+import { carregarConta } from '@/features/conta/carregar'
+import { AvatarDaConta, BlocoAlertas, BlocoAssinatura, BlocoConta, BlocoDispositivos } from '@/features/conta/Blocos'
+import s from '@/features/conta/Conta.module.css'
 
 export const dynamic = 'force-dynamic'
 export const metadata = { title: 'Minha conta' }
 
-/**
- * Mensagem de cada `?aviso=` que uma ação desta tela pode devolver depois do
- * redirect. 'nome-ok' e 'avatar-ok' nascem aqui (Task 4); 'senha-ok',
- * 'email-ok' e 'sessao-ok' chegam com as ações de segurança da Task 5 — as
- * chaves já estão aqui para as duas tasks escreverem no MESMO dicionário.
- */
+/** `?aviso=` e `?erro=` chegam como CÓDIGOS: chave fora daqui some — nunca texto cru da URL. */
 const TEXTO_DO_AVISO: Record<string, string> = {
   'nome-ok': 'Nome atualizado.',
   'avatar-ok': 'Avatar atualizado.',
@@ -34,16 +18,6 @@ const TEXTO_DO_AVISO: Record<string, string> = {
   'email-ok': 'E-mail alterado.',
   'sessao-ok': 'Sessão encerrada.',
 }
-
-/**
- * Mesmo dicionário, para `?erro=`. Antes, as ações redirecionavam com a
- * mensagem por extenso na própria URL: `/conta?erro=<qualquer frase>` cai
- * direto num `role="alert"` desta tela, e qualquer um pode forjar esse link
- * sem nunca ter passado pela ação — texto de atacante dentro de um alerta da
- * própria NIP, num app que leva a uma casa de apostas (achado da revisão
- * final). Um código fora daqui não vira alerta vazio: some, como `?aviso=`
- * já fazia.
- */
 const TEXTO_DO_ERRO: Record<string, string> = {
   'nome-curto': 'Nome muito curto.',
   'nome-longo': 'Nome muito longo.',
@@ -60,206 +34,64 @@ export default async function PaginaConta({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>
 }) {
-  const { sessao, acesso } = await exigirNivel('GRATIS', '/conta')
-  const { fuso } = (await rulesetAtivo()).rodada
-  const db = getDb()
-  const agora = new Date()
-  // `validarSessao` (dentro de `sessaoAtual`) já preenche `dispositivoId` pela
-  // MESMA linha e condição de vida que uma consulta separada repetiria — é
-  // sempre o dispositivo por trás do cookie desta requisição.
-  const esteAparelho = sessao.dispositivoId
-  const [dispositivos, experiencia, linhas, usuarioLinhas, parametros] = await Promise.all([
-    dispositivosDoUsuario(db, sessao.usuarioId),
-    estadoExperienciaDoUsuario(db, sessao.usuarioId),
-    db
-      .select()
-      .from(assinaturas)
-      .where(eq(assinaturas.usuarioId, sessao.usuarioId))
-      // O CONTRATO DO ACESSO VIGENTE — não o que foi escrito por último.
-      // Depois de um upgrade, a última escrita é a do contrato que MORREU: o
-      // webhook fecha a transação com os dois no mesmo instante e, mais tarde,
-      // a varredura de cancelamento toca SÓ o antigo de novo. Ordenar apenas
-      // por `atualizado_em desc` mostraria a quem acabou de pagar mais o plano
-      // velho, o status cancelado e uma próxima cobrança que não existe — e
-      // tiraria o botão "Cancelar assinatura" de um contrato recorrente ATIVO.
-      // Não cancelado primeiro; entre iguais, o mais recente.
-      .orderBy(sql`${assinaturas.canceladaEm} is null desc`, desc(assinaturas.atualizadoEm))
-      .limit(1),
-    db
-      .select({ nome: usuarios.nome, email: usuarios.email, fotoUrl: usuarios.fotoUrl })
-      .from(usuarios)
-      .where(eq(usuarios.id, sessao.usuarioId))
-      .limit(1),
-    searchParams,
-  ])
-  // A sessão validada já garante a linha (FK de `sessoes` para `usuarios`).
-  const usuario = usuarioLinhas[0]!
-  const idsJogadores = [
-    ...new Set([...experiencia.jogadoresAcompanhados, ...experiencia.jogadoresSilenciados]),
-  ]
-  const [identidades, timesSeguidos] = await Promise.all([
-    identidadesDeApresentacao(db, idsJogadores),
-    experiencia.timesAcompanhados.length === 0
-      ? Promise.resolve([])
-      : db
-          .select({ id: times.id, nome: times.nome, sigla: times.sigla })
-          .from(times)
-          .where(inArray(times.id, experiencia.timesAcompanhados)),
-  ])
-  const assinatura = linhas[0] ?? null
-  const estadoCancelamento = Array.isArray(parametros.cancelamento)
-    ? parametros.cancelamento[0]
-    : parametros.cancelamento
-  const aviso = Array.isArray(parametros.aviso) ? parametros.aviso[0] : parametros.aviso
-  const erro = Array.isArray(parametros.erro) ? parametros.erro[0] : parametros.erro
-  // `?aviso=` é URL: uma chave fora de TEXTO_DO_AVISO (link velho, dedo no
-  // teclado) não pode virar `<p role="status"></p>` vazio — um anúncio em
-  // branco para quem usa leitor de tela.
+  const [d, p] = await Promise.all([carregarConta(), searchParams])
+  const aviso = parametro(p.aviso)
+  const erro = parametro(p.erro)
   const mensagemDoAviso = aviso ? TEXTO_DO_AVISO[aviso] : undefined
-  // Mesma regra para `?erro=`: uma chave fora do dicionário não aparece —
-  // nunca o texto cru da URL.
   const mensagemDeErro = erro ? TEXTO_DO_ERRO[erro] : undefined
-  const podeCancelar = Boolean(
-    assinatura?.mercadopagoId &&
-    !['CANCELADA', 'CANCELED', 'CANCELLED'].includes(assinatura.status),
-  )
+  const pago = d.acesso.nivel !== 'GRATIS'
 
   return (
-    <Moldura
-      aba="conta"
-      largura="dados"
-      conta={{ email: usuario.email, nome: usuario.nome, fotoUrl: usuario.fotoUrl }}
-      lateral={await lateralPadrao({
-        assistente: atende(acesso.nivel, 'MVP'),
-        gratis: !atende(acesso.nivel, 'MVP'),
-      })}
-      assistente={atende(acesso.nivel, 'MVP')}
-    >
-      <CabecalhoTela sobrancelha="SUA CONTA" titulo="PERFIL" />
-      <section style={{ display: 'flex', gap: 16, alignItems: 'center', marginBottom: 20 }}>
-        <AvatarUsuario
-          nome={usuario.nome}
-          email={usuario.email}
-          fotoUrl={usuario.fotoUrl}
-          tamanho={72}
-        />
-        <div style={{ minWidth: 0 }}>
-          <p
-            style={{
-              margin: 0,
-              fontFamily: semantico.fonteTitulo,
-              fontSize: 22,
-              textTransform: 'uppercase',
-            }}
-          >
-            {usuario.nome ?? 'Sem nome'}
-          </p>
-          <p style={{ margin: '2px 0 0', color: semantico.textoSecundario, fontSize: 13 }}>
-            {usuario.email}
-          </p>
-          <p style={{ margin: '6px 0 0' }}>
-            {/* Duas perguntas diferentes, duas fontes diferentes. O RÓTULO diz
-                qual é o contrato — `plano` é anulável, então sem nome sobra o
-                status, a mesma palavra que o bloco de Assinatura escreve logo
-                abaixo; e sem contrato nenhum sobra o NÍVEL, porque quem não
-                assina está no Grátis, não num vazio. O ÍCONE diz se há acesso
-                PAGO valendo agora: "✓" em cima de "CANCELADA" (ou do Grátis)
-                seria um confirmado sobre o que não vale — é a contradição que
-                a Task 4 já tinha consertado uma vez. Puramente decorativo
-                (`aria-hidden` no Selo). */}
-            <Selo
-              icone={acesso.nivel !== 'GRATIS' ? '✓' : '—'}
-              rotulo={
-                assinatura ? (assinatura.plano ?? assinatura.status) : ROTULO_DO_NIVEL[acesso.nivel]
-              }
-            />
-          </p>
+    <div className={s.tela}>
+      <header className={s.cabecalho}>
+        <AvatarDaConta nome={d.usuario.nome} email={d.usuario.email} fotoUrl={d.usuario.fotoUrl} tamanho={64} />
+        <div className={s.identidade}>
+          <h1 className={s.nome}>{d.usuario.nome ?? 'Sem nome'}</h1>
+          <p className={s.email}>{d.usuario.email}</p>
         </div>
-      </section>
+        <span className={s.plano} data-pago={pago}>
+          {d.assinatura?.plano ?? ROTULO_DO_NIVEL[d.acesso.nivel]}
+        </span>
+      </header>
+
       {mensagemDoAviso && (
-        <p role="status" style={{ color: semantico.apitoNivel3 }}>
+        <p role="status" className={s.aviso}>
           {mensagemDoAviso}
         </p>
       )}
       {mensagemDeErro && (
-        <p role="alert" style={{ color: semantico.alerta }}>
+        <p role="alert" className={s.erro}>
           {mensagemDeErro}
         </p>
       )}
 
-      {/* Os quatro blocos da spec §4.3, nesta ordem: é ela que o celular lê de
-          cima para baixo. Dois por linha no desktop — a grade é inline e a
-          classe leva SÓ a media query, que o estilo inline não faz. */}
-      <div className="grade-conta" style={{ display: 'grid', gap: 16 }}>
-        <BlocoConta usuario={usuario} />
+      {/* A ordem é a leitura do celular: Conta, Assinatura, Alertas, Dispositivos. */}
+      <div className={s.grade}>
+        <BlocoConta usuario={d.usuario} />
         <BlocoAssinatura
-          assinatura={assinatura}
-          acesso={acesso}
-          podeCancelar={podeCancelar}
-          estadoCancelamento={estadoCancelamento}
-          agora={agora}
-          fuso={fuso}
+          assinatura={d.assinatura}
+          acesso={d.acesso}
+          podeCancelar={d.podeCancelar}
+          estadoCancelamento={parametro(p.cancelamento)}
+          agora={new Date()}
+          fuso={d.fuso}
         />
-        <BlocoAlertas
-          usuarioId={sessao.usuarioId}
-          recebeAlertas={atende(acesso.nivel, 'MVP')}
-          experiencia={experiencia}
-          jogadores={idsJogadores.map((id) => ({
-            id,
-            nome: identidades.get(id)?.nome ?? 'Jogador',
-          }))}
-          times={timesSeguidos.map((time) => ({
-            id: time.id,
-            nome: identidadeDoTime(time.sigla).nome,
-          }))}
-        />
-        <BlocoDispositivos dispositivos={dispositivos} esteAparelho={esteAparelho} fuso={fuso} />
+        <BlocoAlertas recebeAlertas={atende(d.acesso.nivel, 'MVP')} usuarioId={d.sessao.usuarioId} experiencia={d.experiencia} jogadores={d.jogadores} times={d.times} />
+        <BlocoDispositivos dispositivos={d.dispositivos} esteAparelho={d.sessao.dispositivoId} fuso={d.fuso} />
       </div>
 
-      <form action={sair} style={{ marginTop: 20 }}>
-        {/* SECUNDÁRIO: primário é UMA ação por tela, e sair da conta não é o
-            que a pessoa veio fazer no Perfil. A regra "contorno azul vira
-            preenchido" da Identidade 05 não distinguia primária de secundária
-            e promoveu este botão por engano. */}
-        <button
-          type="submit"
-          className="botao-secundario"
-          style={{
-            padding: '11px 12px',
-            borderRadius: 8,
-            fontFamily: semantico.fonteTitulo,
-            letterSpacing: 0.5,
-            textTransform: 'uppercase',
-            fontWeight: 700,
-            fontSize: 15,
-            cursor: 'pointer',
-          }}
-        >
-          Sair
-        </button>
-      </form>
-
-      {/* Estatísticas e "como funciona" não são conta: eram um bloco de
-          navegação no meio da tela e viram rodapé, alcançáveis sem disputar
-          espaço com o que a pessoa veio fazer aqui. */}
-      <p
-        style={{
-          display: 'flex',
-          gap: 8,
-          flexWrap: 'wrap',
-          margin: '18px 0 0',
-          fontSize: 13,
-          color: semantico.textoSecundario,
-        }}
-      >
-        <Link href="/estatisticas" style={{ color: semantico.textoSecundario }}>
-          Estatísticas
-        </Link>
-        <span aria-hidden>·</span>
-        <Link href="/como-funciona" style={{ color: semantico.textoSecundario }}>
-          Como funciona
-        </Link>
-      </p>
-    </Moldura>
+      <footer className={s.rodape}>
+        <form action={sair}>
+          <button type="submit" className={s.botaoSecundario}>
+            Sair da conta
+          </button>
+        </form>
+        <nav className={s.links} aria-label="Mais">
+          <Link href="/estatisticas">Estatísticas</Link>
+          <span aria-hidden>·</span>
+          <Link href="/como-funciona">Como funciona</Link>
+        </nav>
+      </footer>
+    </div>
   )
 }

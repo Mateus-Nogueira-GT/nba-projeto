@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 
-import { semantico } from '@/design-system/tokens/semantico'
+import { FUNDO_DO_TEMA_PADRAO } from '@/features/shell/tema'
 import manifest from '../manifest'
 
 /** O código sem os comentários — para afirmar sobre o que RODA, não sobre a prosa. */
@@ -16,7 +16,9 @@ function dimensoesPng(caminho: string): { largura: number; altura: number } {
 }
 
 describe('manifest PWA', () => {
-  it('fecha identidade, escopo, idioma, modo e cores nos tokens', () => {
+  it('fecha identidade, escopo, idioma, modo e cores no fundo do tema padrão', () => {
+    // A splash e a barra do sistema vestem o `--fundo` do Marinho — o mesmo
+    // `themeColor` do layout raiz (`tema.test.ts` trava que é o do CSS).
     const resultado = manifest()
     expect(resultado).toMatchObject({
       id: '/',
@@ -26,8 +28,8 @@ describe('manifest PWA', () => {
       start_url: '/abrir',
       scope: '/',
       display: 'standalone',
-      background_color: semantico.fundo,
-      theme_color: semantico.fundo,
+      background_color: FUNDO_DO_TEMA_PADRAO,
+      theme_color: FUNDO_DO_TEMA_PADRAO,
     })
   })
 
@@ -62,7 +64,7 @@ describe('manifest PWA', () => {
     expect(configuracao).toContain("value: 'public, max-age=0, must-revalidate'")
     expect(configuracao).toContain("{ key: 'Service-Worker-Allowed', value: '/' }")
 
-    const registro = readFileSync('src/components/pwa/RegistrarServiceWorker.tsx', 'utf8')
+    const registro = readFileSync('src/features/pwa/RegistrarServiceWorker.tsx', 'utf8')
     expect(registro).toContain("process.env.NODE_ENV !== 'production'")
   })
 
@@ -75,7 +77,7 @@ describe('manifest PWA', () => {
     // explicar por que ele saiu, e essa explicação é justamente o que impede
     // alguém de reintroduzir o convite sem querer. O que não pode voltar é o
     // código que o exibe.
-    const painel = semComentarios(readFileSync('src/components/pwa/PainelPwa.tsx', 'utf8'))
+    const painel = semComentarios(readFileSync('src/features/pwa/PainelPwa.tsx', 'utf8'))
     for (const convite of [
       'Instale a NIP',
       'Instalar app',
@@ -88,13 +90,15 @@ describe('manifest PWA', () => {
   })
 
   it('continua sendo o caminho da atualização', () => {
-    const painel = semComentarios(readFileSync('src/components/pwa/PainelPwa.tsx', 'utf8'))
+    const painel = semComentarios(readFileSync('src/features/pwa/PainelPwa.tsx', 'utf8'))
     expect(painel).toContain('Atualização disponível')
     expect(painel).toContain('aplicarAtualizacaoPwa')
   })
 
   it('mantém a página offline neutra e sem acesso a sessão ou banco', () => {
-    const pagina = readFileSync('src/app/offline/page.tsx', 'utf8')
+    // Front v2 (Tarefa 8): a tela mora no grupo (publico); o caminho público
+    // continua `/offline`, o que `public/sw.js` pré-cacheia.
+    const pagina = readFileSync('src/app/(publico)/offline/page.tsx', 'utf8')
     expect(pagina).toContain('Nenhum dado')
     expect(pagina).not.toMatch(/sessaoAtual|getDb|DATABASE_URL|cookies\(/)
   })

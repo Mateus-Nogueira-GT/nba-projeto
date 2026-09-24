@@ -1,0 +1,274 @@
+.selo {
+  display: inline-flex;
+  align-items: center;
+  height: 21px;
+  padding: 1px 8px 0;
+  border-radius: 5px;
+  font-family: var(--fonte-heroi);
+  font-size: 15px;
+  font-weight: 400;
+  line-height: 1;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+/*
+ * Nível do jogador com acabamento metálico (reunião 23/09/2026: "fonte mais
+ * chamativa, o MVP tem que saltar aos olhos"). Ouro, prata e bronze viram
+ * placa de metal com letra escura; o Randola fica só no contorno.
+ */
+.mvp {
+  color: var(--selo-mvp-texto);
+  background: var(--selo-mvp-fundo);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.6),
+    0 0 12px -3px color-mix(in srgb, var(--selo-mvp-brilho) 70%, transparent);
+}
+.allStar {
+  color: var(--selo-all-star-texto);
+  background: var(--selo-all-star-fundo);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7);
+}
+.suporte {
+  color: var(--selo-suporte-texto);
+  background: var(--selo-suporte-fundo);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.45);
+}
+.randola {
+  color: var(--nivel-randola);
+  box-shadow: inset 0 0 0 1px var(--borda-forte);
+}
+
+/* ---------- Modo turbo: raio + fogo ---------- */
+.turboSelo {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 22px;
+  padding: 0 8px;
+  overflow: hidden;
+  border-radius: 6px;
+  background: var(--turbo-fundo);
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.25) inset,
+    0 0 14px -2px color-mix(in srgb, var(--turbo-azul) 75%, transparent),
+    0 0 18px -4px color-mix(in srgb, var(--turbo-laranja) 70%, transparent);
+  color: var(--turbo-texto);
+  white-space: nowrap;
+  animation: turboPulso 2.4s ease-in-out infinite;
+}
+.turboSelo[data-grande] {
+  height: 30px;
+  padding: 0 12px;
+  border-radius: 8px;
+}
+/* O brilho que corre pelo selo. */
+.turboSelo::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(100deg, transparent 20%, rgba(255, 255, 255, 0.55) 50%, transparent 80%);
+  transform: translateX(-120%);
+  animation: turboBrilho 2.4s ease-in-out infinite;
+}
+.turboTexto {
+  position: relative;
+  font-family: var(--fonte-heroi);
+  font-size: 15px;
+  line-height: 1;
+  letter-spacing: 0.1em;
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.45);
+}
+.turboSelo[data-grande] .turboTexto {
+  font-size: 19px;
+}
+.turboRaio,
+.turboFogo {
+  position: relative;
+  flex-shrink: 0;
+  filter: drop-shadow(0 0 4px rgba(255, 255, 255, 0.8));
+}
+.turboRaio {
+  color: var(--turbo-raio-traco);
+  fill: var(--turbo-raio-miolo);
+}
+.turboFogo {
+  color: var(--turbo-fogo-traco);
+  fill: var(--turbo-fogo-miolo);
+}
+@keyframes turboBrilho {
+  0%,
+  35% {
+    transform: translateX(-120%);
+  }
+  70%,
+  100% {
+    transform: translateX(120%);
+  }
+}
+@keyframes turboPulso {
+  50% {
+    box-shadow:
+      0 0 0 1px rgba(255, 255, 255, 0.35) inset,
+      0 0 20px 0 color-mix(in srgb, var(--turbo-azul) 90%, transparent),
+      0 0 24px -2px color-mix(in srgb, var(--turbo-laranja) 85%, transparent);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .turboSelo,
+  .turboSelo::after {
+    animation: none;
+  }
+  .turboSelo::after {
+    display: none;
+  }
+}
+
+.apito {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 700;
+  font-size: var(--t-13);
+}
+.barras {
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 13px;
+}
+.barra {
+  width: 4px;
+  border-radius: 1px;
+  background: var(--borda-forte);
+}
+.barra[data-aceso='true'] {
+  background: currentColor;
+}
+.apitoTexto {
+  font-variant-numeric: tabular-nums;
+}
+.turbo {
+  color: var(--apito-turbo);
+}
+.opd {
+  white-space: nowrap;
+  margin-left: 2px;
+  padding: 0 5px;
+  border: 1px solid var(--borda-forte);
+  border-radius: 4px;
+  color: var(--texto-2);
+  font-size: var(--t-12);
+  font-weight: 600;
+  line-height: 18px;
+}
+
+.confianca {
+  display: inline-flex;
+  align-items: center;
+  font-size: var(--t-16);
+  font-weight: 700;
+}
+
+.vazio {
+  color: var(--texto-3);
+}
+
+.mercado {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  height: 28px;
+  padding: 0 10px;
+  align-items: center;
+  border: 1px solid var(--borda-forte);
+  border-radius: var(--raio-controle);
+  background: var(--campo);
+  color: var(--texto-2);
+  font-size: var(--t-13);
+  white-space: nowrap;
+}
+.mercadoTexto {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  color: var(--texto-2);
+  font-size: var(--t-13);
+  white-space: nowrap;
+}
+.mercadoTexto strong {
+  color: var(--texto);
+  font-size: var(--t-16);
+  font-weight: 700;
+}
+.mercado strong {
+  color: var(--texto);
+  font-weight: 700;
+}
+
+.aoVivo {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: var(--raio-pilula);
+  background: var(--ao-vivo-veu);
+  color: var(--ao-vivo);
+  font-size: var(--t-12);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.pulso {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--ao-vivo);
+  animation: pulso 1.6s ease-in-out infinite;
+}
+@keyframes pulso {
+  50% {
+    opacity: 0.35;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .pulso {
+    animation: none;
+  }
+}
+
+.modoFire {
+  display: inline-flex;
+  align-items: center;
+  height: 20px;
+  padding: 0 7px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--ao-vivo-solido) 14%, transparent);
+  color: var(--ao-vivo);
+  font-size: var(--t-12);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+/* A odd como caixa: contorno discreto, número forte, largura confortável. */
+.oddCaixa {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 82px;
+  height: 36px;
+  padding: 0 10px;
+  border: 1px solid var(--borda-forte);
+  border-radius: 10px;
+  background: var(--campo);
+  color: var(--texto);
+  font-size: var(--t-14);
+  font-weight: 700;
+  white-space: nowrap;
+}
+.oddCaixa[data-media] {
+  border-style: dashed;
+}

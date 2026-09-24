@@ -26,9 +26,14 @@ export default defineConfig({
     { name: 'setup', testMatch: /.*\.setup\.ts/ },
     {
       name: 'gestao',
-      testMatch: /.*\.spec\.ts/,
+      testMatch: /gestao\.spec\.ts/,
       dependencies: ['setup'],
       use: { storageState: SESSAO_SALVA },
     },
+    // `front-v2` cuida do próprio login (se `E2E_EMAIL`/`E2E_SENHA` existirem):
+    // não depende de `setup` porque a varredura roda também sem sessão, contra
+    // a referência do cliente, onde essa conta não existe. Sem `storageState`
+    // fixo por isso — cada `browser.newContext()` no spec decide o seu.
+    { name: 'front-v2', testMatch: /front-v2\.spec\.ts/ },
   ],
 })

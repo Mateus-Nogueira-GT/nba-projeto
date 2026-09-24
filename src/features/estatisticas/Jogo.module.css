@@ -1,0 +1,303 @@
+.tela {
+  container-type: inline-size;
+  display: flex;
+  flex-direction: column;
+  gap: var(--e-6);
+  max-width: 1200px;
+}
+.fraco {
+  color: var(--texto-3);
+  font-size: var(--t-12);
+}
+
+/* ---------- Placar ---------- */
+.placar {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: var(--e-4);
+  padding: var(--e-6) var(--e-4);
+  border: 1px solid var(--borda);
+  border-radius: var(--raio);
+  background: linear-gradient(180deg, var(--campo), var(--superficie));
+}
+.lado {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  grid-template-areas:
+    'logo pontos'
+    'sigla pontos'
+    'nome nome'
+    'forma forma';
+  justify-items: center;
+  align-items: center;
+  row-gap: 6px;
+  column-gap: var(--e-4);
+}
+.lado:last-child {
+  grid-template-columns: 1fr auto;
+  grid-template-areas:
+    'pontos logo'
+    'pontos sigla'
+    'nome nome'
+    'forma forma';
+}
+.logo {
+  grid-area: logo;
+}
+.sigla {
+  grid-area: sigla;
+  font-size: var(--t-16);
+  font-weight: 700;
+}
+.nome {
+  grid-area: nome;
+  color: var(--texto-3);
+  font-size: var(--t-12);
+  text-align: center;
+}
+.formaLado {
+  grid-area: forma;
+}
+.pontos {
+  grid-area: pontos;
+  font-family: var(--fonte-heroi);
+  font-size: 64px;
+  line-height: 1;
+}
+.pontos[data-perdeu='true'] {
+  color: var(--texto-3);
+}
+.lado:hover .sigla {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.centro {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  min-width: 110px;
+  text-align: center;
+}
+.final {
+  color: var(--texto-2);
+  font-size: var(--t-12);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.hora {
+  font-family: var(--fonte-heroi);
+  font-size: var(--t-40);
+  line-height: 1;
+}
+.arroba {
+  color: var(--texto-3);
+  font-weight: 600;
+}
+.data {
+  color: var(--texto-3);
+  font-size: var(--t-12);
+}
+
+/* ---------- Visão geral ---------- */
+.geral {
+  display: flex;
+  flex-direction: column;
+  gap: var(--e-8);
+}
+.lideres {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: var(--e-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.lider {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 4px var(--e-3);
+  padding: var(--e-4);
+  border: 1px solid var(--borda);
+  border-radius: var(--raio);
+  background: var(--superficie);
+  transition: background var(--rapido) var(--curva);
+}
+.lider:hover {
+  background: var(--campo);
+}
+.liderRotulo {
+  color: var(--texto-3);
+  font-size: var(--t-13);
+  font-weight: 500;
+}
+.liderValor {
+  grid-row: span 2;
+  align-self: center;
+  font-family: var(--fonte-heroi);
+  font-size: var(--t-40);
+  line-height: 1;
+}
+.liderNome {
+  font-size: var(--t-14);
+  font-weight: 700;
+}
+.desfalquesGrade {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--e-4);
+}
+.desfalqueLado {
+  display: flex;
+  flex-direction: column;
+  gap: var(--e-2);
+  padding: var(--e-4);
+  border: 1px solid var(--borda);
+  border-radius: var(--raio);
+  background: var(--superficie);
+}
+.desfalqueTime {
+  display: flex;
+  align-items: center;
+  gap: var(--e-2);
+  font-weight: 700;
+}
+.desfalques {
+  display: flex;
+  flex-direction: column;
+  gap: var(--e-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.desfalque {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--e-3);
+}
+.desfalqueStatus {
+  flex-shrink: 0;
+  min-width: 58px;
+  padding: 2px 8px;
+  border-radius: var(--raio-pilula);
+  background: var(--ao-vivo-veu);
+  color: var(--ao-vivo);
+  font-size: var(--t-12);
+  font-weight: 700;
+  text-align: center;
+}
+.desfalqueStatus[data-status='DUVIDA'] {
+  background: var(--campo);
+  color: var(--texto-2);
+}
+.desfalqueTexto {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  color: var(--texto-3);
+  font-size: var(--t-12);
+}
+.desfalqueTexto strong {
+  color: var(--texto);
+  font-size: var(--t-14);
+}
+.curadoria {
+  color: var(--texto-2);
+}
+
+/* ---------- Box score ---------- */
+.boxes {
+  display: flex;
+  flex-direction: column;
+  gap: var(--e-8);
+}
+.jogador {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--e-2);
+}
+.jogadorNome {
+  font-weight: 600;
+}
+.jogador:hover .jogadorNome {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+/* ---------- Confrontos ---------- */
+.h2h {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border: 1px solid var(--borda);
+  border-radius: var(--raio);
+  background: var(--superficie);
+  overflow: hidden;
+}
+.h2h li + li {
+  border-top: 1px solid var(--borda);
+}
+.confronto {
+  display: grid;
+  grid-template-columns: 48px 1fr auto 1fr;
+  align-items: center;
+  gap: var(--e-3);
+  min-height: 52px;
+  padding: 0 var(--e-4);
+}
+.confronto:hover {
+  background: var(--campo);
+}
+.confrontoLado {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--e-2);
+  color: var(--texto-3);
+  font-weight: 600;
+}
+.confrontoLado:last-child {
+  justify-content: flex-end;
+}
+.confrontoLado strong {
+  font-size: var(--t-16);
+}
+.confrontoLado[data-venceu='true'] {
+  color: var(--texto);
+}
+
+@container (min-width: 760px) {
+  .desfalquesGrade {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+@container (max-width: 560px) {
+  .placar {
+    padding: var(--e-4) var(--e-2);
+    gap: var(--e-2);
+  }
+  .lado,
+  .lado:last-child {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      'logo'
+      'sigla'
+      'pontos'
+      'forma';
+  }
+  .nome {
+    display: none;
+  }
+  .pontos {
+    font-size: var(--t-40);
+  }
+  .centro {
+    min-width: 72px;
+  }
+  .data {
+    display: none;
+  }
+}

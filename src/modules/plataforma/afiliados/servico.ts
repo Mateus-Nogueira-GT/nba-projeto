@@ -1887,3 +1887,13 @@ export async function painelAdministrativo(
       })),
   }
 }
+
+/*
+ * Apelidos de tipo do retorno dos dois painéis. As telas do front v2 (área de
+ * afiliados e /admin/afiliados) declaram a variável antes do `try` que a
+ * preenche e precisam nomear o tipo — sem isto repetiriam `Awaited<ReturnType<…>>`
+ * em cada tela. É a ÚNICA mudança em `modules` que vem do front v2 (spec
+ * 2026-09-23-front-v2-integracao, §3): nenhum comportamento muda, só o nome.
+ */
+export type PainelDoAfiliado = Awaited<ReturnType<typeof painelDoAfiliado>>
+export type PainelAdministrativo = Awaited<ReturnType<typeof painelAdministrativo>>

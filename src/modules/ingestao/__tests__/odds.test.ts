@@ -127,9 +127,9 @@ describe('reconciliação de mercados e jogadores das casas (spec 06, fatia 4)',
 
 describe('guarda da tela de curadoria de mercados', () => {
   it('página e ações exigem admin', () => {
-    const pagina = readFileSync('src/app/(admin)/admin/mercados/page.tsx', 'utf8')
+    const pagina = readFileSync('src/app/(app)/admin/mercados/page.tsx', 'utf8')
     expect(pagina).toContain('negarSeNaoForAdmin')
-    const acoes = readFileSync('src/app/(admin)/admin/mercados/acoes.ts', 'utf8')
+    const acoes = readFileSync('src/features/admin/mercados/acoes.ts', 'utf8')
     expect(acoes).toContain('exigirAdmin')
   })
 })

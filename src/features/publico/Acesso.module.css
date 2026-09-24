@@ -1,0 +1,122 @@
+.tela {
+  display: grid;
+  grid-template-columns: minmax(0, 55fr) minmax(0, 45fr);
+  min-height: 100dvh;
+}
+
+/* ---------- Área de marca (desktop) ---------- */
+.heroi {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: var(--e-8);
+  padding: var(--e-8) clamp(32px, 5vw, 72px);
+  overflow: hidden;
+  isolation: isolate;
+  background: var(--fundo-nip) url('/marca/hero-quadra.jpg') center right / cover no-repeat;
+}
+/* Escurece só onde o texto precisa de contraste: a coluna da esquerda e a base. */
+.heroi::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background:
+    linear-gradient(90deg, color-mix(in srgb, var(--fundo-nip) 78%, transparent) 0%, color-mix(in srgb, var(--fundo-nip) 35%, transparent) 55%, color-mix(in srgb, var(--fundo-nip) 0%, transparent) 100%),
+    linear-gradient(180deg, color-mix(in srgb, var(--fundo-nip) 0%, transparent) 55%, color-mix(in srgb, var(--fundo-nip) 80%, transparent) 100%);
+}
+.heroiTexto {
+  display: flex;
+  flex-direction: column;
+  gap: var(--e-4);
+  max-width: 620px;
+}
+.manchete {
+  font-family: var(--fonte-heroi);
+  font-size: clamp(56px, 6.6vw, 104px);
+  line-height: 0.92;
+  letter-spacing: 0.01em;
+  text-transform: uppercase;
+}
+.linhaFina {
+  color: var(--texto-2);
+  font-size: var(--t-18);
+  line-height: 1.5;
+}
+.heroiRodape {
+  display: flex;
+  align-items: center;
+  gap: var(--e-3);
+  color: var(--texto-2);
+  font-size: var(--t-12);
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.traco {
+  width: 48px;
+  height: 1px;
+  background: currentColor;
+}
+
+/* ---------- Formulário ---------- */
+.lado {
+  display: grid;
+  place-items: center;
+  padding: var(--e-8) var(--e-6);
+  border-left: 1px solid var(--borda);
+  background: var(--superficie);
+}
+.caixa {
+  width: 100%;
+  max-width: 380px;
+}
+.marcaCelular {
+  display: none;
+}
+.titulo {
+  font-family: var(--fonte-heroi);
+  font-size: 40px;
+  font-weight: 400;
+  line-height: 1;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+.subtitulo {
+  margin: var(--e-2) 0 var(--e-6);
+  color: var(--texto-2);
+  font-size: var(--t-16);
+  line-height: 1.5;
+}
+
+@media (max-width: 1023px) {
+  .tela {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .heroi {
+    display: none;
+  }
+  .lado {
+    place-items: start center;
+    padding: calc(var(--e-8) + env(safe-area-inset-top)) var(--e-5) calc(var(--e-8) + env(safe-area-inset-bottom));
+    border-left: 0;
+    background: var(--fundo);
+  }
+  .marcaCelular {
+    display: flex;
+    flex-direction: column;
+    gap: var(--e-3);
+    margin-bottom: var(--e-8);
+  }
+  .mancheteCelular {
+    font-family: var(--fonte-heroi);
+    font-size: 30px;
+    line-height: 1;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+  }
+  .titulo {
+    font-size: 30px;
+  }
+}

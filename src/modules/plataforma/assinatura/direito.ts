@@ -1,3 +1,4 @@
+import { cache } from 'react'
 import { and, eq, gt, isNull, lte, or } from 'drizzle-orm'
 
 import { direitosAcesso, usuarios } from '../../dominio/db/schema'
@@ -50,11 +51,20 @@ const GRATIS: AcessoComNivel = Object.freeze({
   metodologiaAceitaEm: null,
 })
 
-export async function avaliarAcesso(
+/**
+ * `cache()` memoriza por REQUISIÇÃO, como `sessaoAtual`: numa visita a `/` a
+ * casca do app, a Lista e o resumo da coluna perguntam o acesso da mesma
+ * pessoa — três consultas iguais viravam uma (revisão da Tarefa 3 do front
+ * v2, 2k simultâneos no lançamento). A chave são os argumentos PASSADOS: as
+ * telas chamam com `(getDb(), usuarioId)` e `getDb()` é um só por processo;
+ * quem passa `agora` explícito (checkout) tem chave própria. Fora de uma
+ * renderização do React (rotas, ações, testes) não há cache: é chamada direta.
+ */
+export const avaliarAcesso = cache(async function avaliarAcesso(
   db: Db,
   usuarioId: string | null,
-  agora = new Date(),
-  produto = PRODUTO_PAGO,
+  agora: Date = new Date(),
+  produto: string = PRODUTO_PAGO,
 ): Promise<ResultadoAcesso> {
   if (!usuarioId) return { nivel: null, motivo: 'sem-sessao' }
 
@@ -117,7 +127,7 @@ export async function avaliarAcesso(
   }
   // O GRATIS é uma constante compartilhada; o aceite é DESTE usuário.
   return vencedor ?? { ...GRATIS, metodologiaAceitaEm: primeira.metodologiaAceitaEm }
-}
+})
 
 export async function concederCortesia(
   db: Db,

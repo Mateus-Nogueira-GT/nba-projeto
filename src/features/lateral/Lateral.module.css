@@ -1,0 +1,118 @@
+.lateral {
+  display: flex;
+  flex-direction: column;
+  gap: var(--e-8);
+  min-height: 100%;
+  padding: var(--e-6) var(--e-5);
+}
+.apoio {
+  color: var(--texto-3);
+  font-size: var(--t-13);
+}
+.link {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  color: var(--acento-texto);
+  font-size: var(--t-13);
+  font-weight: 600;
+}
+
+/* ---------- Números da noite ---------- */
+.numeros {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--e-2);
+  margin: 0;
+}
+.numeros > div {
+  padding: var(--e-3);
+  border: 1px solid var(--borda);
+  border-radius: var(--raio);
+  background: var(--superficie);
+  text-align: center;
+}
+.numeros dt {
+  color: var(--texto-3);
+  font-size: var(--t-12);
+  font-weight: 500;
+}
+.numeros dd {
+  margin: 2px 0 0;
+  font-family: var(--fonte-heroi);
+  font-size: 30px;
+  line-height: 1;
+}
+.numeros dd[data-tom='bom'] {
+  color: var(--bateu-texto);
+}
+
+/* ---------- Classificação ---------- */
+.classificacao {
+  display: flex;
+  flex-direction: column;
+  gap: var(--e-3);
+}
+.abas {
+  display: inline-flex;
+  gap: 2px;
+  align-self: flex-start;
+  padding: 3px;
+  border: 1px solid var(--borda);
+  border-radius: calc(var(--raio-controle) + 3px);
+  background: var(--superficie);
+}
+.aba {
+  height: 30px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: var(--raio-controle);
+  background: transparent;
+  color: var(--texto-2);
+  font-size: var(--t-13);
+  font-weight: 600;
+}
+.aba[aria-selected='true'] {
+  background: var(--acento);
+  color: var(--texto-sobre-acento);
+}
+.tabela {
+  width: 100%;
+  border-collapse: collapse;
+  border: 1px solid var(--borda);
+  border-radius: var(--raio);
+  background: var(--superficie);
+  font-size: var(--t-13);
+  overflow: hidden;
+}
+.tabela th,
+.tabela td {
+  height: 36px;
+  padding: 0 var(--e-3);
+  text-align: left;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.tabela thead th {
+  color: var(--texto-3);
+  font-size: var(--t-12);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  background: var(--fundo);
+}
+.tabela tbody tr + tr th,
+.tabela tbody tr + tr td {
+  border-top: 1px solid var(--borda);
+}
+.numero {
+  text-align: right;
+}
+.time {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.time:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}

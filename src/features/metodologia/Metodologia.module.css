@@ -1,0 +1,303 @@
+.tela {
+  display: flex;
+  flex-direction: column;
+  gap: var(--e-8);
+  max-width: 1080px;
+}
+.cabecalho {
+  display: flex;
+  flex-direction: column;
+  gap: var(--e-2);
+  max-width: 760px;
+}
+.sobrancelha {
+  color: var(--acento-texto);
+  font-size: var(--t-13);
+  font-weight: 500;
+}
+.titulo {
+  font-size: var(--t-28);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+.introducao {
+  color: var(--texto-2);
+  font-size: var(--t-16);
+  line-height: 1.6;
+}
+.corpo {
+  display: grid;
+  grid-template-columns: 220px minmax(0, 760px);
+  gap: var(--e-8);
+  align-items: start;
+}
+.sumario {
+  position: sticky;
+  top: calc(var(--topo) + var(--e-6));
+}
+.sumarioTitulo {
+  margin-bottom: var(--e-3);
+  font-size: var(--t-16);
+  font-weight: 700;
+  color: var(--texto);
+}
+.sumario ol {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-left: 1px solid var(--borda);
+}
+.sumario a {
+  display: block;
+  margin-left: -1px;
+  padding: 6px var(--e-3);
+  border-left: 2px solid transparent;
+  color: var(--texto-2);
+  font-size: var(--t-14);
+}
+.sumario a:hover {
+  border-left-color: var(--acento);
+  color: var(--texto);
+}
+.texto {
+  display: flex;
+  flex-direction: column;
+  gap: var(--e-8);
+}
+
+/* ---------- Conteúdo ---------- */
+.conteudo {
+  display: flex;
+  flex-direction: column;
+  gap: var(--e-8);
+}
+.secao {
+  display: flex;
+  flex-direction: column;
+  gap: var(--e-3);
+  scroll-margin-top: calc(var(--topo) + var(--e-5));
+  color: var(--texto);
+  font-size: var(--t-16);
+  line-height: 1.65;
+}
+.tituloSecao {
+  font-size: var(--t-22);
+  font-weight: 700;
+  line-height: 1.25;
+}
+.caixa {
+  padding: var(--e-4) var(--e-5);
+  border: 1px solid var(--borda);
+  border-radius: var(--raio);
+  background: var(--superficie);
+}
+.caixa[data-destaque='true'] {
+  border-color: var(--acento);
+  background: linear-gradient(135deg, var(--acento-veu), transparent 70%), var(--superficie);
+}
+.nota {
+  color: var(--texto-2);
+  font-size: var(--t-14);
+  line-height: 1.6;
+}
+.alerta {
+  color: var(--apito-2);
+  font-size: var(--t-14);
+  line-height: 1.6;
+}
+.lista {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding-left: var(--e-5);
+}
+.listaNiveis {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border: 1px solid var(--borda);
+  border-radius: var(--raio);
+  background: var(--superficie);
+}
+.listaNiveis li {
+  display: grid;
+  grid-template-columns: 96px 1fr;
+  align-items: center;
+  gap: var(--e-4);
+  padding: var(--e-3) var(--e-4);
+  color: var(--texto-2);
+  font-size: var(--t-14);
+}
+.listaNiveis li > :first-child {
+  justify-self: start;
+}
+.listaNiveis li + li {
+  border-top: 1px solid var(--borda);
+}
+.exemplosApito {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: var(--e-2);
+}
+.exemploApito {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--e-2);
+  padding: var(--e-4);
+  border: 1px solid var(--borda);
+  border-radius: var(--raio);
+  background: var(--superficie);
+  color: var(--texto-2);
+  font-size: var(--t-14);
+}
+.iconeTurbo {
+  display: inline;
+  vertical-align: -2px;
+  color: var(--apito-turbo);
+}
+.iconeFogo {
+  display: inline;
+  vertical-align: -3px;
+  color: var(--modo-fire);
+}
+.modoFire {
+  color: var(--modo-fire);
+}
+.regua {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: var(--e-2);
+}
+.faixa {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--e-3);
+  border: 1.5px solid;
+  border-radius: var(--raio-controle);
+  text-align: center;
+}
+.faixaRotulo {
+  font-size: var(--t-13);
+  font-weight: 500;
+}
+.rolagem {
+  overflow-x: auto;
+  border: 1px solid var(--borda);
+  border-radius: var(--raio);
+}
+.tabela {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--t-14);
+}
+.tabela th,
+.tabela td {
+  padding: var(--e-3) var(--e-4);
+  text-align: left;
+  white-space: nowrap;
+}
+.tabela thead th {
+  background: var(--fundo);
+  color: var(--texto-2);
+  font-size: var(--t-12);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.tabela tbody tr {
+  border-top: 1px solid var(--borda);
+}
+.tabela tbody th {
+  font-weight: 700;
+}
+.tabela td {
+  color: var(--texto-2);
+}
+.demo {
+  display: block;
+  color: var(--apito-2);
+  font-size: var(--t-12);
+  font-weight: 600;
+}
+.linhaExemplo {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--e-3) var(--e-5);
+  padding: var(--e-4) var(--e-5);
+  border: 1px solid var(--borda);
+  border-left: 3px solid var(--apito-3);
+  border-radius: var(--raio);
+  background: var(--superficie);
+  font-size: var(--t-14);
+  font-weight: 600;
+}
+.exemploIdentidade {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.exemploMeta {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--e-2);
+  color: var(--texto-2);
+  font-size: var(--t-12);
+}
+
+/* ---------- Portão de aceite ---------- */
+.aceite {
+  display: flex;
+  flex-direction: column;
+  gap: var(--e-3);
+  padding: var(--e-5);
+  border: 1px solid var(--acento);
+  border-radius: var(--raio);
+  background: var(--superficie);
+}
+.aceiteTexto {
+  color: var(--texto-2);
+  font-size: var(--t-14);
+}
+.botaoAceite {
+  min-height: 52px;
+  border: 0;
+  border-radius: var(--raio-controle);
+  background: var(--acento);
+  color: var(--texto-sobre-acento);
+  font-size: var(--t-16);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  transition: background var(--rapido) var(--curva);
+}
+.botaoAceite:hover {
+  background: var(--acento-hover);
+}
+
+@media (max-width: 1023px) {
+  .corpo {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .sumario {
+    display: none;
+  }
+  .titulo {
+    font-size: var(--t-22);
+  }
+  .tituloSecao {
+    font-size: var(--t-18);
+  }
+  .listaNiveis li {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+}

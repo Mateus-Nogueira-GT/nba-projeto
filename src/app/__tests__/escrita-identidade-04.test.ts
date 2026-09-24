@@ -3,9 +3,6 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vite
 
 import type { PlanoDoDia } from '../../modules/entrega/gestao'
 import type { Ruleset } from '../../modules/motor/ruleset/schema'
-import { razaoDeContraste } from '../../design-system/tokens/contraste'
-import { componente } from '../../design-system/tokens/componente'
-import { semantico } from '../../design-system/tokens/semantico'
 
 let homologado: Ruleset
 let ruleset: Ruleset
@@ -29,13 +26,23 @@ vi.mock('next/cache', () => ({
   revalidatePath: () => {},
 }))
 vi.mock('../../modules/dominio/db/cliente', () => ({ getDb: () => ({}) }))
-// Esta suíte cobra a ESCRITA da tela e usa um banco de mentira (`{}`). A
-// lateral direita lê o recap e a classificação de verdade, então aqui ela sai
-// de cena — o que está sob teste é a frase, não a coluna.
-vi.mock('../(app)/lateral/montar', () => ({ lateralPadrao: async () => null }))
+// Esta suíte cobra a ESCRITA da tela e usa um banco de mentira (`{}`). No v2
+// a coluna da direita é o slot `@painel`, fora da página — nada a simular aqui.
 vi.mock('../../modules/entrega/gestao', () => ({
   BANCA_PADRAO: 1000,
   planoDoDia: async () => plano,
+}))
+// Front v2 (Tarefa 6): a Gestão do v2 também lê os registros do dia e a
+// conferência dos 30 dias ("Seu mês"). Sem banco aqui, os dois voltam vazios:
+// o que está sob teste é a escrita da linha do plano.
+// O feed da Gestão vem do cache; o plano de mentira acima não o usa.
+vi.mock('../_cache/feed', () => ({ lerFeedCacheado: async () => null }))
+vi.mock('../../modules/entrega/gestao-realizadas', () => ({
+  entradasRealizadasDoDia: async () => [],
+}))
+vi.mock('../../modules/entrega/resultados', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../modules/entrega/resultados')>()),
+  conferirRodadas: async () => [],
 }))
 
 beforeAll(async () => {
@@ -105,27 +112,25 @@ async function guia() {
   return renderToStaticMarkup(await Pagina())
 }
 
+// Front v2 (Tarefa 7): o guia é o `features/metodologia/Conteudo` do v2. O
+// "card de exemplo" virou "Um exemplo de linha da lista" e o toque é na linha.
+// O caso "o número grande do exemplo permanece legível sobre o card escuro"
+// saiu: ele media contraste sobre a cor EMBUTIDA do design-system antigo, e a
+// linha do v2 pinta por `var(--…)` de `src/ui/tokens.css` — contraste de token
+// é assunto do teste de marca (Tarefa 11b), não de string de HTML.
 describe('escrita da identidade 04 · guia', () => {
-  it('o número grande do exemplo permanece legível sobre o card escuro', async () => {
-    // Na identidade 06 o número grande do card deixou de ser a nota de
-    // confiança e passou a ser a ODD — o elemento que o parceiro pediu como
-    // maior atrativo. A regra de legibilidade é a mesma; mudou o dono.
-    const exemplo = secao(await guia(), 'Um exemplo de card')
-    const estilo = exemplo.match(
-      new RegExp(`<span style="([^"]*font-size:${componente.odd.valorMedia}[^"]*)"`),
-    )?.[1]
-    expect(estilo, 'a odd não saiu no card de exemplo').toBeDefined()
-    const cor = estilo!.match(/(?:^|;)color:(#[a-f0-9]{6})/i)?.[1]
-    expect(cor).toBeDefined()
-    for (const fundo of [semantico.superficieFria1, semantico.superficieFria2]) {
-      // 38px: contraste AA para texto grande.
-      expect(razaoDeContraste(cor!, fundo)).toBeGreaterThanOrEqual(3)
-    }
+  it('o exemplo mostra a odd só com o valor, na forma que o ruleset manda — o rótulo fica para o leitor de tela', async () => {
+    // Como a `PilulaOdd` da Lista e o v2: "1,85" na tela, nunca "Odd 1,85". O
+    // "(odd)" que sobra no texto é o `.so-leitor`, invisível.
+    ruleset.odds.exibicao = 'casa_unica'
+    const exemplo = texto(secao(await guia(), 'Um exemplo de linha'))
+    expect(exemplo).toContain('1,85 (odd)')
+    expect(exemplo).not.toContain('Odd 1,85')
   })
 
   it('explica confiança como nota numérica e bônus em pontos da nota', async () => {
     const html = await guia()
-    const confianca = texto(secao(html, 'linhas de pontos'))
+    const confianca = texto(secao(html, 'A nota de confiança e as linhas'))
     expect(confianca).not.toMatch(/%|percentual/i)
     expect(confianca).toContain('nota de confiança')
     expect(confianca).toContain('Não é probabilidade de acerto')
@@ -139,7 +144,7 @@ describe('escrita da identidade 04 · guia', () => {
 
   it('orienta abrir o card e conserva linhas inteiras com +', async () => {
     const html = await guia()
-    expect(texto(html)).toContain('Toque no card')
+    expect(texto(html)).toContain('Toque na linha')
     expect(texto(html)).not.toContain('Toque em “linhas e confiança”')
     const atributos = texto(secao(html, 'Pontos, rebotes e assistências'))
     expect(atributos).not.toContain('funcionam igual nos três atributos')
@@ -160,9 +165,12 @@ describe('escrita da identidade 04 · guia', () => {
       expect(odds).toContain('última coleta')
       expect(odds).toContain('tabela de referência')
       expect(odds).not.toContain('próxima da média do mercado')
-      const exemplo = texto(secao(html, 'Um exemplo de card'))
-      if (exibicao === 'media') expect(exemplo).toContain('ODD MÉDIA')
-      else expect(exemplo).not.toContain('ODD MÉDIA')
+      // A forma do ruleset muda o VALOR do exemplo; o rótulo só vai ao leitor de tela.
+      const exemplo = texto(secao(html, 'Um exemplo de linha'))
+      if (exibicao === 'media') expect(exemplo).toContain('1,54 (odd média)')
+      else expect(exemplo).toContain('1,47–1,62 (odd)')
+      expect(exemplo).not.toMatch(/Odd (média )?\d/)
+      if (exibicao !== 'media') expect(exemplo).not.toMatch(/odd média/i)
     },
   )
 
@@ -178,8 +186,11 @@ describe('escrita da identidade 04 · gestão', () => {
     plano.entradas[0]!.item.linha = linha
     const { default: Pagina } = await import('../(app)/gestao/page')
     const html = renderToStaticMarkup(await Pagina({ searchParams: Promise.resolve({}) }))
+    // Front v2 (Tarefa 6): a pílula de mercado do v2 escreve o sinal à frente
+    // ("+8 REB"); sem linha, só o mercado — e a linha não oferece registro.
     const resumo = texto(html.match(/<a\b[^>]*href="\/apito\/[\s\S]*?<\/a>/)?.[0] ?? '')
-    expect(resumo).toContain(linha === null ? 'REB · nível' : 'REB 8+ · nível')
-    expect(resumo).not.toMatch(/REB\s*\+|null/)
+    expect(resumo).toContain(linha === null ? 'MVP REB' : 'MVP +8 REB')
+    expect(resumo).not.toMatch(/\+\s*REB|null/)
+    if (linha === null) expect(texto(html)).toContain('Sem linha para registrar')
   })
 })

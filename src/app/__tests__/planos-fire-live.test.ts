@@ -13,7 +13,7 @@ import type { FeedFireLive } from '../../modules/entrega/fire-live/leitura'
 /**
  * O FIRE LIVE POR NÍVEL (spec §5, linha 3).
  *
- * Mesmo arnês de `telas-04-firelive.test.ts` — temporada simulada com 21 dias
+ * Mesmo arnês da fumaça do Ao Vivo (`features/ao-vivo/__tests__/fumaca.test.tsx`) — temporada simulada com 21 dias
  * de histórico, que é o que garante jogo ao vivo no 1º quarto em 15/01 — mais
  * o ACESSO MUTÁVEL de `planos-home.test.ts`: um banco só, um `beforeAll` só,
  * e `nivelNoTeste` alterna a renderização entre GRATIS e MVP no mesmo

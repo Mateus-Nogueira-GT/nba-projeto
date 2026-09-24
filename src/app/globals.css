@@ -4,41 +4,53 @@
   box-sizing: border-box;
 }
 
+/* ===== BASE DO FRONT V2 ==============================================
+   A base de `referencias/nip-front-v2/src/app/globals.css`, GLOBAL como lá:
+   vale para toda tela, dentro e fora da casca `(app)`.
+
+   Durante a transição (Tarefa 3) as regras de ELEMENTO (body, h1–p, a, img,
+   :focus-visible) ficaram presas em `[data-app]` para não mudar as telas
+   públicas antigas, que não vestiam a casca. A Tarefa 12 apagou essas telas
+   e o escopo ficou — e /entrar, /offline, /oferta, /admin/entrar, a landing
+   e o 404 saíam na serif 16px do navegador, com link sublinhado, margem de
+   <p> e, no Claro, texto preto. O atributo `data-app` continua no <div>
+   raiz de `(app)/layout.tsx` só porque o botão de recolher o menu o procura.
+
+   O que não é do v2: `min-width: 320px` (a largura mínima que o app
+   suporta) e `color-scheme: dark`, o mesmo que a meta `color-scheme` do
+   layout raiz já declara — nenhum dos dois muda o que o v2 desenha.
+   ==================================================================== */
 html {
+  -webkit-text-size-adjust: 100%;
   min-width: 320px;
   background: var(--fundo);
   color-scheme: dark;
 }
 
 body {
+  margin: 0;
   min-width: 320px;
   min-height: 100dvh;
-  margin: 0;
   background: var(--fundo);
+  color: var(--texto);
+  font-family: var(--fonte);
+  font-size: var(--t-14);
+  font-weight: 500;
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
 }
 
-.marca-nip {
-  display: inline-flex;
-  flex-direction: column;
-  gap: 2px;
+h1,
+h2,
+h3,
+h4,
+p {
+  margin: 0;
+}
+
+a {
   color: inherit;
-  line-height: 1;
-}
-.marca-nip strong {
-  font-family: var(--fonte-bebas), sans-serif;
-  font-size: 28px;
-  letter-spacing: 0.08em;
-}
-/* A assinatura da logo ("NBA Intelligence Platform"). O manual pede que ela
-   fique legível quando houver largura — daí os 12px do piso, no lugar dos 9. */
-.marca-nip small {
-  color: currentColor;
-  font-family: var(--fonte-montserrat), sans-serif;
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.13em;
-  opacity: 0.7;
-  text-transform: uppercase;
+  text-decoration: none;
 }
 
 button,
@@ -46,453 +58,68 @@ input,
 select,
 textarea {
   font: inherit;
+  color: inherit;
 }
 
-/* Identidade dos confrontos: nomes inteiros, inclusive em telas estreitas. */
-.jogo-frio {
-  flex-wrap: wrap;
+button {
+  cursor: pointer;
 }
-.jogo-times-frio {
-  flex: 1 1 280px;
-}
-.jogo-times-frio > span:first-child,
-.jogo-times-frio > span:last-child {
-  flex: 1;
-}
-.jogo-placar-quente {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
-  align-items: center;
-  gap: 12px;
-}
-.quadra-ao-vivo {
-  width: 100%;
-  max-width: 440px;
-  margin: 16px auto 0;
-}
-.quadra-ao-vivo svg {
+
+img,
+svg {
   display: block;
-  width: 100%;
-  height: auto;
-}
-.card-confronto {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 4px 10px;
-  margin-top: 6px;
-}
-.card-adversario {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  min-width: 0;
-}
-.card-selo-fire {
-  display: inline-flex;
+  max-width: 100%;
 }
 
-/* O movimento é uma resposta ao hover/foco, exclusivo do estado Modo Fire. */
-.card-modo-fire > article {
-  position: relative;
-  isolation: isolate;
+:focus-visible {
+  outline: 2px solid var(--texto);
+  outline-offset: 2px;
+  border-radius: 4px;
 }
-.card-modo-fire > article::before {
-  content: '';
+
+::selection {
+  background: var(--acento);
+  color: var(--texto-sobre-acento);
+}
+
+.num {
+  font-variant-numeric: tabular-nums;
+}
+
+.so-leitor {
   position: absolute;
-  inset: 0;
-  pointer-events: none;
-  border-radius: inherit;
-  box-shadow: inset 0 0 0 1px var(--apito-modo-fire);
-  opacity: 0;
-}
-.card-modo-fire:focus-within > article::before {
-  opacity: 0.7;
-}
-@media (hover: hover) {
-  .card-modo-fire:hover > article::before {
-    opacity: 0.7;
-  }
-}
-@media (prefers-reduced-motion: no-preference) {
-  .card-modo-fire {
-    transition:
-      transform 220ms ease,
-      filter 220ms ease;
-  }
-  .card-modo-fire > article::before {
-    transition: opacity 220ms ease;
-  }
-  .card-modo-fire:focus-within {
-    transform: translateY(-3px);
-    filter: drop-shadow(0 5px 12px var(--veu-fire));
-  }
-  .card-modo-fire:focus-within .card-selo-fire {
-    animation: fire-aquecer 650ms ease both;
-  }
-  @media (hover: hover) {
-    .card-modo-fire:hover {
-      transform: translateY(-3px);
-      filter: drop-shadow(0 5px 12px var(--veu-fire));
-    }
-    .card-modo-fire:hover .card-selo-fire {
-      animation: fire-aquecer 650ms ease both;
-    }
-  }
-}
-@keyframes fire-aquecer {
-  0%,
-  100% {
-    transform: scale(1);
-  }
-  40% {
-    transform: scale(1.08) rotate(-2deg);
-  }
-  70% {
-    transform: scale(1.04) rotate(1deg);
-  }
-}
-@media (max-width: 420px) {
-  .jogo-placar-quente {
-    gap: 8px;
-  }
-  .card-confronto {
-    flex-direction: column;
-    align-items: flex-start;
-  }
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
-.oferta-publica {
-  min-height: 100dvh;
-  display: grid;
-  place-items: center;
-  padding: 24px;
-  background: #f5f7fb;
-  color: #152033;
-  font-family: var(--fonte-montserrat), sans-serif;
+/* Cabeçalho das seções na voz da marca: sobretítulo pequeno + título em
+   Bebas (Manual: Bebas em títulos curtos). Mesmo desenho em toda seção. */
+.sobretitulo-marca {
+  display: block;
+  color: var(--texto-3);
+  font-size: var(--t-13);
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
 }
-.oferta-publica section {
-  width: min(100%, 560px);
-  padding: clamp(28px, 6vw, 52px);
-  border: 1px solid #dce3ee;
-  border-radius: 20px;
-  background: #fff;
-  box-shadow: 0 18px 50px rgb(26 39 64 / 9%);
-}
-.oferta-publica h1 {
-  margin: 28px 0 12px;
-  font-size: clamp(30px, 6vw, 48px);
+.titulo-marca {
+  margin-top: 2px;
+  font-family: var(--fonte-heroi);
+  font-size: 44px;
+  font-weight: 400;
+  letter-spacing: 0.01em;
   line-height: 1;
+  text-transform: uppercase;
 }
-.oferta-publica p {
-  color: #5c6a7d;
-  line-height: 1.6;
-}
-.oferta-publica .etiqueta {
-  margin: 32px 0 0;
-  color: #7057d9;
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.14em;
-}
-.oferta-publica a {
-  display: flex;
-  justify-content: center;
-  padding: 13px 18px;
-  border-radius: 10px;
-  font-weight: 700;
-  text-decoration: none;
-}
-.oferta-publica .acao-primaria {
-  margin-top: 28px;
-  background: #7057d9;
-  color: #fff;
-}
-.oferta-publica .acao-secundaria {
-  margin-top: 8px;
-  color: #46536a;
-}
-
-/*
- * Ponto pulsante do "ao vivo" (Fire Live). Guardado por
- * `prefers-reduced-motion`: quem pediu menos movimento vê o ponto fixo, não
- * piscando — o jogo já está rolando, a animação não pode se impor.
- */
-@keyframes ponto-ao-vivo-pulso {
-  0%,
-  100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.3;
+@media (max-width: 1023px) {
+  .titulo-marca {
+    font-size: 36px;
   }
 }
-
-@media (prefers-reduced-motion: no-preference) {
-  .ponto-ao-vivo {
-    animation: ponto-ao-vivo-pulso 1.6s ease-in-out infinite;
-  }
-}
-
-/*
- * ESQUELETO DE CARREGAMENTO.
- *
- * Toda tela autenticada é `force-dynamic` e leva de 200ms a 1s para voltar do
- * servidor (ADR-0008). Sem uma fronteira de Suspense, o roteador do Next
- * segura a tela ANTERIOR inteira nesse intervalo: o usuário toca e nada muda.
- * A ausência de resposta lê-se como travamento, que é pior que a espera.
- *
- * Guardado por `prefers-reduced-motion` como o ponto do "ao vivo": quem pediu
- * menos movimento vê a barra parada, e ela continua comunicando "aqui vem
- * conteúdo" pela forma.
- */
-@keyframes esqueleto-brilho {
-  0%,
-  100% {
-    opacity: 0.35;
-  }
-  50% {
-    opacity: 0.7;
-  }
-}
-
-@media (prefers-reduced-motion: no-preference) {
-  .esqueleto {
-    animation: esqueleto-brilho 1.4s ease-in-out infinite;
-  }
-}
-
-/*
- * Colunas que só cabem na largura de dados (Tabela, `soDesktop`). Inline não
- * faz media query — é a única razão de uma regra de layout de tabela morar
- * aqui.
- */
-.so-desktop {
-  display: none;
-}
-
-/*
- * As duas conferências lado a lado no desktop, empilhadas no celular. A grade
- * em si é inline, na tela; aqui fica só o que o inline não faz.
- */
-@media (min-width: 900px) {
-  .so-desktop {
-    display: table-cell;
-  }
-}
-
-/*
- * As duas conferências lado a lado, e só onde CABEM. O mínimo de conteúdo das
- * duas tabelas juntas é 1113 px (nomes de time longos, quatro colunas); a
- * 900 px elas vazavam para os lados, que é o que o manual proíbe — defeito
- * anterior a esta passada, que a captura a 1024 revelou.
- */
-@media (min-width: 1160px) {
-  .grade-conferencias {
-    grid-template-columns: 1fr 1fr;
-  }
-  /*
-   * Banco sem conferência nenhuma cai numa tabela só — e ela toma a largura
-   * inteira, em vez de ficar na metade esquerda com a direita vazia.
-   */
-  .grade-conferencias > :only-child {
-    grid-column: 1 / -1;
-  }
-}
-
-/*
- * Com a lateral (a partir de 1280) sobram 1040 px para o conteúdo: duas
- * conferências lado a lado dão 508 cada, e a tabela do Oeste — nomes longos —
- * rola por dentro e corta o TRILHO.
- *
- * SEM limite superior, e isto corrige a spec: `.comLateral .coluna` é
- * `max-width: 1040px` em QUALQUER largura (Moldura.module.css), então as duas
- * conferências não passam a caber a 1600 — a coluna não cresce. Um teto de
- * 1599 devolveria o vazamento no monitor grande.
- */
-@media (min-width: 1280px) {
-  .moldura-com-lateral .grade-conferencias {
-    grid-template-columns: 1fr;
-  }
-}
-
-/*
- * Os quatro blocos da conta, dois por linha no desktop (spec 12/09, §4.3) e
- * empilhados no celular na ordem Conta · Assinatura · Alertas · Dispositivos.
- * A grade em si é inline, na tela; aqui fica só o que o inline não faz.
- */
-@media (min-width: 900px) {
-  .grade-conta {
-    grid-template-columns: 1fr 1fr;
-  }
-}
-
-/* A seção de cada jogo na Lista é um <details> cujo <summary> é o próprio
-   cabeçalho do jogo (identidade 05). O marcador nativo do WebKit sai; quem
-   indica aberto/fechado é o chevron desenhado, que gira. */
-summary.jogo-frio::-webkit-details-marker {
-  display: none;
-}
-.jogo-chevron {
-  flex-shrink: 0;
-  transition: transform 150ms ease;
-}
-details:not([open]) > summary .jogo-chevron {
-  transform: rotate(-90deg);
-}
-@media (prefers-reduced-motion: reduce) {
-  .jogo-chevron {
-    transition: none;
-  }
-}
-
-/* A faixa de convite do grátis mora INLINE até a lateral existir; a partir de
-   1280 ela é o primeiro bloco da coluna da direita, e repeti-la nos dois
-   lugares seria a mesma frase duas vezes na mesma dobra (identidade 05, §8). */
-@media (min-width: 1280px) {
-  .so-ate-lateral {
-    display: none;
-  }
-}
-
-/* ===== CONTROLES COM ESTADO (correções UX 19/09, §4.15) =====
-
-   Estilo embutido não tem :hover nem :focus-visible. As CORES dos controles
-   que mudam de estado moram aqui; a geometria (padding, fonte, raio, largura)
-   continua embutida em cada um. Quem usa uma destas classes NÃO escreve
-   background, color nem border embutidos — o embutido venceria a classe e o
-   hover nunca apareceria.
-
-   Só tokens: nenhum hex aqui. O hover fica atrás de (hover: hover) para a
-   tela de toque não ficar com o estado preso depois do toque. */
-
-/* O botão primário do manual: azul chapado, hover mais claro, texto branco. */
-.botao-primario {
-  background: var(--cta-fundo);
-  color: var(--cta-texto);
-  border: 1px solid transparent;
-}
-.botao-primario:focus-visible {
-  outline: var(--foco);
-  outline-offset: 2px;
-}
-
-/* Sair, cancelar, voltar: contorno na divisória, texto branco. */
-.botao-secundario {
-  background: transparent;
-  color: var(--texto-primario);
-  border: 1px solid var(--divisor);
-}
-.botao-secundario:focus-visible {
-  outline: var(--foco);
-  outline-offset: 2px;
-}
-
-/* As pílulas das duas barras. A ativa é preenchida no acento (identidade 05);
-   o `aria-current` acompanha, e a classe modificadora é o que o CSS lê. */
-.pilula-nav {
-  background: transparent;
-  color: var(--texto-secundario);
-}
-.pilula-nav-ativa {
-  background: var(--acento);
-  color: var(--texto-sobre-acento);
-}
-.pilula-nav:focus-visible {
-  outline: var(--foco);
-  outline-offset: 2px;
-}
-
-/* O chip de filtro, nos menus do desktop e na folha do celular. */
-.chip-filtro {
-  background: transparent;
-  color: var(--texto-secundario);
-  border: 1.5px solid var(--divisor);
-}
-.chip-filtro-ativo {
-  background: var(--acento);
-  color: var(--texto-sobre-acento);
-  border-color: transparent;
-}
-.chip-filtro:focus-visible {
-  outline: var(--foco);
-  outline-offset: 2px;
-}
-
-@media (hover: hover) {
-  .botao-primario:hover {
-    background: var(--cta-fundo-hover);
-  }
-  .botao-secundario:hover {
-    background: var(--superficie-elevada);
-  }
-  .pilula-nav:not(.pilula-nav-ativa):hover {
-    background: var(--superficie-elevada);
-    color: var(--texto100);
-  }
-  .chip-filtro:not(.chip-filtro-ativo):hover {
-    background: var(--superficie-elevada);
-    color: var(--texto100);
-  }
-}
-/* ===== FIM CONTROLES COM ESTADO ===== */
-
-/* ===== ESTADO NO DESKTOP (auditoria de UX para web, 19/09) =====
-
-   A auditoria mediu 520 de 794 elementos interativos sem :hover e sem o anel
-   de foco do app — estilo embutido não tem estado, e é assim que quase toda a
-   UI foi escrita. No celular não faz falta; no desktop é a diferença entre uma
-   tela viva e uma imagem.
-
-   DIFERENÇA para o bloco de cima: aquelas quatro classes assumiram a COR dos
-   controles neutros. Estas quatro não podem — o card carrega o metálico do
-   nível do jogador e a aba carrega o cromático do apito, e as duas cores são
-   DADO. Aqui só existe estado.
-
-   Por isso o realce do card é `outline`, e não `border` nem `box-shadow`: a
-   borda é o nível e o box-shadow é o brilho do turbo e do modo fire.
-
-   `.linha-alvo` é a irmã do card para LINHA clicável (as 37 da Gestão): lá o
-   link cobre a linha inteira, e `.link-texto` sublinharia todo o conteúdo
-   dela. Mesmo realce, alvo diferente. */
-
-.card-alvo:focus-within > article,
-.linha-alvo:focus-within {
-  outline: var(--foco);
-  outline-offset: -2px;
-}
-.link-texto:focus-visible,
-.aba-atributo:focus-visible,
-.opcao-segmentada:focus-visible {
-  outline: var(--foco);
-  outline-offset: 2px;
-}
-
-@media (hover: hover) {
-  .card-alvo:hover > article,
-  .linha-alvo:hover {
-    outline: 1px solid var(--texto55);
-    outline-offset: -1px;
-  }
-  .link-texto:hover {
-    color: var(--texto100);
-    text-decoration: underline;
-  }
-  .aba-atributo:hover {
-    background: var(--superficie-elevada);
-  }
-  .opcao-segmentada:not([aria-current]):hover {
-    background: var(--superficie-elevada);
-    color: var(--texto100);
-  }
-}
-/* ===== FIM ESTADO NO DESKTOP ===== */
-
-/* Os três planos lado a lado quando há largura; empilhados abaixo de 900, que
-   é onde a comparação deixa de caber e vira lista. */
-@media (min-width: 900px) {
-  .grade-planos {
-    grid-template-columns: repeat(3, 1fr);
-    align-items: start;
-  }
-}
+/* ===== FIM DA BASE DO FRONT V2 ===== */

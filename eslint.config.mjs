@@ -9,6 +9,9 @@ const config = [
       'node_modules/**',
       'coverage/**',
       '.superpowers/**',
+      // Cópias de referência (o front v2 do cliente): outro projeto, com o
+      // próprio tsconfig e o próprio `@/`. Nada daqui é importado pelo app.
+      'referencias/**',
       'next-env.d.ts',
       // Rotas de runtime geradas por withWorkflow() a cada build. O próprio
       // gerador as mantém fora do git; lintar código gerado não tem valor.

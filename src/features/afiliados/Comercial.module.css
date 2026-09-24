@@ -1,0 +1,150 @@
+.pagina {
+  display: grid;
+  grid-template-columns: 240px minmax(0, 1fr);
+  min-height: 100dvh;
+  background: var(--fundo);
+}
+.lateral {
+  position: sticky;
+  top: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--e-6);
+  height: 100dvh;
+  padding: var(--e-6) var(--e-4);
+  border-right: 1px solid var(--borda);
+  background: var(--superficie);
+}
+.nav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.nav a {
+  display: flex;
+  align-items: center;
+  height: 44px;
+  padding: 0 var(--e-3);
+  border-radius: var(--raio-controle);
+  color: var(--texto-2);
+  font-weight: 600;
+  transition:
+    background var(--rapido) var(--curva),
+    color var(--rapido) var(--curva);
+}
+.nav a:hover {
+  background: var(--campo);
+  color: var(--texto);
+}
+.navProduto {
+  margin-top: var(--e-3);
+  border-top: 1px solid var(--borda);
+  border-radius: 0 !important;
+  padding-top: var(--e-3) !important;
+  height: auto !important;
+}
+.rodape {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: auto;
+  color: var(--texto-3);
+  font-size: var(--t-12);
+}
+.rodape strong {
+  color: var(--texto);
+  font-size: var(--t-13);
+}
+.conteudo {
+  min-width: 0;
+  padding: var(--e-8) var(--e-6);
+}
+
+/* Página pública do convite */
+.publica {
+  display: grid;
+  place-items: center;
+  min-height: 100dvh;
+  padding: var(--e-6) var(--e-4);
+  background: radial-gradient(ellipse at top, color-mix(in srgb, var(--azul-nip) 14%, transparent), transparent 60%), var(--fundo);
+}
+.cartao {
+  display: flex;
+  flex-direction: column;
+  gap: var(--e-5);
+  width: min(480px, 100%);
+  padding: var(--e-8) var(--e-6);
+  border: 1px solid var(--borda);
+  border-radius: 16px;
+  background: var(--superficie);
+}
+.etiqueta {
+  color: var(--texto-3);
+  font-size: var(--t-13);
+  font-weight: 500;
+}
+.tituloPublico {
+  margin-top: 4px;
+  font-size: var(--t-22);
+  font-weight: 700;
+  line-height: 1.2;
+}
+.textoPublico {
+  color: var(--texto-2);
+  font-size: var(--t-14);
+  line-height: 1.55;
+}
+.acaoPrimaria {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 48px;
+  padding: 0 var(--e-5);
+  border: 0;
+  border-radius: var(--raio-controle);
+  background: var(--acento);
+  color: var(--texto-sobre-acento);
+  font-size: var(--t-14);
+  font-weight: 700;
+}
+.acaoPrimaria:hover {
+  background: var(--acento-hover);
+}
+
+@media (max-width: 1023px) {
+  .pagina {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .lateral {
+    position: sticky;
+    z-index: 10;
+    flex-direction: row;
+    align-items: center;
+    gap: var(--e-3);
+    height: auto;
+    padding: calc(var(--e-3) + env(safe-area-inset-top)) var(--e-4) var(--e-3);
+    border-right: 0;
+    border-bottom: 1px solid var(--borda);
+    overflow-x: auto;
+  }
+  .nav {
+    flex-direction: row;
+  }
+  .nav a {
+    height: 40px;
+    white-space: nowrap;
+  }
+  .navProduto {
+    margin-top: 0;
+    border-top: 0;
+    padding-top: 0 !important;
+    height: 40px !important;
+    border-radius: var(--raio-controle) !important;
+  }
+  .rodape {
+    display: none;
+  }
+  .conteudo {
+    padding: var(--e-5) var(--e-4) var(--e-8);
+  }
+}

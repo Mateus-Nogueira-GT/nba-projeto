@@ -1,0 +1,15 @@
+/* Linha fina, no fluxo, acima de tudo — sem `position: fixed`: ela não pode
+   cobrir conteúdo nem competir com a barra de abas. O recuo do topo é a área
+   segura: no PWA standalone o body começa por baixo do relógio, e sem isso o
+   aviso sumiria inteiro justamente no aparelho-alvo. */
+.faixa {
+  padding: calc(5px + env(safe-area-inset-top, 0px)) var(--e-4) 5px;
+  border-bottom: 1px solid var(--borda);
+  background: var(--campo);
+  color: var(--texto-2);
+  font-size: var(--t-12);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-align: center;
+  text-transform: uppercase;
+}

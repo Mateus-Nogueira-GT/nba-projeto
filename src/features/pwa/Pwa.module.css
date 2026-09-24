@@ -1,0 +1,55 @@
+/* Mesma faixa fina da demonstração: o aviso mora no fluxo, nunca fixo por
+   cima do conteúdo nem competindo com a barra de abas. */
+.faixa {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--e-4);
+  min-height: 44px;
+  padding: 8px var(--e-6);
+  border-bottom: 1px solid var(--borda);
+  background: linear-gradient(90deg, var(--acento-veu), transparent 70%), var(--superficie);
+}
+.icone {
+  display: inline-flex;
+  flex-shrink: 0;
+  padding: 6px;
+  border-radius: 8px;
+  background: var(--acento);
+  color: var(--texto-sobre-acento);
+}
+.texto {
+  flex: 1;
+  min-width: 0;
+  color: var(--texto-2);
+  font-size: var(--t-13);
+}
+.texto strong {
+  color: var(--texto);
+}
+.botao {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  height: 36px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: var(--raio-controle);
+  background: var(--acento);
+  color: var(--texto-sobre-acento);
+  font-size: var(--t-13);
+  font-weight: 700;
+}
+.botao:hover {
+  background: var(--acento-hover);
+}
+.botao:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+@media (max-width: 1023px) {
+  .faixa {
+    padding: 8px var(--e-4);
+  }
+}

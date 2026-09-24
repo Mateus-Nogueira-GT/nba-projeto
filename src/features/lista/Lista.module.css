@@ -1,0 +1,368 @@
+.tela {
+  container-type: inline-size;
+  display: flex;
+  flex-direction: column;
+  gap: var(--e-4);
+  max-width: 1400px;
+}
+
+/* ---------- Cabeçalho ---------- */
+.cabecalho {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--e-4);
+}
+.sobretitulo {
+  color: var(--texto-3);
+  font-size: var(--t-13);
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+/* O nome da tela na voz da marca: Bebas, como no Manual (título curto). */
+.titulo {
+  margin-top: 2px;
+  font-family: var(--fonte-heroi);
+  font-size: 44px;
+  font-weight: 400;
+  letter-spacing: 0.01em;
+  line-height: 1;
+  text-transform: uppercase;
+}
+.subtitulo {
+  margin-top: 4px;
+  color: var(--texto-2);
+  font-size: var(--t-14);
+}
+.subtitulo::first-letter {
+  text-transform: uppercase;
+}
+
+/* ---------- Controles ---------- */
+.controles {
+  display: flex;
+  flex-direction: column;
+  gap: var(--e-3);
+  padding: var(--e-2) var(--e-4);
+  border: 1px solid var(--borda);
+  border-radius: var(--raio);
+  background: var(--superficie);
+}
+.linhaPrincipal {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--e-2) var(--e-4);
+}
+.abasNaBarra {
+  min-width: 0;
+  max-width: 100%;
+}
+/* Dentro da barra, a aba não precisa da linha de base: o cartão já delimita. */
+.abasNaBarra nav {
+  border-bottom: 0;
+}
+.linhaControles {
+  display: flex;
+  flex: 1 1 auto;
+  flex-wrap: nowrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--e-2);
+  min-width: 0;
+}
+.controles .ativos:empty {
+  display: none;
+}
+.busca {
+  display: flex;
+  align-items: center;
+  gap: var(--e-2);
+  flex: 1 1 200px;
+  min-width: 120px;
+  max-width: 280px;
+  height: 40px;
+  padding: 0 var(--e-3);
+  border: 1px solid var(--borda);
+  border-radius: var(--raio-controle);
+  background: var(--superficie);
+  color: var(--texto-3);
+}
+.busca:focus-within {
+  border-color: var(--texto-3);
+}
+.busca input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  outline: none;
+  font-size: var(--t-14);
+}
+.busca input::placeholder {
+  color: var(--texto-3);
+}
+.botaoFiltros {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--e-2);
+  height: 40px;
+  padding: 0 var(--e-4);
+  border: 1px solid var(--borda-forte);
+  border-radius: var(--raio-controle);
+  background: var(--superficie);
+  font-size: var(--t-13);
+  font-weight: 600;
+}
+.botaoFiltros:hover {
+  background: var(--campo);
+}
+.contador {
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: var(--raio-pilula);
+  background: var(--acento);
+  color: var(--texto-sobre-acento);
+  font-size: var(--t-12);
+  line-height: 20px;
+  text-align: center;
+}
+.lenteBarra {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--e-2) var(--e-3);
+}
+.lenteRotulo {
+  color: var(--texto-3);
+  font-size: var(--t-13);
+  font-weight: 500;
+}
+.ativos {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--e-2);
+}
+.limpar {
+  color: var(--texto-2);
+  font-size: var(--t-13);
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+/* Folha de filtros */
+.filtros {
+  display: flex;
+  flex-direction: column;
+  gap: var(--e-5);
+}
+.grupoFiltro {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.grupoFiltro legend {
+  margin-bottom: var(--e-2);
+  padding: 0;
+  color: var(--texto-3);
+  font-size: var(--t-13);
+  font-weight: 500;
+}
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--e-2);
+}
+
+.contagem {
+  margin-bottom: calc(var(--e-2) * -1);
+  color: var(--texto-3);
+  font-size: var(--t-13);
+  font-weight: 500;
+}
+
+/* ---------- Plano grátis ---------- */
+.gratis {
+  display: flex;
+  flex-direction: column;
+  gap: var(--e-3);
+}
+.convite {
+  display: flex;
+  flex-direction: column;
+  gap: var(--e-2);
+  padding: var(--e-5);
+  border: 1px solid var(--acento);
+  border-radius: var(--raio);
+  background: linear-gradient(135deg, var(--acento-veu), transparent 60%), var(--superficie);
+}
+.conviteTitulo {
+  font-size: var(--t-18);
+  font-weight: 700;
+}
+.conviteTexto {
+  max-width: 60ch;
+  color: var(--texto-2);
+}
+.conviteAcao {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  height: 48px;
+  margin-top: var(--e-2);
+  padding: 0 var(--e-5);
+  border-radius: var(--raio-controle);
+  background: var(--acento);
+  color: var(--texto-sobre-acento);
+  font-weight: 700;
+}
+.silhuetaBloco {
+  border: 1px solid var(--borda);
+  border-radius: var(--raio);
+  background: var(--superficie);
+  overflow: hidden;
+}
+.silhuetaJogo {
+  display: flex;
+  align-items: center;
+  gap: var(--e-2);
+  min-height: 48px;
+  padding: 0 var(--e-5);
+  background: color-mix(in srgb, var(--fundo) 55%, transparent);
+}
+.silhuetaHora {
+  margin-left: auto;
+  color: var(--texto-2);
+  font-weight: 600;
+}
+.silhuetaLinha {
+  display: flex;
+  align-items: center;
+  gap: var(--e-5);
+  height: 64px;
+  padding: 0 var(--e-5);
+  border-top: 1px solid var(--borda);
+}
+.sCirculo {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--campo);
+}
+.sBarra {
+  height: 12px;
+  border-radius: 6px;
+  background: var(--campo);
+}
+.fraco {
+  color: var(--texto-3);
+}
+
+@container (max-width: 639px) {
+  .titulo {
+    font-size: 36px;
+  }
+}
+/* 320px: o rótulo "Mostrar" sai e o segmentado ocupa a linha inteira. */
+@container (max-width: 340px) {
+  .lenteRotulo {
+    display: none;
+  }
+  .lenteBarra > * {
+    flex: 1;
+    min-width: 0;
+  }
+  .lenteBarra form > button {
+    flex: 1;
+    padding: 0 6px;
+  }
+}
+
+@media (max-width: 1023px) {
+  .busca {
+    flex: 1 1 100%;
+    max-width: none;
+    height: 52px;
+  }
+  .linhaControles {
+    flex-wrap: wrap;
+  }
+  .linhaPrincipal,
+  .linhaControles {
+    width: 100%;
+  }
+  .controles {
+    padding: var(--e-2) var(--e-3) var(--e-3);
+  }
+  .botaoFiltros {
+    margin-left: 0;
+    flex: 1;
+    justify-content: center;
+    height: 48px;
+  }
+}
+
+/* Resumo editorial da rodada: voz diferente do dado, por isso o filete. */
+.resumoDoDia {
+  max-width: 70ch;
+  margin-top: var(--e-3);
+  padding-left: var(--e-3);
+  border-left: 2px solid var(--borda-forte);
+  color: var(--texto-2);
+  font-size: var(--t-13);
+  font-style: italic;
+  line-height: 1.55;
+}
+
+.silhuetaPlacar {
+  padding: 0 4px;
+  font-weight: 700;
+}
+
+/* Rodapé: quão recente é o número e por qual regra ele saiu. */
+.rodape {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--e-3);
+  margin-top: var(--e-4);
+  padding-top: var(--e-3);
+  border-top: 1px solid var(--borda);
+  color: var(--texto-3);
+  font-size: var(--t-12);
+}
+.rodapeLink {
+  color: var(--texto-2);
+  font-weight: 600;
+}
+.rodapeLink:hover {
+  color: var(--texto);
+}
+
+/* ---------- Amostra do grátis ---------- */
+.conviteAcoes {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--e-4);
+}
+.conviteLink {
+  color: var(--acento-texto);
+  font-size: var(--t-14);
+  font-weight: 600;
+}
+.silhuetaContagem {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px var(--e-4) 0;
+  color: var(--texto-2);
+  font-size: var(--t-13);
+  font-weight: 700;
+}

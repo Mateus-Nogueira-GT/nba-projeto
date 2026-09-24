@@ -1,0 +1,152 @@
+.segmentado {
+  display: inline-flex;
+  flex-shrink: 0;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--borda);
+  border-radius: calc(var(--raio-controle) + 3px);
+  background: var(--superficie);
+}
+.segmento {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 32px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: var(--raio-controle);
+  background: transparent;
+  color: var(--texto-2);
+  font-size: var(--t-13);
+  font-weight: 600;
+  white-space: nowrap;
+  transition:
+    background var(--rapido) var(--curva),
+    color var(--rapido) var(--curva);
+}
+.segmento:hover {
+  color: var(--texto);
+}
+.segmento[aria-current='true'],
+.segmento[aria-pressed='true'] {
+  background: var(--acento);
+  color: var(--texto-sobre-acento);
+}
+.compacto .segmento {
+  height: 28px;
+  padding: 0 10px;
+  font-size: var(--t-12);
+}
+
+.abas {
+  display: flex;
+  gap: var(--e-6);
+  overflow-x: auto;
+  scrollbar-width: none;
+  border-bottom: 1px solid var(--borda);
+}
+.abas::-webkit-scrollbar {
+  display: none;
+}
+.aba {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 44px;
+  color: var(--texto-2);
+  font-size: var(--t-14);
+  font-weight: 600;
+  white-space: nowrap;
+  transition: color var(--rapido) var(--curva);
+}
+.aba:hover {
+  color: var(--texto);
+}
+.aba[aria-current='page'] {
+  color: var(--texto);
+}
+.aba[aria-current='page']::after {
+  content: '';
+  position: absolute;
+  inset: auto 0 -1px;
+  height: 2px;
+  border-radius: 2px 2px 0 0;
+  background: var(--acento);
+  color: var(--texto-sobre-acento);
+}
+.contadorAba {
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: var(--raio-pilula);
+  background: var(--campo);
+  color: var(--texto-2);
+  font-size: var(--t-12);
+  line-height: 20px;
+  text-align: center;
+}
+.aba[aria-current='page'] .contadorAba {
+  background: var(--acento-veu);
+  color: var(--acento-texto);
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--borda-forte);
+  border-radius: var(--raio-pilula);
+  color: var(--texto-2);
+  font-size: var(--t-13);
+  font-weight: 600;
+  white-space: nowrap;
+  transition:
+    border-color var(--rapido) var(--curva),
+    color var(--rapido) var(--curva);
+}
+.chip:hover {
+  border-color: var(--texto-3);
+  color: var(--texto);
+}
+.chip[aria-current='true'] {
+  border-color: var(--acento);
+  background: var(--acento-veu);
+  color: var(--texto);
+}
+
+.contorno {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 36px;
+  padding: 0 14px;
+  border: 1px solid var(--borda-forte);
+  border-radius: var(--raio-controle);
+  color: var(--texto);
+  font-size: var(--t-13);
+  font-weight: 600;
+  white-space: nowrap;
+  transition: background var(--rapido) var(--curva);
+}
+.contorno:hover {
+  background: var(--campo);
+}
+
+/* CELULAR: o dedo pede 40px. Chips e segmentos crescem; no desktop o cursor
+   dispensa a folga e a barra de controles fica compacta. */
+@media (max-width: 1023px) {
+  .chip,
+  .segmento {
+    height: 40px;
+    padding: 0 14px;
+  }
+  .compacto .segmento {
+    height: 36px;
+  }
+  .contorno {
+    height: 44px;
+  }
+}

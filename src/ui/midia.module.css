@@ -1,0 +1,43 @@
+.foto {
+  position: relative;
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--campo);
+}
+.imagem {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+  object-position: top;
+}
+.iniciais {
+  color: var(--texto-2);
+  font-weight: 700;
+}
+.escudo {
+  position: absolute;
+  right: -3px;
+  bottom: -3px;
+  display: inline-flex;
+  padding: 2px;
+  border-radius: 50%;
+  background: var(--superficie);
+}
+.logo {
+  flex-shrink: 0;
+  object-fit: contain;
+}
+.sigla {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--campo);
+  color: var(--texto-2);
+  font-weight: 700;
+}

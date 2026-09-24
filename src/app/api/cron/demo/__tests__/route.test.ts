@@ -46,9 +46,9 @@ vi.mock('@/modules/ingestao/llm', () => ({ portaLLMDoAmbiente: () => mocks.porta
 vi.mock('@/modules/ingestao/demo/temporada', () => ({ simularAte: mocks.simularAte }))
 vi.mock('next/cache', () => ({
   revalidateTag: mocks.revalidateTag,
-  // `leitura.ts` chama `unstable_cache` ao ser importado (a rota importa
-  // `TAG_LATERAL` de lá); devolver a função crua é o bastante — este teste
-  // não lê a lateral.
+  // `_cache/lateral.ts` chama `unstable_cache` ao ser importado (a rota
+  // importa `TAG_LATERAL` de lá); devolver a função crua é o bastante — este
+  // teste não lê a lateral.
   unstable_cache: (fn: unknown) => fn,
 }))
 

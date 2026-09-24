@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 
-import { dataCurta, dataHoraCurta } from '../../components/afiliados/formato'
+import { dataCurta, dataHoraCurta } from '../../features/afiliados/formato'
 import { bancoDeTeste } from '../../modules/dominio/__tests__/ajuda-banco'
 import { entradasRealizadas } from '../../modules/dominio/db/schema'
 import { plantarSaidaComOrigem } from '../../modules/plataforma/afiliados/__tests__/cenario'
@@ -26,8 +26,9 @@ vi.mock('../../modules/dominio/db/cliente', () => ({
   getDb: () => banco.db,
   fecharDb: async () => {},
 }))
-// A página de afiliados não passa pela guarda de `(admin)/admin/guarda`: ela
-// chama `exigirAdmin` direto. É esse o alvo.
+// A página de afiliados do v2 (`(app)/admin/afiliados`) não passa por
+// `negarSeNaoForAdmin`: ela chama `exigirAdmin` direto. É esse o alvo. (O
+// portão com sessão de verdade está em `features/admin/__tests__/fumaca`.)
 vi.mock('../../modules/plataforma/auth/cookies', () => ({
   exigirAdmin: async () => ({
     usuarioId: '00000000-0000-4000-8000-0000000000ad',
@@ -52,7 +53,7 @@ afterAll(async () => {
 })
 
 async function renderizar(): Promise<string> {
-  const { default: Pagina } = await import('../(admin)/admin/afiliados/page')
+  const { default: Pagina } = await import('../(app)/admin/afiliados/page')
   return renderToStaticMarkup(await Pagina({ searchParams: Promise.resolve({}) }))
 }
 

@@ -4,6 +4,26 @@
 > anteriores ficam como histórico. A escrita vigente distingue nota de confiança
 > (inteira, sem `%`), taxa observada (com `%`) e nota da partida (uma casa decimal).
 
+> **Onde o código está (front v2, 23/09/2026).** O design-system em TypeScript
+> (`src/design-system/`, com `primitivo.ts` → `semantico.ts` → `componente.ts`) e os
+> componentes de `src/components/` foram aposentados na Tarefa 12 da integração do front
+> v2. Hoje:
+>
+> - **`src/ui/tokens.css`** é a ÚNICA fonte de cor: o bloco base no `:root` e os três temas
+>   (`:root[data-tema='marinho' | 'aco' | 'claro']`). Os nomes dos primitivos antigos ficam
+>   nos comentários ao lado de cada hex. Nenhum hex fora dele em `src/ui`, `src/features` e
+>   `src/app` — é o teste `src/ui/__tests__/marca-e-vocabulario.test.ts` que garante, e ele
+>   também trava nada abaixo de 12px, "probabilidade" só como "não é probabilidade de
+>   acerto", o contraste AA por tema e os dois canais (nível do jogador ≠ nível do apito).
+> - **`src/ui/`** são as peças de tela (blocos, marcas, mídia, gráficos, controles, odd,
+>   times, formato); **`src/features/<área>/`** são as telas, uma pasta por área, com o
+>   `carregar.ts` que as liga ao back. Cor só por `var(--…)`, em `.module.css`.
+> - As regras deste documento continuam valendo por inteiro: **confiança não é
+>   probabilidade**, piso de 12px, paleta do Manual, um canal visual por informação. Os
+>   nomes de token citados nas seções abaixo (`semantico.*`, `componente.*`, `texto100`,
+>   `focoAnel`…) são os do sistema antigo; o equivalente no v2 é o token CSS de mesmo
+>   papel em `tokens.css` (`--texto`, `--texto-2`, `--foco`, `--nivel-*`, `--apito-*`).
+
 ## O problema que este documento resolve
 
 Os documentos de origem carregam **três sistemas de cor simultâneos** disputando o mesmo
@@ -185,7 +205,8 @@ A seção acima descreve o desenho original, de quando este documento foi escrit
 hoje — não substitui a anterior, porque a lógica de "um canal por informação" e a
 proibição de reintroduzir a escala multi-matiz continuam valendo integralmente; só a
 forma de aplicá-las mudou. Se você está mantendo o design system daqui a alguns meses,
-leia esta seção primeiro — ela é a que corresponde ao código de `src/design-system/`.
+leia esta seção primeiro — ela era a que correspondia ao código de `src/design-system/`
+(aposentado na Tarefa 12 do front v2; hoje os tokens vivem em `src/ui/tokens.css`).
 
 ### Tipografia
 
@@ -198,13 +219,16 @@ Três famílias, cada uma com um papel fixo — não são intercambiáveis:
 | `semantico.fonteCorpo`  | Barlow (`--fonte-barlow`)      | texto corrido, quando existe (a identidade 02 é quase toda título+rótulo) |
 
 As três são carregadas via `next/font/google` em `src/app/layout.tsx` e expostas como
-variáveis CSS (`--fonte-anton` etc.); os tokens primitivos (`primitivo.ts`) sempre
-declaram um fallback de sistema depois da variável, então uma falha de rede no Google
-Fonts degrada para `Arial Narrow`/`system-ui`, nunca quebra o layout.
+variáveis CSS (`--fonte-anton` etc.); os tokens primitivos (`primitivo.ts`, sistema antigo)
+declaravam um fallback de sistema depois da variável, então uma falha de rede no Google
+Fonts degradava para `Arial Narrow`/`system-ui`, nunca quebrava o layout. No v2 as fontes
+são Bebas Neue e Montserrat (`--fonte-bebas`, `--fonte-montserrat`, self-hosted pelo
+`next/font` no layout raiz) e o fallback fica escrito em cada `font-family` dos `.module.css`.
 
 ### A pílula de confiança e a rampa turquesa
 
-A pílula (`design-system/componentes/Pilula.tsx`) é o componente de contorno genérico —
+A pílula (`design-system/componentes/Pilula.tsx`, do sistema antigo; no v2 as pílulas são
+classes de `src/ui/marcas.module.css`) é o componente de contorno genérico —
 ela não sabe se está mostrando confiança, o selo VIVO ou qualquer outra coisa; quem chama
 decide a cor e o texto. Para a confiança especificamente (`CardEntrada.tsx`), a cor vem
 de `faixaDaConfianca` (`src/modules/motor/confianca.ts`, motor puro — não lê nada, só
@@ -248,16 +272,34 @@ brilhasse, o brilho deixaria de significar "isto aqui é excepcional" e viraria 
 
 ### Colisão de canais — verificada por teste, não por inspeção
 
-`src/design-system/__tests__/tokens.test.ts`, describe `'rampa de confiança (identidade
-02)'`, confere mecanicamente três coisas toda vez que a suíte roda:
+`src/design-system/__tests__/tokens.test.ts` (do sistema antigo; a verificação dos dois
+canais e do contraste vive hoje em `src/ui/__tests__/marca-e-vocabulario.test.ts`),
+describe `'rampa de confiança (identidade 02)'`, conferia mecanicamente três coisas toda
+vez que a suíte rodava:
 
 1. nenhum dos cinco degraus da rampa turquesa é igual a uma cor categórica do apito ou a
    uma cor metálica de nível do jogador;
 2. os cinco degraus são todos distintos entre si (a rampa não "achata" em algum ponto);
 3. todo degrau passa em contraste AA (4.5:1) como texto sobre a superfície do card.
 
-Se alguém trocar um valor de `turquesa*` em `primitivo.ts` para algo que colida com uma
-cor do apito, é este teste que quebra — não um comentário lido meses depois.
+Se alguém trocasse um valor de `turquesa*` em `primitivo.ts` para algo que colidisse com
+uma cor do apito, era esse teste que quebrava — não um comentário lido meses depois.
+
+**No v2 a rampa turquesa não existe** (a confiança é uma nota, `PilulaConfianca`), e o que
+`src/ui/__tests__/marca-e-vocabulario.test.ts` confere, tema a tema, a partir dos hex de
+`tokens.css`, é exatamente isto:
+
+1. as quatro cores do nível do jogador (`--nivel-*`) são distintas; as três do apito mais o
+   turbo (`--apito-*`) são distintas; nenhuma cor é dos dois canais; o modo fire
+   (`--modo-fire`) não é cor de apito;
+2. nível do jogador, nível do apito e modo fire passam em AA (4,5:1) como TEXTO sobre
+   `--superficie` e `--campo`; as cores do apito passam em 3,0:1 como borda/anel;
+3. o rótulo da placa metálica do nível (`--selo-*-texto`) passa em AA sobre cada parada do
+   gradiente `--selo-*-fundo`;
+4. `--texto`, `--texto-2` e `--texto-3` passam em AA sobre `--superficie`.
+
+Um par que reprove fica marcado como `it.fails`, nomeado, até o parceiro decidir a cor —
+o teste nunca troca cor sozinho.
 
 ### O que mudou no anel do apito
 
@@ -414,9 +456,11 @@ hierarquia usa a curadoria NIP. O adversário é resolvido no contexto de cada j
 
 ### Verificação reproduzível
 
-O fechamento usa os testes de tela em `src/app/__tests__/telas-04-*.test.ts`, as
-verificações de componentes e a regressão de participação entre telas. O helper
-`conferencia.ts` renderiza o HTML com o CSS real; `scripts/captura-telas.sh` produz
+O fechamento usava os testes de tela em `src/app/__tests__/telas-04-*.test.ts`, as
+verificações de componentes e a regressão de participação entre telas; no front v2 as
+fumaças de tela moram em `src/features/<área>/__tests__/fumaca.test.tsx`. O helper
+`conferencia.ts` renderiza o HTML com o CSS real (`src/ui/tokens.css`, `globals.css` e os
+`.module.css` de `src/ui` e `src/features`); `scripts/captura-telas.sh` produz
 capturas de 390 px e desktop. `demo:conferir -- --pglite` semeia sete semanas com
 `simularAte` e verifica leituras reais sem acessar o Neon. Captura estática verifica
 apresentação; não substitui um smoke autenticado do deploy.
@@ -467,9 +511,10 @@ CJ, e sinal não é decoração.
 bastante para passar em AA seria, aos olhos, o 🔵 do CJ — um quarto canal de cor dizendo o
 que o anel já diz, e dizendo errado. Então o estado ativo é pílula preenchida com
 `textoSobreAcento`, o link é branco sublinhado, o contorno ativo virou preenchimento e o
-anel de foco é branco (`focoAnel`). O teste `tokens.test.ts` › "azul nunca é tinta" varre
+anel de foco é branco (`focoAnel`). O teste `tokens.test.ts` › "azul nunca é tinta" varria
 `design-system/componentes`, `components` e `app` atrás de acento em `color`, `stroke`,
-`border` ou `outline`.
+`border` ou `outline` (sistema antigo; no v2, cor só entra por `var(--…)` e é o teste de
+fonte da marca que vigia).
 
 **Vermelho: cheio no selo, claro na tinta.** `vivoSelo` é o vermelho do manual com branco
 em cima (5,88); `aoVivo` e `alerta` são a tinta clara `#FF5C70`, que passa em AA como texto

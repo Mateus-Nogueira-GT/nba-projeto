@@ -11,7 +11,7 @@ import { coletarOddsDoDia } from '@/modules/ingestao/odds/coleta-do-dia'
 import { fontesDeOdds, fontesIncompletas } from '@/modules/ingestao/odds/fontes'
 import { montarFontes } from '@/modules/ingestao/sincronizar/fonte'
 import { revalidateTag } from 'next/cache'
-import { TAG_LATERAL } from '@/app/(app)/lateral/leitura'
+import { TAG_LATERAL } from '@/app/_cache/lateral'
 import { TAG_RANKING } from '@/app/api/chat/ranking'
 
 export const dynamic = 'force-dynamic'

@@ -504,7 +504,7 @@ export async function encerrarTodasAsSessoes(
 /**
  * Encerra as sessões do usuário — todas, ou todas MENOS `excetoSessaoId`.
  * Quem troca a própria senha ou e-mail no perfil poupa a sessão que fez a
- * troca (`app/(app)/conta/acoes.ts`); o bloqueio pelo painel e a redefinição
+ * troca (`features/conta/acoes.ts`); o bloqueio pelo painel e a redefinição
  * por token (`auth/redefinicao.ts`) não têm uma sessão "de quem pediu" para
  * poupar, então encerram tudo — por isso o parâmetro é opcional.
  *

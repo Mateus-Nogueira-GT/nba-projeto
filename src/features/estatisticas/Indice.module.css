@@ -1,0 +1,332 @@
+.tela {
+  container-type: inline-size;
+  display: flex;
+  flex-direction: column;
+  gap: var(--e-8);
+  max-width: 1400px;
+}
+
+/* ---------- Busca ---------- */
+.buscaForm {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: calc(var(--e-4) * -1);
+}
+.buscaRotulo {
+  color: var(--texto-2);
+  font-size: var(--t-13);
+  font-weight: 500;
+}
+.buscaLinha {
+  display: flex;
+  gap: var(--e-2);
+}
+.busca {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  align-items: center;
+  gap: var(--e-2);
+  height: 52px;
+  padding: 0 var(--e-4);
+  border: 1px solid var(--borda-forte);
+  border-radius: var(--raio-controle);
+  background: var(--campo);
+  color: var(--texto-3);
+}
+.busca:focus-within {
+  border-color: var(--texto-2);
+}
+.busca input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  outline: none;
+  font-size: var(--t-14);
+}
+.busca input::placeholder {
+  color: var(--texto-3);
+}
+.buscar {
+  height: 52px;
+  padding: 0 var(--e-6);
+  border: 0;
+  border-radius: var(--raio-controle);
+  background: var(--acento);
+  color: var(--texto-sobre-acento);
+  font-size: var(--t-13);
+  font-weight: 700;
+}
+.buscar:hover {
+  background: var(--acento-hover);
+}
+.nada {
+  color: var(--texto-2);
+  font-size: var(--t-13);
+}
+.resultados {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: var(--e-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.resultado {
+  display: flex;
+  align-items: center;
+  gap: var(--e-3);
+  padding: var(--e-3);
+  border: 1px solid var(--borda);
+  border-radius: var(--raio);
+  background: var(--superficie);
+  transition: background var(--rapido) var(--curva);
+}
+.resultado:hover {
+  background: var(--campo);
+}
+.resultadoTexto {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  font-size: var(--t-12);
+  color: var(--texto-3);
+}
+.resultadoTexto strong {
+  overflow: hidden;
+  color: var(--texto);
+  font-size: var(--t-14);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.foraDaLiga {
+  color: var(--falhou-texto);
+  font-size: var(--t-12);
+  font-weight: 600;
+}
+.seta {
+  flex-shrink: 0;
+  color: var(--texto-3);
+}
+
+/* ---------- Dias ---------- */
+.dias {
+  display: flex;
+  align-items: center;
+  gap: var(--e-2);
+}
+.diasLista {
+  display: flex;
+  flex: 1;
+  gap: var(--e-2);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.diasLista::-webkit-scrollbar {
+  display: none;
+}
+.diaSeta {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 52px;
+  border: 1px solid var(--borda);
+  border-radius: var(--raio-controle);
+  color: var(--texto-2);
+}
+.diaSeta:hover {
+  background: var(--campo);
+  color: var(--texto);
+}
+.dia {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-width: 68px;
+  height: 52px;
+  border: 1px solid var(--borda);
+  border-radius: var(--raio-controle);
+  background: var(--superficie);
+  transition: background var(--rapido) var(--curva);
+}
+.dia:hover {
+  background: var(--campo);
+}
+.dia[aria-current='date'] {
+  border-color: var(--acento);
+  background: var(--acento);
+  color: var(--texto-sobre-acento);
+}
+.diaSemana {
+  color: var(--texto-3);
+  font-size: var(--t-12);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.dia[aria-current='date'] .diaSemana {
+  color: var(--texto);
+}
+.diaNumero {
+  font-size: var(--t-14);
+  font-weight: 700;
+}
+
+/* ---------- Jogos ---------- */
+.jogos {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--e-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.jogo {
+  display: flex;
+  align-items: center;
+  gap: var(--e-4);
+  padding: var(--e-3) var(--e-4);
+  border: 1px solid var(--borda);
+  border-radius: var(--raio);
+  background: var(--superficie);
+  transition: background var(--rapido) var(--curva);
+}
+.jogo:hover {
+  background: var(--campo);
+}
+.lados {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+.lado {
+  display: flex;
+  align-items: center;
+  gap: var(--e-3);
+}
+.ladoTexto {
+  display: flex;
+  flex: 1;
+  align-items: baseline;
+  gap: var(--e-2);
+  min-width: 0;
+}
+.ladoTexto strong {
+  font-size: var(--t-14);
+  font-weight: 700;
+}
+.ladoNome {
+  overflow: hidden;
+  color: var(--texto-3);
+  font-size: var(--t-12);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.placar {
+  min-width: 32px;
+  color: var(--texto-3);
+  font-family: var(--fonte-heroi);
+  font-size: var(--t-22);
+  line-height: 1;
+  text-align: right;
+}
+.placar[data-forte='true'] {
+  color: var(--texto);
+}
+.status {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: var(--e-2);
+  padding-left: var(--e-4);
+  border-left: 1px solid var(--borda);
+  min-height: 48px;
+}
+.hora {
+  min-width: 48px;
+  font-size: var(--t-14);
+  font-weight: 700;
+  text-align: center;
+}
+.encerrado {
+  min-width: 48px;
+  color: var(--texto-3);
+  font-size: var(--t-12);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+/* ---------- Classificação ---------- */
+.conferencias {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--e-8);
+}
+.posicao {
+  color: var(--texto-3);
+  font-weight: 600;
+}
+.time {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--e-2);
+}
+.time:hover strong {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.franquia {
+  color: var(--texto-3);
+  font-size: var(--t-12);
+  font-weight: 500;
+}
+.trilho {
+  padding: 2px 8px;
+  border-radius: var(--raio-pilula);
+  background: var(--campo);
+  color: var(--texto-2);
+  font-size: var(--t-12);
+  font-weight: 600;
+}
+.trilho[data-t='playoff'] {
+  background: var(--acento-veu);
+  color: var(--acento-texto);
+}
+.fraco {
+  color: var(--texto-3);
+}
+.legenda {
+  color: var(--texto-3);
+  font-size: var(--t-12);
+}
+
+@container (min-width: 760px) {
+  .jogos {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@container (min-width: 1100px) {
+  .conferencias {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .franquia {
+    display: none;
+  }
+}
+@container (max-width: 520px) {
+  .ladoNome,
+  .franquia {
+    display: none;
+  }
+}

@@ -79,7 +79,12 @@ describe('a página /como-funciona', () => {
   // componente que DUAS telas renderizam (a vitrine e o portão de aceite), para
   // não haver duas cópias divergindo. O portão de sessão continua na página; as
   // afirmações sobre o conteúdo seguem o conteúdo.
-  const conteudo = readFileSync('src/components/metodologia/Conteudo.tsx', 'utf8')
+  //
+  // Front v2 (Tarefa 7): o conteúdo é `features/metodologia/Conteudo.tsx` e o
+  // view-model sai de `features/metodologia/carregar.ts` (a página lê, o
+  // componente só desenha).
+  const conteudo = readFileSync('src/features/metodologia/Conteudo.tsx', 'utf8')
+  const carregar = readFileSync('src/features/metodologia/carregar.ts', 'utf8')
 
   it('exige sessão, mas NÃO exige assinatura (vitrine para quem ainda não assinou)', () => {
     expect(fonte).toContain('sessaoAtual')
@@ -90,7 +95,8 @@ describe('a página /como-funciona', () => {
   })
 
   it('todo número vem do view-model do ruleset', () => {
-    expect(conteudo).toContain('montarTeoria')
+    expect(carregar).toContain('montarTeoria(ruleset)')
+    expect(fonte).toContain('lerMetodologia()')
   })
 
   it('chama o número de nota de confiança e nega ser probabilidade (P12)', () => {
