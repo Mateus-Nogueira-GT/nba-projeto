@@ -10,6 +10,12 @@ import { describe, expect, it } from 'vitest'
  *
  * Era um caso de `entrega/__tests__/estatisticas.test.ts` sobre o `CardEntrada`
  * antigo (Tarefa 12, fix round 2): aqui é uma prova de FONTE sobre as telas.
+ *
+ * Temporada retroativa (25/09): `TelaTime.tsx` passou a envolver a rota com
+ * `comTemporada(rotaDoJogador(...), escolhida)` para o link carregar a
+ * temporada escolhida. O `href` ainda é CONSTRUÍDO por `rotaDoJogador` — só
+ * ganhou uma casca por fora —, então o regex abaixo aceita o wrapper mas
+ * continua recusando um `href` que não passe por `rotaDoJogador` nenhuma.
  */
 const RAIZ = 'src/features'
 
@@ -44,7 +50,10 @@ describe('todo link para a ficha do jogador passa por rotaDoJogador', () => {
     ]) {
       const fonte = arquivos.find((a) => a.caminho === tela)?.fonte ?? ''
       expect(fonte, tela).toMatch(/import \{[^}]*\brotaDoJogador\b[^}]*\} from '@\/modules\/entrega\/estatisticas\/rotas'/)
-      expect(fonte, tela).toMatch(/<Link href=\{rotaDoJogador\(/)
+      // Direto (`href={rotaDoJogador(`) ou envolvido por `comTemporada(` — as
+      // duas formas ainda constroem o href a partir de `rotaDoJogador`, nunca
+      // à mão. Envolver por qualquer OUTRA coisa não conta.
+      expect(fonte, tela).toMatch(/<Link href=\{(?:comTemporada\()?rotaDoJogador\(/)
     }
   })
 })

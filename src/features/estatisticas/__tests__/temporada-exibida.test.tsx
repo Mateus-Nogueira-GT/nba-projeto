@@ -130,6 +130,11 @@ afterAll(async () => {
 })
 
 const texto = (html: string) => html.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ')
+/**
+ * O texto SEM o seletor de temporada (Task 10): o seletor oferece a do
+ * calendário como opção — é o convite para trocar, não um rótulo de dado.
+ */
+const semSeletor = (html: string) => texto(html.replace(/<nav[^>]*aria-label="Temporada"[\s\S]*?<\/nav>/g, ''))
 
 async function renderizarIndice(): Promise<string> {
   const { default: Pagina } = await import('@/app/(app)/estatisticas/page')
@@ -149,7 +154,7 @@ it('(telas-06) no dia do lançamento o índice mostra a temporada que TEM dado, 
 it('no hiato, o time mostra a campanha da temporada que TEM dado', async () => {
   vi.setSystemTime(LANCAMENTO)
   const { default: Pagina } = await import('@/app/(app)/estatisticas/time/[id]/page')
-  const visivel = texto(
+  const visivel = semSeletor(
     renderToStaticMarkup(
       await Pagina({ params: Promise.resolve({ id: timeId }), searchParams: Promise.resolve({}) }),
     ),
@@ -162,7 +167,7 @@ it('no hiato, o time mostra a campanha da temporada que TEM dado', async () => {
 it('no hiato, o jogador recortado por temporada mostra a temporada que TEM dado', async () => {
   vi.setSystemTime(LANCAMENTO)
   const { default: Pagina } = await import('@/app/(app)/estatisticas/jogador/[id]/page')
-  const visivel = texto(
+  const visivel = semSeletor(
     renderToStaticMarkup(
       await Pagina({
         params: Promise.resolve({ id: jogadorId }),
@@ -179,10 +184,15 @@ it('as telas e os carregadores usam a versão CACHEADA da temporada exibida', as
   const semComentarios = (f: string) => f.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '')
   for (const arquivo of ['indice', 'jogador', 'time']) {
     const fonte = semComentarios(readFileSync(`src/features/estatisticas/${arquivo}.ts`, 'utf8'))
-    expect(fonte, arquivo).toContain('temporadaParaExibirCacheada(')
+    // Pela resolução comum da aba (Task 10), que lê o seletor pelo cache.
+    expect(fonte, arquivo).toContain('temporadaDasEstatisticas(')
     // A temporada do CALENDÁRIO não decide o que a tela mostra.
     expect(fonte, arquivo).not.toMatch(/[^a-zA-Z]temporadaDe\(/)
   }
+  const comum = semComentarios(readFileSync('src/features/estatisticas/temporada.ts', 'utf8'))
+  expect(comum).toContain('temporadasDaTelaCacheadas(')
+  // O padrão é a EXIBIDA: a URL só troca dentro das disponíveis.
+  expect(comum).toContain('temporadaDaUrl(')
 })
 
 // ÚLTIMO do arquivo de propósito: insere o jogo que encerra o hiato.

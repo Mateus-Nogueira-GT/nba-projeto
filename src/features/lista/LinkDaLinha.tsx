@@ -15,6 +15,7 @@ export function LinkDaLinha({
   className,
   style,
   destaque = false,
+  href: destino,
   children,
 }: {
   jogadorId: string
@@ -24,12 +25,14 @@ export function LinkDaLinha({
   style?: CSSProperties
   /** Turbo: a única linha que ganha tarja e brilho — o destaque do dia. */
   destaque?: boolean
+  /** Outro destino para a linha — na temporada anterior, o resultado daquele dia. */
+  href?: string
   children: ReactNode
 }) {
   const caminho = usePathname()
   const busca = useSearchParams()
-  const href = `/apito/${jogadorId}?atributo=${atributo}`
-  const atual = caminho === `/apito/${jogadorId}` && busca.get('atributo') === atributo
+  const href = destino ?? `/apito/${jogadorId}?atributo=${atributo}`
+  const atual = destino === undefined && caminho === `/apito/${jogadorId}` && busca.get('atributo') === atributo
   return (
     <Link
       href={href}

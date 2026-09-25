@@ -102,7 +102,11 @@ const linhaStatsSchema = z
     pts: inteiroNaoNegativoSchema,
     plus_minus: z.number().nullable(),
     player: jogadorStatsSchema,
-    team: timeSchema,
+    // Só a sigla nos interessa aqui (time REAL do jogador NESTE jogo, base da
+    // temporada anterior) — não o objeto inteiro que `timeSchema` exige.
+    // Opcional/nullable porque uma linha sem time é informação faltando, não
+    // um payload inválido: vira `timeSiglaExterna: null`.
+    team: z.object({ abbreviation: z.string().min(1) }).passthrough().optional().nullable(),
     game: z.object({ id: z.number().int().positive() }).passthrough(),
   })
   .superRefine((linha, contexto) => {
@@ -379,6 +383,7 @@ export function mapearLinhaStatsBalldontlie(bruto: unknown, quarto: number | nul
   const linha = validar(linhaStatsSchema, bruto, 'linha de stats')
   return {
     jogadorIdExterno: String(linha.player.id),
+    timeSiglaExterna: linha.team?.abbreviation?.toUpperCase() ?? null,
     quarto,
     minutos: minutosDecimais(linha.min),
     pontos: linha.pts,

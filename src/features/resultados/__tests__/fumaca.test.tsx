@@ -5,7 +5,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 
 import { bancoDeTeste } from '@/modules/dominio/__tests__/ajuda-banco'
-import { usuarios } from '@/modules/dominio/db/schema'
+import { jogos, times, usuarios } from '@/modules/dominio/db/schema'
 import { dataDeReferencia, somarDias } from '@/modules/dominio/rodada'
 import { lerFeed } from '@/modules/entrega/lista-secreta'
 import {
@@ -859,4 +859,201 @@ describe('Resultados do v2 — fonte', () => {
     expect(painel.indexOf("exigirNivel('GRATIS'")).toBeGreaterThan(0)
     expect(painel.indexOf('<LateralDaRodada')).toBeGreaterThan(painel.indexOf("exigirNivel('GRATIS'"))
   })
+})
+
+// ===========================================================================
+// A TEMPORADA ANTERIOR (spec 25/09) — aberta para o grátis, só leitura
+// ===========================================================================
+
+describe('Resultados do v2 — temporada anterior', () => {
+  /** Um ano antes da temporada simulada: nunca é a temporada do calendário do teste. */
+  const DIA_ANTERIOR = '2024-11-04'
+  let TEMPORADA_ANTERIOR = ''
+  let NOME_DO_APITADO = ''
+
+  /** Nível, rota e busca — o fino invólucro que a spec da tarefa nomeia. */
+  async function renderizarComo(nivel: NivelDoPlano, caminho: string, busca: Busca = {}): Promise<string> {
+    nivelDoTeste = nivel
+    try {
+      if (caminho === '/resultados') {
+        const { GET } = await import('@/app/(app)/resultados/route')
+        const url = new URL('https://nip.test/resultados')
+        for (const [k, v] of Object.entries(busca)) if (typeof v === 'string') url.searchParams.set(k, v)
+        const resposta = await GET(new NextRequest(url))
+        return resposta.headers.get('location') ?? ''
+      }
+      return await renderizar(caminho.replace('/resultados/', ''), busca)
+    } finally {
+      nivelDoTeste = 'ALL_STAR'
+    }
+  }
+
+  beforeAll(async () => {
+    const { semearDiaAnterior } = await import('@/modules/entrega/retroativo/__tests__/semente-tela')
+    const semente = await semearDiaAnterior(banco.db, await rulesetAtivo(), DIA_ANTERIOR)
+    TEMPORADA_ANTERIOR = semente.temporada
+    NOME_DO_APITADO = semente.apitados[0]!.nome
+  }, 60_000)
+
+  it('temporada anterior: o grátis vê os apitos em Resultados, com o veredito', async () => {
+    const html = await renderizarComo('GRATIS', `/resultados/${DIA_ANTERIOR}`, { temporada: TEMPORADA_ANTERIOR })
+    expect(html).toContain(NOME_DO_APITADO)
+    expect(html).toMatch(/Bateu|Não bateu/)
+    expect(html).toContain('aplicada à temporada passada')
+    expect(texto(html)).toContain('Nenhum destes apitos foi publicado na época.')
+    // O seletor mostra as duas temporadas, e a desta tela está marcada.
+    expect(html).toContain(`/resultados?temporada=${TEMPORADA_ANTERIOR}`)
+    expect(html).not.toMatch(/probabilidade/i)
+  }, 60_000)
+
+  it('sem ?temporada=, uma data da temporada anterior implica a temporada dela', async () => {
+    const html = await renderizarComo('GRATIS', `/resultados/${DIA_ANTERIOR}`)
+    expect(html).toContain(NOME_DO_APITADO)
+    expect(html).toContain('aplicada à temporada passada')
+  }, 60_000)
+
+  it('as setas da temporada anterior andam pelas datas dela, levando a temporada', async () => {
+    const html = await renderizarComo('GRATIS', `/resultados/${DIA_ANTERIOR}`, { temporada: TEMPORADA_ANTERIOR })
+    // Só há um dia semeado: não há rodada anterior nem próxima dentro da temporada.
+    expect(html).toContain('aria-label="Rodada anterior (indisponível)"')
+    expect(html).toContain('aria-label="Próxima rodada (indisponível)"')
+    // A Lista do dia é a da MESMA temporada, não a de hoje.
+    expect(html).toContain(`href="/?temporada=${TEMPORADA_ANTERIOR}&amp;data=${DIA_ANTERIOR}"`)
+  }, 60_000)
+
+  it('a temporada do calendário segue com o corte do grátis de hoje — e a escolha fica nos links', async () => {
+    const html = await renderizarComo('GRATIS', `/resultados/${HOJE}`, { temporada: '2025-26' })
+    expect(html).not.toContain('aplicada à temporada passada')
+    // O mesmo conteúdo do caminho sem o parâmetro: nada muda para a temporada atual.
+    nivelDoTeste = 'GRATIS'
+    try {
+      expect(texto(html)).toBe(texto(await renderizar(HOJE)))
+    } finally {
+      nivelDoTeste = 'ALL_STAR'
+    }
+    // Escolhida no seletor, ela viaja nas abas, setas e no formulário (fix round 1).
+    expect(html).toContain(`href="/resultados/${HOJE}?estrategia=LISTA_SECRETA&amp;temporada=2025-26"`)
+    expect(html).toContain('name="temporada" value="2025-26"')
+  }, 60_000)
+
+  it('?temporada=lixo cai na exibida sem erro', async () => {
+    await expect(renderizarComo('MVP', '/resultados', { temporada: 'lixo' })).resolves.toBeTruthy()
+    expect(await renderizarComo('MVP', '/resultados', { temporada: 'lixo' })).toBe(
+      `https://nip.test/resultados/${ONTEM}`,
+    )
+    const html = await renderizarComo('GRATIS', `/resultados/${ONTEM}`, { temporada: 'lixo' })
+    expect(html).not.toContain('aplicada à temporada passada')
+  }, 60_000)
+
+  it('/resultados?temporada=<anterior> leva à última rodada daquela temporada', async () => {
+    expect(await renderizarComo('GRATIS', '/resultados', { temporada: TEMPORADA_ANTERIOR })).toBe(
+      `https://nip.test/resultados/${DIA_ANTERIOR}?temporada=${TEMPORADA_ANTERIOR}`,
+    )
+  }, 60_000)
+})
+
+// ===========================================================================
+// O PADRÃO COM A EXIBIDA ATRASADA (fix round 1): hiato × noite de estreia
+// ===========================================================================
+
+describe('Resultados do v2 — padrão da temporada com o calendário em 2026-27', () => {
+  /** Dentro do hiato: o calendário já virou para 2026-27, nenhum jogo dela ainda. */
+  const HIATO = new Date('2026-10-02T18:00:00.000Z')
+  const DIA_DO_HIATO = '2026-10-02'
+  /** Noite de estreia: jogo de 2026-27 agendado para hoje, nenhum encerrado. */
+  const ESTREIA = new Date('2026-10-21T21:00:00.000Z')
+  const DIA_DA_ESTREIA = '2026-10-21'
+  /** Um dia de 2025-26 fora da janela simulada, com apito retroativo. */
+  const DIA_2025 = '2025-11-04'
+
+  async function destino(busca: Busca, nivel: NivelDoPlano = 'GRATIS'): Promise<string> {
+    nivelDoTeste = nivel
+    try {
+      const { GET } = await import('@/app/(app)/resultados/route')
+      const url = new URL('https://nip.test/resultados')
+      for (const [k, v] of Object.entries(busca)) if (typeof v === 'string') url.searchParams.set(k, v)
+      return (await GET(new NextRequest(url))).headers.get('location') ?? ''
+    } finally {
+      nivelDoTeste = 'ALL_STAR'
+    }
+  }
+
+  async function renderizarGratis(data: string, busca: Busca = {}): Promise<string> {
+    nivelDoTeste = 'GRATIS'
+    try {
+      return await renderizar(data, busca)
+    } finally {
+      nivelDoTeste = 'ALL_STAR'
+    }
+  }
+
+  beforeAll(async () => {
+    const { semearDiaAnterior } = await import('@/modules/entrega/retroativo/__tests__/semente-tela')
+    await semearDiaAnterior(banco.db, await rulesetAtivo(), DIA_2025)
+  }, 60_000)
+
+  it('(a) no hiato, sem parâmetro, /resultados abre a última rodada da temporada anterior', async () => {
+    vi.setSystemTime(HIATO)
+    try {
+      expect(await destino({})).toBe(`https://nip.test/resultados/${DIA_2025}?temporada=2025-26`)
+      // (d) lixo e parâmetro repetido são o mesmo que nenhum.
+      expect(await destino({ temporada: 'lixo' })).toBe(await destino({}))
+      expect(await destino({ temporada: '1999-00' })).toBe(await destino({}))
+    } finally {
+      vi.setSystemTime(AGORA)
+    }
+  }, 60_000)
+
+  it('(c) no hiato, escolher 2026-27 é o caminho de hoje — e a escolha fica no destino e nos links', async () => {
+    vi.setSystemTime(HIATO)
+    try {
+      const alvo = await destino({ temporada: '2026-27' })
+      expect(alvo).toContain('temporada=2026-27')
+      expect(alvo).not.toContain(DIA_2025)
+      const html = await renderizarGratis(DIA_DO_HIATO, { temporada: '2026-27' })
+      expect(html).not.toContain('aplicada à temporada passada')
+      expect(html).toContain(`href="/resultados/${DIA_DO_HIATO}?estrategia=LISTA_SECRETA&amp;temporada=2026-27"`)
+    } finally {
+      vi.setSystemTime(AGORA)
+    }
+  }, 60_000)
+
+  it('(d) no hiato, lixo numa rodada datada é o mesmo que nenhum parâmetro — não um vazio retroativo', async () => {
+    vi.setSystemTime(HIATO)
+    try {
+      const semParametro = await renderizarGratis(DIA_DO_HIATO)
+      expect(semParametro).not.toContain('aplicada à temporada passada')
+      expect(semParametro).not.toContain('Sem apitos neste dia')
+      expect(await renderizarGratis(DIA_DO_HIATO, { temporada: 'lixo' })).toBe(semParametro)
+      expect(await renderizarGratis(DIA_DO_HIATO, { temporada: ['2025-26', '2026-27'] })).toBe(semParametro)
+    } finally {
+      vi.setSystemTime(AGORA)
+    }
+  }, 60_000)
+
+  it('(b) na noite de estreia, sem parâmetro, /resultados é o atalho de hoje — nunca a temporada passada', async () => {
+    const [casa, visitante] = await banco.db.select({ id: times.id }).from(times).limit(2)
+    const [jogo] = await banco.db
+      .insert(jogos)
+      .values({
+        timeCasaId: casa!.id,
+        timeVisitanteId: visitante!.id,
+        status: 'AGENDADO',
+        dataReferencia: DIA_DA_ESTREIA,
+        dataHoraUtc: new Date(`${DIA_DA_ESTREIA}T23:30:00.000Z`),
+      })
+      .returning({ id: jogos.id })
+    vi.setSystemTime(ESTREIA)
+    try {
+      const alvo = await destino({})
+      expect(alvo).not.toContain('temporada=')
+      expect(alvo).not.toContain(DIA_2025)
+      expect(await destino({ temporada: 'lixo' })).toBe(alvo)
+      // A rodada da estreia, sem parâmetro, é a do calendário.
+      expect(await renderizarGratis(DIA_DA_ESTREIA)).not.toContain('aplicada à temporada passada')
+    } finally {
+      vi.setSystemTime(AGORA)
+      await banco.db.delete(jogos).where(eq(jogos.id, jogo!.id))
+    }
+  }, 60_000)
 })

@@ -562,8 +562,54 @@ describe('semearDemo (PGlite, banco vazio)', () => {
       .values({ email: 'preservar@teste.com', senhaHash: 'x', nome: 'Preservar' })
       .returning()
 
-    await limparDemo(banco.db)
+    // Uma linha em cada tabela da temporada anterior: `niveis_versao_id` e
+    // `jogador_id` delas apontam para a lista e os jogadores SEM cascata —
+    // sem apagá-las antes, o DELETE da lista quebra no meio da limpeza.
+    const {
+      apitosRetroativos,
+      feedRetroativo,
+      greensRetroativos,
+      jogos: tabelaJogos,
+      niveis: tabelaNiveis,
+    } = await import('../../dominio/db/schema')
+    const [classe] = await banco.db.select().from(tabelaNiveis).limit(1)
+    const [jogo] = await banco.db.select().from(tabelaJogos).limit(1)
+    const doDia = { temporada: '2025-26', dataReferencia: '2025-11-04' }
+    await banco.db.insert(apitosRetroativos).values({
+      ...doDia,
+      niveisVersaoId: classe!.niveisVersaoId,
+      rulesetVersao: 'v1',
+      jogoId: jogo!.id,
+      jogadorId: classe!.jogadorId,
+      atributo: 'PONTOS',
+      estrategia: 'LISTA_SECRETA',
+      nivelJogador: classe!.nivel,
+      nivelApito: 1,
+      linha: 20,
+    })
+    await banco.db.insert(greensRetroativos).values({
+      ...doDia,
+      jogoId: jogo!.id,
+      jogadorId: classe!.jogadorId,
+      atributo: 'PONTOS',
+      nivelJogador: classe!.nivel,
+      marco: 10,
+      valor: 12,
+    })
+    await banco.db.insert(feedRetroativo).values({
+      ...doDia,
+      niveisVersaoId: classe!.niveisVersaoId,
+      conteudoJson: { itens: [] },
+      hash: 'x',
+    })
 
+    const contagens = await limparDemo(banco.db)
+
+    expect(contagens).toMatchObject({ apitos_retroativos: 1, greens_retroativos: 1, feed_retroativo: 1 })
+    expect(await banco.db.select().from(apitosRetroativos)).toHaveLength(0)
+    expect(await banco.db.select().from(greensRetroativos)).toHaveLength(0)
+    expect(await banco.db.select().from(feedRetroativo)).toHaveLength(0)
+    expect((await banco.db.select().from(niveisVersao)).length).toBe(0)
     expect((await banco.db.select().from(times)).length).toBe(0)
     expect((await banco.db.select().from(jogadores)).length).toBe(0)
     expect((await banco.db.select().from(feedSnapshot)).length).toBe(0)

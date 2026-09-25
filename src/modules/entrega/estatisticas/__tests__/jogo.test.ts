@@ -1,4 +1,4 @@
-import { eq, notInArray } from 'drizzle-orm'
+import { and, eq, notInArray } from 'drizzle-orm'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
 import { bancoDeTeste } from '../../../dominio/__tests__/ajuda-banco'
@@ -88,6 +88,43 @@ describe('tela de partida — jogo encerrado', () => {
       [...tela.casa.boxScore, ...tela.visitante.boxScore].map((l) => l.jogadorId),
     )
     expect(idsNoBox.has(estranho!.id)).toBe(false)
+  })
+
+  it('o lado de cada linha é o time DAQUELE jogo (estatisticas_jogo.time_id), não o cadastro de hoje', async () => {
+    // Um jogador que jogou pelo mandante e foi trocado DEPOIS: o cadastro
+    // (`jogadores.time_id`) já diz o time novo, mas a linha do box diz por
+    // quem ele jogou naquela noite. Sem isso ele sumia do box, ou caía no
+    // lado errado quando o time novo era o adversário.
+    const [jogo] = await banco.db.select().from(jogos).where(eq(jogos.status, 'ENCERRADO')).limit(1)
+    const antes = (await telaDoJogo(banco.db, jogo!.id, {}))!
+    const trocado = antes.casa.boxScore[0]!
+    const [cadastro] = await banco.db.select().from(jogadores).where(eq(jogadores.id, trocado.jogadorId))
+    const ondeLinha = and(eq(estatisticasJogo.jogoId, jogo!.id), eq(estatisticasJogo.jogadorId, trocado.jogadorId))
+    const [linhaOriginal] = await banco.db.select().from(estatisticasJogo).where(ondeLinha)
+    try {
+      await banco.db.update(estatisticasJogo).set({ timeId: jogo!.timeCasaId }).where(ondeLinha)
+      for (const novoTime of [jogo!.timeVisitanteId, null]) {
+        // Trocado para o ADVERSÁRIO daquela noite, e para fora dos dois times.
+        const [terceiro] = await banco.db
+          .select()
+          .from(times)
+          .where(notInArray(times.id, [jogo!.timeCasaId, jogo!.timeVisitanteId]))
+          .limit(1)
+        await banco.db
+          .update(jogadores)
+          .set({ timeId: novoTime ?? terceiro!.id })
+          .where(eq(jogadores.id, trocado.jogadorId))
+        const tela = (await telaDoJogo(banco.db, jogo!.id, {}))!
+        expect(tela.casa.boxScore.map((l) => l.jogadorId), String(novoTime)).toContain(trocado.jogadorId)
+        expect(tela.visitante.boxScore.map((l) => l.jogadorId), String(novoTime)).not.toContain(trocado.jogadorId)
+        // Com nome e rosto: o cadastro dele é lido mesmo fora dos dois times.
+        const linha = tela.casa.boxScore.find((l) => l.jogadorId === trocado.jogadorId)!
+        expect(linha.nome).toBe(trocado.nome)
+      }
+    } finally {
+      await banco.db.update(jogadores).set({ timeId: cadastro!.timeId }).where(eq(jogadores.id, trocado.jogadorId))
+      await banco.db.update(estatisticasJogo).set({ timeId: linhaOriginal!.timeId }).where(ondeLinha)
+    }
   })
 })
 

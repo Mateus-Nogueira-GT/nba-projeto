@@ -366,3 +366,22 @@
   font-size: var(--t-13);
   font-weight: 700;
 }
+
+/* ---------- Temporada anterior: o dia dentro da temporada ---------- */
+.navDia {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--e-3);
+  font-size: var(--t-14);
+}
+.navDia a {
+  color: var(--texto-2);
+  font-weight: 600;
+}
+.navDia a:hover {
+  color: var(--texto);
+}
+.navDia [aria-disabled='true'] {
+  color: var(--texto-3);
+}

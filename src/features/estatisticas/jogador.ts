@@ -9,12 +9,13 @@ import {
   type TelaJogador,
 } from '@/modules/entrega/estatisticas/jogador'
 import { contextoEstatisticas, type ContextoEstatisticas } from '@/modules/entrega/estatisticas/rotas'
+import { intervaloDaTemporada } from '@/modules/entrega/estatisticas/temporadas'
 import { rulesetAtivo } from '@/modules/entrega/ruleset-ativo'
 import { exigirCookieDeSessao, exigirNivel } from '@/modules/plataforma/assinatura/guarda'
 import { atende } from '@/modules/plataforma/assinatura/nivel-do-plano'
 import { estadoExperienciaDoUsuario } from '@/modules/plataforma/experiencia/servico'
-import { temporadaParaExibirCacheada } from '@/app/_cache/temporada'
 import { LIMITE_DE_APITOS_DO_JOGADOR } from './regras'
+import { temporadaDasEstatisticas, type TemporadaDasEstatisticas } from './temporada'
 
 export type DadosDoJogador = {
   id: string
@@ -26,8 +27,13 @@ export type DadosDoJogador = {
   apitos: ApitoDoJogador[]
   truncado: boolean
   acompanhado: boolean
-  /** Apitos, jogo a jogo e números completos são MVP; o resumo é grátis. */
+  /**
+   * Apitos, jogo a jogo e números completos são MVP; o resumo é grátis. Na
+   * temporada ANTERIOR, abertos para todo plano (spec 25/09, decisão 6).
+   */
   profundidade: boolean
+  /** O seletor, a escolha que viaja nos links, e se a temporada é anterior. */
+  seletor: TemporadaDasEstatisticas
 }
 
 type Params = Record<string, string | string[] | undefined>
@@ -43,7 +49,7 @@ type Params = Record<string, string | string[] | undefined>
  *    existe responde 404 sem avaliar o acesso.
  */
 export async function carregarJogador(id: string, params: Params): Promise<DadosDoJogador> {
-  const contexto = contextoEstatisticas(params)
+  const { temporada: _crua, ...semTemporada } = contextoEstatisticas(params)
   if (!z.uuid().safeParse(id).success) notFound()
   await exigirCookieDeSessao(`/estatisticas/jogador/${id}`)
 
@@ -54,18 +60,37 @@ export async function carregarJogador(id: string, params: Params): Promise<Dados
   // `jogos` guarda a data, não o rótulo. A temporada é a que TEM dado (no
   // hiato, a passada), pelo cache — nunca a do calendário.
   const calendario = calendarioDoRuleset(ruleset)
-  const temporada = await temporadaParaExibirCacheada(ruleset, agora)
+  // A temporada que TEM dado é o padrão; `?temporada=` troca dentro das disponíveis.
+  const seletor = await temporadaDasEstatisticas(params, ruleset, agora)
+  const { temporada } = seletor
+  // Só a escolha VÁLIDA viaja nos links: a visita padrão não muda URL nenhuma.
+  const contexto = seletor.escolhida ? { ...semTemporada, temporada: seletor.escolhida } : semTemporada
   const tela = await telaDoJogador(db, id, { temporada, calendario, periodo: contexto.periodo })
   if (tela === null) notFound()
 
   const { sessao, acesso } = await exigirNivel('GRATIS', `/estatisticas/jogador/${id}`)
-  const profundidade = atende(acesso.nivel, 'MVP')
+  // A temporada anterior é aberta para todo plano (decisão 6); a do
+  // calendário segue a régua de hoje.
+  const profundidade = seletor.anterior || atende(acesso.nivel, 'MVP')
   const [experiencia, lista] = await Promise.all([
     estadoExperienciaDoUsuario(db, sessao.usuarioId),
     // Os apitos são profundidade (MVP): o grátis nem os lê — a tela mostra
     // silhueta, e dado pago não carregado não tem como vazar para o HTML.
-    // UM a mais que o limite: é assim que a tela sabe que cortou.
-    profundidade ? apitosDoJogador(db, id, LIMITE_DE_APITOS_DO_JOGADOR + 1) : Promise.resolve([]),
+    // UM a mais que o limite: é assim que a tela sabe que cortou. Numa
+    // temporada anterior com retroativo, os retroativos dela — nunca os
+    // publicados de hoje; sem retroativo (publicada ao vivo), os publicados
+    // DELA. O intervalo é portão: a temporada passada abre para o grátis, e
+    // sem o recorte a leitura de `apitos` traria o histórico pago de hoje.
+    profundidade
+      ? apitosDoJogador(
+          db,
+          id,
+          LIMITE_DE_APITOS_DO_JOGADOR + 1,
+          seletor.retroativa
+            ? { temporadaAnterior: temporada }
+            : { periodo: intervaloDaTemporada(temporada, calendario) },
+        )
+      : Promise.resolve([]),
   ])
 
   return {
@@ -79,5 +104,6 @@ export async function carregarJogador(id: string, params: Params): Promise<Dados
     truncado: lista.length > LIMITE_DE_APITOS_DO_JOGADOR,
     acompanhado: experiencia.jogadoresAcompanhados.includes(id),
     profundidade,
+    seletor,
   }
 }

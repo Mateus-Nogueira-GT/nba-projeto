@@ -1,12 +1,12 @@
 import { getDb } from '@/modules/dominio/db/cliente'
 import { dataDeReferencia } from '@/modules/dominio/rodada'
-import { temporadaParaExibirCacheada } from '@/app/_cache/temporada'
 import { buscar, type ResultadoBusca } from '@/modules/entrega/estatisticas/busca'
 import { dataValidaOuHoje } from '@/modules/entrega/estatisticas/calendario'
 import { telaJogosDoDia, type TelaJogosDoDia } from '@/modules/entrega/estatisticas/jogos-do-dia'
 import { telaDaClassificacao, type TelaClassificacao } from '@/modules/entrega/estatisticas/time'
 import { rulesetAtivo } from '@/modules/entrega/ruleset-ativo'
 import { exigirNivel } from '@/modules/plataforma/assinatura/guarda'
+import { temporadaDasEstatisticas, type TemporadaDasEstatisticas } from './temporada'
 
 export type DadosDoIndice = {
   termo: string
@@ -18,6 +18,8 @@ export type DadosDoIndice = {
   agora: Date
   doDia: TelaJogosDoDia
   classificacao: TelaClassificacao
+  /** O seletor e a escolha que viaja nos links. */
+  seletor: TemporadaDasEstatisticas
 }
 
 type Params = Record<string, string | string[] | undefined>
@@ -39,8 +41,10 @@ export async function carregarIndice(params: Params): Promise<DadosDoIndice> {
   const data = dataValidaOuHoje(primeiro(params.data), hoje)
   // A temporada que TEM dado, não a do calendário: entre o lançamento e a
   // primeira bola as duas divergem por ~um mês (spec 22/09, §5.2). Pelo cache:
-  // o agregado muda poucas vezes por dia (auditoria 23/09).
-  const temporada = await temporadaParaExibirCacheada(ruleset, agora)
+  // o agregado muda poucas vezes por dia (auditoria 23/09). `?temporada=`
+  // troca a classificação dentro das disponíveis.
+  const seletor = await temporadaDasEstatisticas(params, ruleset, agora)
+  const { temporada } = seletor
 
   const [doDia, classificacao, resultados] = await Promise.all([
     telaJogosDoDia(db, data, fuso),
@@ -48,5 +52,5 @@ export async function carregarIndice(params: Params): Promise<DadosDoIndice> {
     termo.length > 0 ? buscar(db, termo) : Promise.resolve([]),
   ])
 
-  return { termo, resultados, data, hoje, fuso, temporada, agora, doDia, classificacao }
+  return { termo, resultados, data, hoje, fuso, temporada, agora, doDia, classificacao, seletor }
 }

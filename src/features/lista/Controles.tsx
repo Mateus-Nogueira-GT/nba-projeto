@@ -159,6 +159,7 @@ export function BarraDeControles({
   lente,
   abas,
   seguidosNaRodada,
+  semOdd = false,
 }: {
   estado: EstadoDaTabela
   opcoes: Opcoes
@@ -168,6 +169,11 @@ export function BarraDeControles({
   seguidosNaRodada: number
   /** As abas de mercado moram na mesma barra, à esquerda. */
   abas: React.ReactNode
+  /**
+   * Temporada anterior: sem odd e sem a hierarquia de hoje, as duas lentes
+   * não teriam o que mostrar — e não são oferecidas.
+   */
+  semOdd?: boolean
 }) {
   const destino = hrefDaLista(estado)
   const n = quantosRecortes(estado)
@@ -183,6 +189,8 @@ export function BarraDeControles({
     estado.lente ? (['lente', estado.lente] as [string, string]) : null,
     estado.ordenarPor !== 'sinal' ? (['ordenar', estado.ordenarPor] as [string, string]) : null,
     estado.seguidos ? (['seguidos', '1'] as [string, string]) : null,
+    estado.temporada ? (['temporada', estado.temporada] as [string, string]) : null,
+    estado.data ? (['data', estado.data] as [string, string]) : null,
   ].filter((p): p is [string, string] => p !== null)
   return (
     <div className={s.controles}>
@@ -245,7 +253,7 @@ export function BarraDeControles({
           acao={definirLente}
           campo="lente"
           destino={destino}
-          opcoes={(['ULT5', 'MEDIA_LINHA', 'ODDS', 'HIERARQUIA'] as const).map((l) => ({
+          opcoes={(semOdd ? (['ULT5', 'MEDIA_LINHA'] as const) : (['ULT5', 'MEDIA_LINHA', 'ODDS', 'HIERARQUIA'] as const)).map((l) => ({
             valor: l,
             rotulo: ROTULO_LENTE[l],
             href: hrefDaLista(estado, { lente: l }),

@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm'
+import { eq, sql } from 'drizzle-orm'
 
 import {
   classificacao,
@@ -164,14 +164,38 @@ export async function persistirBoxScore(
       `snapshot rejeitado: ${desconhecidos.length} jogador(es) sem identidade em ${provedor}`,
     )
   }
+  // Time é informação extra da linha, não identidade: sigla desconhecida vira
+  // `timeId: null` e NÃO rejeita o snapshot — só o jogador sem identidade faz isso.
+  const siglas = await mapaDeTimes(db)
   const resolvidas = linhas.flatMap((l) => {
     const jogadorId = porIdExterno.get(l.jogadorIdExterno)
-    return jogadorId ? [{ ...l, jogadorId }] : []
+    return jogadorId
+      ? [
+          {
+            ...l,
+            jogadorId,
+            timeId: l.timeSiglaExterna ? (siglas.get(l.timeSiglaExterna) ?? null) : null,
+          },
+        ]
+      : []
   })
 
   const totais = resolvidas.filter((l) => l.quarto === null)
   const quartos = resolvidas.filter((l) => l.quarto !== null)
   let gravados = 0
+
+  // O time que já se sabia, por jogador, ANTES de apagar: uma fonte que não
+  // informa o time (o failover, ou uma sigla desconhecida) não pode apagar o
+  // `time_id` bom de uma passada anterior. Sem ele, a temporada anterior perde
+  // o time daquele jogo (spec 25/09, §3.1). Fonte que TRAZ o time manda.
+  const timeAnterior = new Map(
+    (
+      await db
+        .select({ jogadorId: estatisticasJogo.jogadorId, timeId: estatisticasJogo.timeId })
+        .from(estatisticasJogo)
+        .where(eq(estatisticasJogo.jogoId, jogo.id))
+    ).flatMap((l) => (l.timeId === null ? [] : [[l.jogadorId, l.timeId] as const])),
+  )
 
   // O endpoint foi homologado como snapshot completo. Substituir dentro da
   // mesma transação remove correções/linhas que desapareceram na origem.
@@ -185,6 +209,7 @@ export async function persistirBoxScore(
         totais.map((l) => ({
           jogoId: jogo.id,
           jogadorId: l.jogadorId,
+          timeId: l.timeId ?? timeAnterior.get(l.jogadorId) ?? null,
           ...linhaDeJogador(l),
           capturadoEm,
           origemAtualizadaEm: dadoAtualizadoEm,
@@ -194,6 +219,8 @@ export async function persistirBoxScore(
       .onConflictDoUpdate({
         target: [estatisticasJogo.jogoId, estatisticasJogo.jogadorId],
         set: {
+          // Mesma regra no conflito: null da fonte nunca sobrescreve um time conhecido.
+          timeId: sql`coalesce(${excluded('time_id')}, ${estatisticasJogo.timeId})`,
           minutos: excluded('minutos'),
           pontos: excluded('pontos'),
           rebotesTotal: excluded('rebotes_total'),

@@ -1,8 +1,9 @@
 import { identidadesDeApresentacao } from '../../dominio/identidade-apresentacao'
-import { and, asc, desc, eq, inArray, isNotNull, or, sql } from 'drizzle-orm'
+import { and, asc, desc, eq, gte, inArray, isNotNull, lte, or, sql } from 'drizzle-orm'
 
 import {
   classificacao,
+  estatisticasJogo,
   estatisticasTimeJogo,
   jogadores,
   jogos,
@@ -12,6 +13,8 @@ import {
   times,
 } from '../../dominio/db/schema'
 import type { Db } from '../../dominio/db/tipos'
+import { ordenarHierarquia, timeNaData } from '../../dominio/retroativo/regras'
+import { temporadaDe, type ConfigTemporada } from '../../dominio/temporada'
 
 // A aba de estatísticas NÃO importa do motor (regra `estatisticas-nao-passam-
 // pelo-motor`). Atributo e nível vêm do schema — é a lista do CJ como dado
@@ -99,7 +102,17 @@ function quebra(l: {
 export async function telaDoTime(
   db: Db,
   timeId: string,
-  opcoes: { temporada: string; limiteJogos?: number },
+  opcoes: {
+    temporada: string
+    limiteJogos?: number
+    /**
+     * Recorte das partidas por dia da rodada, inclusive nas duas pontas. Só a
+     * temporada ANTERIOR o passa: sem ele, "as mais recentes" seriam as da
+     * temporada de hoje debaixo do rótulo da passada. Na temporada atual a
+     * consulta segue a de sempre.
+     */
+    periodo?: { de: string; ate: string }
+  },
 ): Promise<TelaTime | null> {
   const [time] = await db.select().from(times).where(eq(times.id, timeId)).limit(1)
   if (!time) return null
@@ -115,7 +128,13 @@ export async function telaDoTime(
     db
       .select()
       .from(jogos)
-      .where(or(eq(jogos.timeCasaId, timeId), eq(jogos.timeVisitanteId, timeId)))
+      .where(
+        and(
+          or(eq(jogos.timeCasaId, timeId), eq(jogos.timeVisitanteId, timeId)),
+          opcoes.periodo ? gte(jogos.dataReferencia, opcoes.periodo.de) : undefined,
+          opcoes.periodo ? lte(jogos.dataReferencia, opcoes.periodo.ate) : undefined,
+        ),
+      )
       .orderBy(desc(jogos.dataHoraUtc))
       .limit(limite),
     db.select().from(jogadores).where(eq(jogadores.timeId, timeId)),
@@ -231,9 +250,21 @@ export async function hierarquiaDoTime(
   timeId: string,
   atributo: Atributo,
   jogoId: string | null,
+  opcoes: {
+    /**
+     * Uma temporada ANTERIOR à do calendário: a hierarquia é REMONTADA com o
+     * time em que cada jogador da lista JOGOU até `data` (decisão 2) e
+     * ordenada pelo nível do jogador e, no mesmo nível, pela posição dele na
+     * lista do CJ (decisão 3) — a mesma regra de `montarFatosRetroativos`.
+     */
+    temporadaAnterior?: { temporada: string; data: string; calendario: ConfigTemporada }
+  } = {},
 ): Promise<LinhaHierarquia[]> {
   const [versao] = await db.select().from(niveisVersao).where(eq(niveisVersao.ativa, true)).limit(1)
   if (!versao) return []
+  if (opcoes.temporadaAnterior) {
+    return hierarquiaRetroativa(db, versao.id, timeId, atributo, opcoes.temporadaAnterior)
+  }
 
   const [linhas, fora] = await Promise.all([
     db
@@ -270,6 +301,80 @@ export async function hierarquiaDoTime(
     nome: identidades.get(l.jogadorId)?.nome ?? l.nome,
     fora: desfalcados.has(l.jogadorId),
   }))
+}
+
+/**
+ * A hierarquia de um time numa temporada que já acabou. Sem `fora`: o
+ * desfalque é de um JOGO, e aqui não há jogo de hoje a marcar.
+ *
+ * O time de cada jogador sai do BOX SCORE (`estatisticas_jogo.time_id`), não
+ * da lista do CJ — a lista dá o nível e a posição, não o time. Só conta o box
+ * da temporada pedida: o último jogo de outra temporada não põe ninguém no
+ * elenco desta. Jogador fora da lista do CJ não entra (spec 25/09, §6).
+ */
+async function hierarquiaRetroativa(
+  db: Db,
+  versaoId: string,
+  timeId: string,
+  atributo: Atributo,
+  anterior: { temporada: string; data: string; calendario: ConfigTemporada },
+): Promise<LinhaHierarquia[]> {
+  const classes = await db
+    .select({
+      jogadorId: niveis.jogadorId,
+      nivel: niveis.nivel,
+      posicaoCj: niveis.posicaoHierarquia,
+      nome: jogadores.nomeCompleto,
+    })
+    .from(niveis)
+    .innerJoin(jogadores, eq(niveis.jogadorId, jogadores.id))
+    .where(and(eq(niveis.niveisVersaoId, versaoId), eq(niveis.atributo, atributo)))
+  if (classes.length === 0) return []
+
+  // O ÚLTIMO jogo de cada jogador até a data, no banco: é só dele que
+  // `timeNaData` precisa, e a liga inteira de box não viaja para a memória.
+  const ultimos = await db
+    .selectDistinctOn([estatisticasJogo.jogadorId], {
+      jogadorId: estatisticasJogo.jogadorId,
+      timeId: estatisticasJogo.timeId,
+      data: jogos.dataReferencia,
+      dataHoraUtc: jogos.dataHoraUtc,
+    })
+    .from(estatisticasJogo)
+    .innerJoin(jogos, eq(jogos.id, estatisticasJogo.jogoId))
+    .where(
+      and(
+        inArray(
+          estatisticasJogo.jogadorId,
+          classes.map((c) => c.jogadorId),
+        ),
+        isNotNull(estatisticasJogo.timeId),
+        lte(jogos.dataReferencia, anterior.data),
+      ),
+    )
+    .orderBy(estatisticasJogo.jogadorId, desc(jogos.dataReferencia), desc(jogos.dataHoraUtc))
+
+  const doTime = new Set(
+    ultimos
+      .filter((u) => temporadaDe(u.dataHoraUtc, anterior.calendario) === anterior.temporada)
+      .filter((u) => timeNaData([u], anterior.data) === timeId)
+      .map((u) => u.jogadorId),
+  )
+  const membros = classes.filter((c) => doTime.has(c.jogadorId))
+  const posicoes = ordenarHierarquia(membros)
+  const identidades = await identidadesDeApresentacao(
+    db,
+    membros.map((m) => m.jogadorId),
+  )
+  return membros
+    .map((m) => ({
+      posicao: posicoes.get(m.jogadorId)!,
+      jogadorId: m.jogadorId,
+      nome: identidades.get(m.jogadorId)?.nome ?? m.nome,
+      nivel: m.nivel,
+      fora: false,
+    }))
+    .sort((a, b) => a.posicao - b.posicao)
 }
 
 export type TelaClassificacao = ComAtualizacao & {

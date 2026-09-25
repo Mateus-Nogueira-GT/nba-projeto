@@ -232,6 +232,20 @@
       "when": 1790180918423,
       "tag": "0032_melted_lady_vermin",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1790354030500,
+      "tag": "0033_graceful_bullseye",
+      "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1790354574257,
+      "tag": "0034_freezing_post",
+      "breakpoints": true
     }
   ]
 }

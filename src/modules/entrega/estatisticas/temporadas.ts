@@ -1,7 +1,7 @@
 import { sql } from 'drizzle-orm'
 
 import { jogos } from '../../dominio/db/schema'
-import { dataDeReferencia } from '../../dominio/rodada'
+import { dataDeReferencia, somarDias } from '../../dominio/rodada'
 import type { Db } from '../../dominio/db/tipos'
 import {
   calendarioDoRuleset,
@@ -151,4 +151,47 @@ export async function estadoDaTemporada(
     emHiato: exibida !== doCalendario,
     proximoJogo: proximo?.data ?? null,
   }
+}
+
+/**
+ * A temporada do calendário JÁ TEM JOGO até hoje (qualquer status)?
+ *
+ * É o que separa o hiato da noite de estreia. `emHiato` (exibida ≠ calendário)
+ * continua verdadeiro até o primeiro jogo ENCERRAR — na estreia, com a Lista
+ * publicada e os jogos agendados ou em quadra, ele ainda diz "hiato". Aqui
+ * basta um jogo da temporada nova com rodada até hoje: a partir dele, o
+ * padrão das telas de apito é a temporada nova.
+ */
+export async function temporadaDoCalendarioComecou(
+  db: Db,
+  config: ConfigTemporada,
+  agora: Date,
+): Promise<boolean> {
+  const hoje = dataDeReferencia(agora, config.fuso)
+  const anoInicial = temporadaDe(agora, config).slice(0, 4)
+  const abertura = `${anoInicial}-${String(config.mesInicio).padStart(2, '0')}-01`
+  const [jogo] = await db
+    .select({ id: jogos.id })
+    .from(jogos)
+    .where(sql`${jogos.dataReferencia} >= ${abertura} AND ${jogos.dataReferencia} <= ${hoje}`)
+    .limit(1)
+  return jogo !== undefined
+}
+
+/**
+ * O primeiro e o último dia (da rodada) de uma temporada, pelo rótulo.
+ *
+ * O rótulo começa pelo ano inicial com quatro dígitos nos dois formatos
+ * (`temporadaDe`), e a temporada vai da abertura (dia 1º do mês de início)
+ * até a véspera da abertura seguinte. Recorta as partidas de uma temporada
+ * que já acabou sem uma segunda tradução de data para rótulo.
+ */
+export function intervaloDaTemporada(
+  temporada: string,
+  config: ConfigTemporada,
+): { de: string; ate: string } {
+  const anoInicial = Number(temporada.slice(0, 4))
+  const mes = String(config.mesInicio).padStart(2, '0')
+  const seguinte = String(anoInicial + 1).padStart(4, '0')
+  return { de: `${temporada.slice(0, 4)}-${mes}-01`, ate: somarDias(`${seguinte}-${mes}-01`, -1) }
 }

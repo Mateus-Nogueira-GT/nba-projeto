@@ -102,6 +102,7 @@ const FIXTURE: Fixture = {
     // Total do jogo — quarto null.
     {
       jogadorIdExterno: 'p1',
+      timeSiglaExterna: null,
       quarto: null,
       minutos: 36,
       pontos: 30,
@@ -126,6 +127,7 @@ const FIXTURE: Fixture = {
     // Quebra por quarto — é isto que o Fire Live lê.
     {
       jogadorIdExterno: 'p1',
+      timeSiglaExterna: null,
       quarto: 1,
       minutos: 10,
       pontos: 12,

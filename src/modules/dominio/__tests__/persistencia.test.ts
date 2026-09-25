@@ -44,9 +44,12 @@ afterAll(async () => {
 // ---------------------------------------------------------------------------
 
 describe('migrations sobem e descem limpas', () => {
-  it('a subida cria as 70 tabelas dos grupos persistidos', async () => {
-    // 70 desde entradas_realizadas (gestão sugeridas × realizadas); 69 desde a redefinição de senha por link do admin.
-    expect(await banco.contarTabelas()).toBe(70)
+  it('a subida cria as 73 tabelas dos grupos persistidos', async () => {
+    // 73 desde a temporada retroativa (0034: apitos_retroativos,
+    // greens_retroativos, feed_retroativo); 70 desde entradas_realizadas
+    // (gestão sugeridas × realizadas); 69 desde a redefinição de senha por
+    // link do admin.
+    expect(await banco.contarTabelas()).toBe(73)
   })
 
   it('desce zerando o schema e sobe de novo sem resíduo', async () => {
@@ -54,8 +57,8 @@ describe('migrations sobem e descem limpas', () => {
     expect(await banco.contarTabelas()).toBe(0)
 
     await banco.subir()
-    // 70 desde entradas_realizadas (gestão sugeridas × realizadas).
-    expect(await banco.contarTabelas()).toBe(70)
+    // 73 desde a temporada retroativa (0034) — ver comentário acima.
+    expect(await banco.contarTabelas()).toBe(73)
   })
 })
 

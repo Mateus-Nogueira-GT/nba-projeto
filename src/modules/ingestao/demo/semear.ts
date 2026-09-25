@@ -507,8 +507,17 @@ export async function semearDemo(
  * inscrições de push ficam intactas — quem testou o login não perde o acesso.
  */
 export async function limparDemo(db: Db): Promise<Record<string, number>> {
-  const { apitos, greens, feedSnapshot, niveisVersao, identidadesJogador, identidadesJogo } =
-    await import('../../dominio/db/schema')
+  const {
+    apitos,
+    greens,
+    feedSnapshot,
+    niveisVersao,
+    identidadesJogador,
+    identidadesJogo,
+    apitosRetroativos,
+    greensRetroativos,
+    feedRetroativo,
+  } = await import('../../dominio/db/schema')
 
   const contagens: Record<string, number> = {}
   const apagar = async (nome: string, fn: () => Promise<unknown>) => {
@@ -521,6 +530,18 @@ export async function limparDemo(db: Db): Promise<Record<string, number>> {
   await apagar('feed_snapshot', () => db.delete(feedSnapshot).returning({ id: feedSnapshot.id }))
   await apagar('greens', () => db.delete(greens).returning({ id: greens.id }))
   await apagar('apitos', () => db.delete(apitos).returning({ id: apitos.id }))
+  // A temporada anterior (spec 25/09) é derivada destes jogos, jogadores e
+  // desta lista: sem a lista inventada ela não tem de onde vir. As três
+  // tabelas saem ANTES de `niveis_versao`, `jogadores` e `jogos` — as FKs
+  // `niveis_versao_id` e `jogador_id` não têm cascata, e o DELETE da lista
+  // quebraria no meio da limpeza.
+  await apagar('feed_retroativo', () => db.delete(feedRetroativo).returning({ id: feedRetroativo.id }))
+  await apagar('greens_retroativos', () =>
+    db.delete(greensRetroativos).returning({ id: greensRetroativos.id }),
+  )
+  await apagar('apitos_retroativos', () =>
+    db.delete(apitosRetroativos).returning({ id: apitosRetroativos.id }),
+  )
   await apagar('fire_live_execucoes', () =>
     db.delete(fireLiveExecucoes).returning({ id: fireLiveExecucoes.id }),
   )

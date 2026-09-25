@@ -494,6 +494,9 @@ export function mapearEstatisticaJogadorApiSports(
 
   return {
     jogadorIdExterno: String(linha.player.id),
+    // Api-sports ainda não traduz o time da linha aqui (fora do escopo desta
+    // tarefa) — igual a qualquer outro adaptador que não preenche o campo.
+    timeSiglaExterna: null,
     quarto: null,
     minutos,
     pontos: linha.points,

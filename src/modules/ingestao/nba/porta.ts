@@ -66,6 +66,8 @@ export class CapacidadeNaoSuportadaError extends Error {
 
 export type LinhaBoxScore = {
   jogadorIdExterno: string
+  /** Sigla do time pelo qual o jogador atuou NESTE jogo. Base do time real da temporada anterior. */
+  timeSiglaExterna: string | null
   /** null = linha do jogo inteiro; 1..4+ = split por quarto. */
   quarto: number | null
   minutos: number | null

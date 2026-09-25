@@ -20,6 +20,9 @@ vercel.json
 .env*.local
 .superpowers/
 
+# Backups da lista do CJ (npm run lista-cj:backup) — dado do operador, não código.
+backups/
+
 # Scripts de diagnóstico descartáveis — nunca no repositório. Um deles chegou
 # à main por um `git add -A` carregando um token de sessão (revogado em
 # 27/08/2026); este padrão fecha a porta.

@@ -432,3 +432,24 @@ a.titulo:hover {
   z-index: 1;
   transform: translateY(-50%);
 }
+
+/* ---------- Sem odd (temporada anterior) ---------- */
+/* A coluna da odd não é desenhada: as grades de cada largura perdem a trilha dela. */
+@container (min-width: 640px) {
+  .tabela[data-sem-odd] .cabecalho,
+  .tabela[data-sem-odd] .linha {
+    grid-template-columns: minmax(200px, 2fr) minmax(128px, 1fr) 84px 112px;
+  }
+}
+@container (min-width: 860px) {
+  .tabela[data-sem-odd] .cabecalho,
+  .tabela[data-sem-odd] .linha {
+    grid-template-columns: minmax(200px, 2fr) minmax(128px, 1fr) 76px 84px 96px 112px;
+  }
+}
+@container (min-width: 1060px) {
+  .tabela[data-sem-odd] .cabecalho,
+  .tabela[data-sem-odd] .linha {
+    grid-template-columns: minmax(220px, 2fr) minmax(120px, 1fr) 76px 84px 104px 168px minmax(104px, 1fr);
+  }
+}

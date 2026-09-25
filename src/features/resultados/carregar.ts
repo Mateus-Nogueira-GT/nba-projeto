@@ -3,7 +3,7 @@ import { redirect } from 'next/navigation'
 import { getDb } from '@/modules/dominio/db/cliente'
 import { greens as tabelaGreens, jogos as tabelaJogos } from '@/modules/dominio/db/schema'
 import { dataDeReferencia, somarDias } from '@/modules/dominio/rodada'
-import { calendarioDoRuleset } from '@/modules/dominio/temporada'
+import { calendarioDoRuleset, temporadaDe } from '@/modules/dominio/temporada'
 import { estadoDoCiclo, type EstadoDoCiclo } from '@/modules/entrega/lista-por-jogo'
 import {
   conferirFireLive,
@@ -12,6 +12,7 @@ import {
   filtrosResultadosDaUrl,
   greensDoDia,
   recapDaNoite,
+  recapDosCards,
   rotaResultados,
   ultimaRodadaConferida,
   type FiltrosResultados,
@@ -22,13 +23,26 @@ import {
   type ResultadoFireLive,
   type TaxaDaTemporada,
 } from '@/modules/entrega/resultados'
+import {
+  fireLiveRetroativo,
+  greensRetroativosDoDia,
+  recapRetroativo,
+} from '@/modules/entrega/retroativo/leitura'
+import { temporadaDaTela } from '@/modules/entrega/retroativo/temporada'
 import { rulesetAtivo } from '@/modules/entrega/ruleset-ativo'
+import type { Ruleset } from '@/modules/motor/ruleset/schema'
 import type { ItemFeed } from '@/modules/entrega/tipos-feed'
 import { exigirNivel } from '@/modules/plataforma/assinatura/guarda'
 import { atende } from '@/modules/plataforma/assinatura/nivel-do-plano'
 import { lerFeedCacheado } from '@/app/_cache/feed'
 import { placarCacheado } from '@/app/_cache/placar'
-import { taxaDaTemporadaCacheada } from '@/app/_cache/temporada'
+import { feedRetroativoCacheado, temporadaAnteriorComDados } from '@/app/_cache/retroativo'
+import {
+  taxaDaTemporadaCacheada,
+  taxaRetroativaCacheada,
+  temporadasDaTelaCacheadas,
+  type TemporadasDaTela,
+} from '@/app/_cache/temporada'
 
 type Params = Record<string, string | string[] | undefined>
 
@@ -39,17 +53,43 @@ function dataValida(data: string): boolean {
   return !Number.isNaN(instante.getTime()) && instante.toISOString().slice(0, 10) === data
 }
 
+/** Os filtros sem a temporada: no caminho de hoje ela não existe, e nenhum link a carrega. */
+const semTemporada = (f: FiltrosResultados): FiltrosResultados => ({ ...f, temporada: undefined })
+
 /**
  * `/resultados` é um ATALHO para a última rodada com conferência. O destino é
  * a noite que TERMINOU; sem nenhuma, a rodada de hoje. O dia é o da RODADA, no
  * fuso do ruleset — nunca o UTC do servidor.
  */
 export async function destinoDosResultados(params: Params): Promise<string> {
-  const filtros = filtrosResultadosDaUrl(params)
-  const { fuso } = (await rulesetAtivo()).rodada
-  const hoje = dataDeReferencia(new Date(), fuso)
-  const ultima = process.env.DATABASE_URL ? await ultimaRodadaConferida(getDb(), hoje) : null
-  return rotaResultados(ultima ?? hoje, filtros)
+  const filtrosDaUrl = semTemporada(filtrosResultadosDaUrl(params))
+  const ruleset = await rulesetAtivo()
+  const agora = new Date()
+  const hoje = dataDeReferencia(agora, ruleset.rodada.fuso)
+  if (!process.env.DATABASE_URL) return rotaResultados(hoje, filtrosDaUrl)
+  // Temporada anterior (a escolhida no seletor, ou o padrão no HIATO): a
+  // última rodada DELA. Sem dado retroativo, o atalho é o de sempre.
+  const temporadas = await temporadasDaTelaCacheadas(ruleset, agora)
+  const escolha = temporadaDaTela(params.temporada, temporadas)
+  const anterior = await temporadaAnteriorComDados(escolha.temporada, temporadas.doCalendario)
+  if (anterior) return rotaResultados(anterior.datas.at(-1)!, { ...filtrosDaUrl, temporada: anterior.temporada })
+  const ultima = await ultimaRodadaConferida(getDb(), hoje)
+  return rotaResultados(ultima ?? hoje, filtrosDoCalendario(filtrosDaUrl, escolha, temporadas.doCalendario))
+}
+
+/**
+ * No caminho de hoje a temporada só fica nos links quando a pessoa ESCOLHEU a
+ * do calendário no seletor: sem isso, no hiato, o primeiro filtro devolveria
+ * a tela para a temporada anterior. Sem escolha (ou com lixo), ela some.
+ */
+function filtrosDoCalendario(
+  filtros: FiltrosResultados,
+  escolha: { temporada: string; escolhida: boolean },
+  doCalendario: string,
+): FiltrosResultados {
+  return escolha.escolhida && escolha.temporada === doCalendario
+    ? { ...filtros, temporada: doCalendario }
+    : semTemporada(filtros)
 }
 
 export type CardConferido = {
@@ -88,7 +128,8 @@ export type DadosDosResultados = {
   fuso: string
   filtros: FiltrosResultados
   filtrado: boolean
-  anterior: string
+  /** null só na temporada anterior, antes da primeira data dela. */
+  anterior: string | null
   proxima: string | null
   vazio: boolean
   mostrarLista: boolean
@@ -107,6 +148,15 @@ export type DadosDosResultados = {
   fire: ResultadoFireLive[]
   greens: GreenDoDia[]
   times: { id: string; sigla: string }[]
+  /** O seletor "2025-26 | 2026-27": a temporada em tela e as que existem. */
+  seletor: { temporada: string; temporadas: string[] }
+  /**
+   * A tela é da TEMPORADA ANTERIOR (spec 25/09): a metodologia aplicada a
+   * posteriori, sem odd e sem Placar do NIP, e a tela diz isso.
+   */
+  retroativo: boolean
+  /** A Lista do mesmo dia: a de hoje, ou a daquela data na temporada anterior. */
+  listaDoDia: string
 }
 
 /**
@@ -181,18 +231,40 @@ function soJogosEncerrados(recap: RecapDaNoite, encerrado: (jogoId: string) => b
 }
 
 export async function carregarResultados(data: string, params: Params): Promise<DadosDosResultados> {
-  const filtros = filtrosResultadosDaUrl(params)
+  const filtrosDaUrl = filtrosResultadosDaUrl(params)
   // Resultados é a prova social que convence quem ainda não assina (decisão
   // 9): a guarda aqui é de LOGIN. O plano entra logo abaixo como CORTE, não
   // como portão — o grátis vê a tela, mas só o que já terminou (24/09).
-  const { acesso } = await exigirNivel('GRATIS', rotaResultados(data, filtros))
+  const { acesso } = await exigirNivel('GRATIS', rotaResultados(data, filtrosDaUrl))
   const assinante = atende(acesso.nivel, 'MVP')
 
   const ruleset = await rulesetAtivo()
   const { fuso } = ruleset.rodada
-  const hoje = dataDeReferencia(new Date(), fuso)
+  const agora = new Date()
+  const hoje = dataDeReferencia(agora, fuso)
   // Rota inventada não vira erro nem tela vazia: volta para a rodada de hoje.
-  if (!dataValida(data)) redirect(rotaResultados(hoje, filtros))
+  if (!dataValida(data)) redirect(rotaResultados(hoje, semTemporada(filtrosDaUrl)))
+
+  // A TEMPORADA ANTERIOR é aberta para todo plano (spec 25/09, decisão 6) e
+  // lê só as tabelas retroativas. A escolha válida do seletor manda; sem ela
+  // (ou com lixo), a DATA da rota diz a temporada — um link antigo para uma
+  // noite de 2025-26 abre 2025-26, e a rodada de hoje é sempre a de hoje.
+  // Data de temporada que o banco não tem cai na do calendário.
+  const temporadas = await temporadasDaTelaCacheadas(ruleset, agora)
+  const temporadaDaData = temporadaDe(new Date(`${data}T12:00:00.000Z`), calendarioDoRuleset(ruleset))
+  const escolha = temporadaDaTela(params.temporada, temporadas)
+  const temporadaDaRota = escolha.escolhida
+    ? escolha.temporada
+    : temporadas.disponiveis.includes(temporadaDaData)
+      ? temporadaDaData
+      : temporadas.doCalendario
+  const anterior = await temporadaAnteriorComDados(temporadaDaRota, temporadas.doCalendario)
+  const seletor = { temporada: anterior?.temporada ?? temporadas.doCalendario, temporadas: temporadas.disponiveis }
+  if (anterior) {
+    const filtros = semTemporada(filtrosDaUrl)
+    return carregarResultadosRetroativos({ data, hoje, fuso, ruleset, filtros, anterior, seletor, temporadaDaData, temporadas })
+  }
+  const filtros = filtrosDoCalendario(filtrosDaUrl, escolha, temporadas.doCalendario)
 
   // Os agregados (temporada, placar) e o feed vêm dos caches de `_cache`: o
   // que é igual para todo visitante da mesma rodada não vai ao banco a cada
@@ -250,16 +322,55 @@ export async function carregarResultados(data: string, params: Params): Promise<
       .map((c) => [c.timeId!, c.timeSigla] as const),
   )
 
+  const emCurso = !recap.noiteEncerrada
+  const apito = recap.apitoDaNoite
+  return {
+    placar,
+    data,
+    hoje,
+    fuso,
+    filtros,
+    filtrado: Boolean(filtros.atributo || filtros.timeId),
+    anterior: rotaResultados(somarDias(data, -1), filtros),
+    proxima: data >= hoje ? null : rotaResultados(somarDias(data, 1), filtros),
+    vazio: rodadaInteira.porJogo.length === 0 && fireLido.length === 0,
+    mostrarLista,
+    mostrarFire,
+    recap,
+    emCurso,
+    jogosPorEncerrar,
+    temporada,
+    // Superlativo da noite inteira: só com a noite encerrada.
+    apitoDaNoite:
+      !emCurso && apito
+        ? { card: apito, jogo: recap.porJogo.find((g) => g.jogo.jogoId === apito.jogoId)?.jogo ?? null }
+        : null,
+    jogos: montarJogos(recap, feed?.conteudo.itens ?? [], ruleset),
+    fire,
+    greens,
+    times: [...times].map(([id, sigla]) => ({ id, sigla })),
+    seletor,
+    retroativo: false,
+    listaDoDia: '/',
+  }
+}
+
+/**
+ * Os blocos por jogo: cada card conferido com a metade PRÉ-LIVE do item da
+ * Lista (média, odd, fileira dos últimos jogos). O mesmo para a temporada de
+ * hoje e para a anterior — muda só de onde vêm o recap e os itens.
+ */
+function montarJogos(recap: RecapDaNoite, itens: ItemFeed[], ruleset: Ruleset): JogoDaNoite[] {
   // O item do feed pela chave (jogo, jogador, atributo); entre as linhas do
   // mesmo apito vale a MAIS BAIXA, que é a que o card confere.
   const itemPorCard = new Map<string, ItemFeed>()
-  for (const item of feed?.conteudo.itens ?? []) {
+  for (const item of itens) {
     const chave = `${item.jogoId}|${item.jogadorId}|${item.atributo}`
     const atual = itemPorCard.get(chave)
     if (!atual || (item.linha ?? Infinity) < (atual.linha ?? Infinity)) itemPorCard.set(chave, item)
   }
 
-  const jogos: JogoDaNoite[] = recap.porJogo.map(({ jogo, cards }) => {
+  return recap.porJogo.map(({ jogo, cards }) => {
     // O estado vem do JOGO e da chegada do box oficial — nunca de o jogador
     // ter estatística: o box PARCIAL diria "não jogou" para quem entra às 22h.
     const estado = estadoDoCiclo(jogo, jogo.temBoxOficial, ruleset.fire_live.quarto)
@@ -285,33 +396,104 @@ export async function carregarResultados(data: string, params: Params): Promise<
       }),
     }
   })
+}
+
+/**
+ * RESULTADOS DA TEMPORADA ANTERIOR — a metodologia aplicada a uma temporada
+ * que já acabou, lida de `apitos_retroativos`, `greens_retroativos` e
+ * `feed_retroativo`. Sem corte nem portão de plano (decisão 6): nada daqui é
+ * sinal para apostar hoje. Sem Placar do NIP — ele é o histórico do que foi
+ * PUBLICADO, e nada daqui foi.
+ */
+async function carregarResultadosRetroativos({
+  data,
+  hoje,
+  fuso,
+  ruleset,
+  filtros: filtrosDeHoje,
+  anterior: { temporada: temporadaEscolhida, datas },
+  seletor,
+  temporadaDaData,
+  temporadas,
+}: {
+  data: string
+  hoje: string
+  fuso: string
+  ruleset: Ruleset
+  filtros: FiltrosResultados
+  anterior: { temporada: string; datas: string[] }
+  seletor: DadosDosResultados['seletor']
+  temporadaDaData: string
+  temporadas: TemporadasDaTela
+}): Promise<DadosDosResultados> {
+  // A escolha viaja em toda seta, aba e filtro desta tela.
+  const filtros = { ...filtrosDeHoje, temporada: temporadaEscolhida }
+  // Defesa em profundidade: uma data da temporada do CALENDÁRIO nunca é lida
+  // das tabelas retroativas por este caminho sem portão — mesmo que alguém
+  // tenha rodado o script sobre ela. Ela é da temporada paga.
+  const legivel = temporadaDaData !== temporadas.doCalendario
+  const db = getDb()
+  const [rodadaInteira, temporada, greensLidos, feed, fireLido] = await Promise.all([
+    // Pela temporada E pela data: o índice das tabelas retroativas. Recap,
+    // greens e Fire Live trazem `Date` e seguem por visita; a Lista, JSON
+    // puro, vem do cache (`app/_cache/retroativo.ts`).
+    legivel ? recapRetroativo(db, temporadaEscolhida, data) : recapDosCards(db, data, []),
+    taxaRetroativaCacheada(somarDias(data, 1), diasDaTemporada(data, calendarioDoRuleset(ruleset))),
+    legivel ? greensRetroativosDoDia(db, temporadaEscolhida, data) : Promise.resolve([]),
+    legivel ? feedRetroativoCacheado(temporadaEscolhida, data) : Promise.resolve(null),
+    legivel ? fireLiveRetroativo(db, temporadaEscolhida, data) : Promise.resolve([]),
+  ])
+
+  const recap = filtrarRecapDaNoite(rodadaInteira, filtros)
+  const mostrarLista = filtros.estrategia !== 'FIRE_LIVE'
+  const mostrarFire = filtros.estrategia !== 'LISTA_SECRETA'
+  const fire = fireLido.filter(
+    (c) => (!filtros.atributo || c.atributo === filtros.atributo) && (!filtros.timeId || c.timeId === filtros.timeId),
+  )
+  const greens = greensLidos.filter(
+    (g) =>
+      mostrarFire &&
+      (!filtros.atributo || g.atributo === filtros.atributo) &&
+      (!filtros.timeId || g.timeId === filtros.timeId),
+  )
+  const times = new Map(
+    [...rodadaInteira.porJogo.flatMap((g) => g.cards), ...fireLido]
+      .filter((c) => c.timeId !== null)
+      .map((c) => [c.timeId!, c.timeSigla] as const),
+  )
+  // As setas andam pelas datas DA TEMPORADA — não pelo calendário, que tem
+  // meses sem jogo no meio (o intervalo entre temporadas).
+  const antes = datas.filter((d) => d < data).at(-1)
+  const depois = datas.find((d) => d > data)
 
   const emCurso = !recap.noiteEncerrada
   const apito = recap.apitoDaNoite
   return {
-    placar,
+    placar: montarPlacar([], []),
     data,
     hoje,
     fuso,
     filtros,
     filtrado: Boolean(filtros.atributo || filtros.timeId),
-    anterior: rotaResultados(somarDias(data, -1), filtros),
-    proxima: data >= hoje ? null : rotaResultados(somarDias(data, 1), filtros),
+    anterior: antes === undefined ? null : rotaResultados(antes, filtros),
+    proxima: depois === undefined ? null : rotaResultados(depois, filtros),
     vazio: rodadaInteira.porJogo.length === 0 && fireLido.length === 0,
     mostrarLista,
     mostrarFire,
     recap,
     emCurso,
-    jogosPorEncerrar,
+    jogosPorEncerrar: false,
     temporada,
-    // Superlativo da noite inteira: só com a noite encerrada.
     apitoDaNoite:
       !emCurso && apito
         ? { card: apito, jogo: recap.porJogo.find((g) => g.jogo.jogoId === apito.jogoId)?.jogo ?? null }
         : null,
-    jogos,
+    jogos: montarJogos(recap, feed?.itens ?? [], ruleset),
     fire,
     greens,
     times: [...times].map(([id, sigla]) => ({ id, sigla })),
+    seletor,
+    retroativo: true,
+    listaDoDia: `/?${new URLSearchParams({ temporada: temporadaEscolhida, data })}`,
   }
 }

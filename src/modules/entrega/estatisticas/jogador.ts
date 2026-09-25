@@ -1,8 +1,9 @@
 import { identidadesDeApresentacao } from '../../dominio/identidade-apresentacao'
-import { and, asc, desc, eq } from 'drizzle-orm'
+import { and, asc, desc, eq, gte, lte } from 'drizzle-orm'
 
 import {
   apitos,
+  apitosRetroativos,
   estatisticasJogo,
   estatisticasQuarto,
   jogadores,
@@ -661,47 +662,105 @@ export async function apitosDoJogador(
   db: Db,
   jogadorId: string,
   limite: number,
+  opcoes: {
+    /**
+     * Rótulo de uma temporada ANTERIOR à do calendário: a seção lê
+     * `apitos_retroativos` daquela temporada — o que o motor teria apitado,
+     * nunca publicado (spec 25/09). Sem a opção, `apitos`, como sempre.
+     */
+    temporadaAnterior?: string
+    /**
+     * O intervalo (rótulos de dia, inclusivos) da temporada em tela, para a
+     * leitura de `apitos`. É PORTÃO, não só recorte: numa temporada passada
+     * aberta ao grátis (decisão 6), sem ele a seção entregava o histórico
+     * PAGO da temporada do calendário junto.
+     */
+    periodo?: { de: string; ate: string }
+  } = {},
 ): Promise<ApitoDoJogador[]> {
-  const linhas = await db
-    .select({
-      data: jogos.dataHoraUtc,
-      jogoId: apitos.jogoId,
-      atributo: apitos.atributo,
-      linha: apitos.linha,
-      timeCasaId: jogos.timeCasaId,
-      timeVisitanteId: jogos.timeVisitanteId,
-      status: jogos.status,
-      ...colunasDeParticipacao,
-    })
-    .from(apitos)
-    .innerJoin(jogos, eq(apitos.jogoId, jogos.id))
-    .leftJoin(
-      estatisticasJogo,
-      and(
-        eq(estatisticasJogo.jogoId, apitos.jogoId),
-        eq(estatisticasJogo.jogadorId, apitos.jogadorId),
-      ),
-    )
-    .where(
-      and(
-        eq(apitos.estrategia, 'LISTA_SECRETA'),
-        eq(apitos.jogadorId, jogadorId),
-        // SÓ JOGO ENCERRADO — e isto é portão comercial, não filtro de tela.
-        //
-        // Esta aba é PÚBLICA: não exige conta. Sem este corte, a seção
-        // entregava o apito de HOJE com o jogo ainda por começar — atributo e
-        // linha exatos, de graça, na mesma noite em que a Lista Secreta os
-        // vende. Bastava saber o nome do jogador.
-        //
-        // O corte não é escolha de produto: a própria seção se anuncia como o
-        // que a estratégia fez com o jogador CONFERIDO, e apito de jogo que
-        // não terminou não foi conferido por definição. `AGUARDANDO_OFICIAL`
-        // continua existindo para o caso legítimo — o jogo acabou e o box
-        // score ainda não chegou.
-        eq(jogos.status, 'ENCERRADO'),
-      ),
-    )
-    .orderBy(desc(jogos.dataHoraUtc), asc(apitos.atributo), asc(apitos.linha))
+  const retroativa = opcoes.temporadaAnterior
+  const { periodo } = opcoes
+  const linhas =
+    retroativa === undefined
+      ? await db
+          .select({
+            data: jogos.dataHoraUtc,
+            jogoId: apitos.jogoId,
+            atributo: apitos.atributo,
+            linha: apitos.linha,
+            timeCasaId: jogos.timeCasaId,
+            timeVisitanteId: jogos.timeVisitanteId,
+            status: jogos.status,
+            timeDoBox: estatisticasJogo.timeId,
+            ...colunasDeParticipacao,
+          })
+          .from(apitos)
+          .innerJoin(jogos, eq(apitos.jogoId, jogos.id))
+          .leftJoin(
+            estatisticasJogo,
+            and(
+              eq(estatisticasJogo.jogoId, apitos.jogoId),
+              eq(estatisticasJogo.jogadorId, apitos.jogadorId),
+            ),
+          )
+          .where(
+            and(
+              eq(apitos.estrategia, 'LISTA_SECRETA'),
+              eq(apitos.jogadorId, jogadorId),
+              // SÓ JOGO ENCERRADO — e isto é portão comercial, não filtro de tela.
+              //
+              // Esta aba é PÚBLICA: não exige conta. Sem este corte, a seção
+              // entregava o apito de HOJE com o jogo ainda por começar — atributo e
+              // linha exatos, de graça, na mesma noite em que a Lista Secreta os
+              // vende. Bastava saber o nome do jogador.
+              //
+              // O corte não é escolha de produto: a própria seção se anuncia como o
+              // que a estratégia fez com o jogador CONFERIDO, e apito de jogo que
+              // não terminou não foi conferido por definição. `AGUARDANDO_OFICIAL`
+              // continua existindo para o caso legítimo — o jogo acabou e o box
+              // score ainda não chegou.
+              eq(jogos.status, 'ENCERRADO'),
+              periodo ? gte(jogos.dataReferencia, periodo.de) : undefined,
+              periodo ? lte(jogos.dataReferencia, periodo.ate) : undefined,
+            ),
+          )
+          .orderBy(desc(jogos.dataHoraUtc), asc(apitos.atributo), asc(apitos.linha))
+      : // A MESMA leitura sobre a tabela retroativa: mesma estratégia, mesmo
+        // corte de jogo encerrado, mesma ordem — a seção não sabe de onde veio.
+        await db
+          .select({
+            data: jogos.dataHoraUtc,
+            jogoId: apitosRetroativos.jogoId,
+            atributo: apitosRetroativos.atributo,
+            linha: apitosRetroativos.linha,
+            timeCasaId: jogos.timeCasaId,
+            timeVisitanteId: jogos.timeVisitanteId,
+            status: jogos.status,
+            timeDoBox: estatisticasJogo.timeId,
+            ...colunasDeParticipacao,
+          })
+          .from(apitosRetroativos)
+          .innerJoin(jogos, eq(apitosRetroativos.jogoId, jogos.id))
+          .leftJoin(
+            estatisticasJogo,
+            and(
+              eq(estatisticasJogo.jogoId, apitosRetroativos.jogoId),
+              eq(estatisticasJogo.jogadorId, apitosRetroativos.jogadorId),
+            ),
+          )
+          .where(
+            and(
+              eq(apitosRetroativos.temporada, retroativa),
+              eq(apitosRetroativos.estrategia, 'LISTA_SECRETA'),
+              eq(apitosRetroativos.jogadorId, jogadorId),
+              eq(jogos.status, 'ENCERRADO'),
+            ),
+          )
+          .orderBy(
+            desc(jogos.dataHoraUtc),
+            asc(apitosRetroativos.atributo),
+            asc(apitosRetroativos.linha),
+          )
 
   if (linhas.length === 0) return []
 
@@ -730,7 +789,15 @@ export async function apitosDoJogador(
   for (const l of linhas) {
     if (l.linha === null) continue
     const chave = `${l.jogoId}|${l.atributo}`
-    const { emCasa, adversarioId } = mandoDoJogador(timesDoJogador, l)
+    // Na temporada anterior o jogador contou pelo time em que JOGOU aquela
+    // partida (decisão 2): o `time_id` do box vem primeiro. O time atual e o
+    // da lista de hoje podem nem estar no jogo — um jogador trocado depois.
+    const { emCasa, adversarioId } = mandoDoJogador(
+      retroativa !== undefined && l.timeDoBox !== null
+        ? { real: l.timeDoBox, naLista: timesDoJogador.real }
+        : timesDoJogador,
+      l,
+    )
     // TRÊS estados, nunca dois. "Não jogou" é a LINHA DO RESERVA QUE NÃO
     // ENTROU (0 min, 0 pts) — o provedor manda essa linha também, e a
     // sincronização insere toda linha recebida. AUSÊNCIA de linha é outra

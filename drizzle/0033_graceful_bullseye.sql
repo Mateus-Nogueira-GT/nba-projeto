@@ -1,0 +1,2 @@
+ALTER TABLE "estatisticas_jogo" ADD COLUMN "time_id" uuid;--> statement-breakpoint
+ALTER TABLE "estatisticas_jogo" ADD CONSTRAINT "estatisticas_jogo_time_id_times_id_fk" FOREIGN KEY ("time_id") REFERENCES "public"."times"("id") ON DELETE no action ON UPDATE no action;

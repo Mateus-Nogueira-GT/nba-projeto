@@ -19,6 +19,11 @@ export type ContextoEstatisticas = {
   periodo: '5' | '10' | 'temporada'
   atributo: 'PONTOS' | 'REBOTES' | 'ASSISTENCIAS'
   q?: string
+  /**
+   * A temporada ESCOLHIDA no seletor, crua: quem a lê valida contra as
+   * disponíveis (`temporadaDaUrl`). Viaja para a tela seguinte como `q`.
+   */
+  temporada?: string
 }
 
 export function contextoEstatisticas(
@@ -31,6 +36,7 @@ export function contextoEstatisticas(
         ? params.atributo
         : 'PONTOS',
     ...(typeof params.q === 'string' ? { q: params.q } : {}),
+    ...(typeof params.temporada === 'string' ? { temporada: params.temporada } : {}),
   }
 }
 
@@ -43,8 +49,8 @@ export function rotaDoJogador(jogadorId: string, contexto?: ContextoEstatisticas
   return contexto ? `${base}?${parametrosEstatisticas(contexto)}` : base
 }
 
-export function rotaDoTime(timeId: string): string {
-  return `${BASE_ESTATISTICAS}/time/${encodeURIComponent(timeId)}`
+export function rotaDoTime(timeId: string, temporada?: string): string {
+  return comTemporada(`${BASE_ESTATISTICAS}/time/${encodeURIComponent(timeId)}`, temporada)
 }
 
 export function rotaDoJogo(jogoId: string): string {
@@ -53,4 +59,13 @@ export function rotaDoJogo(jogoId: string): string {
 
 export function rotaDaBusca(termo: string): string {
   return `${BASE_ESTATISTICAS}?q=${encodeURIComponent(termo)}`
+}
+
+/**
+ * `href` com `temporada=` quando ela foi ESCOLHIDA — e idêntico quando não:
+ * a visita padrão não muda nenhuma URL da aba.
+ */
+export function comTemporada(href: string, temporada: string | undefined): string {
+  if (temporada === undefined) return href
+  return `${href}${href.includes('?') ? '&' : '?'}temporada=${encodeURIComponent(temporada)}`
 }

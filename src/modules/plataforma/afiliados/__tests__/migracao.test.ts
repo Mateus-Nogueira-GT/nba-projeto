@@ -23,12 +23,14 @@ afterAll(async () => {
 
 describe('schema comercial de afiliados', () => {
   it('sobe e desce junto com todas as migrations', async () => {
-    // 70 desde entradas_realizadas (Task 10); 69 desde a redefinição de senha por link do admin (Task 7).
-    expect(await banco.contarTabelas()).toBe(70)
+    // 73 desde a temporada retroativa (0034: apitos_retroativos,
+    // greens_retroativos, feed_retroativo); 70 desde entradas_realizadas
+    // (Task 10); 69 desde a redefinição de senha por link do admin (Task 7).
+    expect(await banco.contarTabelas()).toBe(73)
     await banco.descer()
     expect(await banco.contarTabelas()).toBe(0)
     await banco.subir()
-    expect(await banco.contarTabelas()).toBe(70)
+    expect(await banco.contarTabelas()).toBe(73)
   })
 
   it('protege percentuais, códigos e vínculos comerciais no banco', async () => {

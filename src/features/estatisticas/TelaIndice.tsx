@@ -1,13 +1,14 @@
 import Link from 'next/link'
 import { somarDias } from '@/modules/dominio/rodada'
 import type { JogoDoDia } from '@/modules/entrega/estatisticas/jogos-do-dia'
-import { rotaDoJogador, rotaDoJogo, rotaDoTime } from '@/modules/entrega/estatisticas/rotas'
+import { comTemporada, rotaDoJogador, rotaDoJogo, rotaDoTime } from '@/modules/entrega/estatisticas/rotas'
 import type { TelaClassificacao } from '@/modules/entrega/estatisticas/time'
 import { EstadoVazio } from '@/ui/blocos'
 import { diaDaRodada, hora } from '@/ui/formato'
 import { IconeAvancar, IconeBusca, IconeVoltar } from '@/ui/icones'
 import { SeloAoVivo } from '@/ui/marcas'
 import { FotoJogador, LogoTime } from '@/ui/midia'
+import { SeletorTemporada } from '@/ui/SeletorTemporada'
 import { identidadeDoTime } from '@/ui/times'
 import { CabecalhoStats, FormaVD, SecaoStats, TabelaDados, UltimaAtualizacao, type Coluna } from './Comum'
 import type { DadosDoIndice } from './indice'
@@ -19,9 +20,10 @@ function tituloJogosDoDia(data: string, hoje: string): string {
   return data === hoje ? 'Jogos do dia' : `Jogos de ${diaDaRodada(data)}`
 }
 
-function Busca({ termo }: { termo: string }) {
+function Busca({ termo, escolhida }: { termo: string; escolhida: string | undefined }) {
   return (
     <form action="/estatisticas" method="get" className={s.buscaForm} role="search">
+      {escolhida && <input type="hidden" name="temporada" value={escolhida} />}
       <label htmlFor="busca-stats" className={s.buscaRotulo}>
         Buscar jogador ou time
       </label>
@@ -47,6 +49,7 @@ function Busca({ termo }: { termo: string }) {
 
 function ResultadosDaBusca({ dados }: { dados: DadosDoIndice }) {
   const { termo, resultados } = dados
+  const { escolhida } = dados.seletor
   return (
     <SecaoStats titulo={`Resultados para “${termo}”`} aux={resultados.length > 0 ? `${resultados.length}` : undefined}>
       {resultados.length === 0 ? (
@@ -58,8 +61,13 @@ function ResultadosDaBusca({ dados }: { dados: DadosDoIndice }) {
               <Link
                 href={
                   r.tipo === 'JOGADOR'
-                    ? rotaDoJogador(r.id, { periodo: '10', atributo: 'PONTOS', q: termo })
-                    : rotaDoTime(r.id)
+                    ? rotaDoJogador(r.id, {
+                        periodo: '10',
+                        atributo: 'PONTOS',
+                        q: termo,
+                        ...(escolhida ? { temporada: escolhida } : {}),
+                      })
+                    : rotaDoTime(r.id, escolhida)
                 }
                 className={s.resultado}
               >
@@ -88,11 +96,11 @@ function ResultadosDaBusca({ dados }: { dados: DadosDoIndice }) {
 }
 
 /** Os dias ao redor da data navegada, como no StatsHub. */
-function SeletorDeDias({ data, hoje }: { data: string; hoje: string }) {
+function SeletorDeDias({ data, hoje, escolhida }: { data: string; hoje: string; escolhida: string | undefined }) {
   const dias = [-2, -1, 0, 1, 2].map((d) => somarDias(data, d))
   return (
     <nav className={s.dias} aria-label="Navegar por data">
-      <Link href={`/estatisticas?data=${somarDias(data, -1)}`} className={s.diaSeta} aria-label="Dia anterior" scroll={false}>
+      <Link href={comTemporada(`/estatisticas?data=${somarDias(data, -1)}`, escolhida)} className={s.diaSeta} aria-label="Dia anterior" scroll={false}>
         <IconeVoltar tamanho={20} />
       </Link>
       <div className={s.diasLista}>
@@ -101,7 +109,7 @@ function SeletorDeDias({ data, hoje }: { data: string; hoje: string }) {
           return (
             <Link
               key={d}
-              href={d === hoje ? '/estatisticas' : `/estatisticas?data=${d}`}
+              href={comTemporada(d === hoje ? '/estatisticas' : `/estatisticas?data=${d}`, escolhida)}
               scroll={false}
               className={s.dia}
               aria-current={d === data ? 'date' : undefined}
@@ -112,7 +120,7 @@ function SeletorDeDias({ data, hoje }: { data: string; hoje: string }) {
           )
         })}
       </div>
-      <Link href={`/estatisticas?data=${somarDias(data, 1)}`} className={s.diaSeta} aria-label="Dia seguinte" scroll={false}>
+      <Link href={comTemporada(`/estatisticas?data=${somarDias(data, 1)}`, escolhida)} className={s.diaSeta} aria-label="Dia seguinte" scroll={false}>
         <IconeAvancar tamanho={20} />
       </Link>
     </nav>
@@ -164,7 +172,10 @@ function LinhaDeJogo({ jogo, fuso, href }: { jogo: JogoDoDia; fuso: string; href
 
 type LinhaDaClassificacao = TelaClassificacao['linhas'][number]
 
-function colunasDaClassificacao(lider: LinhaDaClassificacao | undefined): Coluna<LinhaDaClassificacao>[] {
+function colunasDaClassificacao(
+  lider: LinhaDaClassificacao | undefined,
+  escolhida: string | undefined,
+): Coluna<LinhaDaClassificacao>[] {
   return [
     {
       chave: 'pos',
@@ -177,7 +188,7 @@ function colunasDaClassificacao(lider: LinhaDaClassificacao | undefined): Coluna
       rotulo: 'Time',
       descricao: 'time',
       celula: (l) => (
-        <Link href={rotaDoTime(l.timeId)} className={s.time}>
+        <Link href={rotaDoTime(l.timeId, escolhida)} className={s.time}>
           <LogoTime sigla={l.sigla} tamanho={22} />
           <strong>{l.sigla}</strong>
           <span className={s.franquia}>{identidadeDoTime(l.sigla).nome}</span>
@@ -220,7 +231,7 @@ function Classificacao({ dados }: { dados: DadosDoIndice }) {
                   ? 'Classificação da temporada, da primeira posição para a última'
                   : `Classificação da conferência ${conferencia}, da primeira posição para a última`
               }
-              colunas={colunasDaClassificacao(linhas[0])}
+              colunas={colunasDaClassificacao(linhas[0], dados.seletor.escolhida)}
               linhas={linhas}
               chaveDaLinha={(l) => l.timeId}
               vazio="Sem classificação registrada para esta temporada."
@@ -240,7 +251,8 @@ function Classificacao({ dados }: { dados: DadosDoIndice }) {
 }
 
 export function TelaIndice({ dados }: { dados: DadosDoIndice }) {
-  const { data, hoje, fuso, doDia } = dados
+  const { data, hoje, fuso, doDia, seletor, temporada } = dados
+  const { escolhida } = seletor
   return (
     <div className={s.tela}>
       <CabecalhoStats
@@ -248,11 +260,16 @@ export function TelaIndice({ dados }: { dados: DadosDoIndice }) {
         titulo="Estatísticas"
         apoio="Jogos, classificação e o perfil de cada jogador e time — o que a liga registrou."
       />
-      <Busca termo={dados.termo} />
+      <SeletorTemporada
+        temporadas={seletor.disponiveis}
+        atual={temporada}
+        hrefDe={(t) => comTemporada(data === hoje ? '/estatisticas' : `/estatisticas?data=${data}`, t)}
+      />
+      <Busca termo={dados.termo} escolhida={escolhida} />
       {dados.termo.length > 0 && <ResultadosDaBusca dados={dados} />}
 
       <SecaoStats titulo={tituloJogosDoDia(data, hoje)} aux={doDia.jogos.length > 0 ? `${doDia.jogos.length} ${doDia.jogos.length === 1 ? 'jogo' : 'jogos'}` : undefined}>
-        <SeletorDeDias data={data} hoje={hoje} />
+        <SeletorDeDias data={data} hoje={hoje} escolhida={escolhida} />
         {doDia.jogos.length === 0 ? (
           <EstadoVazio
             titulo={data === hoje ? 'Nenhum jogo hoje' : `Nenhum jogo em ${diaDaRodada(data)}`}
@@ -263,7 +280,7 @@ export function TelaIndice({ dados }: { dados: DadosDoIndice }) {
           <ul className={s.jogos}>
             {doDia.jogos.map((j) => (
               <li key={j.id}>
-                <LinhaDeJogo jogo={j} fuso={fuso} href={`${rotaDoJogo(j.id)}?data=${data}`} />
+                <LinhaDeJogo jogo={j} fuso={fuso} href={comTemporada(`${rotaDoJogo(j.id)}?data=${data}`, escolhida)} />
               </li>
             ))}
           </ul>

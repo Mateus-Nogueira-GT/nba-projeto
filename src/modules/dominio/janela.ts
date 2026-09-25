@@ -16,3 +16,15 @@ export function janelaNoBanco(janela: JanelaMedia): 'TEMPORADA' | 'ULTIMOS_5' | 
       return 'ULTIMOS_10'
   }
 }
+
+/** Quantos jogos cada janela considera. `null` = todos os da temporada. */
+export function tamanhoDaJanela(janela: JanelaMedia): number | null {
+  switch (janela) {
+    case 'temporada':
+      return null
+    case 'ultimos_5':
+      return 5
+    case 'ultimos_10':
+      return 10
+  }
+}

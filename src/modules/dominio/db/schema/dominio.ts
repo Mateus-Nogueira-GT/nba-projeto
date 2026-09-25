@@ -190,6 +190,8 @@ export const estatisticasJogo = pgTable(
     jogadorId: uuid('jogador_id')
       .notNull()
       .references(() => jogadores.id),
+    /** Time pelo qual o jogador atuou neste jogo. Null em linhas anteriores à coluna. */
+    timeId: uuid('time_id').references(() => times.id),
     minutos: numeric('minutos', { precision: 5, scale: 2 }),
     pontos: smallint('pontos').notNull().default(0),
     rebotesTotal: smallint('rebotes_total').notNull().default(0),

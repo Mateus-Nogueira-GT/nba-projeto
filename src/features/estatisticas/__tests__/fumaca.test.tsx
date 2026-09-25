@@ -33,7 +33,7 @@ import type { NivelDoPlano } from '@/modules/plataforma/assinatura/nivel-do-plan
 import { diaDaRodada, hora } from '@/ui/formato'
 
 import { NotaPartida } from '../Comum'
-import { LIMITE_DE_APITOS_DO_JOGADOR, num } from '../regras'
+import { diaMes, LIMITE_DE_APITOS_DO_JOGADOR, num } from '../regras'
 
 /**
  * FUMAÇA DA ABA DE ESTATÍSTICAS DO V2 — ligada ao NOSSO back.
@@ -1247,4 +1247,310 @@ describe('Estatísticas do v2 — partida', () => {
       }
     }
   }, 120_000)
+})
+
+// ===========================================================================
+// TEMPORADA ANTERIOR (spec 25/09, Task 10)
+// ===========================================================================
+
+describe('Estatísticas do v2 — temporada anterior', () => {
+  /** Um ano antes da temporada simulada: nunca é a temporada do calendário do teste. */
+  const DIA_ANTERIOR = '2024-11-04'
+  let TEMPORADA_ANTERIOR = ''
+  let TEMPORADA_DO_CALENDARIO = ''
+  /** O apitado do dia — e o MVP e o All Star da semente, com o time REAL em que jogaram. */
+  let apitado: string
+  let mvp: { id: string; nome: string }
+  let allStar: { id: string; nome: string }
+  let timeReal: string
+  let jogoDoDia: { id: string; dataHoraUtc: Date }
+
+  async function renderizarJogadorComo(nivel: NivelDoPlano, id: string, busca: Busca = {}) {
+    nivelDoTeste = nivel
+    return renderizarJogador(id, busca)
+  }
+  async function renderizarTimeComo(nivel: NivelDoPlano, id: string, busca: Busca = {}) {
+    nivelDoTeste = nivel
+    return renderizarTime(id, busca)
+  }
+
+  beforeAll(async () => {
+    const { semearDiaAnterior } = await import('@/modules/entrega/retroativo/__tests__/semente-tela')
+    const ruleset = await rulesetAtivo()
+    const semente = await semearDiaAnterior(banco.db, ruleset, DIA_ANTERIOR)
+    TEMPORADA_ANTERIOR = semente.temporada
+    TEMPORADA_DO_CALENDARIO = temporada
+    apitado = semente.apitados[0]!.jogadorId
+
+    const [jogo] = await banco.db
+      .select({ id: jogos.id, dataHoraUtc: jogos.dataHoraUtc, casa: jogos.timeCasaId })
+      .from(jogos)
+      .where(eq(jogos.dataReferencia, DIA_ANTERIOR))
+    jogoDoDia = jogo!
+    timeReal = jogo!.casa
+    const box = await banco.db
+      .select({ jogadorId: estatisticasJogo.jogadorId })
+      .from(estatisticasJogo)
+      .where(eq(estatisticasJogo.jogoId, jogo!.id))
+    const { niveis } = await import('@/modules/dominio/db/schema')
+    const { nomesDeJogadores } = await import('@/modules/entrega/estatisticas/jogador')
+    const ids = box.map((b) => b.jogadorId)
+    const nomes = await nomesDeJogadores(banco.db, ids)
+    const classes = await banco.db
+      .select({ jogadorId: niveis.jogadorId, nivel: niveis.nivel })
+      .from(niveis)
+      .where(and(inArray(niveis.jogadorId, ids), eq(niveis.atributo, 'PONTOS')))
+    const de = (n: string) => {
+      const id = classes.find((c) => c.nivel === n)!.jogadorId
+      return { id, nome: nomes.get(id)! }
+    }
+    mvp = de('MVP')
+    allStar = de('ALL_STAR')
+  }, 60_000)
+
+  it('jogador na temporada anterior: grátis vê "Apitos da estratégia" com os retroativos', async () => {
+    const html = await renderizarJogadorComo('GRATIS', apitado, { temporada: TEMPORADA_ANTERIOR })
+    const apitos = secao(html, 'Apitos da estratégia')
+    expect(apitos).not.toContain('começa no plano')
+    expect(apitos).toContain(diaMes(jogoDoDia.dataHoraUtc, FUSO))
+    expect(apitos).toMatch(/[✓✗]/)
+    // Jogo a jogo e números completos também abrem (decisão 6).
+    expect(html).not.toContain('começa no plano')
+    // A faixa diz que nada disso foi publicado na época.
+    expect(texto(html)).toContain('Nenhum destes apitos foi publicado na época.')
+    // O seletor oferece as duas temporadas.
+    expect(html).toContain(`temporada=${TEMPORADA_ANTERIOR}`)
+    expect(html).toContain(`temporada=${TEMPORADA_DO_CALENDARIO}`)
+    regrasDeEscrita(html, 'jogador na temporada anterior')
+  }, 60_000)
+
+  it('time na temporada anterior: Hierarquia NIP com o time REAL, nível do jogador primeiro', async () => {
+    const html = await renderizarTimeComo('GRATIS', timeReal, { temporada: TEMPORADA_ANTERIOR })
+    const hierarquia = secao(html, 'Hierarquia NIP · Pontos')
+    expect(hierarquia).toContain(mvp.nome)
+    expect(hierarquia).toContain(allStar.nome)
+    expect(hierarquia.indexOf(mvp.nome)).toBeLessThan(hierarquia.indexOf(allStar.nome))
+    // Sem desfalque de "hoje" numa temporada que acabou.
+    expect(hierarquia).not.toContain('Sem jogo hoje')
+    // O box score é da temporada escolhida, aberto para o grátis.
+    const box = secao(html, 'Box score por jogo')
+    expect(box).not.toContain('começa no plano')
+    expect(box).toContain(`href="/estatisticas/jogo/${jogoDoDia.id}`)
+    regrasDeEscrita(html, 'time na temporada anterior')
+  }, 60_000)
+
+  it('temporada do calendário: grátis continua sem a profundidade', async () => {
+    const html = await renderizarJogadorComo('GRATIS', apitado, { temporada: TEMPORADA_DO_CALENDARIO })
+    expect(secao(html, 'Apitos da estratégia')).toContain('O histórico de apitos começa no plano')
+    expect(html).not.toContain('Nenhum destes apitos foi publicado na época.')
+    const time = await renderizarTimeComo('GRATIS', timeReal, { temporada: TEMPORADA_DO_CALENDARIO })
+    expect(secao(time, 'Box score por jogo')).toContain('começa no plano')
+  }, 60_000)
+
+  it('links internos preservam ?temporada= escolhida', async () => {
+    const html = await renderizarJogadorComo('GRATIS', apitado, { temporada: TEMPORADA_ANTERIOR })
+    expect(html).toMatch(new RegExp(`href="/estatisticas/jogo/[^"]*temporada=${TEMPORADA_ANTERIOR}`))
+    expect(html).toMatch(new RegExp(`href="/estatisticas/time/[^"]*temporada=${TEMPORADA_ANTERIOR}`))
+    const time = await renderizarTimeComo('GRATIS', timeReal, { temporada: TEMPORADA_ANTERIOR })
+    expect(time).toMatch(new RegExp(`href="/estatisticas/jogador/[^"]*temporada=${TEMPORADA_ANTERIOR}`))
+    expect(time).toContain(`href="/estatisticas/time/${timeReal}?atributo=REBOTES&amp;temporada=${TEMPORADA_ANTERIOR}"`)
+  }, 60_000)
+
+  it('sem escolha, e com lixo, os links não ganham ?temporada=', async () => {
+    for (const busca of [{}, { temporada: 'lixo' }, { temporada: [TEMPORADA_ANTERIOR, TEMPORADA_DO_CALENDARIO] }]) {
+      const html = await renderizarJogadorComo('MVP', apitado, busca)
+      // Só o seletor nomeia temporada; jogo e time seguem com a URL de hoje.
+      expect(html).not.toMatch(/href="\/estatisticas\/(jogo|time)\/[^"]*temporada=/)
+      expect(html).not.toContain('Nenhum destes apitos foi publicado na época.')
+    }
+    expect(await renderizarJogadorComo('MVP', apitado, { temporada: 'lixo' })).toBe(
+      await renderizarJogadorComo('MVP', apitado),
+    )
+  }, 60_000)
+
+  it('índice: o seletor troca a classificação de temporada; o padrão não ganha ?temporada=', async () => {
+    nivelDoTeste = 'GRATIS'
+    const html = await renderizarIndice({ temporada: TEMPORADA_ANTERIOR })
+    expect(html).toContain(`href="/estatisticas?temporada=${TEMPORADA_DO_CALENDARIO}"`)
+    expect(texto(html)).toContain(`temporada ${TEMPORADA_ANTERIOR}`)
+    const padrao = await renderizarIndice()
+    expect(texto(padrao)).toContain(`temporada ${TEMPORADA_DO_CALENDARIO}`)
+    expect(padrao).not.toMatch(/href="\/estatisticas\/time\/[^"]*temporada=/)
+  }, 60_000)
+
+  it('partida da temporada anterior: grátis vê box score e confrontos (decisão 6), pela DATA do jogo', async () => {
+    nivelDoTeste = 'GRATIS'
+    // Sem `?temporada=`: a temporada sai da data do próprio jogo, que a URL não forja.
+    const box = await renderizarJogo(jogoDoDia.id, { aba: 'box' })
+    expect(box).not.toContain('começa no plano')
+    // O lado de cada linha sai do `time_id` DAQUELE jogo: a tabela aparece
+    // mesmo que o cadastro de hoje ponha o jogador em outro time.
+    expect(box).toMatch(/<caption[^>]*>Box score de [^<]*<\/caption>/)
+    const confrontos = await renderizarJogo(jogoDoDia.id, { aba: 'confrontos' })
+    expect(confrontos).not.toContain('começa no plano')
+  }, 60_000)
+
+  it('partida de temporada FUTURA (rótulo adiantado): grátis vê silhueta, não a abertura da passada', async () => {
+    nivelDoTeste = 'GRATIS'
+    const ruleset = await rulesetAtivo()
+    const DIA_FUTURO = '2027-11-03'
+    expect(temporadaDe(new Date(`${DIA_FUTURO}T12:00:00Z`), calendarioDoRuleset(ruleset)) > TEMPORADA_DO_CALENDARIO).toBe(true)
+    const [casa, visitante] = await banco.db.select({ id: times.id }).from(times).limit(2)
+    const [futuro] = await banco.db
+      .insert(jogos)
+      .values({
+        timeCasaId: casa!.id,
+        timeVisitanteId: visitante!.id,
+        status: 'ENCERRADO',
+        dataReferencia: DIA_FUTURO,
+        dataHoraUtc: new Date(`${DIA_FUTURO}T23:30:00Z`),
+        placarCasa: 100,
+        placarVisitante: 90,
+      })
+      .returning({ id: jogos.id })
+    try {
+      for (const aba of ['box', 'confrontos']) {
+        expect(await renderizarJogo(futuro!.id, { aba }), aba).toContain('começa no plano')
+      }
+    } finally {
+      await banco.db.delete(jogos).where(eq(jogos.id, futuro!.id))
+    }
+  }, 60_000)
+
+  it('partida da temporada do calendário: grátis continua com silhueta — nem com ?temporada= anterior', async () => {
+    nivelDoTeste = 'GRATIS'
+    const [atual] = await banco.db
+      .select({ id: jogos.id, dataHoraUtc: jogos.dataHoraUtc })
+      .from(jogos)
+      .where(and(eq(jogos.status, 'ENCERRADO'), eq(jogos.dataReferencia, somarDias(HOJE, -1))))
+      .limit(1)
+    expect(temporadaDe(atual!.dataHoraUtc, calendarioDoRuleset(await rulesetAtivo()))).toBe(TEMPORADA_DO_CALENDARIO)
+    for (const busca of [{}, { temporada: TEMPORADA_ANTERIOR }]) {
+      for (const aba of ['box', 'confrontos']) {
+        const html = await renderizarJogo(atual!.id, { ...busca, aba })
+        expect(html, aba).toContain('começa no plano')
+        expect(html, aba).not.toMatch(/<caption[^>]*>Box score de/)
+      }
+    }
+  }, 60_000)
+
+  it('partida: os links de saída levam a temporada ESCOLHIDA; sem escolha, ou com lixo, não', async () => {
+    nivelDoTeste = 'GRATIS'
+    const escolhida = await renderizarJogo(jogoDoDia.id, { temporada: TEMPORADA_ANTERIOR })
+    expect(escolhida).toMatch(new RegExp(`href="/estatisticas/time/[^"]*\\?temporada=${TEMPORADA_ANTERIOR}"`))
+    // Líderes e box score: numa partida com box (a da temporada simulada),
+    // escolhida no seletor, os links para o jogador também levam a temporada.
+    const [comBox] = await banco.db
+      .select({ id: jogos.id })
+      .from(jogos)
+      .where(and(eq(jogos.status, 'ENCERRADO'), eq(jogos.dataReferencia, somarDias(HOJE, -1))))
+      .limit(1)
+    const escolhidaAtual = { temporada: TEMPORADA_DO_CALENDARIO }
+    const geral = await renderizarJogo(comBox!.id, escolhidaAtual)
+    expect(secao(geral, 'Líderes da partida')).toMatch(
+      new RegExp(`href="/estatisticas/jogador/[^"]*\\?temporada=${TEMPORADA_DO_CALENDARIO}"`),
+    )
+    nivelDoTeste = 'MVP'
+    const box = await renderizarJogo(comBox!.id, { ...escolhidaAtual, aba: 'box' })
+    expect(box).toMatch(new RegExp(`href="/estatisticas/jogador/[^"]*\\?temporada=${TEMPORADA_DO_CALENDARIO}"`))
+    expect(box).not.toMatch(/href="\/estatisticas\/jogador\/[0-9a-f-]+"/)
+    for (const busca of [{}, { temporada: 'lixo' }]) {
+      const html = await renderizarJogo(jogoDoDia.id, busca)
+      expect(html).not.toMatch(/href="\/estatisticas\/(jogo|time|jogador)\/[^"]*temporada=/)
+    }
+    // O "voltar" não ecoa uma temporada crua que ninguém validou.
+    const voltar = await renderizarJogo(jogoDoDia.id, { jogador: apitado, temporada: '<lixo>' })
+    expect(voltar).toContain(`href="/estatisticas/jogador/${apitado}?`)
+    expect(voltar).not.toContain('lixo')
+    const voltarValido = await renderizarJogo(jogoDoDia.id, { jogador: apitado, temporada: TEMPORADA_ANTERIOR })
+    expect(voltarValido).toMatch(new RegExp(`href="/estatisticas/jogador/${apitado}\\?[^"]*temporada=${TEMPORADA_ANTERIOR}`))
+  }, 60_000)
+
+  it('temporada passada SEM retroativo (publicada ao vivo): lê os apitos e a lista de hoje, não as tabelas retroativas', async () => {
+    // Dois anos antes da simulada: uma temporada com jogo encerrado e apito
+    // PUBLICADO (em `apitos`), sem nenhuma linha retroativa — o caso de
+    // 2026-27 visto de outubro de 2027.
+    const ruleset = await rulesetAtivo()
+    const DIA = '2023-11-06'
+    const temporadaPublicada = temporadaDe(new Date(`${DIA}T12:00:00Z`), calendarioDoRuleset(ruleset))
+    expect(temporadaPublicada).not.toBe(TEMPORADA_ANTERIOR)
+    const [casa, visitante] = await banco.db.select({ id: times.id }).from(times).limit(2)
+    const [jogo] = await banco.db
+      .insert(jogos)
+      .values({
+        timeCasaId: casa!.id,
+        timeVisitanteId: visitante!.id,
+        status: 'ENCERRADO',
+        dataReferencia: DIA,
+        dataHoraUtc: new Date(`${DIA}T23:30:00Z`),
+        placarCasa: 101,
+        placarVisitante: 99,
+      })
+      .returning({ id: jogos.id, dataHoraUtc: jogos.dataHoraUtc })
+    try {
+      await banco.db
+        .insert(estatisticasJogo)
+        .values({ jogoId: jogo!.id, jogadorId: apitado, timeId: casa!.id, pontos: 31, minutos: '33' })
+      await banco.db.insert(apitos).values({
+        rulesetVersao: 'v1',
+        jogoId: jogo!.id,
+        jogadorId: apitado,
+        atributo: 'PONTOS',
+        estrategia: 'LISTA_SECRETA',
+        metodo: 'OSCILACAO',
+        nivelJogador: 'MVP',
+        nivelApito: 1,
+        linha: 25,
+      })
+      // E um apito PAGO da temporada do calendário, do mesmo jogador: a
+      // abertura da temporada passada não pode abrir o histórico de hoje.
+      const [jogoPago] = await banco.db
+        .select({ id: jogos.id, dataHoraUtc: jogos.dataHoraUtc })
+        .from(jogos)
+        .where(and(eq(jogos.status, 'ENCERRADO'), eq(jogos.dataReferencia, somarDias(HOJE, -1))))
+        .limit(1)
+      const [pago] = await banco.db
+        .insert(apitos)
+        .values({
+          rulesetVersao: 'v1',
+          jogoId: jogoPago!.id,
+          jogadorId: apitado,
+          atributo: 'PONTOS',
+          estrategia: 'LISTA_SECRETA',
+          metodo: 'OSCILACAO',
+          nivelJogador: 'MVP',
+          nivelApito: 1,
+          linha: 97,
+        })
+        .returning({ id: apitos.id })
+      try {
+        const html = await renderizarJogadorComo('GRATIS', apitado, { temporada: temporadaPublicada })
+        const secaoApitos = secao(html, 'Apitos da estratégia')
+        // Aberta (temporada passada, decisão 6) e com o apito PUBLICADO dela.
+        expect(secaoApitos).not.toContain('começa no plano')
+        expect(secaoApitos).toContain(diaMes(jogo!.dataHoraUtc, FUSO))
+        // Só ela: nenhum apito da temporada do calendário (pago) no HTML do grátis.
+        expect(secaoApitos).not.toContain(diaMes(jogoPago!.dataHoraUtc, FUSO))
+        expect(html).not.toContain(`/estatisticas/jogo/${jogoPago!.id}`)
+        // O assinante, na temporada do calendário, continua vendo o apito dela
+        // — e não o da temporada passada.
+        const mvp = secao(
+          await renderizarJogadorComo('MVP', apitado, { temporada: TEMPORADA_DO_CALENDARIO }),
+          'Apitos da estratégia',
+        )
+        expect(mvp).toContain(diaMes(jogoPago!.dataHoraUtc, FUSO))
+        expect(mvp).not.toContain(diaMes(jogo!.dataHoraUtc, FUSO))
+      } finally {
+        await banco.db.delete(apitos).where(eq(apitos.id, pago!.id))
+      }
+      const html = await renderizarJogadorComo('GRATIS', apitado, { temporada: temporadaPublicada })
+      // Nada foi "aplicado a posteriori" aqui: a faixa do retroativo não aparece.
+      expect(html).not.toContain('Nenhum destes apitos foi publicado na época.')
+      const time = await renderizarTimeComo('GRATIS', casa!.id, { temporada: temporadaPublicada })
+      expect(time).not.toContain('Nenhum destes apitos foi publicado na época.')
+      expect(texto(time)).not.toMatch(new RegExp(`atuou[^.]* em ${temporadaPublicada}`))
+    } finally {
+      await banco.db.delete(jogos).where(eq(jogos.id, jogo!.id))
+    }
+  }, 60_000)
 })

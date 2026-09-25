@@ -2,7 +2,7 @@ import Link from 'next/link'
 import { rotaDoJogador } from '@/modules/entrega/estatisticas/rotas'
 import { rotaResultados, type JogoEncerradoResumo } from '@/modules/entrega/resultados'
 import type { Atributo, NivelApito } from '@/modules/motor/tipos'
-import { EstadoVazio, NumeroGrande } from '@/ui/blocos'
+import { EstadoVazio, FaixaAviso, NumeroGrande } from '@/ui/blocos'
 import { Abas } from '@/ui/controles'
 import { contar, decimal, diaDaRodada, hora, linha as fmtLinha } from '@/ui/formato'
 import { Minigrafico } from '@/ui/graficos'
@@ -17,6 +17,7 @@ import {
   SeloNivel, PilulaOdd } from '@/ui/marcas'
 import { FotoJogador, LogoTime } from '@/ui/midia'
 import { oddDaLinha } from '@/ui/odd'
+import { AVISO_TEMPORADA_ANTERIOR, SeletorTemporada } from '@/ui/SeletorTemporada'
 import { identidadeDoTime } from '@/ui/times'
 import type { CardConferido, DadosDosResultados, JogoDaNoite, LinhaDoPlacar, PlacarDoNip } from './carregar'
 import s from './Resultados.module.css'
@@ -73,9 +74,16 @@ function Cabecalho({ d }: { d: DadosDosResultados }) {
         <h1 className="titulo-marca">{diaDaRodada(d.data)}</h1>
       </div>
       <nav className={s.setas} aria-label="Navegar entre rodadas">
-        <Link href={d.anterior} className={s.seta} aria-label="Rodada anterior">
-          <IconeVoltar tamanho={18} />
-        </Link>
+        {/* Só a temporada anterior tem começo: antes da primeira data dela não há rodada. */}
+        {d.anterior === null ? (
+          <span className={s.seta} aria-disabled="true" aria-label="Rodada anterior (indisponível)">
+            <IconeVoltar tamanho={18} />
+          </span>
+        ) : (
+          <Link href={d.anterior} className={s.seta} aria-label="Rodada anterior">
+            <IconeVoltar tamanho={18} />
+          </Link>
+        )}
         {d.proxima === null ? (
           <span className={s.seta} aria-disabled="true" aria-label="Próxima rodada (indisponível)">
             <IconeAvancar tamanho={18} />
@@ -85,8 +93,8 @@ function Cabecalho({ d }: { d: DadosDosResultados }) {
             <IconeAvancar tamanho={18} />
           </Link>
         )}
-        <Link href="/" className={s.hoje}>
-          Lista de hoje
+        <Link href={d.listaDoDia} className={s.hoje}>
+          {d.retroativo ? 'Lista do dia' : 'Lista de hoje'}
         </Link>
       </nav>
     </header>
@@ -117,6 +125,7 @@ function Filtros({ d }: { d: DadosDosResultados }) {
       />
       <form action={`/resultados/${d.data}`} className={s.formFiltros} aria-label="Filtros de resultados">
         {f.estrategia && <input type="hidden" name="estrategia" value={f.estrategia} />}
+        {f.temporada && <input type="hidden" name="temporada" value={f.temporada} />}
         <div className={s.campo}>
           <label htmlFor="filtro-atributo">Atributo</label>
           <select id="filtro-atributo" name="atributo" defaultValue={f.atributo ?? ''}>
@@ -129,7 +138,8 @@ function Filtros({ d }: { d: DadosDosResultados }) {
           </select>
         </div>
         <div className={s.campo}>
-          <label htmlFor="filtro-time">Time da curadoria NIP</label>
+          {/* Na temporada anterior o time é o que o jogador JOGOU (decisão 2), não o da curadoria. */}
+          <label htmlFor="filtro-time">{d.retroativo ? 'Time na temporada' : 'Time da curadoria NIP'}</label>
           <select id="filtro-time" name="time" defaultValue={f.timeId ?? ''}>
             <option value="">Todos</option>
             {d.times.map((t) => (
@@ -144,7 +154,7 @@ function Filtros({ d }: { d: DadosDosResultados }) {
             Aplicar
           </button>
           {(f.atributo || f.timeId) && (
-            <Link href={rotaResultados(d.data, { estrategia: f.estrategia })} className={s.limpar}>
+            <Link href={rotaResultados(d.data, { estrategia: f.estrategia, temporada: f.temporada })} className={s.limpar}>
               Limpar
             </Link>
           )}
@@ -366,7 +376,7 @@ function CabecalhoDoJogo({ j, fuso }: { j: JogoDaNoite; fuso: string }) {
   )
 }
 
-function LinhaConferida({ c, j }: { c: CardConferido; j: JogoDaNoite }) {
+function LinhaConferida({ c, j, retroativo }: { c: CardConferido; j: JogoDaNoite; retroativo: boolean }) {
   const { card, item } = c
   const v = vereditoDe(c, j)
   const realizado =
@@ -419,7 +429,9 @@ function LinhaConferida({ c, j }: { c: CardConferido; j: JogoDaNoite }) {
           linha conferida, na forma que o ruleset mandou na materialização. */}
       <div className={s.cOdd}>
         <span className={s.rotuloCelula}>Odd</span>
-        <PilulaOdd odd={odd} />
+        {/* Temporada anterior: não há odd coletada de uma rodada que já
+            passou, e um "—" na pílula leria como defeito. */}
+        {retroativo ? <span className={s.fraco}>Sem odd registrada</span> : <PilulaOdd odd={odd} />}
       </div>
       <div className={s.cLinhas}>
         <span className={s.rotuloCelula}>Linhas do apito</span>
@@ -505,7 +517,7 @@ function Lista({ d }: { d: DadosDosResultados }) {
               )}
               <ul className={s.linhas}>
                 {j.cards.map((c) => (
-                  <LinhaConferida key={c.card.chave} c={c} j={j} />
+                  <LinhaConferida key={c.card.chave} c={c} j={j} retroativo={d.retroativo} />
                 ))}
               </ul>
             </section>
@@ -630,13 +642,28 @@ export function TelaResultados({ dados: d }: { dados: DadosDosResultados }) {
   return (
     <div className={s.tela}>
       <Cabecalho d={d} />
+      <SeletorTemporada
+        temporadas={d.seletor.temporadas}
+        atual={d.seletor.temporada}
+        hrefDe={(t) => `/resultados?temporada=${encodeURIComponent(t)}`}
+      />
+      {d.retroativo && <FaixaAviso>{AVISO_TEMPORADA_ANTERIOR}</FaixaAviso>}
       <Filtros d={d} />
       {d.vazio ? (
-        <EstadoVazio
-          titulo="Sem lista publicada neste dia"
-          texto="Use as setas para navegar até uma rodada com lista."
-          acao={{ rotulo: 'Rodada anterior', href: d.anterior }}
-        />
+        d.retroativo ? (
+          // Nada daqui foi publicado: o vazio da temporada anterior não fala em "lista publicada".
+          <EstadoVazio
+            titulo="Sem apitos neste dia"
+            texto={`Use as setas para navegar pelas rodadas da temporada ${d.seletor.temporada}.`}
+            acao={d.anterior === null ? undefined : { rotulo: 'Rodada anterior', href: d.anterior }}
+          />
+        ) : (
+          <EstadoVazio
+            titulo="Sem lista publicada neste dia"
+            texto="Use as setas para navegar até uma rodada com lista."
+            acao={{ rotulo: 'Rodada anterior', href: d.anterior! }}
+          />
+        )
       ) : (
         <>
           {d.mostrarLista && <Lista d={d} />}
