@@ -28,6 +28,10 @@ const CONSTRAINTS_ANTERIORES = {
   // quando ela é revertida.
   comissoes_afiliados_valores_validos:
     'CHECK ("base_nip_centavos" >= 0 and "parcela_parceiro_centavos" >= 0 and "percentual_pontos_base" between 0 and 10000)',
+  // A 0035 (rastreamento de indicações) troca as duas por versões que aceitam
+  // CADASTRO/ASSINATURA_NIP; texto copiado de drizzle/0019_demonic_silver_surfer.sql.
+  links_afiliados_tipo_destino_valido: `CHECK ("links_afiliados"."tipo_destino" in ('NIP', 'CASA'))`,
+  eventos_afiliados_tipo_valido: `CHECK ("eventos_afiliados"."tipo" in ('CLIQUE', 'VISITA_NIP', 'SAIDA_CASA', 'CADASTRO_NIP'))`,
 }
 
 /** Comandos cuja inversão é conhecida. Qualquer outro derruba o script. */

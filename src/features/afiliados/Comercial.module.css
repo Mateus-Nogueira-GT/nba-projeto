@@ -110,6 +110,23 @@
 .acaoPrimaria:hover {
   background: var(--acento-hover);
 }
+/* "Criar conta" no convite: mesma forma da primária, sem competir com ela. */
+.acaoSecundaria {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 48px;
+  padding: 0 var(--e-5);
+  border: 1px solid var(--borda-forte);
+  border-radius: var(--raio-controle);
+  background: transparent;
+  color: var(--texto);
+  font-size: var(--t-14);
+  font-weight: 700;
+}
+.acaoSecundaria:hover {
+  background: var(--campo);
+}
 
 @media (max-width: 1023px) {
   .pagina {

@@ -254,6 +254,17 @@ describe('as outras telas do painel — a mesma guarda, antes de ler', () => {
     expect(galeria).toContain('Nível do apito')
   })
 
+  it('/admin/afiliados não lista o parceiro USUARIO do link pessoal — revisão final, item 4', async () => {
+    const { linkPessoalDoUsuario } = await import('@/modules/plataforma/afiliados/indicacoes')
+    const conta = await adicionarUsuario(banco.db, { email: 'so-link-pessoal@teste.com', senha: SENHA, nome: 'Só Link' })
+    const { codigo } = await linkPessoalDoUsuario(banco.db, conta.id, AGORA)
+    como('admin')
+    const html = await renderizar(TELAS.afiliados)
+    expect(html).toContain('Trilha de saídas')
+    expect(html).not.toContain(`/r/${codigo}`)
+    expect(html).not.toContain('Link pessoal')
+  })
+
   it('nenhuma tela do painel chama o score de probabilidade', async () => {
     como('admin')
     for (const tela of Object.values(TELAS)) {
@@ -350,6 +361,19 @@ describe('/afiliados e o convite — o fluxo real de parceiro', () => {
     expect(html).not.toContain('Visão geral')
   })
 
+  it('conta comum que abriu /conta (e ganhou o link pessoal) continua sem parceria em /afiliados — revisão final, item 3', async () => {
+    const { linkPessoalDoUsuario } = await import('@/modules/plataforma/afiliados/indicacoes')
+    const conta = await adicionarUsuario(banco.db, { email: 'abriu-conta@teste.com', senha: SENHA, nome: 'Abriu Conta' })
+    // É exatamente o que `/conta` faz em toda visita (features/conta/carregar.ts).
+    await linkPessoalDoUsuario(banco.db, conta.id, AGORA)
+    const sessao = await abrirSessao(banco.db, conta.id, ACESSO, AGORA, { duracaoMs: 3600_000 })
+    armario.clear()
+    armario.set(NOME_COOKIE, sessao.token)
+    const html = await renderizar(PaginaAfiliado)
+    expect(html).toContain('Sua conta ainda não possui uma parceria NIP ativa')
+    expect(html).not.toContain('Visão geral')
+  })
+
   it('o convite sem sessão oferece entrar; aceitar sem sessão é recusado', async () => {
     const { default: PaginaConvite } = await import('@/app/(afiliados)/afiliados/convite/[token]/page')
     const { aceitar } = await import('@/features/afiliados/acoes')
@@ -382,5 +406,19 @@ describe('/afiliados e o convite — o fluxo real de parceiro', () => {
     expect(html).toContain('Nenhum link disponível.')
     // O convite é de uso único.
     expect((await aceitar(ESTADO_INICIAL, formulario({ token: token! }))).erro).toMatch(/Não foi possível aceitar/)
+
+    // Rastreamento de indicações (Tarefa 6): o painel do parceiro mostra
+    // Cadastros e Assinaturas — SÓ números, nunca nome nem e-mail de quem
+    // foi indicado (contexto comum, regra 2). Sem cadastro via link de
+    // indicação nesta cena, os dois totais são zero — a prova aqui é de
+    // FIAÇÃO (o painel chega até a tela), não da conta em si, já travada em
+    // `indicacoes-leitura.test.ts`.
+    const inicioMetricas = html.indexOf('aria-label="Indicadores do parceiro"')
+    expect(inicioMetricas).toBeGreaterThanOrEqual(0)
+    const metricas = html.slice(inicioMetricas, html.indexOf('</dl>', inicioMetricas))
+    expect(metricas).toContain('Cadastros')
+    expect(metricas).toContain('Assinaturas')
+    expect(metricas).not.toContain('Parceiro Comum')
+    expect(metricas).not.toContain('@')
   })
 })

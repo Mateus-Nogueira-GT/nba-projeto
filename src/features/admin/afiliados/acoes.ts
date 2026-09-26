@@ -23,6 +23,7 @@ import {
   registrarRepasse,
   type AtorAfiliados,
 } from '@/modules/plataforma/afiliados/servico'
+import { criarLinkDeIndicacao } from '@/modules/plataforma/afiliados/indicacoes'
 import { falha, mensagemDeErro, sucesso, type EstadoAcao } from '../estado-acao'
 
 /**
@@ -50,6 +51,7 @@ function texto(formulario: FormData, chave: string): string {
 function atualizar() {
   revalidatePath('/admin/afiliados')
   revalidatePath('/afiliados')
+  revalidatePath('/admin/indicacoes')
 }
 
 /** Roda a ação, revalida e converte qualquer falha em mensagem. */
@@ -90,10 +92,19 @@ export async function acaoCriarParceiro(_e: EstadoAcao, formulario: FormData): P
 export async function acaoCriarConvite(_e: EstadoAcao, formulario: FormData): Promise<EstadoAcao> {
   try {
     const ator = await atorAdmin()
-    const entrada = z.object({ email: z.email(), nomePublico: z.string().min(2).max(120) }).parse({
-      email: texto(formulario, 'email'),
-      nomePublico: texto(formulario, 'nomePublico'),
-    })
+    // `parceiroId` opcional: convite para um parceiro já cadastrado, que o
+    // aceite liga à conta em vez de criar outro (auditoria 26/09).
+    const entrada = z
+      .object({
+        email: z.email(),
+        nomePublico: z.string().min(2).max(120),
+        parceiroId: z.string().uuid().optional(),
+      })
+      .parse({
+        email: texto(formulario, 'email'),
+        nomePublico: texto(formulario, 'nomePublico'),
+        parceiroId: texto(formulario, 'parceiroId') || undefined,
+      })
     const agora = new Date()
     const resultado = await criarConvite(
       getDb(),
@@ -198,6 +209,32 @@ export async function acaoCriarCampanha(_e: EstadoAcao, formulario: FormData): P
       },
       new Date(),
     )
+  })
+}
+
+/**
+ * Link de indicação (leva a `/cadastrar`, sem oferta nem comissão) para um
+ * parceiro já cadastrado — a validação de `canal` reservado ao link pessoal
+ * ("usuario") é feita no SERVIÇO (`criarLinkDeIndicacao`), não aqui: um campo
+ * de formulário nunca é o único lugar que barra a regra.
+ */
+export async function acaoCriarLinkDeIndicacao(_e: EstadoAcao, formulario: FormData): Promise<EstadoAcao> {
+  return executar('Link de indicação criado.', async () => {
+    const ator = await atorAdmin()
+    const entrada = z
+      .object({
+        parceiroId: z.string().uuid(),
+        nome: z.string().min(2),
+        canal: z.string().min(2),
+        codigo: z.string().regex(/^[a-z0-9][a-z0-9-]{2,95}$/),
+      })
+      .parse({
+        parceiroId: texto(formulario, 'parceiroId'),
+        nome: texto(formulario, 'nome'),
+        canal: texto(formulario, 'canal'),
+        codigo: texto(formulario, 'codigo').toLowerCase(),
+      })
+    await criarLinkDeIndicacao(getDb(), ator, entrada, new Date())
   })
 }
 

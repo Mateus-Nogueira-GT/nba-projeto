@@ -9,6 +9,12 @@ const DESTINO_SEGURO = '/'
 // integração do front v2); `/admin/usuarios` fica porque links antigos ainda
 // apontam para ele.
 const DESTINOS_POS_LOGIN = new Set(['/', '/abrir', '/assinar', '/conta', '/admin', '/admin/usuarios'])
+// A área de afiliados e o convite de parceiro (auditoria de 26/09): sem eles
+// aqui, quem entrava ou criava conta a partir do convite caía em `/` e perdia
+// o convite. O caminho do convite é casado por FORMA, não por prefixo: o
+// token é exatamente o que `criarConvite` gera — 32 bytes em base64url, 43
+// caracteres de [A-Za-z0-9_-] —, então `..`, `/`, `?` e `#` nunca cabem nele.
+const DESTINOS_POS_LOGIN_POR_FORMA = [/^\/afiliados$/, /^\/afiliados\/convite\/[A-Za-z0-9_-]{43}$/]
 
 type Cabecalhos = Pick<Headers, 'get'>
 
@@ -25,7 +31,8 @@ export function destinoInternoSeguro(valor: string): string {
     return codigo <= 31 || codigo === 127 || caractere === '\\'
   })
   if (temCaractereInvalido) return DESTINO_SEGURO
-  return DESTINOS_POS_LOGIN.has(valor) ? valor : DESTINO_SEGURO
+  if (DESTINOS_POS_LOGIN.has(valor)) return valor
+  return DESTINOS_POS_LOGIN_POR_FORMA.some((forma) => forma.test(valor)) ? valor : DESTINO_SEGURO
 }
 
 /**

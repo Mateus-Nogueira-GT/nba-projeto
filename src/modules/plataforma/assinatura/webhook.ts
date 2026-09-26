@@ -10,6 +10,7 @@ import {
 } from '../../dominio/db/schema'
 import type { Db } from '../../dominio/db/tipos'
 import { TRAVA } from '../../dominio/db/travas'
+import { registrarAssinaturaIndicada } from '../afiliados/indicacoes'
 import { PRODUTO_PAGO } from './configuracao'
 import type { Modalidade, NivelDoPlano, NivelPago } from './nivel-do-plano'
 import { atende, NIVEIS_PAGOS } from './nivel-do-plano'
@@ -274,13 +275,24 @@ async function substituirDireitosAnteriores(
     )
 }
 
+/**
+ * O que foi concedido, para quem registra a indicação DEPOIS do commit. Não
+ * sai no `ResultadoWebhook`: o pagamento não sabe nada de indicação.
+ */
+type Concessao = {
+  usuarioId: string
+  nivelDoPlano: NivelPago
+  modalidade: Modalidade
+  aprovadoEm: Date
+}
+
 async function aplicarEfeito(
   db: Db,
   provedor: string,
   evento: EventoPagamento,
   agora: Date,
   fimDaTemporada: Date | null,
-): Promise<{ liberou: boolean; usuarioId: string | null }> {
+): Promise<{ liberou: boolean; usuarioId: string | null; concessao?: Concessao }> {
   const compra = await compraDoEvento(db, evento.referenciaExterna)
   if (!compra) return { liberou: false, usuarioId: null }
   const usuarioId = compra.usuarioId
@@ -440,7 +452,16 @@ async function aplicarEfeito(
       assinaturaId: assinatura.id,
       agora,
     })
-    return { liberou: true, usuarioId }
+    return {
+      liberou: true,
+      usuarioId,
+      concessao: {
+        usuarioId,
+        nivelDoPlano: compra.nivelDoPlano,
+        modalidade: compra.modalidade,
+        aprovadoEm: inicio,
+      },
+    }
   }
 
   if (
@@ -476,7 +497,7 @@ export async function aplicarEventoPagamento(
   agora: Date,
   fimDaTemporada: Date | null,
 ): Promise<ResultadoWebhook> {
-  return db.transaction(async (tx) => {
+  const { resultado, concessao } = await db.transaction(async (tx) => {
     // SERIALIZA os eventos do MESMO pagamento. No primeiro evento de uma
     // temporada não existe linha em `assinaturas`: duas notificações
     // simultâneas (payment.created + payment.updated, ou webhook +
@@ -507,10 +528,32 @@ export async function aplicarEventoPagamento(
       })
       .returning({ id: eventosPagamento.id })
 
-    if (gravado.length === 0) return { aceito: true, duplicado: true } as const
-    const efeito = await aplicarEfeito(tx, provedor, evento, agora, fimDaTemporada)
-    return { aceito: true, duplicado: false, ...efeito } as const
+    if (gravado.length === 0) {
+      return { resultado: { aceito: true, duplicado: true } as const, concessao: undefined }
+    }
+    const { concessao, ...efeito } = await aplicarEfeito(tx, provedor, evento, agora, fimDaTemporada)
+    return { resultado: { aceito: true, duplicado: false, ...efeito } as const, concessao }
   })
+
+  // DEPOIS do commit, fora da transação do pagamento: indicação é registro,
+  // não pagamento. Uma falha aqui dentro da transação desfaria o direito de
+  // quem pagou; aqui fora ela só vira log, e a varredura da reconciliação
+  // (`registrarAssinaturasPendentes`) refaz. Só o 1º pagamento grava — o
+  // índice único segura as renovações.
+  if (concessao) {
+    try {
+      await registrarAssinaturaIndicada(db, concessao)
+    } catch (erro) {
+      console.error(
+        JSON.stringify({
+          evento: 'indicacao_assinatura_falhou',
+          usuarioId: concessao.usuarioId,
+          mensagem: erro instanceof Error ? erro.message : String(erro),
+        }),
+      )
+    }
+  }
+  return resultado
 }
 
 export async function processarNotificacao(

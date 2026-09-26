@@ -443,7 +443,7 @@ describe('regras transversais da identidade', () => {
         }),
       ),
       renderToStaticMarkup(await Conta({ searchParams: Promise.resolve({}) })),
-      renderToStaticMarkup(await Cadastrar()),
+      renderToStaticMarkup(await Cadastrar({ searchParams: Promise.resolve({}) })),
     ]
 
     for (const html of htmls) {

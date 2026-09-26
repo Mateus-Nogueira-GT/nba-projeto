@@ -35,8 +35,18 @@ const arquivosDeAcao = (d: string): string[] =>
   })
 
 describe('todo o admin exige ADMIN no servidor', () => {
-  it('as oito telas do painel do v2 existem em (app)/admin — e o grupo (admin) antigo saiu', () => {
-    for (const tela of ['', 'usuarios', 'afiliados', 'afiliados/visual', 'backtest', 'galeria', 'mapeamento', 'mercados']) {
+  it('as nove telas do painel do v2 existem em (app)/admin — e o grupo (admin) antigo saiu', () => {
+    for (const tela of [
+      '',
+      'usuarios',
+      'afiliados',
+      'afiliados/visual',
+      'indicacoes',
+      'backtest',
+      'galeria',
+      'mapeamento',
+      'mercados',
+    ]) {
       expect(existsSync(join(RAIZ_ADMIN, tela, 'page.tsx')), tela || '(índice)').toBe(true)
     }
     // Duas árvores para a mesma URL seria o Next recusando o build — ou pior,

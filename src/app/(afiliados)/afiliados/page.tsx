@@ -105,6 +105,12 @@ export default async function PaginaAfiliado({
         <GradeDeMetricas rotulo="Indicadores do parceiro">
           <Metrica rotulo="Cliques observados" valor={painel.totais.cliquesObservados} />
           <Metrica rotulo="Saídas para casas" valor={painel.totais.saidasParaCasa} />
+          {/* Rastreamento de indicações (Tarefa 6): só o NÚMERO — nome e
+              e-mail de quem foi indicado ficam só com o admin (contexto
+              comum, regra 2). `painel.totais` já vem assim de
+              `painelDoAfiliado`. */}
+          <Metrica rotulo="Cadastros" valor={painel.totais.cadastros} />
+          <Metrica rotulo="Assinaturas" valor={painel.totais.assinaturas} />
           <Metrica rotulo="Comissão confirmada" valor={totalFinanceiro('comissaoConfirmadaCentavos')} />
           <Metrica rotulo="Repassado" valor={totalFinanceiro('repassadoCentavos')} destaque />
         </GradeDeMetricas>

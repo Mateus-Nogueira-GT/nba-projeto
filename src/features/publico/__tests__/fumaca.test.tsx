@@ -245,18 +245,19 @@ describe('/entrar — a ação real sobre a conta real', () => {
 // ===========================================================================
 
 describe('/cadastrar — a ação real, com a checagem de origem e UM scrypt só', () => {
-  function formularioDeCadastro(email: string, senha = SENHA) {
+  function formularioDeCadastro(email: string, senha = SENHA, destino?: string) {
     const f = new FormData()
     f.set('nome', 'Pessoa Nova')
     f.set('email', email)
     f.set('senha', senha)
     f.set('dispositivo', 'fp-fumaca')
     f.set('ua', 'Mozilla/5.0 (Teste NIP)')
+    if (destino !== undefined) f.set('destino', destino)
     return f
   }
-  async function cadastrarCom(email: string, senha?: string) {
+  async function cadastrarCom(email: string, senha?: string, destino?: string) {
     const { cadastrar } = await import('../acoes')
-    return resultado(() => cadastrar(null, formularioDeCadastro(email, senha)))
+    return resultado(() => cadastrar(null, formularioDeCadastro(email, senha, destino)))
   }
   const contaExiste = async (email: string) =>
     (await banco.db.select({ id: usuarios.id }).from(usuarios).where(eq(usuarios.email, email))).length > 0
@@ -290,12 +291,89 @@ describe('/cadastrar — a ação real, com a checagem de origem e UM scrypt só
 
   it('o formulário exige 12 caracteres, como o back (senhaSchema.min(12)), e diz a regra com a frase única', async () => {
     const { default: Pagina } = await import('@/app/(publico)/cadastrar/page')
-    const html = renderToStaticMarkup(await Pagina())
+    const html = renderToStaticMarkup(await Pagina({ searchParams: Promise.resolve({}) }))
     expect(html.toLowerCase()).toContain('minlength="12"')
     expect(html.toLowerCase()).not.toContain('minlength="10"')
     expect(html).toContain(MENSAGEM_REGRA_SENHA)
     expect(html).toContain('href="/entrar"')
   })
+})
+
+// ===========================================================================
+// CONVITE DE PARCEIRO → CRIAR CONTA → DE VOLTA AO CONVITE (auditoria 26/09)
+// ===========================================================================
+
+describe('convite de parceiro: quem ainda não tem conta cria uma e volta ao convite', () => {
+  // Formato real do token de `criarConvite`: 32 bytes em base64url (43 caracteres).
+  const TOKEN = 'Ab_c-123Ab_c-123Ab_c-123Ab_c-123Ab_c-123Ab_'
+  const DESTINO = `/afiliados/convite/${TOKEN}`
+
+  function formulario(email: string, destino?: string) {
+    const f = new FormData()
+    f.set('nome', 'Pessoa Convidada')
+    f.set('email', email)
+    f.set('senha', SENHA)
+    f.set('dispositivo', 'fp-fumaca')
+    f.set('ua', 'Mozilla/5.0 (Teste NIP)')
+    if (destino !== undefined) f.set('destino', destino)
+    return f
+  }
+
+  it('a tela do convite sem sessão oferece "Entrar para continuar" e "Criar conta", os dois voltando ao convite', async () => {
+    const { default: Pagina } = await import('@/app/(afiliados)/afiliados/convite/[token]/page')
+    const html = renderToStaticMarkup(await Pagina({ params: Promise.resolve({ token: TOKEN }) }))
+    const destinoCodificado = encodeURIComponent(DESTINO)
+    expect(html).toContain('Entrar para continuar')
+    expect(html).toContain(`href="/entrar?destino=${destinoCodificado}"`)
+    expect(html).toContain('Criar conta')
+    expect(html).toContain(`href="/cadastrar?destino=${destinoCodificado}"`)
+  })
+
+  it('com o cadastro público FECHADO, o convite não oferece "Criar conta" — só entrar (revisão final, item 9)', async () => {
+    vi.stubEnv('CADASTRO_PUBLICO_HABILITADO', 'false')
+    try {
+      const { default: Pagina } = await import('@/app/(afiliados)/afiliados/convite/[token]/page')
+      const html = renderToStaticMarkup(await Pagina({ params: Promise.resolve({ token: TOKEN }) }))
+      expect(html).toContain('Entrar para continuar')
+      expect(html).not.toContain('Criar conta')
+      expect(html).not.toContain('href="/cadastrar')
+    } finally {
+      vi.stubEnv('CADASTRO_PUBLICO_HABILITADO', 'true')
+    }
+  })
+
+  it('a página de cadastro leva o ?destino= válido ao campo oculto e ao "Entrar"; o hostil some', async () => {
+    const { default: Pagina } = await import('@/app/(publico)/cadastrar/page')
+    const html = renderToStaticMarkup(
+      await Pagina({ searchParams: Promise.resolve({ destino: DESTINO }) }),
+    )
+    expect(html).toContain(`name="destino" value="${DESTINO}"`)
+    expect(html).toContain(`href="/entrar?destino=${encodeURIComponent(DESTINO)}"`)
+    for (const hostil of DESTINOS_HOSTIS) {
+      const pagina = renderToStaticMarkup(
+        await Pagina({ searchParams: Promise.resolve({ destino: hostil }) }),
+      )
+      expect(pagina, JSON.stringify(hostil)).not.toContain('evil')
+    }
+  })
+
+  it('cadastrar com o destino do convite volta ao convite; sem destino ou com destino hostil, /assinar', async () => {
+    const { cadastrar } = await import('../acoes')
+    expect(
+      await resultado(() => cadastrar(null, formulario(emailUnico('convite-volta'), DESTINO))),
+    ).toEqual({ redirect: DESTINO })
+    expect(
+      await resultado(() => cadastrar(null, formulario(emailUnico('convite-sem')))),
+    ).toEqual({ redirect: '/assinar' })
+    expect(
+      await resultado(() => cadastrar(null, formulario(emailUnico('convite-hostil'), '//evil.com'))),
+    ).toEqual({ redirect: '/assinar' })
+    expect(
+      await resultado(() =>
+        cadastrar(null, formulario(emailUnico('convite-fora'), '/rota-que-nao-existe')),
+      ),
+    ).toEqual({ redirect: '/assinar' })
+  }, 60_000)
 })
 
 // ===========================================================================

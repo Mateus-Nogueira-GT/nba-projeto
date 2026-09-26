@@ -6,6 +6,7 @@ import type { AcessoComNivel } from '@/modules/plataforma/assinatura/direito'
 import { ROTULO_DA_MODALIDADE, ROTULO_DO_NIVEL } from '@/modules/plataforma/assinatura/nivel-do-plano'
 import { MENSAGEM_REGRA_SENHA } from '@/modules/plataforma/auth/senha'
 import type { EstadoExperiencia } from '@/modules/plataforma/experiencia/contrato'
+import { CopiarLink } from '@/features/afiliados/CopiarLink'
 import { atualizarNome, cancelarAssinatura, encerrarDispositivo, escolherAvatar, trocarEmail, trocarSenha } from './acoes'
 import { AtivarAlertas } from './AtivarAlertas'
 import { AVATARES_PRONTOS } from './avatares'
@@ -329,6 +330,32 @@ export function BlocoDispositivos({
             )
           })}
         </ul>
+      )}
+    </Bloco>
+  )
+}
+
+/**
+ * "Indique a NIP" — o link pessoal de indicação da conta (rastreamento de
+ * indicações, Tarefa 6). Só o link: nenhum número aqui — cadastros e
+ * assinaturas são do painel do PARCEIRO (`/afiliados`), nunca da conta comum
+ * (contexto comum, regra 2) — e nunca "comissão"/"ganhe": a indicação não
+ * paga nada (spec §1).
+ *
+ * `link` é `null` quando `linkPessoalDoUsuario` falhou em `carregarConta` —
+ * a tela não pode quebrar por isso, então o bloco mostra um aviso neutro em
+ * vez do link.
+ */
+export function BlocoIndicacao({ link }: { link: string | null }) {
+  return (
+    <Bloco titulo="Indique a NIP" descricao="Seu link leva um amigo direto para o cadastro na NIP.">
+      {link ? (
+        <div className={s.linkIndicacao}>
+          <span className={s.linkIndicacaoTexto}>{link}</span>
+          <CopiarLink caminho={link} />
+        </div>
+      ) : (
+        <p className={s.textoAlerta}>Link indisponível no momento.</p>
       )}
     </Bloco>
   )

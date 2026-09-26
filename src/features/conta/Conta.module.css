@@ -398,6 +398,26 @@
   font-size: var(--t-14);
   line-height: 1.55;
 }
+.linkIndicacao {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--e-2);
+}
+.linkIndicacaoTexto {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  padding: var(--e-3) var(--e-4);
+  border: 1px solid var(--borda);
+  border-radius: var(--raio-controle);
+  background: var(--fundo);
+  color: var(--texto);
+  font-size: var(--t-14);
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .passos {
   margin: 0;
   padding-left: var(--e-5);

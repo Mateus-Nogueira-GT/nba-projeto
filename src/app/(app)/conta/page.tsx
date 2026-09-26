@@ -4,7 +4,7 @@ import { MENSAGEM_REGRA_SENHA } from '@/modules/plataforma/auth/senha'
 import { sair } from '@/features/publico/acoes'
 import { parametro } from '@/features/publico/destino'
 import { carregarConta } from '@/features/conta/carregar'
-import { AvatarDaConta, BlocoAlertas, BlocoAssinatura, BlocoConta, BlocoDispositivos } from '@/features/conta/Blocos'
+import { AvatarDaConta, BlocoAlertas, BlocoAssinatura, BlocoConta, BlocoDispositivos, BlocoIndicacao } from '@/features/conta/Blocos'
 import s from '@/features/conta/Conta.module.css'
 
 export const dynamic = 'force-dynamic'
@@ -65,7 +65,9 @@ export default async function PaginaConta({
         </p>
       )}
 
-      {/* A ordem é a leitura do celular: Conta, Assinatura, Alertas, Dispositivos. */}
+      {/* A ordem é a leitura do celular: Conta, Assinatura, Alertas,
+          Dispositivos — e "Indique a NIP" por último: é convite, não
+          configuração da conta. */}
       <div className={s.grade}>
         <BlocoConta usuario={d.usuario} />
         <BlocoAssinatura
@@ -78,6 +80,7 @@ export default async function PaginaConta({
         />
         <BlocoAlertas recebeAlertas={atende(d.acesso.nivel, 'MVP')} usuarioId={d.sessao.usuarioId} experiencia={d.experiencia} jogadores={d.jogadores} times={d.times} />
         <BlocoDispositivos dispositivos={d.dispositivos} esteAparelho={d.sessao.dispositivoId} fuso={d.fuso} />
+        <BlocoIndicacao link={d.linkDeIndicacao} />
       </div>
 
       <footer className={s.rodape}>

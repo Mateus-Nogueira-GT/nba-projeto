@@ -36,7 +36,12 @@ export default async function PaginaEntrar({
       <FormularioLogin destino={destino} />
       {cadastroAberto && (
         <p className={f.rodape}>
-          Ainda não tem conta? <Link href="/cadastrar">Criar conta</Link>
+          Ainda não tem conta?{' '}
+          {/* Um destino explícito (o convite de parceiro) sobrevive à troca
+              para o cadastro; o padrão `/abrir` não precisa viajar. */}
+          <Link href={destino === '/abrir' ? '/cadastrar' : `/cadastrar?destino=${encodeURIComponent(destino)}`}>
+            Criar conta
+          </Link>
         </p>
       )}
     </LayoutAcesso>

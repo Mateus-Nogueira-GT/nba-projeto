@@ -5,8 +5,11 @@ import { bancoDeTeste } from '@/modules/dominio/__tests__/ajuda-banco'
 import {
   atribuicoesAfiliados,
   auditoriaAfiliados,
+  campanhasAfiliados,
+  convitesAfiliados,
   eventosAfiliados,
   linksAfiliados,
+  parceirosAfiliados,
   usuarios,
 } from '@/modules/dominio/db/schema'
 import { montarChave } from '@/modules/motor/tipos'
@@ -32,7 +35,9 @@ import {
   registrarSaidaParaCasa,
   registrarVisitaNip,
   resolverDestinoDaCasaSemRegistrar,
+  resolverLinkSemRegistrar,
 } from '../servico'
+import { linkPessoalDoUsuario } from '../indicacoes'
 import { apitoDeTeste, cenarioDeAfiliados } from './cenario'
 
 let banco: Awaited<ReturnType<typeof bancoDeTeste>>
@@ -598,7 +603,7 @@ describe('operação de afiliados', () => {
     const [atribuicaoConflitante] = await banco.db
       .select()
       .from(atribuicoesAfiliados)
-      .where(eq(atribuicoesAfiliados.id, segundoDispositivo.atribuicaoId))
+      .where(eq(atribuicoesAfiliados.id, segundoDispositivo.atribuicaoId!))
     expect(atribuicaoConflitante!.estado).toBe('CONFLITO')
     await expect(
       confirmarImportacao(
@@ -767,5 +772,205 @@ describe('a saída para a casa carrega de qual apito nasceu', () => {
       .from(eventosAfiliados)
       .where(eq(eventosAfiliados.visitanteHash, hashVisitante('visitante-uuid-invalido')))
     expect(evento!.apitoId).toBeNull()
+  })
+})
+
+describe('convite ligado a um parceiro já cadastrado pelo admin (auditoria 26/09)', () => {
+  const AGORA_CONVITE = new Date('2026-09-26T12:00:00.000Z')
+  const EXPIRA = new Date('2026-10-03T12:00:00.000Z')
+
+  async function conta(rotulo: string) {
+    const sufixo = Math.random().toString(36).slice(2)
+    const [usuario] = await banco.db
+      .insert(usuarios)
+      .values({ email: `${rotulo}-${sufixo}@teste.com`, senhaHash: 'x' })
+      .returning()
+    return usuario!
+  }
+
+  async function parceiroSemConta(admin: { usuarioId: string; papel: 'ADMIN' }, rotulo: string) {
+    const sufixo = Math.random().toString(36).slice(2, 10)
+    return criarParceiro(
+      banco.db,
+      admin,
+      { codigo: `${rotulo}-${sufixo}`, nomePublico: `Parceiro ${rotulo}` },
+      AGORA_CONVITE,
+    )
+  }
+
+  async function parceirosDaConta(usuarioId: string) {
+    return banco.db.select().from(parceirosAfiliados).where(eq(parceirosAfiliados.usuarioId, usuarioId))
+  }
+
+  it('sem parceiro na conta: o aceite liga a conta ao parceiro do convite, sem criar outro', async () => {
+    const c = await contexto()
+    const alvo = await parceiroSemConta(c.admin, 'sem-conta')
+    const convidado = await conta('convidado-ligado')
+    const { token } = await criarConvite(
+      banco.db,
+      c.admin,
+      { email: convidado.email, nomePublico: 'Nome do convite', expiraEm: EXPIRA, parceiroId: alvo.id },
+      AGORA_CONVITE,
+    )
+    const parceiro = await aceitarConvite(banco.db, convidado.id, token, AGORA_CONVITE)
+    expect(parceiro.id).toBe(alvo.id)
+    expect(parceiro.usuarioId).toBe(convidado.id)
+    expect(await parceirosDaConta(convidado.id)).toHaveLength(1)
+    const [convite] = await banco.db
+      .select()
+      .from(convitesAfiliados)
+      .where(eq(convitesAfiliados.parceiroId, alvo.id))
+    expect(convite!.consumidoEm).toEqual(AGORA_CONVITE)
+  })
+
+  it('parceiro do convite já ligado a OUTRA conta: recusa com erro claro e não consome o convite', async () => {
+    const c = await contexto()
+    const alvo = await parceiroSemConta(c.admin, 'ocupado')
+    const convidado = await conta('convidado-recusado')
+    const { token, convite } = await criarConvite(
+      banco.db,
+      c.admin,
+      { email: convidado.email, nomePublico: 'Ocupado', expiraEm: EXPIRA, parceiroId: alvo.id },
+      AGORA_CONVITE,
+    )
+    const outra = await conta('outra-conta')
+    await banco.db
+      .update(parceirosAfiliados)
+      .set({ usuarioId: outra.id })
+      .where(eq(parceirosAfiliados.id, alvo.id))
+    await expect(aceitarConvite(banco.db, convidado.id, token, AGORA_CONVITE)).rejects.toThrow(
+      'Este parceiro já está ligado a outra conta',
+    )
+    const [intacto] = await banco.db
+      .select()
+      .from(convitesAfiliados)
+      .where(eq(convitesAfiliados.id, convite.id))
+    expect(intacto!.consumidoEm).toBeNull()
+    expect(await parceirosDaConta(convidado.id)).toHaveLength(0)
+  })
+
+  it('criar convite para parceiro inexistente ou já ligado a uma conta é recusado na hora', async () => {
+    const c = await contexto()
+    const entrada = { email: 'x@teste.com', nomePublico: 'X', expiraEm: EXPIRA }
+    await expect(
+      criarConvite(
+        banco.db,
+        c.admin,
+        { ...entrada, parceiroId: '11111111-1111-4111-8111-111111111111' },
+        AGORA_CONVITE,
+      ),
+    ).rejects.toThrow('Parceiro não encontrado')
+    await expect(
+      criarConvite(banco.db, c.admin, { ...entrada, parceiroId: c.parceiroA.id }, AGORA_CONVITE),
+    ).rejects.toThrow('Este parceiro já está ligado a outra conta')
+  })
+
+  it('sem parceiroId e sem parceiro na conta: comportamento de hoje (cria um PARCEIRO novo)', async () => {
+    const c = await contexto()
+    const convidado = await conta('convidado-novo')
+    const { token } = await criarConvite(
+      banco.db,
+      c.admin,
+      { email: convidado.email, nomePublico: 'Novo Parceiro', expiraEm: EXPIRA },
+      AGORA_CONVITE,
+    )
+    const parceiro = await aceitarConvite(banco.db, convidado.id, token, AGORA_CONVITE)
+    expect(parceiro.usuarioId).toBe(convidado.id)
+    expect(parceiro.tipo).toBe('PARCEIRO')
+    expect(parceiro.nomePublico).toBe('Novo Parceiro')
+    expect(await parceirosDaConta(convidado.id)).toHaveLength(1)
+  })
+
+  it('conta com link pessoal e convite SEM parceiroId: o parceiro USUARIO é promovido a PARCEIRO', async () => {
+    const c = await contexto()
+    const convidado = await conta('promovido')
+    const { codigo } = await linkPessoalDoUsuario(banco.db, convidado.id, AGORA_CONVITE)
+    const [pessoal] = await parceirosDaConta(convidado.id)
+    expect(pessoal!.tipo).toBe('USUARIO')
+
+    const { token } = await criarConvite(
+      banco.db,
+      c.admin,
+      { email: convidado.email, nomePublico: 'Promovido Público', expiraEm: EXPIRA },
+      AGORA_CONVITE,
+    )
+    const parceiro = await aceitarConvite(banco.db, convidado.id, token, AGORA_CONVITE)
+    expect(parceiro.id).toBe(pessoal!.id)
+    expect(parceiro.tipo).toBe('PARCEIRO')
+    expect(parceiro.nomePublico).toBe('Promovido Público')
+    expect(await parceirosDaConta(convidado.id)).toHaveLength(1)
+    // O link pessoal segue o mesmo e segue levando ao cadastro.
+    expect((await linkPessoalDoUsuario(banco.db, convidado.id, AGORA_CONVITE)).codigo).toBe(codigo)
+    expect((await resolverLinkSemRegistrar(banco.db, codigo)).destino).toBe('/cadastrar')
+  })
+
+  it('conta com link pessoal e convite COM parceiroId: mescla no parceiro do convite — link e atribuição sobrevivem', async () => {
+    const c = await contexto()
+    const alvo = await parceiroSemConta(c.admin, 'mescla')
+    const convidado = await conta('mesclado')
+    const { codigo } = await linkPessoalDoUsuario(banco.db, convidado.id, AGORA_CONVITE)
+    const [pessoal] = await parceirosDaConta(convidado.id)
+
+    // Alguém clicou no link pessoal ANTES do convite: há atribuição sob o
+    // parceiro USUARIO.
+    await registrarClique(banco.db, {
+      codigo,
+      visitanteToken: `visitante-mescla-${codigo}`,
+      agora: AGORA_CONVITE,
+      automatizado: false,
+    })
+    const [atribuicaoAntes] = await banco.db
+      .select()
+      .from(atribuicoesAfiliados)
+      .where(eq(atribuicoesAfiliados.parceiroId, pessoal!.id))
+    expect(atribuicaoAntes).toBeDefined()
+
+    const { token } = await criarConvite(
+      banco.db,
+      c.admin,
+      { email: convidado.email, nomePublico: 'Mescla', expiraEm: EXPIRA, parceiroId: alvo.id },
+      AGORA_CONVITE,
+    )
+    const parceiro = await aceitarConvite(banco.db, convidado.id, token, AGORA_CONVITE)
+    expect(parceiro.id).toBe(alvo.id)
+    expect(parceiro.usuarioId).toBe(convidado.id)
+
+    // O parceiro USUARIO, já vazio, sumiu; a conta tem um parceiro só.
+    const restantes = await banco.db
+      .select()
+      .from(parceirosAfiliados)
+      .where(eq(parceirosAfiliados.id, pessoal!.id))
+    expect(restantes).toHaveLength(0)
+    expect(await parceirosDaConta(convidado.id)).toHaveLength(1)
+
+    // A atribuição agora é do parceiro do convite.
+    const [atribuicaoDepois] = await banco.db
+      .select()
+      .from(atribuicoesAfiliados)
+      .where(eq(atribuicoesAfiliados.id, atribuicaoAntes!.id))
+    expect(atribuicaoDepois!.parceiroId).toBe(alvo.id)
+
+    // O link pessoal é o MESMO, sob o parceiro do convite, e resolve para /cadastrar.
+    const [link] = await banco.db
+      .select({ parceiroId: campanhasAfiliados.parceiroId })
+      .from(linksAfiliados)
+      .innerJoin(campanhasAfiliados, eq(linksAfiliados.campanhaId, campanhasAfiliados.id))
+      .where(eq(linksAfiliados.codigo, codigo))
+    expect(link!.parceiroId).toBe(alvo.id)
+    expect((await linkPessoalDoUsuario(banco.db, convidado.id, AGORA_CONVITE)).codigo).toBe(codigo)
+    expect((await resolverLinkSemRegistrar(banco.db, codigo)).destino).toBe('/cadastrar')
+
+    // A mescla fica na trilha de auditoria.
+    const [trilha] = await banco.db
+      .select()
+      .from(auditoriaAfiliados)
+      .where(
+        and(
+          eq(auditoriaAfiliados.acao, 'PARCEIRO_USUARIO_MESCLADO'),
+          eq(auditoriaAfiliados.entidadeId, alvo.id),
+        ),
+      )
+    expect(trilha).toBeDefined()
+    expect(trilha!.contexto).toMatchObject({ parceiroUsuarioId: pessoal!.id })
   })
 })

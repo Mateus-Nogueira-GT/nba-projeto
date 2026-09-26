@@ -115,7 +115,12 @@ export async function cadastrar(_estado: string | null, formulario: FormData): P
   )
   await gravarCookieDeSessao(login.token, new Date(agora.getTime() + DURACAO_MS))
   await associarAfiliado(login.usuarioId, agora, 'CADASTRO')
-  redirect('/assinar')
+  // Quem veio de um convite de parceiro volta a ele (auditoria 26/09); o
+  // resto segue para a assinatura, como antes. O destino passa pela MESMA
+  // allowlist do login — `/` (o que ela devolve para o desconhecido) vira o
+  // padrão do cadastro, não a home.
+  const destino = destinoSeguro(String(formulario.get('destino') ?? ''), '/assinar')
+  redirect(destino === '/' ? '/assinar' : destino)
 }
 
 /** Os códigos que a tela de redefinição sabe traduzir — conjunto fechado. */
