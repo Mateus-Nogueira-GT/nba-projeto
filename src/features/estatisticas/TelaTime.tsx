@@ -1,12 +1,13 @@
 import Link from 'next/link'
-import { BASE_ESTATISTICAS, rotaDoJogador, rotaDoJogo, rotaDoTime } from '@/modules/entrega/estatisticas/rotas'
+import { BASE_ESTATISTICAS, comTemporada, rotaDoJogador, rotaDoJogo, rotaDoTime } from '@/modules/entrega/estatisticas/rotas'
 import type { BoxScoreDoJogo, LinhaHierarquia } from '@/modules/entrega/estatisticas/time'
-import { NumeroGrande } from '@/ui/blocos'
+import { FaixaAviso, NumeroGrande } from '@/ui/blocos'
 import { Abas } from '@/ui/controles'
 import { hora } from '@/ui/formato'
 import { IconeAvancar } from '@/ui/icones'
 import { SeloAoVivo, SeloNivel } from '@/ui/marcas'
 import { LogoTime } from '@/ui/midia'
+import { AVISO_TEMPORADA_ANTERIOR, SeletorTemporada } from '@/ui/SeletorTemporada'
 import { identidadeDoTime } from '@/ui/times'
 import { BotaoAcompanhar } from './BotaoAcompanhar'
 import { CabecalhoStats, SecaoStats, Silhueta, TabelaDados, UltimaAtualizacao, type Coluna } from './Comum'
@@ -17,14 +18,14 @@ import s from './Time.module.css'
 /** Ausência é "—", nunca zero. */
 const n = (v: number | null | undefined) => (v === null || v === undefined ? '—' : String(v))
 
-function colunas(prorrogacao: boolean, fuso: string): Coluna<BoxScoreDoJogo>[] {
+function colunas(prorrogacao: boolean, fuso: string, escolhida: string | undefined): Coluna<BoxScoreDoJogo>[] {
   const lista: Coluna<BoxScoreDoJogo>[] = [
     {
       chave: 'jogo',
       rotulo: 'Jogo',
       fixa: true,
       celula: (l) => (
-        <Link href={rotaDoJogo(l.jogoId)} className={s.jogoLink}>
+        <Link href={comTemporada(rotaDoJogo(l.jogoId), escolhida)} className={s.jogoLink}>
           <span className={`${s.fraco} num`}>{diaMes(l.data, fuso)}</span>
           {l.emCasa ? 'vs' : '@'} {l.adversarioSigla}
         </Link>
@@ -64,9 +65,23 @@ function colunas(prorrogacao: boolean, fuso: string): Coluna<BoxScoreDoJogo>[] {
  * desfalques CONTÍNUOS a partir do topo ficam em destaque: é a abertura que a
  * OPD lê.
  */
-function Hierarquia({ linhas }: { linhas: LinhaHierarquia[] }) {
+function Hierarquia({
+  linhas,
+  escolhida,
+  anterior,
+}: {
+  linhas: LinhaHierarquia[]
+  escolhida: string | undefined
+  anterior: string | null
+}) {
   if (linhas.length === 0) {
-    return <p className={s.vazio}>A curadoria NIP ainda não classifica este time neste atributo.</p>
+    return (
+      <p className={s.vazio}>
+        {anterior === null
+          ? 'A curadoria NIP ainda não classifica este time neste atributo.'
+          : `Nenhum jogador da curadoria NIP atuou por este time em ${anterior}.`}
+      </p>
+    )
   }
   const ordenadas = [...linhas].sort((a, b) => a.posicao - b.posicao)
   let prefixo = 0
@@ -77,7 +92,7 @@ function Hierarquia({ linhas }: { linhas: LinhaHierarquia[] }) {
         {ordenadas.map((l, i) => (
           <li key={l.jogadorId} className={s.degrau} data-abre={i < prefixo} data-fora={l.fora}>
             <span className={`${s.posicao} num`}>{l.posicao}</span>
-            <Link href={rotaDoJogador(l.jogadorId)} className={s.degrauNome}>
+            <Link href={comTemporada(rotaDoJogador(l.jogadorId), escolhida)} className={s.degrauNome}>
               {l.nome}
             </Link>
             <SeloNivel nivel={l.nivel} />
@@ -93,7 +108,8 @@ function Hierarquia({ linhas }: { linhas: LinhaHierarquia[] }) {
 }
 
 export function TelaTime({ dados }: { dados: DadosDoTime }) {
-  const { id, tela, temporada, fuso, atributo, hierarquia, jogoDeHoje, profundidade } = dados
+  const { id, tela, temporada, fuso, atributo, hierarquia, jogoDeHoje, profundidade, seletor } = dados
+  const { escolhida } = seletor
   const { time, campanha } = tela
   const identidade = identidadeDoTime(time.sigla)
   const prorrogacao = tela.jogosDoTime.some((j) => (j.nosso?.prorrogacao ?? 0) > 0)
@@ -103,12 +119,18 @@ export function TelaTime({ dados }: { dados: DadosDoTime }) {
   return (
     <div className={s.tela}>
       <CabecalhoStats
-        voltar={{ href: `${BASE_ESTATISTICAS}#classificacao`, rotulo: 'Classificação' }}
+        voltar={{ href: `${comTemporada(BASE_ESTATISTICAS, escolhida)}#classificacao`, rotulo: 'Classificação' }}
         icone={<LogoTime sigla={identidade.sigla} tamanho={64} />}
         titulo={identidade.nome}
         apoio={[identidade.sigla, time.conferencia ? `Conferência ${time.conferencia}` : null, `temporada ${temporada}`].filter(Boolean).join(' · ')}
         acoes={<BotaoAcompanhar tipo="TIME" id={id} inicial={dados.acompanhado} />}
       />
+      <SeletorTemporada
+        temporadas={seletor.disponiveis}
+        atual={temporada}
+        hrefDe={(t) => comTemporada(`${rotaDoTime(id)}?atributo=${atributo}`, t)}
+      />
+      {seletor.retroativa && <FaixaAviso>{AVISO_TEMPORADA_ANTERIOR}</FaixaAviso>}
 
       <SecaoStats titulo="Campanha" aux={`temporada ${temporada}`}>
         {campanha === null ? (
@@ -159,7 +181,7 @@ export function TelaTime({ dados }: { dados: DadosDoTime }) {
           {profundidade ? (
             <TabelaDados
               legenda="Pontos por quarto, da partida mais recente para a mais antiga"
-              colunas={colunas(prorrogacao, fuso)}
+              colunas={colunas(prorrogacao, fuso, escolhida)}
               linhas={tela.jogosDoTime}
               chaveDaLinha={(l) => l.jogoId}
               vazio="Nenhuma partida registrada para este time."
@@ -176,14 +198,21 @@ export function TelaTime({ dados }: { dados: DadosDoTime }) {
               abas={ATRIBUTOS_DA_HIERARQUIA.map((a) => ({
                 chave: a.valor,
                 rotulo: a.porExtenso,
-                href: `${rotaDoTime(id)}?atributo=${a.valor}`,
+                href: comTemporada(`${rotaDoTime(id)}?atributo=${a.valor}`, escolhida),
                 ativo: a.valor === atributo,
               }))}
             />
-            {jogoDeHoje === null && hierarquia.length > 0 && (
-              <p className={s.nota}>Sem jogo hoje: nenhum desfalque a marcar.</p>
+            {seletor.retroativa ? (
+              hierarquia.length > 0 && (
+                <p className={s.nota}>Com o time em que cada jogador atuou em {temporada}.</p>
+              )
+            ) : (
+              // Temporada passada não tem "hoje": a nota do desfalque do dia é só da atual.
+              !seletor.anterior &&
+              jogoDeHoje === null &&
+              hierarquia.length > 0 && <p className={s.nota}>Sem jogo hoje: nenhum desfalque a marcar.</p>
             )}
-            <Hierarquia linhas={hierarquia} />
+            <Hierarquia linhas={hierarquia} escolhida={escolhida} anterior={seletor.retroativa ? temporada : null} />
           </SecaoStats>
 
           <SecaoStats titulo="Elenco" aux="time atual">
@@ -193,7 +222,7 @@ export function TelaTime({ dados }: { dados: DadosDoTime }) {
               <ul className={s.elenco}>
                 {tela.elenco.map((j) => (
                   <li key={j.id}>
-                    <Link href={rotaDoJogador(j.id)} className={s.elencoLinha}>
+                    <Link href={comTemporada(rotaDoJogador(j.id), escolhida)} className={s.elencoLinha}>
                       <span className={s.elencoNome}>{j.nome}</span>
                       <span className={`${s.fraco} num`}>
                         {[j.posicao, j.numeroCamisa !== null ? `nº ${j.numeroCamisa}` : null].filter(Boolean).join(' · ')}

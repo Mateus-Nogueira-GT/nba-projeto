@@ -145,6 +145,14 @@ module.exports = {
       to: { path: '^src/(components|design-system)/' },
     },
     {
+      name: 'retroativo-sem-push',
+      comment:
+        'A temporada anterior nunca publica: nada de push, fila ou das tabelas do app ao vivo (spec 25/09).',
+      severity: 'error',
+      from: { path: '^src/modules/(dominio|entrega)/retroativo' },
+      to: { path: '^src/modules/entrega/(push|fila)' },
+    },
+    {
       name: 'sem-dependencia-circular',
       severity: 'error',
       comment: 'Ciclo de importação indica fronteira mal desenhada.',

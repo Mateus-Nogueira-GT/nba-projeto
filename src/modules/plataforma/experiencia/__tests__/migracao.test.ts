@@ -34,9 +34,11 @@ it('upgrade/rollback aditivo preserva dados anteriores de preferências, canais 
   await banco.pg.exec(readFileSync('drizzle/down/0020_new_brood.sql', 'utf8'))
   await banco.pg.exec(readFileSync('drizzle/down/0019_demonic_silver_surfer.sql', 'utf8'))
   await banco.pg.exec(readFileSync('drizzle/down/0018_experiencia_por_conta.sql', 'utf8'))
-  // 50 (era 49): a 0025 (entradas_realizadas, Task 10) não é descida aqui,
-  // então soma à contagem de base como qualquer migration fora deste range.
-  expect(await banco.contarTabelas()).toBe(50)
+  // 53 (era 50): a 0033/0034 (temporada retroativa — time_id do box score,
+  // apitos_retroativos, greens_retroativos, feed_retroativo) somam 3 tabelas
+  // à contagem de base, e a 0025 (entradas_realizadas, Task 10) tampouco é
+  // descida aqui — nenhuma delas entra no range 0018-0021 descido abaixo.
+  expect(await banco.contarTabelas()).toBe(53)
   expect(await preferenciasDoUsuario(banco.db, usuarioId)).toEqual({
     ordemLista: 'POR_NIVEL',
     lente: 'ODDS',
@@ -48,7 +50,9 @@ it('upgrade/rollback aditivo preserva dados anteriores de preferências, canais 
     '--> statement-breakpoint',
   ))
     await banco.pg.exec(sql)
-  expect(await banco.contarTabelas()).toBe(54)
+  // +4 de 0018 (atributos_silenciados, jogadores_acompanhados,
+  // jogadores_silenciados, times_acompanhados) sobre a base de 53 acima.
+  expect(await banco.contarTabelas()).toBe(57)
   const esperado = estadoExperienciaPadrao()
   esperado.canais.GREEN = false
   expect(await estadoExperienciaDoUsuario(banco.db, usuarioId)).toEqual(esperado)
@@ -66,7 +70,8 @@ it('upgrade/rollback aditivo preserva dados anteriores de preferências, canais 
       if (sql.trim()) await banco.pg.exec(sql)
     }
   }
-  expect(await banco.contarTabelas()).toBe(70)
+  // De volta ao total cheio (73) com 0019-0021 reaplicadas.
+  expect(await banco.contarTabelas()).toBe(73)
 })
 
 it('falha ao reexibir desfaz o acompanhamento na mesma transação', async () => {

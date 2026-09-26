@@ -18,22 +18,9 @@ import type { Resumo } from './identidade'
  * `ultimos_10` tem que ser um diff de YAML — regra 1 do CLAUDE.md.
  */
 
-import { janelaNoBanco, type JanelaMedia } from '../../dominio/janela'
+import { janelaNoBanco, tamanhoDaJanela, type JanelaMedia } from '../../dominio/janela'
 
 export type { JanelaMedia }
-
-/** Quantos jogos cada janela considera. `null` = todos os da temporada. */
-function tamanhoDaJanela(janela: JanelaMedia): number | null {
-  switch (janela) {
-    case 'temporada':
-      return null
-    case 'ultimos_5':
-      return 5
-    case 'ultimos_10':
-      return 10
-  }
-}
-
 
 function media(valores: number[]): string | null {
   if (valores.length === 0) return null

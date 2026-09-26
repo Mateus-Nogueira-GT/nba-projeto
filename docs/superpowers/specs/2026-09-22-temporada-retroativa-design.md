@@ -3,6 +3,14 @@
 **Data:** 22/09/2026 · **Status:** spec escrita; as três decisões de produto foram
 fechadas pelo parceiro no mesmo dia (seção 2). **Aprovada para execução.**
 
+> **Nota de 25/09/2026 — decisão 1 revogada.** O parceiro pediu o motor NIP
+> rodando também sobre 2025-26 ("o motor deve rodar em ambas, motor é
+> estático e somente a temporada e seus respectivos jogadores mudam"). A
+> decisão 1 desta seção ("só consulta, sem apito retroativo") **não vale
+> mais**: agora existem apitos, Lista Secreta e Fire Live retroativos para
+> 2025-26. As decisões 2 e 3 e o resto desta spec continuam valendo. Ver
+> [`docs/superpowers/specs/2026-09-25-motor-temporada-anterior-design.md`](2026-09-25-motor-temporada-anterior-design.md).
+
 **Contexto:** o lançamento é por volta de **02/10/2026** e a NBA só volta por volta de
 **03/11/2026** — cerca de **32 dias no ar sem uma bola quicando**. Hoje quem preenche
 esse vazio é o seed de demonstração, que escreve fatos inventados (`docs/demonstracao.md`).

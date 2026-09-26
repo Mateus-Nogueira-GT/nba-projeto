@@ -113,6 +113,7 @@ describe('adapter API-SPORTS — API-NBA v2', () => {
     await expect(fonte.boxScore('10403')).resolves.toEqual([
       {
         jogadorIdExterno: '265',
+        timeSiglaExterna: null,
         quarto: null,
         minutos: 8.5,
         pontos: 12,

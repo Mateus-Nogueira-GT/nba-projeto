@@ -125,6 +125,9 @@ export class FonteHttp implements FonteNBA {
   async boxScore(jogoIdExterno: string): Promise<LinhaBoxScore[]> {
     return (await this.buscar(`/games/${jogoIdExterno}/stats`)).map((s) => ({
       jogadorIdExterno: String((s['player'] as Json | undefined)?.['id'] ?? s['player_id'] ?? ''),
+      // Este adaptador genérico ainda não traduz o time da linha (fora do
+      // escopo desta tarefa) — igual a qualquer outro que não preenche o campo.
+      timeSiglaExterna: null,
       quarto: numero(s['period']),
       minutos: numero(s['min']),
       pontos: inteiro(s['pts']),

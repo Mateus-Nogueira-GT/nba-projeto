@@ -2,15 +2,17 @@ import Link from 'next/link'
 import type { ApitoDoJogador, LinhaHistorico, Numeros } from '@/modules/entrega/estatisticas/jogador'
 import {
   BASE_ESTATISTICAS,
+  comTemporada,
   parametrosEstatisticas,
   rotaDoJogador,
   rotaDoJogo,
   rotaDoTime,
 } from '@/modules/entrega/estatisticas/rotas'
-import { NumeroGrande } from '@/ui/blocos'
+import { FaixaAviso, NumeroGrande } from '@/ui/blocos'
 import { Abas, Segmentado } from '@/ui/controles'
 import { ROTULO_ATRIBUTO, SeloAoVivo, SeloNivel } from '@/ui/marcas'
 import { FotoJogador } from '@/ui/midia'
+import { AVISO_TEMPORADA_ANTERIOR, SeletorTemporada } from '@/ui/SeletorTemporada'
 import { BotaoAcompanhar } from './BotaoAcompanhar'
 import { CabecalhoStats, NotaPartida, SecaoStats, Silhueta, TabelaDados, UltimaAtualizacao, type Coluna } from './Comum'
 import { GraficoDesempenho } from './GraficoDesempenho'
@@ -148,7 +150,10 @@ function NumerosCompletos({ n }: { n: Numeros }) {
 }
 
 export function TelaJogador({ dados }: { dados: DadosDoJogador }) {
-  const { id, tela, contexto, temporada, fuso, profundidade } = dados
+  const { id, tela, contexto, temporada, fuso, profundidade, seletor } = dados
+  // Só a escolha VALIDADA viaja nos links (o mesmo padrão de `jogo.ts`),
+  // nunca um campo que se pareça com a URL crua.
+  const { escolhida } = seletor
   const { perfil, aoVivo, timeNaListaDoCj } = tela
   const mesmoTime = timeNaListaDoCj !== null && timeNaListaDoCj.id === perfil.timeId
   const rotuloPeriodo = contexto.periodo === 'temporada' ? `Temporada ${temporada}` : `Últimos ${contexto.periodo}`
@@ -164,8 +169,8 @@ export function TelaJogador({ dados }: { dados: DadosDoJogador }) {
       <CabecalhoStats
         voltar={
           contexto.q
-            ? { href: `${BASE_ESTATISTICAS}?q=${encodeURIComponent(contexto.q)}`, rotulo: 'Busca' }
-            : { href: BASE_ESTATISTICAS, rotulo: 'Estatísticas' }
+            ? { href: comTemporada(`${BASE_ESTATISTICAS}?q=${encodeURIComponent(contexto.q)}`, escolhida), rotulo: 'Busca' }
+            : { href: comTemporada(BASE_ESTATISTICAS, escolhida), rotulo: 'Estatísticas' }
         }
         icone={<FotoJogador nome={perfil.nome} fotoUrl={perfil.fotoUrl} tamanho={72} timeSigla={perfil.timeSigla ?? undefined} />}
         titulo={perfil.nome}
@@ -175,7 +180,7 @@ export function TelaJogador({ dados }: { dados: DadosDoJogador }) {
             <p className={s.times}>
               <span className={s.rotuloTime}>Time atual</span>
               {perfil.timeId ? (
-                <Link href={rotaDoTime(perfil.timeId)} className={s.linkTime}>
+                <Link href={rotaDoTime(perfil.timeId, escolhida)} className={s.linkTime}>
                   {perfil.timeSigla ?? '—'}
                 </Link>
               ) : (
@@ -188,7 +193,7 @@ export function TelaJogador({ dados }: { dados: DadosDoJogador }) {
               ) : mesmoTime ? (
                 <strong>{timeNaListaDoCj.sigla}</strong>
               ) : (
-                <Link href={rotaDoTime(timeNaListaDoCj.id)} className={s.linkTime}>
+                <Link href={rotaDoTime(timeNaListaDoCj.id, escolhida)} className={s.linkTime}>
                   {timeNaListaDoCj.sigla}
                 </Link>
               )}
@@ -202,6 +207,13 @@ export function TelaJogador({ dados }: { dados: DadosDoJogador }) {
         }
         acoes={<BotaoAcompanhar tipo="JOGADOR" id={id} inicial={dados.acompanhado} />}
       />
+
+      <SeletorTemporada
+        temporadas={seletor.disponiveis}
+        atual={temporada}
+        hrefDe={(t) => rotaDoJogador(id, { ...contexto, temporada: t })}
+      />
+      {seletor.retroativa && <FaixaAviso>{AVISO_TEMPORADA_ANTERIOR}</FaixaAviso>}
 
       {!perfil.ativo && <p className={s.alerta}>Jogador fora da liga segundo o provedor.</p>}
 

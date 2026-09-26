@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import type { LadoDaPartida, LinhaDoBoxScore } from '@/modules/entrega/estatisticas/jogo'
-import { rotaDoJogador, rotaDoJogo, rotaDoTime } from '@/modules/entrega/estatisticas/rotas'
+import { comTemporada, rotaDoJogador, rotaDoJogo, rotaDoTime } from '@/modules/entrega/estatisticas/rotas'
 import { EstadoVazio } from '@/ui/blocos'
 import { Abas } from '@/ui/controles'
 import { hora } from '@/ui/formato'
@@ -14,14 +14,15 @@ import type { AbaDoJogo, DadosDoJogo } from './jogo'
 import { dataHora, diaMes, pct } from './regras'
 import s from './Jogo.module.css'
 
-function colunasDoBoxScore(): Coluna<LinhaDoBoxScore>[] {
+/** A temporada ESCOLHIDA viaja em todo link de saída; sem escolha, nenhum muda. */
+function colunasDoBoxScore(escolhida: string | undefined): Coluna<LinhaDoBoxScore>[] {
   return [
     {
       chave: 'jogador',
       rotulo: 'Jogador',
       fixa: true,
       celula: (l) => (
-        <Link href={rotaDoJogador(l.jogadorId)} className={s.jogador}>
+        <Link href={comTemporada(rotaDoJogador(l.jogadorId), escolhida)} className={s.jogador}>
           <FotoJogador nome={l.nome} fotoUrl={l.fotoUrl} tamanho={28} />
           <span className={s.jogadorNome}>{l.nome}</span>
           {l.posicao && <span className={s.fraco}>{l.posicao}</span>}
@@ -49,7 +50,7 @@ function Placar({ dados }: { dados: DadosDoJogo }) {
   const encerrado = tela.status === 'ENCERRADO'
   const temPlacar = tela.casa.placar !== null && tela.visitante.placar !== null
   const lado = (l: LadoDaPartida, outro: LadoDaPartida) => (
-    <Link href={rotaDoTime(l.timeId)} className={s.lado}>
+    <Link href={rotaDoTime(l.timeId, dados.escolhida)} className={s.lado}>
       <span className={s.logo}>
         <LogoTime sigla={l.sigla} tamanho={56} />
       </span>
@@ -113,7 +114,7 @@ function Quartos({ casa, visitante }: { casa: LadoDaPartida; visitante: LadoDaPa
   )
 }
 
-function Desfalques({ lado }: { lado: LadoDaPartida }) {
+function Desfalques({ lado, escolhida }: { lado: LadoDaPartida; escolhida: string | undefined }) {
   return (
     <div className={s.desfalqueLado}>
       <p className={s.desfalqueTime}>
@@ -129,7 +130,7 @@ function Desfalques({ lado }: { lado: LadoDaPartida }) {
                 {d.status === 'FORA' ? 'Fora' : 'Dúvida'}
               </span>
               <span className={s.desfalqueTexto}>
-                <Link href={rotaDoJogador(d.jogadorId)}>
+                <Link href={comTemporada(rotaDoJogador(d.jogadorId), escolhida)}>
                   <strong>{d.nome}</strong>
                 </Link>
                 <span>
@@ -165,7 +166,7 @@ function VisaoGeral({ dados }: { dados: DadosDoJogo }) {
           <ul className={s.lideres}>
             {tela.lideres.map((l) => (
               <li key={l.rotulo}>
-                <Link href={rotaDoJogador(l.jogadorId)} className={s.lider}>
+                <Link href={comTemporada(rotaDoJogador(l.jogadorId), dados.escolhida)} className={s.lider}>
                   <span className={s.liderRotulo}>{l.rotulo}</span>
                   <span className={`${s.liderValor} num`}>{l.valor}</span>
                   <span className={s.liderNome}>
@@ -181,8 +182,8 @@ function VisaoGeral({ dados }: { dados: DadosDoJogo }) {
       {!encerrado && temDesfalque && (
         <SecaoStats titulo="Desfalques">
           <div className={s.desfalquesGrade}>
-            <Desfalques lado={tela.visitante} />
-            <Desfalques lado={tela.casa} />
+            <Desfalques lado={tela.visitante} escolhida={dados.escolhida} />
+            <Desfalques lado={tela.casa} escolhida={dados.escolhida} />
           </div>
         </SecaoStats>
       )}
@@ -211,7 +212,7 @@ function BoxScore({ dados }: { dados: DadosDoJogo }) {
         <SecaoStats key={lado.timeId} titulo={`${lado.sigla} · ${identidadeDoTime(lado.sigla).nome}`}>
           <TabelaDados
             legenda={`Box score de ${identidadeDoTime(lado.sigla).nome}`}
-            colunas={colunasDoBoxScore()}
+            colunas={colunasDoBoxScore(dados.escolhida)}
             linhas={lado.boxScore}
             chaveDaLinha={(l) => l.jogadorId}
             vazio="Box score em atualização."
@@ -233,7 +234,7 @@ function Confrontos({ dados }: { dados: DadosDoJogo }) {
         const casaVenceu = c.placarCasa > c.placarVisitante
         return (
           <li key={c.jogoId}>
-            <Link href={rotaDoJogo(c.jogoId)} className={s.confronto}>
+            <Link href={comTemporada(rotaDoJogo(c.jogoId), dados.escolhida)} className={s.confronto}>
               <span className={`${s.fraco} num`}>{diaMes(c.data, fuso)}</span>
               <span className={s.confrontoLado} data-venceu={!casaVenceu}>
                 <LogoTime sigla={c.siglaVisitante} tamanho={20} /> {c.siglaVisitante}

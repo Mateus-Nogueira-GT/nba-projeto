@@ -122,7 +122,19 @@ function Lente({ linha, lente }: { linha: LinhaDaLista; lente: Lente }) {
   }
 }
 
-function Linha({ linha, fuso, lente }: { linha: LinhaDaLista; fuso: string; lente: Lente }) {
+function Linha({
+  linha,
+  fuso,
+  lente,
+  semOdd,
+  href,
+}: {
+  linha: LinhaDaLista
+  fuso: string
+  lente: Lente
+  semOdd: boolean
+  href: string | undefined
+}) {
   const { item } = linha
   const cor = corDoApito(item.nivelApito, item.turbo)
   const mercado =
@@ -150,6 +162,7 @@ function Linha({ linha, fuso, lente }: { linha: LinhaDaLista; fuso: string; lent
         atributo={item.atributo}
         rotulo={rotulo}
         className={s.linha!}
+        href={href}
         destaque={item.turbo}
         style={{ ['--cor-apito' as string]: cor }}
       >
@@ -205,9 +218,12 @@ function Linha({ linha, fuso, lente }: { linha: LinhaDaLista; fuso: string; lent
         <span className={s.cConfianca}>
           <PilulaConfianca valor={item.confianca} grau={item.grauConfianca} />
         </span>
-        <span className={s.cOdd}>
-          <Odd linha={linha} />
-        </span>
+        {/* Sem odd (temporada anterior) a coluna não existe — nem célula, nem título. */}
+        {!semOdd && (
+          <span className={s.cOdd}>
+            <Odd linha={linha} />
+          </span>
+        )}
         <span className={s.cMedia}>
           <Media linha={linha} />
         </span>
@@ -315,17 +331,23 @@ export function TabelaDeApitos({
   fuso,
   lente,
   faixasConfianca = [],
+  semOdd = false,
+  hrefDaLinha,
 }: {
   grupos: GrupoDaLista[]
   estado: EstadoDaTabela
   fuso: string
   lente: Lente
   faixasConfianca?: { de: number; grau: number; rotulo_curto: string }[]
+  /** Temporada anterior: não há odd coletada de uma rodada que já passou. */
+  semOdd?: boolean
+  /** Para onde TODA linha leva, quando não é o apito de hoje. */
+  hrefDaLinha?: string
 }) {
   return (
-    <div className={s.tabela}>
+    <div className={s.tabela} data-sem-odd={semOdd || undefined}>
       <div className={s.cabecalho} role="presentation">
-        {COLUNAS.map((c) =>
+        {COLUNAS.filter((c) => !semOdd || c.chave !== 'odd').map((c) =>
           c.chave === 'confianca' ? (
             <span key={c.chave} className={`${c.classe} ${s.titulo} ${s.tituloComLegenda}`}>
               <Link
@@ -363,7 +385,7 @@ export function TabelaDeApitos({
           <CabecalhoDoGrupo grupo={g} fuso={fuso} />
           <ol className={s.linhas}>
             {g.linhas.map((l) => (
-              <Linha key={l.item.chave} linha={l} fuso={fuso} lente={lente} />
+              <Linha key={l.item.chave} linha={l} fuso={fuso} lente={lente} semOdd={semOdd} href={hrefDaLinha} />
             ))}
           </ol>
         </section>

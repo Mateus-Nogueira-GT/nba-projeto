@@ -25,8 +25,8 @@ import { numero, percentual } from './numeros'
  * dado canônico, que muda quando a liga registra e não quando a estratégia
  * roda.
  *
- * FRONTEIRA: o elenco vem do BOX SCORE REAL e de `jogadores.time_id` — nunca
- * da lista curada do CJ. Usar a lista aqui diria que um jogador atuou num jogo
+ * FRONTEIRA: o elenco vem do BOX SCORE REAL — o lado pelo `time_id` da linha
+ * do box, com `jogadores.time_id` como reserva — nunca da lista curada do CJ. Usar a lista aqui diria que um jogador atuou num jogo
  * que ele não disputou (CLAUDE.md, "armadilhas conhecidas").
  */
 
@@ -176,7 +176,23 @@ export async function telaDoJogo(
     db.select().from(times).where(inArray(times.id, idsTimes)),
     db.select().from(estatisticasTimeJogo).where(eq(estatisticasTimeJogo.jogoId, jogoId)),
     db.select().from(estatisticasJogo).where(eq(estatisticasJogo.jogoId, jogoId)),
-    db.select().from(jogadores).where(inArray(jogadores.timeId, idsTimes)),
+    // Os dois elencos de HOJE (desfalques) e quem tem linha NESTE box, esteja
+    // onde estiver hoje: um trocado depois do jogo ainda precisa de nome e rosto.
+    db
+      .select()
+      .from(jogadores)
+      .where(
+        or(
+          inArray(jogadores.timeId, idsTimes),
+          inArray(
+            jogadores.id,
+            db
+              .select({ id: estatisticasJogo.jogadorId })
+              .from(estatisticasJogo)
+              .where(eq(estatisticasJogo.jogoId, jogoId)),
+          ),
+        ),
+      ),
     db.select().from(lesoesEscalacao).where(eq(lesoesEscalacao.jogoId, jogoId)),
     // H2H: só jogos ENTRE estes dois times — o filtro já é o universo
     // certo, então o LIMIT no banco é exato (não corta confronto relevante).
@@ -242,21 +258,13 @@ export async function telaDoJogo(
     // Jogador sem linha não entrou em quadra, e listá-lo com tudo zerado diria
     // que jogou mal quando ele nem jogou.
     //
-    // LIMITAÇÃO CONHECIDA (revisão da Task 3/4, Important 2 — decidido NÃO
-    // corrigir agora): a associação jogador→time aqui é `jogadores.time_id`,
-    // o cadastro ATUAL, não o time que o jogador vestiu NAQUELE jogo
-    // específico. Um jogador trocado no meio da temporada aparece no box
-    // score do time de HOJE ao consultar um jogo PASSADO de antes da troca —
-    // exatamente o erro de atribuição que o resto do projeto guarda contra
-    // (CLAUDE.md, "os elencos da lista não são a NBA real"; aqui o mesmo
-    // risco entra por uma porta diferente, a tabela real do provedor, não a
-    // lista curada). A correção definitiva exige uma coluna `time_id` em
-    // `estatisticas_jogo` (o time daquele jogo, não o cadastro) preenchida
-    // pelo adaptador de ingestão real — hoje não há provedor contratado para
-    // projetar esse contrato. Registrado em docs/specs/README.md, tabela
-    // "Perguntas que bloqueiam" (Spec 01).
+    // O LADO é o time que o jogador vestiu NAQUELE jogo
+    // (`estatisticas_jogo.time_id`, spec 25/09 §3.1) — não o cadastro de hoje,
+    // que põe um jogador trocado depois da partida no time novo (ou fora
+    // dela). Linha sem o time do jogo (anterior à coluna, ou fonte que não o
+    // informa) cai no cadastro, a regra de antes.
     const linhas = boxJogadores
-      .filter((l) => jogadorPorId.get(l.jogadorId)?.timeId === timeId)
+      .filter((l) => (l.timeId ?? jogadorPorId.get(l.jogadorId)?.timeId) === timeId)
       .map((l): LinhaDoBoxScore => {
         const jogador = jogadorPorId.get(l.jogadorId)
         const minutos = numero(l.minutos)

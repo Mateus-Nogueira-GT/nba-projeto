@@ -194,13 +194,83 @@ export async function conferirRodadas(db: Db, ate: string, dias: number): Promis
   // estatísticas). Ler `jogadores.time_id` aqui faria o card de um elenco
   // projetado mostrar a sigla que a Lista Secreta não mostra e, pior, não
   // casar com nenhum lado do jogo — o confronto sumiria do apoio.
-  const identidades = await identidadesDeApresentacao(db, [
-    ...new Set(linhas.map((l) => l.jogadorId)),
+  const idsJogador = [...new Set(linhas.map((l) => l.jogadorId))]
+  const [identidades, timeDoCj, siglaPorTime, box] = await Promise.all([
+    identidadesDeApresentacao(db, idsJogador),
+    vinculosDaListaDoCj(db, idsJogador),
+    siglasDosTimes(db),
+    boxDeQuemJogou(db, [...new Set(linhas.map((l) => l.jogoId))]),
   ])
-  const idsJogo = [...new Set(linhas.map((l) => l.jogoId))]
-  const timeDoCj = await vinculosDaListaDoCj(db, [...new Set(linhas.map((l) => l.jogadorId))])
-  const listaTimes = await db.select({ id: times.id, sigla: times.sigla }).from(times)
-  const siglaPorTime = new Map(listaTimes.map((t) => [t.id, t.sigla] as const))
+
+  // (dia) → as linhas dele, na ordem da consulta; cada dia vira os seus cards.
+  const porDia = new Map<string, LinhaApitoComBox[]>()
+  for (const l of linhas) {
+    // Sem linha não há o que conferir — e o dia não nasce só por ela.
+    if (l.linha === null) continue
+    const timeId = timeDoCj.get(`${l.jogadorId}|${l.atributo}`) ?? null
+    const doDia = porDia.get(l.dataReferencia) ?? []
+    doDia.push({
+      ...l,
+      nome: identidades.get(l.jogadorId)?.nome ?? l.nome,
+      timeId,
+      timeSigla: timeId === null ? '—' : (siglaPorTime.get(timeId) ?? '—'),
+      box: box.get(`${l.jogoId}|${l.jogadorId}`) ?? null,
+    })
+    porDia.set(l.dataReferencia, doDia)
+  }
+
+  return [...porDia.entries()]
+    .sort(([a], [b]) => b.localeCompare(a))
+    .map(([dataReferencia, doDia]) => {
+      const lista = conferirLinhas(doDia)
+      return {
+        dataReferencia,
+        jogadores: lista,
+        acertos: lista.filter((j) => j.maiorLinhaBatida !== null).length,
+        conferidos: lista.filter((j) => j.valor !== null).length,
+      }
+    })
+}
+
+/** O box de um jogador num jogo, só com o que a conferência lê. */
+export type BoxConferido = { pontos: number; rebotes: number | null; assistencias: number | null }
+
+/**
+ * Uma linha de apito já com o jogador apresentado e o box do jogo — o que a
+ * conferência precisa, venha o apito de `apitos` ou de `apitos_retroativos`.
+ * Quem monta decide o TIME (a lista do CJ no app ao vivo, o time que ele
+ * jogou na temporada anterior); a conferência não sabe de onde ele veio.
+ */
+export type LinhaApitoComBox = {
+  jogoId: string
+  jogadorId: string
+  nome: string
+  fotoUrl: string | null
+  timeId: string | null
+  timeSigla: string
+  atributo: Atributo
+  nivelJogador: Nivel
+  nivelApito: number
+  turbo: boolean
+  linha: number | null
+  confianca: string | null
+  /** Só de quem ENTROU EM QUADRA (`entrouEmQuadra`); null é DNP ou box ausente. */
+  box: BoxConferido | null
+}
+
+/** A sigla de cada time por id — o cabeçalho e o card escrevem a sigla. */
+async function siglasDosTimes(db: Db): Promise<Map<string, string>> {
+  const lista = await db.select({ id: times.id, sigla: times.sigla }).from(times)
+  return new Map(lista.map((t) => [t.id, t.sigla] as const))
+}
+
+/**
+ * O box de quem entrou em quadra, por `jogo|jogador`. DNP é neutro (§4.4,
+ * §5.1): minutos positivos OU produção provam que o jogador entrou; uma
+ * linha inteira zerada não recebe um erro de aposta, e por isso nem entra.
+ */
+export async function boxDeQuemJogou(db: Db, idsJogo: string[]): Promise<Map<string, BoxConferido>> {
+  if (idsJogo.length === 0) return new Map()
   const observados = await db
     .select({
       jogoId: estatisticasJogo.jogoId,
@@ -209,37 +279,39 @@ export async function conferirRodadas(db: Db, ate: string, dias: number): Promis
     })
     .from(estatisticasJogo)
     .where(inArray(estatisticasJogo.jogoId, idsJogo))
-
-  // DNP é neutro (§4.4, §5.1). Minutos positivos OU produção provam que o
-  // jogador entrou; uma linha inteira zerada não recebe um erro de aposta.
-  const porJogoJogador = new Map(
-    observados.filter(entrouEmQuadra).map((o) => [`${o.jogoId}|${o.jogadorId}`, o] as const),
+  return new Map(
+    observados
+      .filter(entrouEmQuadra)
+      .map((o) => [`${o.jogoId}|${o.jogadorId}`, { pontos: o.pontos, rebotes: o.rebotes, assistencias: o.assistencias }] as const),
   )
+}
 
-  // (dia, jogador, atributo) é o card; as linhas se acumulam dentro dele.
-  const porDia = new Map<string, Map<string, JogadorConferido>>()
+/**
+ * A CONFERÊNCIA DE UM DIA: linhas de apito (com o box) viram cards.
+ *
+ * O agrupamento é por (jogo, jogador, atributo) — o card —, e as linhas se
+ * acumulam dentro dele; a ordem dos cards é a da primeira linha de cada um.
+ * Mesma função para o app ao vivo e para a temporada anterior: duas cópias
+ * desta conta divergiriam na primeira mudança de regra de veredito.
+ */
+export function conferirLinhas(linhas: LinhaApitoComBox[]): JogadorConferido[] {
+  const cards = new Map<string, JogadorConferido>()
 
   for (const l of linhas) {
     if (l.linha === null) continue
-
-    const doDia = porDia.get(l.dataReferencia) ?? new Map<string, JogadorConferido>()
     const chave = `${l.jogoId}|${l.jogadorId}|${l.atributo}`
-
-    const observado = porJogoJogador.get(`${l.jogoId}|${l.jogadorId}`)
-    const valor = observado ? valorDoAtributo(observado, l.atributo) : null
+    const valor = l.box ? valorDoAtributo(l.box, l.atributo) : null
     const bateu = valor === null ? null : valor >= l.linha
 
-    const timeId = timeDoCj.get(`${l.jogadorId}|${l.atributo}`) ?? null
-    const timeSigla = timeId === null ? '—' : (siglaPorTime.get(timeId) ?? '—')
     const atual =
-      doDia.get(chave) ??
+      cards.get(chave) ??
       ({
         chave,
         jogoId: l.jogoId,
         jogadorId: l.jogadorId,
-        nome: identidades.get(l.jogadorId)?.nome ?? l.nome,
-        timeId,
-        timeSigla,
+        nome: l.nome,
+        timeId: l.timeId,
+        timeSigla: l.timeSigla,
         fotoUrl: l.fotoUrl,
         atributo: l.atributo,
         nivelJogador: l.nivelJogador,
@@ -262,32 +334,19 @@ export async function conferirRodadas(db: Db, ate: string, dias: number): Promis
     if (bateu === true && (atual.maiorLinhaBatida === null || l.linha > atual.maiorLinhaBatida)) {
       atual.maiorLinhaBatida = l.linha
     }
-
-    doDia.set(chave, atual)
-    porDia.set(l.dataReferencia, doDia)
+    cards.set(chave, atual)
   }
 
-  return [...porDia.entries()]
-    .sort(([a], [b]) => b.localeCompare(a))
-    .map(([dataReferencia, doDia]) => {
-      const lista = [...doDia.values()].map((j) => {
-        const linhas = [...j.linhas].sort((a, b) => a.linha - b.linha)
-        const maisBaixa = linhas[0]?.linha
-        return {
-          ...j,
-          linhas,
-          linhaConferida: maisBaixa ?? null,
-          bateuLinhaMaisBaixa:
-            j.valor === null || maisBaixa === undefined ? null : j.valor >= maisBaixa,
-        }
-      })
-      return {
-        dataReferencia,
-        jogadores: lista,
-        acertos: lista.filter((j) => j.maiorLinhaBatida !== null).length,
-        conferidos: lista.filter((j) => j.valor !== null).length,
-      }
-    })
+  return [...cards.values()].map((j) => {
+    const linhas = [...j.linhas].sort((a, b) => a.linha - b.linha)
+    const maisBaixa = linhas[0]?.linha
+    return {
+      ...j,
+      linhas,
+      linhaConferida: maisBaixa ?? null,
+      bateuLinhaMaisBaixa: j.valor === null || maisBaixa === undefined ? null : j.valor >= maisBaixa,
+    }
+  })
 }
 
 // ===========================================================================
@@ -389,7 +448,20 @@ export type RecapDaNoite = {
  */
 export async function recapDaNoite(db: Db, dataReferencia: string): Promise<RecapDaNoite> {
   const [dia] = await conferirRodadas(db, somarDias(dataReferencia, 1), 1)
-  const cards = dia?.jogadores ?? []
+  return recapDosCards(db, dataReferencia, dia?.jogadores ?? [])
+}
+
+/**
+ * Os cards conferidos de UMA rodada, agrupados por jogo com o placar e os
+ * três números da noite. Separado de `recapDaNoite` para a temporada anterior
+ * (`retroativo/leitura.ts`) montar a mesma noite a partir de outra tabela de
+ * apitos — o agrupamento e a regra de "noite encerrada" são um só.
+ */
+export async function recapDosCards(
+  db: Db,
+  dataReferencia: string,
+  cards: JogadorConferido[],
+): Promise<RecapDaNoite> {
   const vazio: RecapDaNoite = {
     dataReferencia,
     publicados: 0,
@@ -468,7 +540,17 @@ export type FiltrosResultados = {
   atributo?: Atributo
   timeId?: string
   estrategia?: 'LISTA_SECRETA' | 'FIRE_LIVE'
+  /**
+   * A temporada ANTERIOR que a pessoa escolheu no seletor. Vai junto com os
+   * filtros para toda seta, aba e login levar a escolha adiante. Aqui só se
+   * confere o formato do rótulo: se ela existe de fato é `temporadaDaUrl` que
+   * decide, contra as temporadas que o banco tem.
+   */
+  temporada?: string
 }
+
+/** "2025-26" ou "2025" (`temporada.formato` do ruleset) — o formato, não a existência. */
+const ROTULO_DE_TEMPORADA = /^\d{4}(-\d{2})?$/
 
 export function filtrosResultadosDaUrl(
   params: Record<string, string | string[] | undefined>,
@@ -485,6 +567,9 @@ export function filtrosResultadosDaUrl(
     ...(typeof params.time === 'string' && z.uuid().safeParse(params.time).success
       ? { timeId: params.time }
       : {}),
+    ...(typeof params.temporada === 'string' && ROTULO_DE_TEMPORADA.test(params.temporada)
+      ? { temporada: params.temporada }
+      : {}),
   }
 }
 
@@ -493,6 +578,7 @@ export function rotaResultados(data: string, filtros: FiltrosResultados = {}): s
   if (filtros.estrategia) params.set('estrategia', filtros.estrategia)
   if (filtros.atributo) params.set('atributo', filtros.atributo)
   if (filtros.timeId) params.set('time', filtros.timeId)
+  if (filtros.temporada) params.set('temporada', filtros.temporada)
   return `/resultados/${encodeURIComponent(data)}${params.size ? `?${params}` : ''}`
 }
 
@@ -594,39 +680,64 @@ export async function conferirFireLive(
     db.select().from(times),
   ])
   const siglas = new Map(listaTimes.map((t) => [t.id, t.sigla]))
-  return linhas.map(({ apito, nome, fotoUrl, jogo, quarto, box }) => {
-    const encerrado =
-      jogo.status === 'ENCERRADO' || (jogo.quartoAtual !== null && jogo.quartoAtual > 1)
-    const dnp =
-      jogo.status === 'ENCERRADO' &&
-      box !== null &&
-      box.minutos !== null &&
-      Number(box.minutos) === 0 &&
-      !entrouEmQuadra({ ...box, rebotes: box.rebotesTotal })
-    const temDado =
-      quarto !== null &&
-      (quarto.minutos !== null ||
-        quarto.pontos > 0 ||
-        quarto.rebotes > 0 ||
-        quarto.assistencias > 0)
-    const estado = dnp ? 'DNP' : encerrado && temDado ? 'CONFERIDO' : 'PENDENTE'
-    const valor = estado === 'CONFERIDO' && quarto ? valorDoAtributo(quarto, apito.atributo) : null
-    const timeId = vinculos.get(`${apito.jogadorId}|${apito.atributo}`) ?? null
-    return {
-      id: apito.id,
-      jogadorId: apito.jogadorId,
-      jogoId: jogo.id,
-      nome: identidades.get(apito.jogadorId)?.nome ?? nome,
-      fotoUrl,
+  return linhas.map((l) => {
+    const timeId = vinculos.get(`${l.apito.jogadorId}|${l.apito.atributo}`) ?? null
+    return conferirLinhaFireLive(l, {
+      nome: identidades.get(l.apito.jogadorId)?.nome ?? l.nome,
       timeId,
       timeSigla: timeId ? (siglas.get(timeId) ?? '—') : '—',
-      atributo: apito.atributo,
-      alvo: apito.alvo1q,
-      valor,
-      bateu: valor === null || apito.alvo1q === null ? null : valor >= apito.alvo1q,
-      estado,
-    }
+    })
   })
+}
+
+/** Uma linha de apito do Fire Live com o jogo, o 1º quarto e o box — de qualquer tabela de apitos. */
+export type LinhaFireLiveComBox = {
+  apito: { id: string; jogadorId: string; atributo: Atributo; alvo1q: number | null }
+  fotoUrl: string | null
+  jogo: typeof jogos.$inferSelect
+  quarto: typeof estatisticasQuarto.$inferSelect | null
+  box: typeof estatisticasJogo.$inferSelect | null
+}
+
+/**
+ * O veredito de UM sinal do Fire Live: alvo gravado contra o split oficial do
+ * 1º quarto. Separado de `conferirFireLive` para a temporada anterior usar a
+ * mesma regra de DNP e de pendência; quem chama decide nome e time.
+ */
+export function conferirLinhaFireLive(
+  { apito, fotoUrl, jogo, quarto, box }: LinhaFireLiveComBox,
+  apresentacao: { nome: string; timeId: string | null; timeSigla: string },
+): ResultadoFireLive {
+  const encerrado =
+    jogo.status === 'ENCERRADO' || (jogo.quartoAtual !== null && jogo.quartoAtual > 1)
+  const dnp =
+    jogo.status === 'ENCERRADO' &&
+    box !== null &&
+    box.minutos !== null &&
+    Number(box.minutos) === 0 &&
+    !entrouEmQuadra({ ...box, rebotes: box.rebotesTotal })
+  const temDado =
+    quarto !== null &&
+    (quarto.minutos !== null ||
+      quarto.pontos > 0 ||
+      quarto.rebotes > 0 ||
+      quarto.assistencias > 0)
+  const estado = dnp ? 'DNP' : encerrado && temDado ? 'CONFERIDO' : 'PENDENTE'
+  const valor = estado === 'CONFERIDO' && quarto ? valorDoAtributo(quarto, apito.atributo) : null
+  return {
+    id: apito.id,
+    jogadorId: apito.jogadorId,
+    jogoId: jogo.id,
+    nome: apresentacao.nome,
+    fotoUrl,
+    timeId: apresentacao.timeId,
+    timeSigla: apresentacao.timeSigla,
+    atributo: apito.atributo,
+    alvo: apito.alvo1q,
+    valor,
+    bateu: valor === null || apito.alvo1q === null ? null : valor >= apito.alvo1q,
+    estado,
+  }
 }
 
 export type TaxaDaTemporada = { conferidos: number; acertos: number; rodadas: number }
@@ -670,7 +781,18 @@ export function diasDaTemporada(data: string, config: ConfigTemporada): number {
   return Math.max(1, Math.min(dias + 1, ateAPrimeiraData))
 }
 
-export async function taxaDaTemporada(db: Db, ate: string, dias: number): Promise<TaxaDaTemporada> {
+/**
+ * De onde a taxa lê os apitos. `apitos_retroativos` é a temporada anterior
+ * (spec 25/09): mesma conta, mesma janela, outra tabela — e nunca misturadas.
+ */
+export type TabelaDeApitos = 'apitos' | 'apitos_retroativos'
+
+export async function taxaDaTemporada(
+  db: Db,
+  ate: string,
+  dias: number,
+  tabela: TabelaDeApitos = 'apitos',
+): Promise<TaxaDaTemporada> {
   const deRef = somarDias(ate, -dias)
   const ateRef = somarDias(ate, -1)
   const resultado = await db.execute(sql`
@@ -695,7 +817,7 @@ export async function taxaDaTemporada(db: Db, ate: string, dias: number): Promis
                      when 'ASSISTENCIAS' then e.assistencias
                    end
                  end) as valor
-        from apitos a
+        from ${sql.identifier(tabela)} a
         join jogos j on j.id = a.jogo_id
         left join estatisticas_jogo e on e.jogo_id = a.jogo_id and e.jogador_id = a.jogador_id
        where a.estrategia = 'LISTA_SECRETA'
@@ -760,7 +882,11 @@ export type GreenDoDia = {
   nivelJogador: Nivel
   marco: number
   valor: number
-  detectadoEm: Date
+  /**
+   * Quando o green foi comemorado. null na temporada anterior: sem lance a
+   * lance, sabe-se que o marco saiu no 1º quarto, não o minuto (spec 25/09, §4).
+   */
+  detectadoEm: Date | null
 }
 
 /** Os greens comemorados pelo Fire Live na data — a outra metade da tela. */

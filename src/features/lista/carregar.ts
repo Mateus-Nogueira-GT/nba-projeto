@@ -2,6 +2,10 @@ import { getDb } from '@/modules/dominio/db/cliente'
 import { dataDeReferencia } from '@/modules/dominio/rodada'
 import { lerFeedCacheado } from '@/app/_cache/feed'
 import { estadoDaTemporadaCacheado } from '@/app/_cache/rodada'
+import { temporadasDaTelaCacheadas } from '@/app/_cache/temporada'
+import { feedRetroativoCacheado, temporadaAnteriorComDados } from '@/app/_cache/retroativo'
+import { temporadaDaTela } from '@/modules/entrega/retroativo/temporada'
+import type { Ruleset } from '@/modules/motor/ruleset/schema'
 import { agruparPorJogador, filtrarItens } from '@/modules/entrega/lista-secreta'
 import {
   agruparPorJogo,
@@ -44,7 +48,23 @@ export type GrupoDaLista = {
 
 export type MetodoDaLista = (typeof METODOS)[number]
 
-export type DadosDaLista =
+/** O seletor "2025-26 | 2026-27": só rótulos de temporada, nenhum dado da Lista. */
+export type SeletorDaLista = { temporada: string; temporadas: string[] }
+
+/**
+ * A Lista de um dia da TEMPORADA ANTERIOR (spec 25/09): a metodologia
+ * aplicada a posteriori, aberta a todo plano. Sem odd, e cada linha leva ao
+ * resultado daquele dia.
+ */
+export type ListaRetroativa = {
+  temporada: string
+  data: string
+  /** O dia anterior e o seguinte DENTRO da temporada; null nas pontas. */
+  anterior: string | null
+  proxima: string | null
+}
+
+export type DadosDaLista = (
   | {
       tipo: 'gratis'
       hoje: string
@@ -101,7 +121,10 @@ export type DadosDaLista =
       rulesetVersao: string
       /** Parágrafo editorial da rodada. Ausência é caso normal. */
       resumoDoDia: string | null
+      /** Preenchido só na temporada anterior — e aí não há portão de plano. */
+      retroativa: ListaRetroativa | null
     }
+) & { seletor: SeletorDaLista }
 
 const NORMALIZAR = (s: string) =>
   s
@@ -145,7 +168,20 @@ export async function carregarLista(estado: EstadoDaTabela): Promise<DadosDaList
   const { sessao, acesso } = await exigirNivel('GRATIS', '/')
   const ruleset = await rulesetAtivo()
   const { fuso } = ruleset.rodada
-  const hoje = dataDeReferencia(new Date(), fuso)
+  const agora = new Date()
+  const hoje = dataDeReferencia(agora, fuso)
+
+  // A TEMPORADA ANTERIOR (spec 25/09, decisão 6): aberta a todo plano, lida
+  // só de `feed_retroativo`. Abre quando ESCOLHIDA no seletor, ou por padrão
+  // só no hiato (`temporadaDaTela`). Tudo o mais — a atual na URL, lixo,
+  // nada fora do hiato, a noite de estreia — segue o caminho de hoje, com o portão.
+  const temporadas = await temporadasDaTelaCacheadas(ruleset, agora)
+  const { temporada: pedida } = temporadaDaTela(estado.temporada, temporadas)
+  const anterior = await temporadaAnteriorComDados(pedida, temporadas.doCalendario)
+  if (anterior) {
+    return carregarListaRetroativa({ estado, usuarioId: sessao.usuarioId, ruleset, hoje, anterior, temporadas: temporadas.disponiveis })
+  }
+  const seletor: SeletorDaLista = { temporada: temporadas.doCalendario, temporadas: temporadas.disponiveis }
 
   const [preferencias, jogosDoDia, experiencia] = await Promise.all([
     preferenciasDoUsuario(getDb(), sessao.usuarioId),
@@ -164,7 +200,7 @@ export async function carregarLista(estado: EstadoDaTabela): Promise<DadosDaList
     const porJogo: Record<string, number> = {}
     const unicos = feedGratis ? agruparPorJogador(feedGratis.conteudo.itens) : []
     for (const i of unicos) porJogo[i.jogoId] = (porJogo[i.jogoId] ?? 0) + 1
-    return { tipo: 'gratis', hoje, fuso, jogos: jogosDoDia, bloqueados: { total: unicos.length, porJogo } }
+    return { tipo: 'gratis', hoje, fuso, jogos: jogosDoDia, bloqueados: { total: unicos.length, porJogo }, seletor }
   }
 
   // O snapshot MATERIALIZADO, pelo cache e DEPOIS do portão — a tela nunca
@@ -186,12 +222,60 @@ export async function carregarLista(estado: EstadoDaTabela): Promise<DadosDaList
     const temporada = primeiro === undefined ? await estadoDaTemporadaCacheado(hoje, ruleset) : null
     const hiato =
       temporada?.emHiato === true ? { exibida: temporada.exibida, proximoJogo: temporada.proximoJogo } : null
-    return { tipo: 'aguardando', hoje, fuso, saida, hiato }
+    return { tipo: 'aguardando', hoje, fuso, saida, hiato, seletor }
   }
 
+  return {
+    ...(await montarTabela({
+      estado,
+      preferencias,
+      seguidos,
+      jogosDoDia,
+      itensDoDia: feed.conteudo.itens,
+      ruleset,
+      hierarquia: true,
+    })),
+    hoje,
+    fuso,
+    dataReferencia: feed.conteudo.dataReferencia,
+    geradoEm: feed.geradoEm,
+    rulesetVersao: feed.conteudo.rulesetVersao,
+    resumoDoDia: feed.conteudo.resumoDoDia ?? null,
+    retroativa: null,
+    seletor,
+  }
+}
+
+/** O que a tabela da Lista recebe, venha o dia do feed de hoje ou do retroativo. */
+type EntradaDaTabela = {
+  estado: EstadoDaTabela
+  preferencias: { ordemLista: OrdemLista; lente: Lente }
+  seguidos: Set<string>
+  jogosDoDia: JogoResumo[]
+  itensDoDia: ItemFeed[]
+  ruleset: Ruleset
+  /**
+   * A hierarquia do time é a da lista do CJ de HOJE: só vale para a temporada
+   * de hoje. Na anterior ela não é consultada, e as lentes sem dado (a da
+   * hierarquia e a de odds) caem na dos últimos jogos.
+   */
+  hierarquia: boolean
+}
+
+/** As lentes que a temporada anterior não tem como preencher. */
+const LENTES_SEM_DADO: Record<Lente, boolean> = { ULT5: false, MEDIA_LINHA: false, ODDS: true, HIERARQUIA: true }
+
+/**
+ * A TABELA DO DIA: recortes da URL, agrupamento, ordenação e contagens —
+ * a mesma para a Lista de hoje e para a da temporada anterior.
+ */
+async function montarTabela({ estado, preferencias, seguidos, jogosDoDia, itensDoDia, ruleset, hierarquia }: EntradaDaTabela) {
   const ordem = estado.ordem ?? preferencias.ordemLista
-  const lente = estado.lente ?? preferencias.lente
-  const doDia = feed.conteudo.itens
+  const lentePedida = estado.lente ?? preferencias.lente
+  // Sem hierarquia (a da temporada anterior não é a de hoje) a lente dela não
+  // existe, e sem odd a de odds também não: cai na dos últimos jogos.
+  const lente = LENTES_SEM_DADO[lentePedida] && !hierarquia ? 'ULT5' : lentePedida
+  const doDia = itensDoDia
   const jogoPorId = new Map(jogosDoDia.map((j) => [j.id, j] as const))
 
   // Uma linha por (jogador, atributo) — a melhor linha — já recortada.
@@ -216,7 +300,7 @@ export async function carregarLista(estado: EstadoDaTabela): Promise<DadosDaList
   }
 
   const hierarquias =
-    lente === 'HIERARQUIA'
+    hierarquia && lente === 'HIERARQUIA'
       ? await hierarquiaDosApitados(
           getDb(),
           itens.map((i) => ({ jogadorId: i.jogadorId, atributo: i.atributo })),
@@ -262,9 +346,7 @@ export async function carregarLista(estado: EstadoDaTabela): Promise<DadosDaList
   ) as Record<Atributo, number>
 
   return {
-    tipo: 'lista',
-    hoje,
-    fuso,
+    tipo: 'lista' as const,
     ordem,
     lente,
     grupos,
@@ -290,9 +372,65 @@ export async function carregarLista(estado: EstadoDaTabela): Promise<DadosDaList
       ),
     },
     contagemPorAtributo,
-    dataReferencia: feed.conteudo.dataReferencia,
-    geradoEm: feed.geradoEm,
-    rulesetVersao: feed.conteudo.rulesetVersao,
-    resumoDoDia: feed.conteudo.resumoDoDia ?? null,
+  }
+}
+
+/**
+ * A LISTA DE UM DIA DA TEMPORADA ANTERIOR — sem corte nem portão de plano
+ * (decisão 6): é a metodologia aplicada a jogos que já aconteceram, nada
+ * daqui foi publicado nem serve para apostar hoje. Lê SÓ `feed_retroativo`;
+ * o feed pago de hoje não entra neste caminho.
+ *
+ * A data da URL só vale se for uma das datas da temporada; senão, a primeira.
+ */
+async function carregarListaRetroativa({
+  estado,
+  usuarioId,
+  ruleset,
+  hoje,
+  anterior: { temporada, datas },
+  temporadas,
+}: {
+  estado: EstadoDaTabela
+  usuarioId: string
+  ruleset: Ruleset
+  hoje: string
+  anterior: { temporada: string; datas: string[] }
+  temporadas: string[]
+}): Promise<DadosDaLista> {
+  const { fuso } = ruleset.rodada
+  const data = estado.data !== undefined && datas.includes(estado.data) ? estado.data : datas[0]!
+  const [preferencias, jogosDoDia, experiencia, feed] = await Promise.all([
+    preferenciasDoUsuario(getDb(), usuarioId),
+    jogosDoDiaResumo(getDb(), data, fuso),
+    estadoExperienciaDoUsuario(getDb(), usuarioId),
+    feedRetroativoCacheado(temporada, data),
+  ])
+  const posicao = datas.indexOf(data)
+  return {
+    ...(await montarTabela({
+      estado,
+      preferencias,
+      seguidos: new Set(experiencia.jogadoresAcompanhados),
+      jogosDoDia,
+      // Dia com jogo e sem apito tem feed vazio; dia só com apito do Fire Live não tem feed.
+      itensDoDia: feed?.itens ?? [],
+      ruleset,
+      hierarquia: false,
+    })),
+    hoje,
+    fuso,
+    dataReferencia: data,
+    // Quando o script calculou — não "publicada": nada daqui foi publicado.
+    geradoEm: feed ? new Date(feed.geradoEm) : new Date(`${data}T12:00:00.000Z`),
+    rulesetVersao: feed?.rulesetVersao ?? `v${ruleset.version}`,
+    resumoDoDia: null,
+    retroativa: {
+      temporada,
+      data,
+      anterior: datas[posicao - 1] ?? null,
+      proxima: datas[posicao + 1] ?? null,
+    },
+    seletor: { temporada, temporadas },
   }
 }
