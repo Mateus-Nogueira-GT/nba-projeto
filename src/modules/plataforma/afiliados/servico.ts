@@ -1,6 +1,7 @@
 import { createHash, randomBytes } from 'node:crypto'
 
-import { and, asc, desc, eq, gt, gte, inArray, isNull, lt, ne, sql } from 'drizzle-orm'
+import { and, asc, desc, eq, gt, gte, inArray, isNotNull, isNull, lt, ne, sql } from 'drizzle-orm'
+import { alias } from 'drizzle-orm/pg-core'
 
 import {
   acordosAfiliados,
@@ -33,14 +34,18 @@ import { decidirAtribuicao } from './atribuicao'
 import { calcularParcelaDoParceiro } from './financeiro'
 import { mascararIdentificador, prepararImportacaoCsv } from './importacao-csv'
 import { acrescentarParametrosComerciais, validarDestinoComercial } from './links'
+import { atribuicaoIndicadaNoCadastro } from './predicado-indicacao'
 
 export type AtorAfiliados = { usuarioId: string; papel: 'USUARIO' | 'ADMIN' }
 
-function exigirAdmin(ator: AtorAfiliados): void {
+// Exportadas para `indicacoes.ts`: os links de indicação são mutação
+// comercial como qualquer outra deste módulo e passam pela MESMA guarda e pela
+// MESMA trilha de auditoria — uma cópia local divergiria em silêncio.
+export function exigirAdmin(ator: AtorAfiliados): void {
   if (ator.papel !== 'ADMIN') throw new Error('Acesso administrativo exigido')
 }
 
-async function auditar(
+export async function auditar(
   db: Db,
   atorUsuarioId: string | null,
   acao: string,
@@ -94,16 +99,32 @@ export async function criarCasaComercial(db: Db, ator: AtorAfiliados, nome: stri
   return casa!
 }
 
+const ERRO_PARCEIRO_DE_OUTRA_CONTA = 'Este parceiro já está ligado a outra conta'
+
 export async function criarConvite(
   db: Db,
   ator: AtorAfiliados,
-  entrada: { email: string; nomePublico: string; expiraEm: Date },
+  entrada: { email: string; nomePublico: string; expiraEm: Date; parceiroId?: string | null },
   agora: Date,
 ) {
   exigirAdmin(ator)
   const email = entrada.email.trim().toLowerCase()
   if (!/^\S+@\S+\.\S+$/.test(email)) throw new Error('E-mail inválido')
   if (entrada.expiraEm.getTime() <= agora.getTime()) throw new Error('Expiração inválida')
+  // Convite para um parceiro que o admin JÁ cadastrou (auditoria 26/09): sem
+  // isso, o aceite sempre criava um segundo parceiro e o cadastrado ficava
+  // órfão para sempre. A checagem aqui é só a gentileza de falhar cedo; quem
+  // manda é a do aceite, que roda na transação.
+  const parceiroId = entrada.parceiroId || null
+  if (parceiroId) {
+    const [parceiro] = await db
+      .select({ usuarioId: parceirosAfiliados.usuarioId })
+      .from(parceirosAfiliados)
+      .where(eq(parceirosAfiliados.id, parceiroId))
+      .limit(1)
+    if (!parceiro) throw new Error('Parceiro não encontrado')
+    if (parceiro.usuarioId) throw new Error(ERRO_PARCEIRO_DE_OUTRA_CONTA)
+  }
   const token = randomBytes(32).toString('base64url')
   const tokenHash = createHash('sha256').update(token).digest('hex')
   const [convite] = await db
@@ -114,16 +135,40 @@ export async function criarConvite(
       tokenHash,
       criadoPorId: ator.usuarioId,
       expiraEm: entrada.expiraEm,
+      parceiroId,
       criadoEm: agora,
     })
     .returning()
-  await auditar(db, ator.usuarioId, 'CONVITE_CRIADO', 'CONVITE', convite!.id, agora)
+  await auditar(db, ator.usuarioId, 'CONVITE_CRIADO', 'CONVITE', convite!.id, agora, {
+    parceiroId,
+  })
   return { convite: convite!, token }
 }
 
+/**
+ * Aceite do convite. A conta pode chegar em três estados, e nenhum deles pode
+ * estourar o único de `parceiros_afiliados.usuario_id`:
+ *
+ * - sem parceiro nenhum: liga ao parceiro do convite (se o admin apontou um)
+ *   ou cria um PARCEIRO novo — o comportamento de antes;
+ * - com o parceiro USUARIO do link pessoal (criado na primeira visita a
+ *   `/conta`) e convite SEM parceiro: o próprio USUARIO é promovido a
+ *   PARCEIRO — os links e indicações dele continuam onde estão;
+ * - com o parceiro USUARIO e convite COM parceiro: as campanhas (e com elas
+ *   os links) e as atribuições do USUARIO passam para o parceiro do convite,
+ *   o USUARIO vazio é apagado e a conta é ligada ao do convite. Assim o link
+ *   pessoal que a pessoa já divulgou continua valendo, agora sob o parceiro
+ *   comercial.
+ */
 export async function aceitarConvite(db: Db, usuarioId: string, token: string, agora: Date) {
   const tokenHash = createHash('sha256').update(token).digest('hex')
   return db.transaction(async (tx) => {
+    // A mesma trava de conta que `linkPessoalDoUsuario` toma: sem ela, a
+    // primeira visita a /conta numa outra aba podia criar o parceiro USUARIO
+    // entre a leitura abaixo e a escrita, e o aceite estouraria o único.
+    await tx.execute(
+      sql`select pg_advisory_xact_lock(${TRAVA.AFILIADO_USUARIO}, hashtext(${usuarioId}))`,
+    )
     const [convite] = await tx
       .select()
       .from(convitesAfiliados)
@@ -135,31 +180,150 @@ export async function aceitarConvite(db: Db, usuarioId: string, token: string, a
     const [usuario] = await tx.select().from(usuarios).where(eq(usuarios.id, usuarioId)).limit(1)
     if (!usuario || usuario.email.toLowerCase() !== convite.email)
       throw new Error('Convite pertence a outro e-mail')
-    const codigoBase = convite.nomePublico
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '')
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/^-|-$/g, '')
-      .slice(0, 48)
-    const codigo = `${codigoBase || 'parceiro'}-${convite.id.slice(0, 8)}`
-    const [parceiro] = await tx
-      .insert(parceirosAfiliados)
-      .values({
-        usuarioId,
-        codigo,
-        nomePublico: convite.nomePublico,
-        criadoEm: agora,
-        atualizadoEm: agora,
+
+    const [daConta] = await tx
+      .select()
+      .from(parceirosAfiliados)
+      .where(eq(parceirosAfiliados.usuarioId, usuarioId))
+      .limit(1)
+    // `FOR UPDATE`: dois aceites de convites diferentes apontando para o mesmo
+    // parceiro não podem ambos vê-lo sem conta e ambos ligá-lo.
+    const [doConvite] = convite.parceiroId
+      ? await tx
+          .select()
+          .from(parceirosAfiliados)
+          .where(eq(parceirosAfiliados.id, convite.parceiroId))
+          .limit(1)
+          .for('update')
+      : []
+    if (convite.parceiroId && !doConvite) throw new Error('Parceiro do convite não encontrado')
+    if (doConvite?.usuarioId && doConvite.usuarioId !== usuarioId) {
+      throw new Error(ERRO_PARCEIRO_DE_OUTRA_CONTA)
+    }
+
+    let parceiro: typeof parceirosAfiliados.$inferSelect
+    if (doConvite && daConta && daConta.id !== doConvite.id) {
+      if (daConta.tipo !== 'USUARIO') {
+        // Duas contas comerciais com acordos e comissões próprias: juntar é
+        // decisão de gente, não de um clique no convite.
+        throw new Error('Esta conta já é parceira; fale com a equipe NIP')
+      }
+      parceiro = await mesclarParceiroUsuario(tx, daConta.id, doConvite.id, usuarioId, agora)
+    } else if (doConvite) {
+      // Conta sem parceiro (ou já ligada a este mesmo): só liga.
+      const [ligado] = await tx
+        .update(parceirosAfiliados)
+        .set({ usuarioId, atualizadoEm: agora })
+        .where(eq(parceirosAfiliados.id, doConvite.id))
+        .returning()
+      parceiro = ligado!
+    } else if (daConta?.tipo === 'USUARIO') {
+      // Convite sem parceiro apontado e conta que já tem o parceiro do link
+      // pessoal: promover, em vez de criar um segundo.
+      const [promovido] = await tx
+        .update(parceirosAfiliados)
+        .set({ tipo: 'PARCEIRO', nomePublico: convite.nomePublico, atualizadoEm: agora })
+        .where(eq(parceirosAfiliados.id, daConta.id))
+        .returning()
+      parceiro = promovido!
+      await auditar(tx, usuarioId, 'PARCEIRO_USUARIO_PROMOVIDO', 'PARCEIRO', daConta.id, agora, {
+        conviteId: convite.id,
       })
-      .returning()
+    } else if (daConta) {
+      // Conta que JÁ é parceira comercial recebendo outro convite: nada a
+      // criar nem renomear — o convite só é consumido sob o parceiro dela.
+      parceiro = daConta
+    } else {
+      const codigoBase = convite.nomePublico
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-|-$/g, '')
+        .slice(0, 48)
+      const codigo = `${codigoBase || 'parceiro'}-${convite.id.slice(0, 8)}`
+      const [criado] = await tx
+        .insert(parceirosAfiliados)
+        .values({
+          usuarioId,
+          codigo,
+          nomePublico: convite.nomePublico,
+          criadoEm: agora,
+          atualizadoEm: agora,
+        })
+        .returning()
+      parceiro = criado!
+    }
     await tx
       .update(convitesAfiliados)
-      .set({ consumidoEm: agora, parceiroId: parceiro!.id })
+      .set({ consumidoEm: agora, parceiroId: parceiro.id })
       .where(eq(convitesAfiliados.id, convite.id))
-    await auditar(tx, usuarioId, 'CONVITE_ACEITO', 'PARCEIRO', parceiro!.id, agora)
-    return parceiro!
+    await auditar(tx, usuarioId, 'CONVITE_ACEITO', 'PARCEIRO', parceiro.id, agora)
+    return parceiro
   })
+}
+
+/**
+ * Passa tudo o que o parceiro USUARIO tem para o parceiro do convite e apaga
+ * o USUARIO. As tabelas que apontam para `parceiros_afiliados.id` são sete;
+ * cada uma é tratada aqui para o DELETE nunca falhar nem deixar linha órfã:
+ *
+ * - campanhas (e, por elas, os links) e atribuições: movidas — são o link
+ *   pessoal e as indicações que ele já trouxe;
+ * - convites: movidos (o FK é `set null`, e apagar perderia o histórico);
+ * - acordos, itens de importação, comissões e repasses: dinheiro de casa. Um
+ *   USUARIO nunca os tem (indicação não gera pagamento); se tiver, alguém
+ *   mexeu à mão, e mover dinheiro entre parceiros em silêncio não é papel do
+ *   aceite — recusa.
+ */
+async function mesclarParceiroUsuario(
+  tx: Db,
+  parceiroUsuarioId: string,
+  parceiroDestinoId: string,
+  usuarioId: string,
+  agora: Date,
+) {
+  const comDinheiro = await Promise.all(
+    [acordosAfiliados, itensImportacaoAfiliados, comissoesAfiliados, repassesAfiliados].map(
+      (tabela) =>
+        tx
+          .select({ id: tabela.id })
+          .from(tabela)
+          .where(eq(tabela.parceiroId, parceiroUsuarioId))
+          .limit(1),
+    ),
+  )
+  if (comDinheiro.some((linhas) => linhas.length > 0)) {
+    throw new Error('O link pessoal desta conta tem movimento comercial; fale com a equipe NIP')
+  }
+  const campanhas = await tx
+    .update(campanhasAfiliados)
+    .set({ parceiroId: parceiroDestinoId, atualizadoEm: agora })
+    .where(eq(campanhasAfiliados.parceiroId, parceiroUsuarioId))
+    .returning({ id: campanhasAfiliados.id })
+  const atribuicoes = await tx
+    .update(atribuicoesAfiliados)
+    .set({ parceiroId: parceiroDestinoId })
+    .where(eq(atribuicoesAfiliados.parceiroId, parceiroUsuarioId))
+    .returning({ id: atribuicoesAfiliados.id })
+  await tx
+    .update(convitesAfiliados)
+    .set({ parceiroId: parceiroDestinoId })
+    .where(eq(convitesAfiliados.parceiroId, parceiroUsuarioId))
+  // Apagar ANTES de ligar: `usuario_id` é único, e os dois parceiros não
+  // podem apontar para a conta ao mesmo tempo.
+  await tx.delete(parceirosAfiliados).where(eq(parceirosAfiliados.id, parceiroUsuarioId))
+  const [destino] = await tx
+    .update(parceirosAfiliados)
+    .set({ usuarioId, atualizadoEm: agora })
+    .where(eq(parceirosAfiliados.id, parceiroDestinoId))
+    .returning()
+  await auditar(tx, usuarioId, 'PARCEIRO_USUARIO_MESCLADO', 'PARCEIRO', parceiroDestinoId, agora, {
+    parceiroUsuarioId,
+    campanhasMovidas: campanhas.length,
+    atribuicoesMovidas: atribuicoes.length,
+  })
+  return destino!
 }
 
 export async function criarOferta(
@@ -228,6 +392,13 @@ function caminhoNipSeguro(valor: string | null | undefined): string {
   return caminho
 }
 
+/** A mesma regra de código para todo link, de casa ou de indicação. */
+export function normalizarCodigoDeLink(valor: string): string {
+  const codigo = valor.trim().toLowerCase()
+  if (!/^[a-z0-9][a-z0-9-]{2,95}$/.test(codigo)) throw new Error('Código de link inválido')
+  return codigo
+}
+
 export async function criarCampanhaComLink(
   db: Db,
   ator: AtorAfiliados,
@@ -245,8 +416,7 @@ export async function criarCampanhaComLink(
   agora: Date,
 ) {
   exigirAdmin(ator)
-  const codigo = entrada.codigo.trim().toLowerCase()
-  if (!/^[a-z0-9][a-z0-9-]{2,95}$/.test(codigo)) throw new Error('Código de link inválido')
+  const codigo = normalizarCodigoDeLink(entrada.codigo)
   const caminhoNip = entrada.tipoDestino === 'NIP' ? caminhoNipSeguro(entrada.caminhoNip) : null
   for (const chave of Object.keys(entrada.utms ?? {})) {
     if (!/^utm_(source|medium|campaign|id|content|term)$/.test(chave))
@@ -318,6 +488,20 @@ export async function associarVisitanteAoUsuario(
       .orderBy(desc(atribuicoesAfiliados.inicio))
       .limit(1)
     if (!atribuicao) return { associada: false, conflito: false }
+    // NINGUÉM SE INDICA — só em link de indicação (CADASTRO). O dono que
+    // clicou deslogado no próprio link criou uma atribuição anônima (o clique
+    // não tinha como saber quem era); ao entrar, ela não é ligada a ele — nem
+    // vira CADASTRO_NIP, nem CONFLITO. Links NIP/CASA seguem a regra de hoje:
+    // a comissão de casa não muda com o rastreamento de indicação.
+    const [linkDeOrigem] = await tx
+      .select({ usuarioId: parceirosAfiliados.usuarioId, tipoDestino: linksAfiliados.tipoDestino })
+      .from(parceirosAfiliados)
+      .innerJoin(linksAfiliados, eq(linksAfiliados.id, atribuicao.linkOrigemId))
+      .where(eq(parceirosAfiliados.id, atribuicao.parceiroId))
+      .limit(1)
+    if (linkDeOrigem?.tipoDestino === 'CADASTRO' && linkDeOrigem.usuarioId === usuarioId) {
+      return { associada: false, conflito: false }
+    }
     if (atribuicao.usuarioId && atribuicao.usuarioId !== usuarioId) {
       await tx
         .update(atribuicoesAfiliados)
@@ -368,9 +552,35 @@ export async function associarVisitanteAoUsuario(
   })
 }
 
-export type ConfiguracaoDoLink = Awaited<ReturnType<typeof configuracaoDoLink>>
+/** Link que sai para uma oferta de casa (NIP/CASA): sempre tem a oferta ATIVA. */
+type ConfiguracaoComOferta = {
+  link: typeof linksAfiliados.$inferSelect
+  campanha: typeof campanhasAfiliados.$inferSelect
+  parceiro: typeof parceirosAfiliados.$inferSelect
+  oferta: typeof ofertasAfiliados.$inferSelect
+}
 
-async function configuracaoDoLink(db: Db, codigo: string) {
+/**
+ * Link de indicação (CADASTRO): leva a `/cadastrar` e não tem oferta, acordo
+ * nem casa — por isso `oferta` é nula aqui, e não "uma oferta qualquer".
+ */
+type ConfiguracaoDeCadastro = Omit<ConfiguracaoComOferta, 'oferta'> & { oferta: null }
+
+export type ConfiguracaoDoLink = ConfiguracaoComOferta | ConfiguracaoDeCadastro
+
+const DESTINO_DO_CADASTRO = '/cadastrar'
+
+/**
+ * Só a saída para a casa precisa da oferta. Um link de indicação que chegue
+ * aqui (alguém montou `/ir/<codigo-de-cadastro>` à mão) recebe o mesmo erro de
+ * uma oferta fora do ar — a rota o transforma em "oferta indisponível".
+ */
+function exigirOferta(configuracao: ConfiguracaoDoLink): ConfiguracaoComOferta {
+  if (!configuracao.oferta) throw new Error('Oferta indisponível')
+  return configuracao
+}
+
+async function configuracaoDoLink(db: Db, codigo: string): Promise<ConfiguracaoDoLink> {
   const [link] = await db
     .select()
     .from(linksAfiliados)
@@ -389,6 +599,19 @@ async function configuracaoDoLink(db: Db, codigo: string) {
     .where(eq(parceirosAfiliados.id, campanha.parceiroId))
     .limit(1)
   if (!parceiro || parceiro.status !== 'ATIVO') throw new Error('Link indisponível')
+  // Link de indicação: as três recusas acima (link, campanha, parceiro) valem
+  // igual, mas oferta não existe — consultá-la derrubaria todo link de
+  // cadastro no dia em que nenhuma casa estivesse ativa. Um CADASTRO fora de
+  // campanha de INDICACAO é dado incoerente e é recusado como indisponível.
+  if (link.tipoDestino === 'CADASTRO') {
+    if (campanha.finalidade !== 'INDICACAO') throw new Error('Link indisponível')
+    return { link, campanha, parceiro, oferta: null }
+  }
+  // Link NIP/CASA sai para uma oferta e pertence a campanha de finalidade
+  // CASA, que o CHECK `campanhas_afiliados_oferta_por_finalidade` obriga a ter
+  // oferta_id. Sem ela (NIP/CASA pendurado numa campanha de INDICACAO), a
+  // resposta é a de oferta fora do ar.
+  if (!campanha.ofertaId) throw new Error('Oferta indisponível')
   const [oferta] = await db
     .select()
     .from(ofertasAfiliados)
@@ -408,16 +631,17 @@ export async function resolverLinkSemRegistrar(
   codigo: string,
 ): Promise<{ destino: string; configuracao: ConfiguracaoDoLink }> {
   const configuracao = await configuracaoDoLink(db, codigo)
-  const { link, oferta } = configuracao
-  const destino =
-    link.tipoDestino === 'NIP' ? caminhoNipSeguro(link.caminhoNip) : destinoDaCasa(link, oferta)
-  return { destino, configuracao }
+  return { destino: destinoDoLink(configuracao), configuracao }
 }
 
-function destinoDaCasa(
-  link: ConfiguracaoDoLink['link'],
-  oferta: ConfiguracaoDoLink['oferta'],
-): string {
+/** Para onde o `/r/<codigo>` manda: cadastro, tela da NIP ou a casa. */
+function destinoDoLink(configuracao: ConfiguracaoDoLink): string {
+  if (configuracao.link.tipoDestino === 'CADASTRO') return DESTINO_DO_CADASTRO
+  if (configuracao.link.tipoDestino === 'NIP') return caminhoNipSeguro(configuracao.link.caminhoNip)
+  return destinoDaCasa(exigirOferta(configuracao))
+}
+
+function destinoDaCasa({ link, oferta }: ConfiguracaoComOferta): string {
   return acrescentarParametrosComerciais(
     validarDestinoComercial(oferta.urlDestino, [oferta.hostDestino]),
     { ...(link.utms ?? {}), ...(link.parametrosCasa ?? {}) },
@@ -428,8 +652,16 @@ export async function resolverDestinoDaCasaSemRegistrar(
   db: Db,
   codigo: string,
 ): Promise<{ destino: string; configuracao: ConfiguracaoDoLink }> {
-  const configuracao = await configuracaoDoLink(db, codigo)
-  return { destino: destinoDaCasa(configuracao.link, configuracao.oferta), configuracao }
+  const configuracao = exigirOferta(await configuracaoDoLink(db, codigo))
+  return { destino: destinoDaCasa(configuracao), configuracao }
+}
+
+/** Sem atribuição (campos nulos) só no clique do dono no próprio link de CADASTRO. */
+export type ResultadoDoClique = {
+  destino: string
+  atribuicaoId: string | null
+  parceiroTitularId: string | null
+  atribuicaoExpiraEm: Date | null
 }
 
 export async function registrarClique(
@@ -443,9 +675,35 @@ export async function registrarClique(
     /** Já lida pelo resolvedor da rota; ausente, é lida aqui. */
     configuracao?: ConfiguracaoDoLink
   },
-) {
+): Promise<ResultadoDoClique> {
   const configuracao = entrada.configuracao ?? (await configuracaoDoLink(db, entrada.codigo))
   const visitanteHash = hashVisitante(entrada.visitanteToken)
+  if (
+    configuracao.link.tipoDestino === 'CADASTRO' &&
+    entrada.usuarioId &&
+    configuracao.parceiro.usuarioId === entrada.usuarioId
+  ) {
+    // NINGUÉM SE INDICA — só em link de indicação (CADASTRO). O clique do
+    // dono no próprio link conta como clique, mas não cria nem reaproveita
+    // atribuição: sem ela, nada de cadastro ou assinatura nasce desse toque, e
+    // o primeiro toque que ele já tenha de outro parceiro fica intocado. Links
+    // NIP/CASA seguem a regra de hoje: a comissão de casa não muda.
+    await db.insert(eventosAfiliados).values({
+      visitanteHash,
+      usuarioId: entrada.usuarioId,
+      linkId: configuracao.link.id,
+      atribuicaoId: null,
+      tipo: 'CLIQUE',
+      automatizado: entrada.automatizado,
+      ocorridoEm: entrada.agora,
+    })
+    return {
+      destino: destinoDoLink(configuracao),
+      atribuicaoId: null,
+      parceiroTitularId: null,
+      atribuicaoExpiraEm: null,
+    }
+  }
   return db.transaction(async (tx) => {
     await tx.execute(
       sql`select pg_advisory_xact_lock(${TRAVA.AFILIADO_VISITANTE}, hashtext(${visitanteHash}))`,
@@ -572,10 +830,7 @@ export async function registrarClique(
       })
     }
     return {
-      destino:
-        configuracao.link.tipoDestino === 'NIP'
-          ? caminhoNipSeguro(configuracao.link.caminhoNip)
-          : destinoDaCasa(configuracao.link, configuracao.oferta),
+      destino: destinoDoLink(configuracao),
       atribuicaoId: atribuicao.id,
       parceiroTitularId: atribuicao.parceiroId,
       atribuicaoExpiraEm: atribuicao.expiraEm,
@@ -637,7 +892,9 @@ export async function registrarSaidaParaCasa(
     configuracao?: ConfiguracaoDoLink
   },
 ) {
-  const configuracao = entrada.configuracao ?? (await configuracaoDoLink(db, entrada.codigo))
+  const configuracao = exigirOferta(
+    entrada.configuracao ?? (await configuracaoDoLink(db, entrada.codigo)),
+  )
   const visitanteHash = hashVisitante(entrada.visitanteToken)
   const atribuicao = await atribuicaoAtivaParaEvento(
     db,
@@ -655,7 +912,7 @@ export async function registrarSaidaParaCasa(
     tipo: 'SAIDA_CASA',
     ocorridoEm: entrada.agora,
   })
-  return destinoDaCasa(configuracao.link, configuracao.oferta)
+  return destinoDaCasa(configuracao)
 }
 
 async function atribuicaoAtivaParaEvento(
@@ -1460,6 +1717,63 @@ export async function registrarRepasse(
 
 export type FiltroPeriodoAfiliados = { inicio?: Date; fim?: Date }
 
+const cadastroDeIndicacao = alias(eventosAfiliados, 'cadastro_de_indicacao')
+const assinaturaDeIndicacao = alias(eventosAfiliados, 'assinatura_de_indicacao')
+
+/**
+ * Cadastros e assinaturas de indicação, para os dois painéis. MESMO predicado
+ * (`atribuicaoIndicadaNoCadastro`) do registro em `indicacoes.ts` e de
+ * `listarIndicacoes`, para os três nunca discordarem sobre o que conta como
+ * indicação — vive num arquivo à parte exatamente para isto poder ser
+ * reaproveitado aqui sem um import de volta para `indicacoes.ts` (que criaria
+ * um ciclo: `indicacoes.ts` já importa `auditar`/`exigirAdmin` DESTE arquivo).
+ *
+ * `parceiroId` ausente = total GLOBAL (painel administrativo); presente = só
+ * as indicações daquele parceiro (painel do afiliado). O período filtra pela
+ * data do CADASTRO, nunca da assinatura — uma assinatura de um cadastro do
+ * período conta mesmo que o pagamento em si tenha vindo depois.
+ */
+async function totaisDeIndicacao(
+  db: Db,
+  filtro: FiltroPeriodoAfiliados,
+  parceiroId?: string,
+): Promise<{ cadastros: number; assinaturas: number }> {
+  const [linha] = await db
+    .select({
+      cadastros: sql<number>`count(distinct ${atribuicoesAfiliados.id})`.mapWith(Number),
+      assinaturas: sql<number>`count(distinct ${assinaturaDeIndicacao.id})`.mapWith(Number),
+    })
+    .from(atribuicoesAfiliados)
+    .innerJoin(
+      cadastroDeIndicacao,
+      and(
+        eq(cadastroDeIndicacao.atribuicaoId, atribuicoesAfiliados.id),
+        eq(cadastroDeIndicacao.tipo, 'CADASTRO_NIP'),
+      ),
+    )
+    .leftJoin(
+      assinaturaDeIndicacao,
+      and(
+        eq(assinaturaDeIndicacao.atribuicaoId, atribuicoesAfiliados.id),
+        eq(assinaturaDeIndicacao.tipo, 'ASSINATURA_NIP'),
+      ),
+    )
+    .where(
+      and(
+        atribuicaoIndicadaNoCadastro(),
+        // Conta apagada (o `usuario_id` do cadastro virou NULL pelo SET NULL)
+        // sai dos totais, como já sai de `listarIndicacoes` — que faz INNER
+        // JOIN em `usuarios`. Sem isto o número do painel e a lista do admin
+        // discordariam (revisão final).
+        isNotNull(cadastroDeIndicacao.usuarioId),
+        parceiroId ? eq(atribuicoesAfiliados.parceiroId, parceiroId) : undefined,
+        filtro.inicio ? gte(cadastroDeIndicacao.ocorridoEm, filtro.inicio) : undefined,
+        filtro.fim ? lt(cadastroDeIndicacao.ocorridoEm, filtro.fim) : undefined,
+      ),
+    )
+  return { cadastros: linha?.cadastros ?? 0, assinaturas: linha?.assinaturas ?? 0 }
+}
+
 export async function painelDoAfiliado(
   db: Db,
   usuarioId: string,
@@ -1468,7 +1782,17 @@ export async function painelDoAfiliado(
   const [parceiro] = await db
     .select()
     .from(parceirosAfiliados)
-    .where(and(eq(parceirosAfiliados.usuarioId, usuarioId), eq(parceirosAfiliados.status, 'ATIVO')))
+    .where(
+      and(
+        eq(parceirosAfiliados.usuarioId, usuarioId),
+        eq(parceirosAfiliados.status, 'ATIVO'),
+        // Só parceiro CONVIDADO tem painel. O parceiro USUARIO nasce sozinho
+        // na primeira visita a /conta (link pessoal) — sem este filtro, toda
+        // conta comum que abriu /conta veria a área de afiliado inteira
+        // (revisão final).
+        eq(parceirosAfiliados.tipo, 'PARCEIRO'),
+      ),
+    )
     .limit(1)
   if (!parceiro) throw new Error('Acesso de afiliado exigido')
   const campanhas = await db
@@ -1593,6 +1917,10 @@ export async function painelDoAfiliado(
   const moedas = [
     ...new Set([...totaisComissoes, ...totaisRepasses].map((item) => item.moeda)),
   ].sort()
+  // Nomes/e-mails NUNCA entram aqui: este painel é o que o parceiro vê, e o
+  // rastreamento de indicação só devolve números para ele (contexto comum,
+  // regra 2). Quem precisa de nome é `listarIndicacoes`, exclusiva do admin.
+  const totaisIndicacao = await totaisDeIndicacao(db, filtro, parceiro.id)
   return {
     parceiro,
     links: links.map((link) => ({
@@ -1605,6 +1933,8 @@ export async function painelDoAfiliado(
     totais: {
       cliquesObservados: totaisEventos?.cliquesObservados ?? 0,
       saidasParaCasa: totaisEventos?.saidasParaCasa ?? 0,
+      cadastros: totaisIndicacao.cadastros,
+      assinaturas: totaisIndicacao.assinaturas,
     },
     totaisPorMoeda: moedas.map((moeda) => ({
       moeda,
@@ -1720,6 +2050,15 @@ export async function painelAdministrativo(
   filtro: FiltroPeriodoAfiliados = {},
   opcoes: { fuso: string },
 ) {
+  // Só parceiros CONVIDADOS (revisão final): cada conta que abre /conta ganha
+  // um parceiro USUARIO para o link pessoal — milhares deles inundariam os
+  // seletores e a tabela de parceiros. Quem indicou como usuário comum é
+  // visto em /admin/indicacoes. Os totais de cadastros/assinaturas seguem
+  // globais (`totaisDeIndicacao` sem parceiro).
+  const parceirosConvidados = db
+    .select({ id: parceirosAfiliados.id })
+    .from(parceirosAfiliados)
+    .where(eq(parceirosAfiliados.tipo, 'PARCEIRO'))
   const [
     parceiros,
     casasCadastradas,
@@ -1736,13 +2075,41 @@ export async function painelAdministrativo(
     itens,
     trilha,
   ] = await Promise.all([
-    db.select().from(parceirosAfiliados).orderBy(desc(parceirosAfiliados.criadoEm)),
+    db
+      .select()
+      .from(parceirosAfiliados)
+      .where(eq(parceirosAfiliados.tipo, 'PARCEIRO'))
+      .orderBy(desc(parceirosAfiliados.criadoEm)),
     db.select().from(casas).orderBy(casas.nome),
     db.select().from(ofertasAfiliados).orderBy(desc(ofertasAfiliados.criadoEm)),
     db.select().from(acordosAfiliados).orderBy(desc(acordosAfiliados.inicio)),
-    db.select().from(campanhasAfiliados).orderBy(desc(campanhasAfiliados.criadoEm)),
-    db.select().from(linksAfiliados).orderBy(desc(linksAfiliados.criadoEm)),
-    db.select().from(atribuicoesAfiliados).orderBy(desc(atribuicoesAfiliados.inicio)).limit(200),
+    db
+      .select()
+      .from(campanhasAfiliados)
+      .where(inArray(campanhasAfiliados.parceiroId, parceirosConvidados))
+      .orderBy(desc(campanhasAfiliados.criadoEm)),
+    db
+      .select()
+      .from(linksAfiliados)
+      .where(
+        inArray(
+          linksAfiliados.campanhaId,
+          db
+            .select({ id: campanhasAfiliados.id })
+            .from(campanhasAfiliados)
+            .where(inArray(campanhasAfiliados.parceiroId, parceirosConvidados)),
+        ),
+      )
+      .orderBy(desc(linksAfiliados.criadoEm)),
+    // A conciliação manual casa atribuições de links de CASA; as de link
+    // pessoal apareceriam como "Parceiro removido" (o parceiro dela saiu da
+    // lista acima) e só fariam volume.
+    db
+      .select()
+      .from(atribuicoesAfiliados)
+      .where(inArray(atribuicoesAfiliados.parceiroId, parceirosConvidados))
+      .orderBy(desc(atribuicoesAfiliados.inicio))
+      .limit(200),
     db
       .select({
         cliquesObservados:
@@ -1848,6 +2215,7 @@ export async function painelAdministrativo(
       )
       .groupBy(recebimentosCasas.moeda),
   ])
+  const totaisIndicacao = await totaisDeIndicacao(db, filtro)
   return {
     parceiros,
     casas: casasCadastradas,
@@ -1865,6 +2233,8 @@ export async function painelAdministrativo(
     totais: {
       cliquesObservados: totaisEventos.cliquesObservados,
       saidasParaCasa: totaisEventos.saidasParaCasa,
+      cadastros: totaisIndicacao.cadastros,
+      assinaturas: totaisIndicacao.assinaturas,
     },
     totaisPorMoeda: [
       ...new Set([

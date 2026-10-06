@@ -35,10 +35,16 @@ const USUARIO_DEMO = '00000000-0000-4000-8000-000000000001'
 // sessão atual autenticada por aquele dispositivo — mesmo campo que
 // `validarSessao` preenche de verdade em produção.
 let dispositivoAtualNoTeste: string | null = null
+// Mesmo arranjo: o teste do bloco "Indique a NIP" (rastreamento de
+// indicações, Tarefa 6) precisa de uma sessão cujo usuário NÃO existe em
+// `usuarios` — é assim, e não com mock de módulo, que ele força
+// `linkPessoalDoUsuario` a lançar (a função busca a conta antes de criar o
+// link) sem tocar no comportamento real da conta demo nos outros testes.
+let usuarioIdDaSessaoNoTeste: string | null = null
 vi.mock('@/modules/plataforma/auth/cookies', () => ({
   tokenDaSessaoAtual: async () => 'token-de-teste',
   sessaoAtual: async () => ({
-    usuarioId: USUARIO_DEMO,
+    usuarioId: usuarioIdDaSessaoNoTeste ?? USUARIO_DEMO,
     email: 'demo@teste.com',
     dispositivoId: dispositivoAtualNoTeste,
   }),
@@ -712,6 +718,105 @@ describe('a conta diz o plano na linguagem da NIP (spec de planos, §5)', () => 
 
     expect(html).toContain('Sem plano ativo')
     expect(html).not.toContain('Próxima cobrança')
+  })
+})
+
+/**
+ * BLOCO "INDIQUE A NIP" (rastreamento de indicações, Tarefa 6).
+ *
+ * Regra do contexto comum: usuário comum só vê o PRÓPRIO link, nunca um
+ * número — os totais são só do painel do parceiro (`/afiliados`, testado em
+ * `features/admin/__tests__/fumaca.test.tsx`). E nunca "comissão"/"ganhe":
+ * a indicação aqui não paga nada (spec §1).
+ */
+describe('perfil — bloco "Indique a NIP" (rastreamento de indicações, Tarefa 6)', () => {
+  const BLOCO_INDICACAO = 'id="bloco-Indique a NIP"'
+
+  function blocoDeIndicacao(html: string): string {
+    const inicio = html.indexOf(BLOCO_INDICACAO)
+    expect(inicio).toBeGreaterThanOrEqual(0)
+    const fim = html.indexOf('<footer', inicio)
+    expect(fim).toBeGreaterThan(inicio)
+    return html.slice(inicio, fim)
+  }
+
+  it('mostra o link pessoal (/r/u-…) e nenhum número — sem "comissão" nem "ganhe"', async () => {
+    const { default: Pagina } = await import('@/app/(app)/conta/page')
+    const html = renderToStaticMarkup(await Pagina({ searchParams: Promise.resolve({}) }))
+    const bloco = blocoDeIndicacao(html)
+    // Sem APP_PUBLIC_URL no teste, a ruling do controller manda o link
+    // RELATIVO — é o comportamento de dev/test, não um bug do bloco.
+    expect(bloco).toMatch(/\/r\/u-[a-z0-9]{10}/)
+    expect(bloco).not.toMatch(/comissão|ganhe/i)
+    expect(bloco).not.toMatch(/\d+\s*(cadastro|assinatura)/i)
+    expect(bloco).toContain('Copiar link')
+  })
+
+  it('APP_PUBLIC_URL com barra final não vira "//r/" (fix round 1)', async () => {
+    vi.stubEnv('APP_PUBLIC_URL', 'https://app.example.com/')
+    try {
+      const { default: Pagina } = await import('@/app/(app)/conta/page')
+      const html = renderToStaticMarkup(await Pagina({ searchParams: Promise.resolve({}) }))
+      const bloco = blocoDeIndicacao(html)
+      expect(bloco).toContain('https://app.example.com/r/u-')
+      expect(bloco).not.toContain('//r/')
+    } finally {
+      vi.unstubAllEnvs()
+    }
+  })
+
+  it('duas renderizações não criam dois links — o mesmo código volta, e só um parceiro/campanha nasce no banco', async () => {
+    const { linksAfiliados, campanhasAfiliados, parceirosAfiliados } = await import(
+      '@/modules/dominio/db/schema'
+    )
+    const { default: Pagina } = await import('@/app/(app)/conta/page')
+    const codigoDoLink = (html: string) => /\/r\/(u-[a-z0-9]{10})/.exec(html)?.[1]
+
+    const primeiro = codigoDoLink(renderToStaticMarkup(await Pagina({ searchParams: Promise.resolve({}) })))
+    const segundo = codigoDoLink(renderToStaticMarkup(await Pagina({ searchParams: Promise.resolve({}) })))
+    expect(primeiro).toBeTruthy()
+    expect(segundo).toBe(primeiro)
+
+    const parceiros = await banco.db
+      .select()
+      .from(parceirosAfiliados)
+      .where(eq(parceirosAfiliados.usuarioId, USUARIO_DEMO))
+    expect(parceiros).toHaveLength(1)
+    const campanhas = await banco.db
+      .select()
+      .from(campanhasAfiliados)
+      .where(eq(campanhasAfiliados.parceiroId, parceiros[0]!.id))
+    expect(campanhas).toHaveLength(1)
+    const links = await banco.db
+      .select()
+      .from(linksAfiliados)
+      .where(eq(linksAfiliados.campanhaId, campanhas[0]!.id))
+    expect(links).toHaveLength(1)
+    expect(links[0]!.codigo).toBe(primeiro)
+  })
+
+  it('se linkPessoalDoUsuario falhar, a conta renderiza igual — aviso neutro e log estruturado', async () => {
+    // Um usuarioId que não existe em `usuarios` faz `linkPessoalDoUsuario`
+    // lançar 'Conta não encontrada' de verdade (ela busca a conta antes de
+    // criar o parceiro) — sem mock de módulo, o mesmo caminho de erro de
+    // produção (banco fora do ar, corrida perdendo a trava).
+    const usuarioSemConta = '00000000-0000-4000-8000-0000000000ff'
+    usuarioIdDaSessaoNoTeste = usuarioSemConta
+    const erro = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    try {
+      const { default: Pagina } = await import('@/app/(app)/conta/page')
+      const html = renderToStaticMarkup(await Pagina({ searchParams: Promise.resolve({}) }))
+      const bloco = blocoDeIndicacao(html)
+      expect(bloco).toContain('Link indisponível no momento')
+      expect(bloco).not.toMatch(/\/r\/u-/)
+      expect(erro).toHaveBeenCalledTimes(1)
+      // Estruturado: um JSON com o motivo, não uma string solta — o mesmo
+      // padrão de `app/r/[codigo]/route.ts`.
+      expect(() => JSON.parse(erro.mock.calls[0]![0] as string)).not.toThrow()
+    } finally {
+      usuarioIdDaSessaoNoTeste = null
+      erro.mockRestore()
+    }
   })
 })
 

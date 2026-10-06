@@ -3,12 +3,21 @@ import type { ReactNode } from 'react'
 import { Abas } from '@/ui/controles'
 import s from './Admin.module.css'
 
-export type AreaAdmin = 'inicio' | 'usuarios' | 'afiliados' | 'backtest' | 'mapeamento' | 'mercados' | 'galeria'
+export type AreaAdmin =
+  | 'inicio'
+  | 'usuarios'
+  | 'afiliados'
+  | 'indicacoes'
+  | 'backtest'
+  | 'mapeamento'
+  | 'mercados'
+  | 'galeria'
 
 const AREAS: { chave: AreaAdmin; rotulo: string; href: string }[] = [
   { chave: 'inicio', rotulo: 'Visão geral', href: '/admin' },
   { chave: 'usuarios', rotulo: 'Usuários', href: '/admin/usuarios' },
   { chave: 'afiliados', rotulo: 'Afiliados', href: '/admin/afiliados' },
+  { chave: 'indicacoes', rotulo: 'Indicações', href: '/admin/indicacoes' },
   { chave: 'backtest', rotulo: 'Backtest', href: '/admin/backtest' },
   { chave: 'mapeamento', rotulo: 'Mapeamento', href: '/admin/mapeamento' },
   { chave: 'mercados', rotulo: 'Mercados', href: '/admin/mercados' },

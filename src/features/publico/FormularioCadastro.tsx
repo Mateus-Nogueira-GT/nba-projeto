@@ -7,7 +7,7 @@ import { CampoSenha } from './CampoSenha'
 import { impressaoDoDispositivo } from './dispositivo'
 import s from './Formulario.module.css'
 
-export function FormularioCadastro() {
+export function FormularioCadastro({ destino }: { destino?: string }) {
   const [erro, acao, enviando] = useActionState(async (estado: string | null, dados: FormData) => {
     dados.set('dispositivo', impressaoDoDispositivo())
     dados.set('ua', navigator.userAgent)
@@ -16,6 +16,7 @@ export function FormularioCadastro() {
 
   return (
     <form action={acao} className={s.form}>
+      {destino && <input type="hidden" name="destino" value={destino} />}
       <div className={s.campo}>
         <label htmlFor="nome" className={s.rotulo}>
           Nome

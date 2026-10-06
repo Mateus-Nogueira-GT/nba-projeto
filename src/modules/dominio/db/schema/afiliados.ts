@@ -28,10 +28,20 @@ export const parceirosAfiliados = pgTable(
     codigo: text('codigo').notNull().unique(),
     nomePublico: text('nome_publico').notNull(),
     status: text('status').notNull().default('ATIVO'),
+    /**
+     * PARCEIRO (o padrão, motor de afiliados de casas) ou USUARIO — quem
+     * indica outra conta pelo próprio link, sem convite/acordo comercial. As
+     * duas linhas convivem na mesma tabela porque o resto do motor de
+     * indicação (link, atribuição, evento) já é o mesmo para ambas.
+     */
+    tipo: text('tipo').notNull().default('PARCEIRO'),
     criadoEm: timestamp('criado_em', { withTimezone: true }).notNull().defaultNow(),
     atualizadoEm: timestamp('atualizado_em', { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [check('parceiros_afiliados_status_valido', sql`${t.status} in ('ATIVO', 'SUSPENSO')`)],
+  (t) => [
+    check('parceiros_afiliados_status_valido', sql`${t.status} in ('ATIVO', 'SUSPENSO')`),
+    check('parceiros_afiliados_tipo_valido', sql`${t.tipo} in ('PARCEIRO', 'USUARIO')`),
+  ],
 )
 
 export const convitesAfiliados = pgTable(
@@ -123,12 +133,17 @@ export const campanhasAfiliados = pgTable(
     parceiroId: uuid('parceiro_id')
       .notNull()
       .references(() => parceirosAfiliados.id),
-    ofertaId: uuid('oferta_id')
-      .notNull()
-      .references(() => ofertasAfiliados.id),
+    // Anulável: campanha de INDICACAO não tem oferta de casa nenhuma — o
+    // CHECK abaixo garante que só finalidade CASA exige o vínculo.
+    ofertaId: uuid('oferta_id').references(() => ofertasAfiliados.id),
     nome: text('nome').notNull(),
     canal: text('canal').notNull(),
     status: text('status').notNull().default('ATIVA'),
+    /**
+     * CASA (o padrão, campanha comercial com casa de apostas) ou INDICACAO —
+     * campanha de convite entre contas, sem oferta nem comissão.
+     */
+    finalidade: text('finalidade').notNull().default('CASA'),
     criadoPorId: uuid('criado_por_id').references(() => usuarios.id, { onDelete: 'set null' }),
     criadoEm: timestamp('criado_em', { withTimezone: true }).notNull().defaultNow(),
     atualizadoEm: timestamp('atualizado_em', { withTimezone: true }).notNull().defaultNow(),
@@ -138,6 +153,14 @@ export const campanhasAfiliados = pgTable(
     check(
       'campanhas_afiliados_status_valido',
       sql`${t.status} in ('ATIVA', 'PAUSADA', 'ENCERRADA')`,
+    ),
+    check(
+      'campanhas_afiliados_finalidade_valida',
+      sql`${t.finalidade} in ('CASA', 'INDICACAO')`,
+    ),
+    check(
+      'campanhas_afiliados_oferta_por_finalidade',
+      sql`${t.finalidade} = 'INDICACAO' or ${t.ofertaId} is not null`,
     ),
   ],
 )
@@ -165,7 +188,13 @@ export const linksAfiliados = pgTable(
     atualizadoEm: timestamp('atualizado_em', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
-    check('links_afiliados_tipo_destino_valido', sql`${t.tipoDestino} in ('NIP', 'CASA')`),
+    // Os painéis buscam os links pelas campanhas (`inArray(campanhaId, …)`) —
+    // com um link pessoal por conta, a tabela cresce com a base de usuários.
+    index('links_afiliados_campanha_idx').on(t.campanhaId),
+    check(
+      'links_afiliados_tipo_destino_valido',
+      sql`${t.tipoDestino} in ('NIP', 'CASA', 'CADASTRO')`,
+    ),
     check(
       'links_afiliados_caminho_nip_valido',
       sql`${t.tipoDestino} <> 'NIP' or ${t.caminhoNip} is not null`,
@@ -222,6 +251,13 @@ export const eventosAfiliados = pgTable(
      */
     apitoId: uuid('apito_id').references(() => apitos.id, { onDelete: 'set null' }),
     tipo: text('tipo').notNull(),
+    /**
+     * Só preenchidos quando `tipo = 'ASSINATURA_NIP'` — o CHECK abaixo exige
+     * os dois juntos. Nível do PLANO assinado, não nível do jogador nem do
+     * apito (vocabulário do domínio esportivo não se aplica aqui).
+     */
+    nivelDoPlano: text('nivel_do_plano'),
+    modalidade: text('modalidade'),
     automatizado: boolean('automatizado').notNull().default(false),
     ocorridoEm: timestamp('ocorrido_em', { withTimezone: true }).notNull(),
   },
@@ -230,12 +266,30 @@ export const eventosAfiliados = pgTable(
     index('eventos_afiliados_atribuicao_idx').on(t.atribuicaoId, t.ocorridoEm),
     check(
       'eventos_afiliados_tipo_valido',
-      sql`${t.tipo} in ('CLIQUE', 'VISITA_NIP', 'SAIDA_CASA', 'CADASTRO_NIP')`,
+      sql`${t.tipo} in ('CLIQUE', 'VISITA_NIP', 'SAIDA_CASA', 'CADASTRO_NIP', 'ASSINATURA_NIP')`,
     ),
     check(
       'eventos_afiliados_apito_so_em_saida',
       sql`${t.apitoId} is null or ${t.tipo} = 'SAIDA_CASA'`,
     ),
+    // `x in (...)` com x NULL avalia para NULL, não FALSE — e um CHECK só
+    // rejeita em FALSE (NULL passa). Por isso `is not null` explícito em
+    // nivelDoPlano/modalidade: sem ele, uma ASSINATURA_NIP sem nível do plano
+    // atravessaria o CHECK inteira, o que o teste da Task 1 barra.
+    //
+    // `usuario_id` NÃO entra aqui de propósito (revisão final): a coluna é
+    // `ON DELETE SET NULL`, e exigi-la tornaria impossível apagar a conta de
+    // quem assinou por indicação — o SET NULL do apagamento violaria o CHECK.
+    // A atribuição continua obrigatória; é ela que diz de quem foi a indicação.
+    check(
+      'eventos_afiliados_assinatura_com_plano',
+      sql`${t.tipo} <> 'ASSINATURA_NIP' or (${t.nivelDoPlano} is not null and ${t.nivelDoPlano} in ('MVP', 'ALL_STAR') and ${t.modalidade} is not null and ${t.modalidade} in ('MENSAL', 'TEMPORADA') and ${t.atribuicaoId} is not null)`,
+    ),
+    // Uma assinatura por atribuição: retry de webhook ou reprocesso não pode
+    // duplicar o evento comercial (mesma razão da regra 5 do projeto).
+    uniqueIndex('eventos_afiliados_assinatura_unica')
+      .on(t.atribuicaoId)
+      .where(sql`${t.tipo} = 'ASSINATURA_NIP'`),
   ],
 )
 

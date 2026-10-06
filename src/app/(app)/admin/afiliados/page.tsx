@@ -27,6 +27,7 @@ import {
   acaoCriarAcordo,
   acaoCriarCampanha,
   acaoCriarCasa,
+  acaoCriarLinkDeIndicacao,
   acaoCriarOferta,
   acaoCriarParceiro,
   acaoDefinirSaidaDoApito,
@@ -150,6 +151,8 @@ export default async function PaginaAdminAfiliados({
         <Metrica rotulo="Saídas para casas" valor={painel.totais.saidasParaCasa} />
         <Metrica rotulo="Receita NIP" valor={financeiro('receitaNipCentavos')} />
         <Metrica rotulo="Parcela dos parceiros" valor={financeiro('parcelaParceirosCentavos')} destaque />
+        <Metrica rotulo="Cadastros por indicação" valor={painel.totais.cadastros} />
+        <Metrica rotulo="Assinaturas por indicação" valor={painel.totais.assinaturas} />
       </GradeDeMetricas>
 
       <div className={s.grade}>
@@ -183,7 +186,11 @@ export default async function PaginaAdminAfiliados({
               </div>
             </FormAcao>
 
-            <FormularioConvite />
+            <FormularioConvite
+              parceirosSemConta={painel.parceiros
+                .filter((p) => p.tipo === 'PARCEIRO' && !p.usuarioId)
+                .map((p) => ({ id: p.id, nomePublico: p.nomePublico }))}
+            />
 
             <FormAcao acao={acaoCriarOferta} className={`${s.formulario} ${s.cartaoForm}`} rotulo="Nova oferta">
               <h3 className={s.subtitulo}>Nova oferta</h3>
@@ -274,6 +281,33 @@ export default async function PaginaAdminAfiliados({
               <div>
                 <button className={s.botao} disabled={semParceiroOuOferta}>
                   Gerar link
+                </button>
+              </div>
+            </FormAcao>
+
+            <FormAcao
+              acao={acaoCriarLinkDeIndicacao}
+              className={`${s.formulario} ${s.cartaoForm}`}
+              rotulo="Link de indicação (leva ao cadastro)"
+            >
+              <h3 className={s.subtitulo}>Link de indicação (leva ao cadastro)</h3>
+              <Campo rotulo="Parceiro">
+                <select name="parceiroId" required>
+                  <Opcoes itens={painel.parceiros} rotulo={(p) => p.nomePublico} />
+                </select>
+              </Campo>
+              <Campo rotulo="Nome">
+                <input name="nome" required />
+              </Campo>
+              <Campo rotulo="Canal">
+                <input name="canal" placeholder="social, whatsapp…" required />
+              </Campo>
+              <Campo rotulo="Código do link" dica="Vira /r/<código> e leva a /cadastrar — sem oferta, sem comissão.">
+                <input name="codigo" required />
+              </Campo>
+              <div>
+                <button className={s.botao} disabled={!painel.parceiros.length}>
+                  Gerar link de indicação
                 </button>
               </div>
             </FormAcao>

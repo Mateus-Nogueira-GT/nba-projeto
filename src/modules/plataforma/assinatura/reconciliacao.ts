@@ -3,6 +3,7 @@ import { and, asc, desc, eq, inArray, isNull, lt, or, sql } from 'drizzle-orm'
 
 import { tentativasCheckout } from '../../dominio/db/schema'
 import type { Db } from '../../dominio/db/tipos'
+import { registrarAssinaturasPendentes } from '../afiliados/indicacoes'
 import type { AssinaturaExterna, CobrancaExterna, EventoPagamento, PortaCobranca } from './porta'
 import { aplicarEventoPagamento } from './webhook'
 
@@ -324,6 +325,20 @@ export async function reconciliarPagamentos(
         })
         .where(eq(tentativasCheckout.id, tentativa.id))
     }
+  }
+
+  // Rede de segurança da indicação: o que o webhook não conseguiu registrar
+  // (a falha lá só vira log) é refeito aqui. Mesma regra do webhook — nunca
+  // derruba a reconciliação dos pagamentos, que é o que importa nesta rodada.
+  try {
+    await registrarAssinaturasPendentes(db, agora, porta.nome)
+  } catch (erro) {
+    console.error(
+      JSON.stringify({
+        evento: 'indicacao_assinaturas_pendentes_falhou',
+        mensagem: erro instanceof Error ? erro.message : String(erro),
+      }),
+    )
   }
 
   return resultado

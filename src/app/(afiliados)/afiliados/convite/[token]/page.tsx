@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import { configuracaoProdutoPago } from '@/modules/plataforma/assinatura/configuracao'
 import { sessaoAtual } from '@/modules/plataforma/auth/cookies'
 import { Logo } from '@/ui/Logo'
 import { FormAcao } from '@/features/admin/FormAcao'
@@ -12,6 +13,9 @@ export default async function PaginaConvite({ params }: { params: Promise<{ toke
   const { token } = await params
   const sessao = await sessaoAtual()
   const destino = `/afiliados/convite/${encodeURIComponent(token)}`
+  // Mesma fonte de `/entrar`: com o cadastro público fechado, "Criar conta"
+  // levaria a uma tela que recusa — fechado vale para todos (spec, decisão 5).
+  const cadastroAberto = configuracaoProdutoPago().cadastroPublicoHabilitado
   return (
     <main className={s.publica}>
       <section className={s.cartao} aria-labelledby="titulo-convite">
@@ -31,9 +35,17 @@ export default async function PaginaConvite({ params }: { params: Promise<{ toke
             <button className={s.acaoPrimaria}>Aceitar convite</button>
           </FormAcao>
         ) : (
-          <Link className={s.acaoPrimaria} href={`/entrar?destino=${encodeURIComponent(destino)}`}>
-            Entrar para continuar
-          </Link>
+          <>
+            <Link className={s.acaoPrimaria} href={`/entrar?destino=${encodeURIComponent(destino)}`}>
+              Entrar para continuar
+            </Link>
+            {/* Quem ainda não tem conta cria uma e volta aqui (auditoria 26/09). */}
+            {cadastroAberto && (
+              <Link className={s.acaoSecundaria} href={`/cadastrar?destino=${encodeURIComponent(destino)}`}>
+                Criar conta
+              </Link>
+            )}
+          </>
         )}
       </section>
     </main>
