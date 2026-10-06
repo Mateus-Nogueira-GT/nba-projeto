@@ -1,0 +1,1 @@
+ALTER TABLE "jogos" DROP CONSTRAINT "jogos_chave_natural";

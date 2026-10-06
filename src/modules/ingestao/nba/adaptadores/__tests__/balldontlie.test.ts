@@ -72,6 +72,34 @@ describe('FonteBalldontlie — contrato oficial GOAT', () => {
     expect(new Headers(chamadas[0]?.init?.headers).get('authorization')).toBe('chave-de-teste')
   })
 
+  it('ignora franquias extintas e clubes de exibição que o GOAT mistura em /teams', async () => {
+    // Formato real de 06/10/2026: conferência '    ', cidade vazia e sigla
+    // repetida da NBA atual (Washington Capitols = WAS).
+    const extinto = {
+      id: 42,
+      conference: '    ',
+      division: '',
+      city: '',
+      name: 'Washington Capitols',
+      full_name: 'Washington Capitols',
+      abbreviation: 'WAS',
+    }
+    const exibicao = { ...extinto, id: 4565, city: 'Flamengo', name: 'Flamengo', abbreviation: 'FLA' }
+    const { fonte } = fonteCom([json({ data: [...times.data, extinto, exibicao] })])
+
+    await expect(fonte.listarTimes()).resolves.toEqual([
+      expect.objectContaining({ idExterno: '1', sigla: 'ATL' }),
+    ])
+  })
+
+  it('/teams sem nenhum time East/West é erro, não lista vazia', async () => {
+    const { fonte } = fonteCom([
+      json({ data: [{ ...times.data[0], conference: '    ', city: '' }] }),
+    ])
+
+    await expect(fonte.listarTimes()).rejects.toThrow(/East\/West/)
+  })
+
   it('percorre next_cursor e converte elenco ativo sem inventar foto', async () => {
     const { fonte, chamadas } = fonteCom([json(jogadoresPagina1), json(jogadoresPagina2)])
 
@@ -89,6 +117,17 @@ describe('FonteBalldontlie — contrato oficial GOAT', () => {
     })
     expect(jogadores[1]).toMatchObject({ idExterno: '246', alturaCm: 211 })
     expect(chamadas[1]?.url).toContain('per_page=100&cursor=115')
+  })
+
+  it('novato sem posição cadastrada (position: "") entra com posição nula', async () => {
+    // Formato real de 06/10/2026 (Josh Dix, OKC).
+    const [jokic] = jogadoresPagina2.data
+    const novato = { ...jokic, id: 1091904395, position: '', height: null, jersey_number: null }
+    const { fonte } = fonteCom([json({ data: [novato], meta: { per_page: 100 } })])
+
+    await expect(fonte.listarJogadores()).resolves.toEqual([
+      expect.objectContaining({ idExterno: '1091904395', posicao: null, alturaCm: null }),
+    ])
   })
 
   it('preserva rodada, instante, relógio e status normalizado do jogo', async () => {

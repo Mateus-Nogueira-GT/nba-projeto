@@ -110,8 +110,10 @@ export async function executarDiaRetroativo(
   })
   if (niveisVersaoId === null || fatos.jogos.length === 0) return ZERADO
 
-  // Lista Secreta e Fire Live — o mesmo `avaliar` do backtest.
-  const apitos = avaliar(fatos, ruleset)
+  // Lista Secreta e Fire Live — o mesmo `avaliar` do backtest. A deduplicação
+  // é a mesma do ao vivo (`gravarApitos`, ON CONFLICT DO NOTHING na chave da
+  // regra 5): fica o primeiro de cada chave.
+  const apitos = primeiroDeCada(avaliar(fatos, ruleset), chaveDeApito)
 
   // Greens: o Fire Live com a OPD da Lista do próprio dia, como o ao vivo
   // recebe a OPD publicada.
@@ -131,6 +133,7 @@ export async function executarDiaRetroativo(
       greens.push(...avaliarFireLive(time, jogo, ruleset, { opdPreLive }).greens)
     }
   }
+  const greensUnicos = primeiroDeCada(greens, chaveDeGreen)
 
   const daLista = apitos.filter((a) => a.estrategia === 'LISTA_SECRETA')
   const [versao, nomes] = await Promise.all([
@@ -164,9 +167,9 @@ export async function executarDiaRetroativo(
           ),
         )
     }
-    if (greens.length > 0) {
+    if (greensUnicos.length > 0) {
       await tx.insert(greensRetroativos).values(
-        greens.map((g) => ({
+        greensUnicos.map((g) => ({
           temporada,
           dataReferencia,
           jogoId: g.jogoId,
@@ -187,8 +190,34 @@ export async function executarDiaRetroativo(
     })
   })
 
-  return { apitos: apitos.length, greens: greens.length, jogos: fatos.jogos.length }
+  return { apitos: apitos.length, greens: greensUnicos.length, jogos: fatos.jogos.length }
 }
+
+/**
+ * DOIS JOGOS DO MESMO TIME NUMA RODADA (achado de 06/10/2026, 08/11/2025).
+ *
+ * A rodada é o dia no fuso do ruleset (Brasília). Um jogo às 22h de Nova York
+ * começa à meia-noite daqui e cai na rodada SEGUINTE — então o Denver teve
+ * DEN×GSW (da noite anterior) e DEN×IND na mesma rodada, e o motor emitiu o
+ * mesmo apito do Fire Live duas vezes, idênticos. O ao vivo descarta o
+ * repetido pela constraint; aqui ele quebrava o INSERT do dia inteiro.
+ */
+export function primeiroDeCada<T>(itens: T[], chave: (item: T) => string): T[] {
+  const vistos = new Set<string>()
+  return itens.filter((item) => {
+    const k = chave(item)
+    if (vistos.has(k)) return false
+    vistos.add(k)
+    return true
+  })
+}
+
+/** As colunas de `apitos_retroativos_dedup` (as mesmas de `apitos_dedup`). */
+export const chaveDeApito = (a: Apito): string =>
+  [a.jogoId, a.jogadorId, a.atributo, a.estrategia, a.linha ?? ''].join('|')
+
+/** As colunas de `greens_retroativos_unico`. */
+const chaveDeGreen = (g: Green): string => [g.jogoId, g.jogadorId, g.atributo, g.marco].join('|')
 
 function linhaDeApito(
   a: Apito,

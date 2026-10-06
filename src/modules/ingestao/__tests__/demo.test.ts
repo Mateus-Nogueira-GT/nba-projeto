@@ -602,10 +602,53 @@ describe('semearDemo (PGlite, banco vazio)', () => {
       conteudoJson: { itens: [] },
       hash: 'x',
     })
+    // Ingestão real rodada ANTES da limpeza (06/10, três dias de teste): o
+    // jogador real com o nome de um inventado vira conflito apontando para o
+    // inventado — de novo uma FK sem cascata no caminho do DELETE.
+    const { conflitosIdentidadeJogador, conflitosIdentidadeJogo } = await import(
+      '../../dominio/db/schema'
+    )
+    await banco.db.insert(conflitosIdentidadeJogador).values({
+      provedor: 'balldontlie',
+      idExterno: '237',
+      nomeExterno: 'Nome Coincidente',
+      jogadorCandidatoId: classe!.jogadorId,
+      motivo: 'NOME_COINCIDENTE_REQUER_CURADORIA',
+    })
+    await banco.db.insert(conflitosIdentidadeJogo).values({
+      provedor: 'balldontlie',
+      idExterno: '999',
+      dataReferencia: '2026-01-05',
+      timeCasaSigla: 'LAL',
+      timeVisitanteSigla: 'BOS',
+      jogoCandidatoId: jogo!.id,
+      motivo: 'TESTE',
+    })
+    // O usuário registrou ter apostado num jogador inventado (FK sem cascata);
+    // e o admin cadastrou uma casa real, que não é da demo e tem de ficar.
+    const { entradasRealizadas } = await import('../../dominio/db/schema')
+    await banco.db.insert(entradasRealizadas).values({
+      usuarioId: usuario!.id,
+      dataReferencia: '2026-09-20',
+      jogadorId: classe!.jogadorId,
+      atributo: 'PONTOS',
+      linha: 20,
+      unidades: '1',
+    })
+    await banco.db.insert(casas).values({ nome: 'Casa Real do Admin' })
 
     const contagens = await limparDemo(banco.db)
 
-    expect(contagens).toMatchObject({ apitos_retroativos: 1, greens_retroativos: 1, feed_retroativo: 1 })
+    expect(contagens).toMatchObject({
+      apitos_retroativos: 1,
+      greens_retroativos: 1,
+      feed_retroativo: 1,
+      conflitos_identidade_jogador: 1,
+      conflitos_identidade_jogo: 1,
+      entradas_realizadas: 1,
+      casas: 3,
+    })
+    expect((await banco.db.select().from(casas)).map((c) => c.nome)).toEqual(['Casa Real do Admin'])
     expect(await banco.db.select().from(apitosRetroativos)).toHaveLength(0)
     expect(await banco.db.select().from(greensRetroativos)).toHaveLength(0)
     expect(await banco.db.select().from(feedRetroativo)).toHaveLength(0)

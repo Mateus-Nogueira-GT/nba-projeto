@@ -42,7 +42,11 @@
     "pwa:assets": "vite-node scripts/gerar-assets-pwa.ts",
     "odds:censo": "vite-node scripts/odds-censo.ts",
     "mp:conferir": "dotenv -e .env.local -- vite-node scripts/mp-conferir.ts",
-    "e2e": "playwright test"
+    "e2e": "playwright test",
+    "ingestao:elenco": "vite-node scripts/sincronizar-elenco.ts",
+    "identidades:conflitos": "vite-node scripts/identidades-conflitos.ts",
+    "lista-cj:sugestoes": "vite-node scripts/lista-cj-sugestoes.ts",
+    "lista-cj:confirmar": "vite-node scripts/lista-cj-confirmar.ts"
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.1.0",

@@ -16,7 +16,15 @@ const BASE_URL = 'https://api.balldontlie.io/nba/v1'
 
 const dataIsoSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/)
 const textoSchema = z.string().min(1)
+// Campo opcional que o provedor às vezes manda como '' em vez de null — os
+// novatos de 2026-27 chegam com `position: ''` (06/10/2026). Vazio é ausência.
+const textoOpcionalSchema = z
+  .string()
+  .nullable()
+  .transform((v) => (v === null || v.trim() === '' ? null : v))
 const inteiroNaoNegativoSchema = z.number().int().nonnegative()
+
+const CONFERENCIAS_NBA = new Set(['East', 'West'])
 
 const timeSchema = z
   .object({
@@ -35,9 +43,9 @@ const jogadorSchema = z
     id: z.number().int().positive(),
     first_name: textoSchema,
     last_name: textoSchema,
-    position: textoSchema.nullable(),
-    height: textoSchema.nullable(),
-    jersey_number: textoSchema.nullable(),
+    position: textoOpcionalSchema,
+    height: textoOpcionalSchema,
+    jersey_number: textoOpcionalSchema,
     team: timeSchema,
   })
   .passthrough()
@@ -47,7 +55,7 @@ const jogadorStatsSchema = z
     id: z.number().int().positive(),
     first_name: textoSchema,
     last_name: textoSchema,
-    position: textoSchema.nullable(),
+    position: textoOpcionalSchema,
   })
   .passthrough()
 
@@ -529,9 +537,23 @@ export class FonteBalldontlie implements FonteNBA {
     return jogo
   }
 
+  /**
+   * Só as franquias atuais. Com a chave GOAT, `/teams` devolve 89 times: os 30
+   * da NBA mais as extintas dos anos 40 e os clubes de jogos de exibição
+   * (Real Madrid, Flamengo…) — todos sem conferência, vários com cidade vazia,
+   * e alguns REPETINDO sigla da NBA atual (Washington Capitols = WAS). A
+   * conferência East/West é o que separa um do outro (achado de 06/10/2026).
+   */
   async listarTimes(): Promise<TimeExterno[]> {
-    const times = await this.buscarLista('/teams', timeSchema, { paginado: false })
-    return times.map(mapearTimeBalldontlie)
+    const brutos = await this.buscarLista('/teams', z.unknown(), { paginado: false })
+    const atuais = brutos.filter((bruto) => {
+      const conferencia = (bruto as { conference?: unknown } | null)?.conference
+      return typeof conferencia === 'string' && CONFERENCIAS_NBA.has(conferencia.trim())
+    })
+    if (brutos.length > 0 && atuais.length === 0) {
+      throw new ErroBalldontlie('nenhum time com conferência East/West em /teams')
+    }
+    return atuais.map(mapearTimeBalldontlie)
   }
 
   async listarJogadores(): Promise<JogadorExterno[]> {

@@ -1,4 +1,4 @@
-import { eq, sql } from 'drizzle-orm'
+import { eq, inArray, sql } from 'drizzle-orm'
 
 import {
   casas,
@@ -44,7 +44,7 @@ import {
   semearPlacares,
   upsertJogoDemo,
 } from './jogos'
-import { semearOdds } from './odds'
+import { CASAS_DEMO, semearOdds } from './odds'
 
 // Reexportado porque `semear.ts` foi o endereço original da constante — quem
 // importa daqui continua funcionando depois da extração para `./cadastro`.
@@ -514,6 +514,9 @@ export async function limparDemo(db: Db): Promise<Record<string, number>> {
     niveisVersao,
     identidadesJogador,
     identidadesJogo,
+    conflitosIdentidadeJogador,
+    conflitosIdentidadeJogo,
+    entradasRealizadas,
     apitosRetroativos,
     greensRetroativos,
     feedRetroativo,
@@ -567,6 +570,15 @@ export async function limparDemo(db: Db): Promise<Record<string, number>> {
   await apagar('medias_jogador', () => db.delete(mediasJogador).returning({ id: mediasJogador.id }))
   await apagar('niveis', () => db.delete(niveis).returning({ id: niveis.id }))
   await apagar('niveis_versao', () => db.delete(niveisVersao).returning({ id: niveisVersao.id }))
+  // Ingestão real rodada com a demo ainda no banco registra o jogador real
+  // homônimo de um inventado como conflito APONTANDO para o inventado (FK sem
+  // cascata). Com o inventado saindo, o conflito não tem mais o que resolver.
+  await apagar('conflitos_identidade_jogador', () =>
+    db.delete(conflitosIdentidadeJogador).returning({ id: conflitosIdentidadeJogador.id }),
+  )
+  await apagar('conflitos_identidade_jogo', () =>
+    db.delete(conflitosIdentidadeJogo).returning({ id: conflitosIdentidadeJogo.id }),
+  )
   await apagar('identidades_jogo', () =>
     db.delete(identidadesJogo).returning({ id: identidadesJogo.id }),
   )
@@ -575,9 +587,19 @@ export async function limparDemo(db: Db): Promise<Record<string, number>> {
   )
   await apagar('mapa_jogadores', () => db.delete(mapaJogadores).returning({ id: mapaJogadores.id }))
   await apagar('jogos', () => db.delete(jogos).returning({ id: jogos.id }))
+  // O que um usuário registrou ter apostado num jogador inventado é tão
+  // inventado quanto o jogador — e a FK `jogador_id` não tem cascata. A conta
+  // do usuário fica; somem só as entradas (achado da limpeza de 06/10).
+  await apagar('entradas_realizadas', () =>
+    db.delete(entradasRealizadas).returning({ id: entradasRealizadas.id }),
+  )
   await apagar('jogadores', () => db.delete(jogadores).returning({ id: jogadores.id }))
   await apagar('times', () => db.delete(times).returning({ id: times.id }))
-  await apagar('casas', () => db.delete(casas).returning({ id: casas.id }))
+  // Só as casas que a DEMO criou. As outras são cadastro do admin (oferta de
+  // afiliado, recebimentos) — dado real, que a limpeza não pode levar.
+  await apagar('casas', () =>
+    db.delete(casas).where(inArray(casas.nome, [...CASAS_DEMO])).returning({ id: casas.id }),
+  )
 
   return contagens
 }

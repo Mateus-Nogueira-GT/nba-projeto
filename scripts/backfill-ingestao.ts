@@ -135,5 +135,10 @@ async function main() {
 
 main().catch((erro: unknown) => {
   console.error(erro instanceof Error ? erro.message : 'falha desconhecida no backfill')
+  // "nenhuma fonte conseguiu…" embrulha o erro real em `cause`; sem imprimi-lo
+  // o operador não tem como saber se foi rede, plano ou payload (06/10/2026).
+  for (let causa = erro instanceof Error ? erro.cause : null; causa instanceof Error; causa = causa.cause) {
+    console.error(`causa: ${causa.message.split('\n')[0]}`)
+  }
   process.exitCode = 1
 })

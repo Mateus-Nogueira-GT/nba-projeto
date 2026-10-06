@@ -64,7 +64,14 @@ dado real — e a única evidência é o assinante vendo dois LeBron na busca.
 ```bash
 vercel env add BALLDONTLIE_API_KEY production
 vercel env add NBA_INGESTAO_HABILITADA production   # true
+vercel env add NBA_RESERVA_OBRIGATORIA production   # false — sem chave API-Sports
 ```
+
+Sem a chave da API-Sports, `NBA_RESERVA_OBRIGATORIA` precisa ser `false`: o
+padrão é `true` e a configuração inteira é recusada. Mudança de env só vale no
+próximo deploy — `vercel redeploy <url-de-produção-atual>` republica o MESMO
+código com o env novo. Confira `/api/cron/demo` (Bearer do `CRON_SECRET`)
+devolvendo `DEMO_AUTOSSEMEADURA_DESLIGADA` antes de seguir.
 
 Hoje nenhuma das duas existe em produção. Sem a segunda, os jobs saem sem fazer
 nada e o backfill termina "com sucesso" sem gravar linha alguma.
@@ -94,8 +101,22 @@ O `--dry-run` percorre as datas e relata o que faria, sem tocar no banco. É
 aqui que erro de chave, de plano ou de intervalo aparece — antes de qualquer
 escrita.
 
-**Comece menor.** Antes da temporada inteira, rode três dias de verdade e olhe
-o resultado na tela:
+**Times e elenco antes de qualquer dia real.** O backfill NÃO cria times: com a
+tabela vazia (o passo 7 apaga os 30), todo jogo sai como `jogos_ignorados`.
+Rode o job de elenco uma vez — times, elenco ativo e identidades:
+
+```bash
+npx dotenv -e .env.local -- npm run ingestao:elenco
+```
+
+(No Hobby o cron `sincronizar-elenco` não roda sozinho.)
+
+**Comece menor — mas DEPOIS do passo 7 e do elenco.** Antes da temporada inteira, rode
+três dias de verdade e olhe o resultado na tela. Com a demonstração ainda no
+banco, isto FALHA (`snapshot rejeitado: N jogador(es) sem identidade`): o
+jogador real com o nome de um inventado vira conflito de identidade e o
+snapshot é recusado (06/10/2026). Ordem que funciona: dry-run → passo 7 → três
+dias → passo 8.
 
 ```bash
 npm run ingestao:backfill -- --from=2026-01-05 --to=2026-01-07
@@ -109,7 +130,14 @@ npm run demo:limpar -- --confirmar
 
 Apaga **somente o domínio** — jogos, jogadores, estatísticas, apitos. Contas,
 sessões, assinaturas e inscrições de push **permanecem**: ninguém perde acesso
-e ninguém precisa entrar de novo.
+e ninguém precisa entrar de novo. Saem também as entradas que usuários
+registraram sobre jogadores inventados e os conflitos de identidade que
+apontam para eles; das casas, só as três da demo (`CASAS_DEMO`) — as
+cadastradas pelo admin ficam.
+
+**Não é transacional.** Se parar no meio, o que veio antes já saiu (inclusive a
+lista do CJ — por isso o passo 2). Corrija a causa e rode de novo: é
+reexecutável.
 
 O `--confirmar` é obrigatório de propósito. Não existe versão automática deste
 passo, e não deve existir.

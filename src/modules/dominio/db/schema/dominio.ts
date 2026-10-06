@@ -147,7 +147,12 @@ export const jogos = pgTable(
      * dia deixar de ser, esta constraint falha alto, que é o comportamento
      * correto.
      */
-    unique('jogos_chave_natural').on(t.dataJogo, t.timeCasaId, t.timeVisitanteId),
+    //
+    // REMOVIDA em 06/10/2026 (migração 0036): a chave por `data_jogo` (data em
+    // UTC) quebrou no backfill de 2025-26. MIA×CHI em Miami em noites
+    // seguidas — 31/01 às 01:00 UTC do dia 01/02 e 01/02 às 23:00 UTC — são
+    // dois jogos com a MESMA data UTC. A chave que vale é a da RODADA
+    // (`data_referencia`, no fuso do ruleset), e é ela o alvo do upsert.
     unique('jogos_chave_referencia').on(t.dataReferencia, t.timeCasaId, t.timeVisitanteId),
   ],
 )
