@@ -357,6 +357,11 @@ type JogoAgendado = {
   timeVisitanteId: string
 }
 
+/**
+ * A hora da agenda simulada no fuso do DIA (`rodada.fuso`, Nova York desde
+ * 07/10/2026) — como a agenda real da liga: 19h00–22h30 de lá, que a tela
+ * mostra no relógio de Brasília.
+ */
 function instanteLocal(dia: string, horaLocal: string, fuso: string): Date {
   const [h, m] = horaLocal.split(':').map(Number)
   return new Date(intervaloDoDia(dia, fuso).inicio.getTime() + (h! * 60 + m!) * 60_000)

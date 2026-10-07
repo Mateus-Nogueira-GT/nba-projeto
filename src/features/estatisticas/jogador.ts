@@ -23,6 +23,8 @@ export type DadosDoJogador = {
   contexto: ContextoEstatisticas
   temporada: string
   fuso: string
+  /** O fuso da RODADA (`rodada.fuso`, NY desde 07/10): a DATA de um jogo é a da rodada; só a hora sai em `fuso`. */
+  fusoDia: string
   agora: Date
   apitos: ApitoDoJogador[]
   truncado: boolean
@@ -98,7 +100,8 @@ export async function carregarJogador(id: string, params: Params): Promise<Dados
     tela,
     contexto,
     temporada,
-    fuso: ruleset.rodada.fuso,
+    fuso: ruleset.rodada.fuso_exibicao,
+    fusoDia: ruleset.rodada.fuso,
     agora,
     apitos: lista.slice(0, LIMITE_DE_APITOS_DO_JOGADOR),
     truncado: lista.length > LIMITE_DE_APITOS_DO_JOGADOR,

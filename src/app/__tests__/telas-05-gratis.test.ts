@@ -20,9 +20,10 @@ import { LLMFake } from '../../modules/ingestao/llm'
  * Mesmo arnês das outras telas, com `acessoDeTeste('GRATIS')`. Nenhuma asserção
  * nomeia jogador, time ou horário — o sujeito é lido do banco.
  */
-const FUSO = 'America/Sao_Paulo'
+// O DIA é o de Nova York desde 07/10/2026 (`rodada.fuso`).
+const FUSO_DIA = 'America/New_York'
 const AGORA = new Date('2026-01-15T18:00:00.000Z')
-const HOJE = dataDeReferencia(AGORA, FUSO)
+const HOJE = dataDeReferencia(AGORA, FUSO_DIA)
 const USUARIO_DEMO = '00000000-0000-4000-8000-000000000001'
 
 let banco: Awaited<ReturnType<typeof bancoDeTeste>>

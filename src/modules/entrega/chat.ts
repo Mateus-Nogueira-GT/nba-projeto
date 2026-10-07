@@ -209,7 +209,10 @@ export async function responder(
     usuarioId: string
     texto: string
     dataReferencia: string
+    /** `rodada.fuso`: o dia da cota, da conversa e dos jogos (a rodada). */
     fuso: string
+    /** `rodada.fuso_exibicao`: as horas que o assistente escreve. */
+    fusoExibicao: string
     temporada: string
     agora: Date
     /**
@@ -311,6 +314,7 @@ export async function responder(
     const contexto = await montarContexto(db, {
       dataReferencia: entrada.dataReferencia,
       fuso: entrada.fuso,
+      fusoExibicao: entrada.fusoExibicao,
       temporada: entrada.temporada,
       cotaDiaria,
       sugestao:

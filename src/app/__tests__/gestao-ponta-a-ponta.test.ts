@@ -22,9 +22,10 @@ import { concederCortesia } from '../../modules/plataforma/assinatura/direito'
  * destino. Nenhuma asserção nomeia jogador: o sujeito vem do feed.
  */
 
-const FUSO = 'America/Sao_Paulo'
+// O DIA é o de Nova York desde 07/10/2026 (`rodada.fuso`).
+const FUSO_DIA = 'America/New_York'
 const AGORA = new Date('2026-01-15T18:00:00.000Z')
-const HOJE = dataDeReferencia(AGORA, FUSO)
+const HOJE = dataDeReferencia(AGORA, FUSO_DIA)
 
 let banco: Awaited<ReturnType<typeof bancoDeTeste>>
 let usuarioA: string
@@ -32,6 +33,19 @@ let usuarioB: string
 let itens: ItemFeed[]
 let sessao: { usuarioId: string; email: string; dispositivoId: string | null } | null = null
 
+// A odd está fora da tela desde 07/10/2026 (`odds.exibir_no_app: false` no
+// YAML). Esta suíte prova a tela COM odd — religar é trocar uma linha, e a
+// tela tem de voltar inteira —, então lê o ruleset de produção com a chave
+// religada. A tela sem odd é provada em `src/features/*/__tests__/fumaca.test.tsx`.
+vi.mock('../../modules/entrega/ruleset-ativo', async (importOriginal) => {
+  const real = await importOriginal<typeof import('../../modules/entrega/ruleset-ativo')>()
+  return {
+    rulesetAtivo: async () => {
+      const r = await real.rulesetAtivo()
+      return { ...r, odds: { ...r.odds, exibir_no_app: true } }
+    },
+  }
+})
 vi.mock('../../modules/plataforma/auth/cookies', () => ({ sessaoAtual: async () => sessao }))
 vi.mock('next/cache', () => ({
   unstable_cache: (fn: (...args: never[]) => unknown) => fn,

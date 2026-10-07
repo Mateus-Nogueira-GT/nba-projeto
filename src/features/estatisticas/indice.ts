@@ -36,8 +36,10 @@ export async function carregarIndice(params: Params): Promise<DadosDoIndice> {
   const db = getDb()
   const agora = new Date()
   const ruleset = await rulesetAtivo()
-  const { fuso } = ruleset.rodada
-  const hoje = dataDeReferencia(agora, fuso)
+  // O DIA sai de `rodada.fuso` (NY, decisão de 07/10/2026); a tela recebe
+  // `fuso_exibicao` (Brasília) no campo `fuso`.
+  const { fuso: fusoDoDia, fuso_exibicao: fuso } = ruleset.rodada
+  const hoje = dataDeReferencia(agora, fusoDoDia)
   const data = dataValidaOuHoje(primeiro(params.data), hoje)
   // A temporada que TEM dado, não a do calendário: entre o lançamento e a
   // primeira bola as duas divergem por ~um mês (spec 22/09, §5.2). Pelo cache:
@@ -47,7 +49,7 @@ export async function carregarIndice(params: Params): Promise<DadosDoIndice> {
   const { temporada } = seletor
 
   const [doDia, classificacao, resultados] = await Promise.all([
-    telaJogosDoDia(db, data, fuso),
+    telaJogosDoDia(db, data, fusoDoDia),
     telaDaClassificacao(db, temporada),
     termo.length > 0 ? buscar(db, termo) : Promise.resolve([]),
   ])

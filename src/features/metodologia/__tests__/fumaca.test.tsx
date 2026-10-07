@@ -22,7 +22,8 @@ import { dataDeReferencia } from '@/modules/dominio/rodada'
  */
 
 const USUARIO = '00000000-0000-4000-8000-000000000001'
-const FUSO = 'America/Sao_Paulo'
+// O DIA é o de Nova York desde 07/10/2026 (`rodada.fuso`).
+const FUSO_DIA = 'America/New_York'
 
 let banco: Awaited<ReturnType<typeof bancoDeTeste>>
 
@@ -39,6 +40,19 @@ vi.mock('@/modules/dominio/db/cliente', () => ({
   getDb: () => banco.db,
   fecharDb: async () => {},
 }))
+// A odd está fora da tela desde 07/10/2026 (`odds.exibir_no_app: false` no
+// YAML). O teste do exemplo de odd roda com a chave religada; o da chave
+// desligada a desliga só para ele.
+let exibirOddsNoTeste = true
+vi.mock('@/modules/entrega/ruleset-ativo', async (importOriginal) => {
+  const real = await importOriginal<typeof import('@/modules/entrega/ruleset-ativo')>()
+  return {
+    rulesetAtivo: async () => {
+      const r = await real.rulesetAtivo()
+      return { ...r, odds: { ...r.odds, exibir_no_app: exibirOddsNoTeste } }
+    },
+  }
+})
 vi.mock('next/navigation', async (importOriginal) => {
   const real = await importOriginal<typeof import('next/navigation')>()
   return {
@@ -197,6 +211,22 @@ describe('Como funciona — a mesma leitura, sem aceite e sem assinatura', () =>
     expect(html).not.toContain('Odd 1,85')
   }, 60_000)
 
+  it('com a odd desligada (YAML de hoje): nem a seção das odds, nem o item do sumário, nem a odd do exemplo', async () => {
+    exibirOddsNoTeste = false
+    try {
+      const { default: Pagina } = await import('@/app/(app)/como-funciona/page')
+      const html = renderToStaticMarkup(await Pagina())
+      expect(html).toContain('nota de confiança da análise NIP')
+      expect(html).not.toContain('id="odds"')
+      expect(html).not.toContain('href="#odds"')
+      expect(html).not.toContain('title="Odd')
+      const visivel = html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ')
+      expect(visivel).not.toMatch(/\bodds?\b/i)
+    } finally {
+      exibirOddsNoTeste = true
+    }
+  }, 60_000)
+
   it('exige sessão, mas NÃO o guarda de nível (vitrine para quem ainda não assinou)', () => {
     const fonte = semComentarios(readFileSync('src/app/(app)/como-funciona/page.tsx', 'utf8'))
     expect(fonte).toContain('sessaoAtual')
@@ -234,7 +264,7 @@ describe('I7 · /abrir leva ao Ao Vivo quando há jogo no 1º quarto, e à Lista
   async function comJogo(status: 'AGENDADO' | 'AO_VIVO', quartoAtual: number | null) {
     await banco.db.insert(jogos).values({
       dataHoraUtc: new Date(AGORA.getTime() - 10 * 60_000),
-      dataReferencia: dataDeReferencia(AGORA, FUSO),
+      dataReferencia: dataDeReferencia(AGORA, FUSO_DIA),
       timeCasaId: casa,
       timeVisitanteId: visitante,
       status,

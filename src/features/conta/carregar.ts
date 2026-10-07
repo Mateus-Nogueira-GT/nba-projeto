@@ -71,7 +71,8 @@ async function linkDeIndicacaoDaConta(db: Db, usuarioId: string, agora: Date): P
 /** Tudo o que a tela de Conta mostra — mesmas leituras do front anterior. */
 export async function carregarConta() {
   const { sessao, acesso } = await exigirNivel('GRATIS', '/conta')
-  const { fuso } = (await rulesetAtivo()).rodada
+  // Só exibição (validade, cobrança, último uso): o relógio da tela, Brasília.
+  const { fuso_exibicao: fuso } = (await rulesetAtivo()).rodada
   const db = getDb()
   const agora = new Date()
   const [dispositivos, experiencia, linhas, linkDeIndicacao] = await Promise.all([

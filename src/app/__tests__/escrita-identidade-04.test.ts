@@ -54,6 +54,9 @@ beforeAll(async () => {
 
 beforeEach(() => {
   ruleset = structuredClone(homologado)
+  // A odd está fora da tela desde 07/10/2026 (`odds.exibir_no_app: false`).
+  // Esta suíte prova a ESCRITA da odd quando ela aparece, então a religa.
+  ruleset.odds.exibir_no_app = true
   vi.stubEnv('DATABASE_URL', 'postgres://escrita-sem-banco')
   plano = {
     temModelo: true,

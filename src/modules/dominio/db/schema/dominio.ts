@@ -152,7 +152,9 @@ export const jogos = pgTable(
     // UTC) quebrou no backfill de 2025-26. MIA×CHI em Miami em noites
     // seguidas — 31/01 às 01:00 UTC do dia 01/02 e 01/02 às 23:00 UTC — são
     // dois jogos com a MESMA data UTC. A chave que vale é a da RODADA
-    // (`data_referencia`, no fuso do ruleset), e é ela o alvo do upsert.
+    // (`data_referencia`, a data no fuso do dia do ruleset — Nova York desde
+    // 07/10/2026 —, que é também a `date` da BallDontLie), e é ela o alvo do
+    // upsert.
     unique('jogos_chave_referencia').on(t.dataReferencia, t.timeCasaId, t.timeVisitanteId),
   ],
 )

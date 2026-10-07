@@ -376,7 +376,17 @@ function CabecalhoDoJogo({ j, fuso }: { j: JogoDaNoite; fuso: string }) {
   )
 }
 
-function LinhaConferida({ c, j, retroativo }: { c: CardConferido; j: JogoDaNoite; retroativo: boolean }) {
+function LinhaConferida({
+  c,
+  j,
+  retroativo,
+  exibirOdds,
+}: {
+  c: CardConferido
+  j: JogoDaNoite
+  retroativo: boolean
+  exibirOdds: boolean
+}) {
   const { card, item } = c
   const v = vereditoDe(c, j)
   const realizado =
@@ -384,7 +394,7 @@ function LinhaConferida({ c, j, retroativo }: { c: CardConferido; j: JogoDaNoite
   // A forma da odd é do RULESET (`unica`/`media`/faixa) — a tela só escreve.
   const odd = oddDaLinha(item?.oddFaixa)
   return (
-    <li className={s.linha} data-v={v}>
+    <li className={s.linha} data-v={v} data-sem-odd={!exibirOdds || undefined}>
       <Link href={rotaDoJogador(card.jogadorId)} className={s.jogador}>
         <FotoJogador
           nome={card.nome}
@@ -427,12 +437,15 @@ function LinhaConferida({ c, j, retroativo }: { c: CardConferido; j: JogoDaNoite
       </div>
       {/* A ODD é o que faz o assinante montar a múltipla: ela volta para a
           linha conferida, na forma que o ruleset mandou na materialização. */}
-      <div className={s.cOdd}>
-        <span className={s.rotuloCelula}>Odd</span>
-        {/* Temporada anterior: não há odd coletada de uma rodada que já
-            passou, e um "—" na pílula leria como defeito. */}
-        {retroativo ? <span className={s.fraco}>Sem odd registrada</span> : <PilulaOdd odd={odd} />}
-      </div>
+      {/* Odd desligada no ruleset (07/10/2026): a coluna inteira sai. */}
+      {exibirOdds && (
+        <div className={s.cOdd}>
+          <span className={s.rotuloCelula}>Odd</span>
+          {/* Temporada anterior: não há odd coletada de uma rodada que já
+              passou, e um "—" na pílula leria como defeito. */}
+          {retroativo ? <span className={s.fraco}>Sem odd registrada</span> : <PilulaOdd odd={odd} />}
+        </div>
+      )}
       <div className={s.cLinhas}>
         <span className={s.rotuloCelula}>Linhas do apito</span>
         <span className={s.chipsLinha}>
@@ -517,7 +530,7 @@ function Lista({ d }: { d: DadosDosResultados }) {
               )}
               <ul className={s.linhas}>
                 {j.cards.map((c) => (
-                  <LinhaConferida key={c.card.chave} c={c} j={j} retroativo={d.retroativo} />
+                  <LinhaConferida key={c.card.chave} c={c} j={j} retroativo={d.retroativo} exibirOdds={d.exibirOdds} />
                 ))}
               </ul>
             </section>

@@ -27,6 +27,10 @@ const ruleset = carregarRuleset(readFileSync('config/ruleset.v1.yaml', 'utf8'))
 // arquivo de produção.
 const tresAtributos = structuredClone(ruleset)
 tresAtributos.niveis.atributos = ['PONTOS', 'REBOTES', 'ASSISTENCIAS']
+// A odd está fora da tela desde 07/10/2026 (`odds.exibir_no_app: false`). A
+// demo prova que o card nasce COM odd quando ela está ligada (a ordem
+// odds → republicação), então o clone a religa.
+tresAtributos.odds.exibir_no_app = true
 
 import {
   historicoOscilacao,

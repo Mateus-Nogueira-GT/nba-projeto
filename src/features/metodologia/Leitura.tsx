@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { ConteudoDaMetodologia, SUMARIO } from './Conteudo'
+import { ConteudoDaMetodologia, sumarioDaMetodologia } from './Conteudo'
 import type { Metodologia } from './carregar'
 import s from './Metodologia.module.css'
 
@@ -28,7 +28,7 @@ export function LeituraDaMetodologia({
         <nav className={s.sumario} aria-label="Nesta página">
           <p className={s.sumarioTitulo}>Nesta página</p>
           <ol>
-            {SUMARIO.map((item) => (
+            {sumarioDaMetodologia(metodologia.exibirOdds).map((item) => (
               <li key={item.id}>
                 <a href={`#${item.id}`}>{item.rotulo}</a>
               </li>

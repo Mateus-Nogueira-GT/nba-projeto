@@ -37,6 +37,7 @@
     "identidades:relatorio": "dotenv -e .env.local -- vite-node scripts/identidades-relatorio.ts",
     "ingestao:backfill": "vite-node scripts/backfill-ingestao.ts",
     "motor:retroativo": "vite-node scripts/motor-retroativo.ts",
+    "jogos:recalcular-rodada": "vite-node scripts/recalcular-rodada.ts",
     "lista-cj:backup": "vite-node scripts/lista-cj-backup.ts",
     "lista-cj:restaurar": "vite-node scripts/lista-cj-restaurar.ts",
     "pwa:assets": "vite-node scripts/gerar-assets-pwa.ts",

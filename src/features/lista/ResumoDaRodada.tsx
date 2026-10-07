@@ -29,14 +29,16 @@ import s from './Resumo.module.css'
 export async function ResumoDaRodada() {
   const { acesso } = await exigirNivel('GRATIS', '/')
   const ruleset = await rulesetAtivo()
-  const { fuso } = ruleset.rodada
-  const hoje = dataDeReferencia(new Date(), fuso)
+  // O DIA sai de `rodada.fuso` (NY, decisão de 07/10/2026); a tela recebe
+  // `fuso_exibicao` (Brasília) no campo `fuso`.
+  const { fuso: fusoDoDia, fuso_exibicao: fuso } = ruleset.rodada
+  const hoje = dataDeReferencia(new Date(), fusoDoDia)
   const assinante = atende(acesso.nivel, 'MVP')
 
   // A última noite é igual para todos e muda poucas vezes por dia: pelo
   // cache (tag da lateral). Os jogos de hoje são ao vivo — ficam diretos.
   const [jogos, { ultima, recap }] = await Promise.all([
-    jogosDoDiaResumo(getDb(), hoje, fuso),
+    jogosDoDiaResumo(getDb(), hoje, fusoDoDia),
     resumoDaNoiteCacheado(hoje),
   ])
   const [taxa, feed] = await Promise.all([

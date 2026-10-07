@@ -153,10 +153,13 @@ function LinhaSugerida({
   hoje,
   erro,
   registrada,
+  exibirOdds,
 }: {
   e: EntradaDoPlano
   hoje: string
   erro: string | null
+  /** Odd desligada no ruleset (07/10/2026): o registro vai sem o campo da odd. */
+  exibirOdds: boolean
   /** Já registrei esta entrada hoje: o formulário abre mostrando o que ficou. */
   registrada: boolean
 }) {
@@ -220,26 +223,28 @@ function LinhaSugerida({
               aria-describedby={erro ? idErro : undefined}
             />
           </div>
-          <div className={s.campo}>
-            <label htmlFor={`odd-${item.chave}`} className={s.rotuloCampo}>
-              Odd <span className={s.opcional}>(opcional)</span>
-            </label>
-            {/* `min` espelha o que o Zod da ação já exige: sem JavaScript, uma
-                odd abaixo de 1,01 é recusada antes do envio. */}
-            <input
-              id={`odd-${item.chave}`}
-              className={s.entrada}
-              type="number"
-              name="odd"
-              step={0.01}
-              min={1.01}
-              max={100}
-              placeholder="—"
-              inputMode="decimal"
-              aria-invalid={erro ? true : undefined}
-              aria-describedby={erro ? idErro : undefined}
-            />
-          </div>
+          {exibirOdds && (
+            <div className={s.campo}>
+              <label htmlFor={`odd-${item.chave}`} className={s.rotuloCampo}>
+                Odd <span className={s.opcional}>(opcional)</span>
+              </label>
+              {/* `min` espelha o que o Zod da ação já exige: sem JavaScript, uma
+                  odd abaixo de 1,01 é recusada antes do envio. */}
+              <input
+                id={`odd-${item.chave}`}
+                className={s.entrada}
+                type="number"
+                name="odd"
+                step={0.01}
+                min={1.01}
+                max={100}
+                placeholder="—"
+                inputMode="decimal"
+                aria-invalid={erro ? true : undefined}
+                aria-describedby={erro ? idErro : undefined}
+              />
+            </div>
+          )}
           <button type="submit" className={s.registrei}>
             Registrei
           </button>
@@ -343,6 +348,7 @@ function Sugeridas({ d }: { d: DadosDaGestao }) {
                       hoje={d.hoje}
                       erro={d.erroEm === `${e.item.jogadorId}|${e.item.atributo}` ? d.erro : null}
                       registrada={d.registradas.has(`${e.item.jogadorId}|${e.item.atributo}`)}
+                      exibirOdds={d.exibirOdds}
                     />
                   ))}
                 </ul>
@@ -376,7 +382,11 @@ function Retrospectiva({ d }: { d: DadosDaGestao }) {
         <NumeroGrande rotulo="Entradas" valor={String(r.entradas)} apoio={r.pendentes > 0 ? `${r.pendentes} aguardando` : undefined} />
         <NumeroGrande rotulo="Greens" valor={String(r.greens)} tom={r.greens > 0 ? 'bom' : 'neutro'} apoio={`${r.reds} red${r.reds === 1 ? '' : 's'}`} />
         <NumeroGrande rotulo="Acerto" valor={taxa === null ? '—' : `${taxa}%`} />
-        <NumeroGrande rotulo="Saldo" valor={conferidas === 0 ? '—' : saldo} tom={conferidas === 0 ? 'neutro' : r.saldo >= 0 ? 'bom' : 'ruim'} apoio={`${decimal(r.unidades, 1)} un. apostadas`} />
+        {/* O saldo só existe com odd (green = unidades × (odd − 1)): com ela
+            desligada no ruleset, ele contaria só os reds. */}
+        {d.exibirOdds && (
+          <NumeroGrande rotulo="Saldo" valor={conferidas === 0 ? '—' : saldo} tom={conferidas === 0 ? 'neutro' : r.saldo >= 0 ? 'bom' : 'ruim'} apoio={`${decimal(r.unidades, 1)} un. apostadas`} />
+        )}
       </dl>
     </section>
   )
@@ -409,7 +419,8 @@ function Realizadas({ d }: { d: DadosDaGestao }) {
               <span>Jogador</span>
               <span>Linha</span>
               <span>Unidades</span>
-              <span>Odd</span>
+              {/* A célula fica, vazia, com a odd desligada: a grade não anda. */}
+              <span>{d.exibirOdds ? 'Odd' : ''}</span>
               <span>Hora</span>
             </div>
             <ul className={s.linhas}>
@@ -422,7 +433,7 @@ function Realizadas({ d }: { d: DadosDaGestao }) {
                   <span className="num">
                     {decimal(e.unidades, e.unidades % 1 === 0 ? 0 : 1)} un.
                   </span>
-                  <span className="num">{e.odd === null ? '—' : decimal(e.odd, 2)}</span>
+                  <span className="num">{!d.exibirOdds ? '' : e.odd === null ? '—' : decimal(e.odd, 2)}</span>
                   <span className={`${s.apoio} num`}>{hora(e.registradaEm, d.fuso)}</span>
                 </li>
               ))}

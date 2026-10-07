@@ -21,7 +21,8 @@ describe('montarContexto num banco sem temporada', () => {
   it('não lança, diz que não há jogo, e a invariante dos números continua valendo', async () => {
     const c = await montarContexto(banco.db, {
       dataReferencia: '2026-10-01',
-      fuso: 'America/Sao_Paulo',
+      fuso: 'America/New_York',
+      fusoExibicao: 'America/Sao_Paulo',
       temporada: '2026-27',
       cotaDiaria: 20,
     })

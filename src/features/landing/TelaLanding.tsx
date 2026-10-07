@@ -11,7 +11,7 @@ import { Logo } from '@/ui/Logo'
 import { ATRIBUTO_CURTO, corDoApito, IndicadorApito, PilulaConfianca, SeloAoVivo, SeloNivel } from '@/ui/marcas'
 import { FotoJogador } from '@/ui/midia'
 import type { AcertoDaVitrine, DadosDaLanding } from './carregar'
-import { CHECKS_DO_APITO, CHECKS_DO_HEROI, COMPARATIVO, FAIXA, FERRAMENTAS, PASSOS, PERGUNTAS, type Icone } from './conteudo'
+import { CHECKS_DO_HEROI, conteudoDaVitrine, FAIXA, PERGUNTAS, type Icone } from './conteudo'
 import {
   IcAlvo,
   IcAoVivo,
@@ -443,6 +443,7 @@ export function TelaLanding({ dados }: { dados: DadosDaLanding }) {
   // "23:41"…) são cenário ilustrativo do desenho do push, não dado: o bloco
   // inteiro é aria-hidden e não tem carimbo real.
   const [a, b, c] = dados.noite?.acertos ?? []
+  const { checksDoApito, ferramentas, passos, comparativo } = conteudoDaVitrine(dados.exibirOdds)
   return (
     <div className={`${s.pagina} ${fonteTitulo.variable} ${fonteCorpo.variable}`}>
       {/* ---------- Navegação ---------- */}
@@ -484,7 +485,7 @@ export function TelaLanding({ dados }: { dados: DadosDaLanding }) {
               </h1>
               <p className={s.heroiLead}>
                 Todo dia a NIP cruza média, sequência e desfalque confirmado de cada jogador e entrega uma lista curta:
-                quem tem oportunidade, em qual mercado, com a odd das casas e a nota de confiança. No 1º quarto, o Fire
+                quem tem oportunidade, em qual mercado{dados.exibirOdds ? ', com a odd das casas' : ''} e a nota de confiança. No 1º quarto, o Fire
                 Live avisa quem está batendo o alvo.
               </p>
               <div className={s.acoes}>
@@ -560,7 +561,7 @@ export function TelaLanding({ dados }: { dados: DadosDaLanding }) {
             rotulo="A plataforma"
             titulo="O box score de 30 times"
             destaque="resumido em uma lista."
-            texto="Abriu a NIP, já vê quem apitou, contra quem joga, a linha, a odd nas casas e como foram os últimos 5 jogos."
+            texto={`Abriu a NIP, já vê quem apitou, contra quem joga, a linha${dados.exibirOdds ? ', a odd nas casas' : ''} e como foram os últimos 5 jogos.`}
           />
           <div className={s.notebook}>
             <div className={s.notebookTela}>
@@ -631,7 +632,7 @@ export function TelaLanding({ dados }: { dados: DadosDaLanding }) {
                 esquerda
               />
               <ul className={s.pilulas}>
-                {CHECKS_DO_APITO.map((t) => (
+                {checksDoApito.map((t) => (
                   <li key={t}>
                     <IcCheck tamanho={14} />
                     {t}
@@ -656,7 +657,7 @@ export function TelaLanding({ dados }: { dados: DadosDaLanding }) {
               texto="Escolher o jogador, acompanhar o 1º quarto, dimensionar a entrada e conferir no fim da noite."
             />
             <div className={s.ferramentas}>
-              {FERRAMENTAS.map((f, i) => (
+              {ferramentas.map((f, i) => (
                 <article key={f.url} className={s.ferramenta}>
                   <div className={s.ferramentaTexto}>
                     <span className={`${s.ferramentaNumero} num`}>{String(i + 1).padStart(2, '0')}</span>
@@ -685,7 +686,7 @@ export function TelaLanding({ dados }: { dados: DadosDaLanding }) {
           <div className={s.conteudo}>
             <Cabecalho id="t-passos" rotulo="Como funciona" titulo="Do cadastro à" destaque="primeira rodada." />
             <ol className={s.passos}>
-              {PASSOS.map((p, i) => (
+              {passos.map((p, i) => (
                 <li key={p.titulo} className={s.passo}>
                   <span className={s.passoNo}>
                     <Ic nome={p.icone} tamanho={18} />
@@ -728,7 +729,7 @@ export function TelaLanding({ dados }: { dados: DadosDaLanding }) {
                   </tr>
                 </thead>
                 <tbody>
-                  {COMPARATIVO.map((l) => (
+                  {comparativo.map((l) => (
                     <tr key={l.criterio}>
                       <th scope="row">
                         <span className={s.criterio}>

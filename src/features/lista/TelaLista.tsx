@@ -250,7 +250,8 @@ export function TelaLista({ dados, estado: estadoDaUrl }: { dados: DadosDaLista;
       {retroativa && <FaixaAviso>{AVISO_TEMPORADA_ANTERIOR}</FaixaAviso>}
       {retroativa && <NavegacaoDoDia retroativa={retroativa} estado={estado} />}
       <BarraDeControles
-        semOdd={retroativa !== null}
+        semOdd={retroativa !== null || !dados.exibirOdds}
+        semHierarquia={retroativa !== null}
         seguidosNaRodada={dados.seguidosNaRodada}
         estado={estado}
         opcoes={dados.opcoes}
@@ -306,7 +307,7 @@ export function TelaLista({ dados, estado: estadoDaUrl }: { dados: DadosDaLista;
             fuso={dados.fuso}
             lente={dados.lente}
             faixasConfianca={dados.faixasConfianca}
-            semOdd={retroativa !== null}
+            semOdd={retroativa !== null || !dados.exibirOdds}
             hrefDaLinha={resultadoDoDia ?? undefined}
           />
         </>

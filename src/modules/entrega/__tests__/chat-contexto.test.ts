@@ -8,11 +8,13 @@ import { carregarRuleset } from '../../motor/ruleset/carregar'
 import { calendarioDoRuleset, temporadaDe } from '../../dominio/temporada'
 import { intervaloDoDia } from '../../dominio/rodada'
 import { montarContexto } from '../chat-contexto'
+import { telaJogosDoDia } from '../estatisticas/jogos-do-dia'
 
 const ruleset = carregarRuleset(readFileSync('config/ruleset.v1.yaml', 'utf8'))
 const AGORA = new Date('2026-08-24T18:00:00.000Z')
 const HOJE = '2026-08-24'
 const FUSO = ruleset.rodada.fuso
+const FUSO_EXIBICAO = ruleset.rodada.fuso_exibicao
 const TEMPORADA = temporadaDe(
   intervaloDoDia(HOJE, FUSO).inicio,
   calendarioDoRuleset(ruleset),
@@ -25,6 +27,7 @@ let banco: Awaited<ReturnType<typeof bancoDeTeste>>
 const opcoes = () => ({
   dataReferencia: HOJE,
   fuso: FUSO,
+  fusoExibicao: FUSO_EXIBICAO,
   temporada: TEMPORADA,
   cotaDiaria: 20,
 })
@@ -45,6 +48,22 @@ describe('montarContexto', () => {
     const c = await montarContexto(banco.db, opcoes())
     const r = validarTexto(c.fatos, { numeros: c.numeros, limiteCaracteres: 1_000_000 })
     expect(r.ok, r.ok ? '' : r.motivo).toBe(true)
+  })
+
+  it('(rodada EUA, 07/10/2026) os jogos são os do dia de NY, e a hora citada é a de Brasília', async () => {
+    const c = await montarContexto(banco.db, opcoes())
+    const { jogos } = await telaJogosDoDia(banco.db, HOJE, FUSO)
+    const semPlacar = jogos.filter((j) => j.casa.placar === null || j.visitante.placar === null)
+    expect(semPlacar.length, 'a demo precisa de um jogo agendado hoje').toBeGreaterThan(0)
+    for (const j of semPlacar) {
+      const brasilia = new Intl.DateTimeFormat('pt-BR', {
+        hour: '2-digit',
+        minute: '2-digit',
+        timeZone: FUSO_EXIBICAO,
+        hourCycle: 'h23',
+      }).format(j.dataHoraUtc)
+      expect(c.fatos).toContain(`${j.casa.nome} x ${j.visitante.nome}: ${j.status}, ${brasilia}`)
+    }
   })
 
   it('a lista do dia entra nos fatos', async () => {

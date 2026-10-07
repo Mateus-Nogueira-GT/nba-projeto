@@ -10,7 +10,8 @@ import { atende } from '@/modules/plataforma/assinatura/nivel-do-plano'
 
 // O que o usuário DIGITOU, não o que a NIP sugeriu: unidades e odd chegam por
 // texto do teclado numérico do celular, daí `z.coerce`. Odd é opcional — nem
-// toda casa mostra odd fixa no momento em que a pessoa registra.
+// toda casa mostra odd fixa no momento em que a pessoa registra — e, com a odd
+// desligada no ruleset (07/10/2026), o campo nem vem no formulário.
 const schema = z.object({
   dataReferencia: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   jogadorId: z.string().uuid(),
@@ -19,7 +20,8 @@ const schema = z.object({
   unidades: z.coerce.number().positive().max(100),
   odd: z
     .union([z.literal(''), z.coerce.number().min(1.01).max(100)])
-    .transform((v) => (v === '' ? null : v)),
+    .optional()
+    .transform((v) => (v === '' || v === undefined ? null : v)),
   // Sem `nome`: a fachada do v2 gravava o nome digitado junto do registro; no
   // nosso back o nome vem de `jogadores` na leitura (`entradasRealizadasDoDia`),
   // e um nome longo recusaria um registro válido.

@@ -13,7 +13,7 @@ import type { RankingDoDia } from './sugestao/tipos'
 
 export type ContextoDoChat = { fatos: string; numeros: number[] }
 
-/** Hora local do jogo, no fuso do ruleset — o mesmo corte que a tela usa. */
+/** Hora do jogo no relógio da tela (`rodada.fuso_exibicao`), a mesma que o card mostra. */
 function horaLocal(quando: Date, fuso: string): string {
   return new Intl.DateTimeFormat('pt-BR', {
     hour: '2-digit',
@@ -40,7 +40,10 @@ export async function montarContexto(
   db: Db,
   opcoes: {
     dataReferencia: string
+    /** `rodada.fuso`: recorta os jogos do DIA (a rodada pela data dos EUA, 07/10/2026). */
     fuso: string
+    /** `rodada.fuso_exibicao`: as horas que o texto cita, as mesmas da tela. */
+    fusoExibicao: string
     temporada: string
     cotaDiaria: number
     /**
@@ -83,7 +86,7 @@ export async function montarContexto(
     for (const j of rodada.jogos) {
       const placar =
         j.casa.placar === null || j.visitante.placar === null
-          ? horaLocal(j.dataHoraUtc, opcoes.fuso)
+          ? horaLocal(j.dataHoraUtc, opcoes.fusoExibicao)
           : `${j.casa.placar} a ${j.visitante.placar}`
       partes.push(`- ${j.casa.nome} x ${j.visitante.nome}: ${j.status}, ${placar}`)
     }

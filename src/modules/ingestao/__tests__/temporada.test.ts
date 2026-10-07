@@ -42,7 +42,8 @@ import {
 import type { LinhaBox } from '../demo/simulacao'
 import { simularAte } from '../demo/temporada'
 
-const ruleset = carregarRuleset(readFileSync('config/ruleset.v1.yaml', 'utf8'))
+const rulesetDoYaml = carregarRuleset(readFileSync('config/ruleset.v1.yaml', 'utf8'))
+const ruleset = rulesetDoYaml
 
 // 15:00 em Brasília de um sábado de setembro — dentro da temporada 2025-26.
 const AGORA = new Date('2026-09-05T18:00:00.000Z')
@@ -780,6 +781,11 @@ describe('simularAte — dias passados (PGlite)', () => {
  */
 describe('simularAte — o dia de HOJE (PGlite)', () => {
   const DIAS_HOJE = 21
+  // A odd está fora da tela desde 07/10/2026 (`odds.exibir_no_app: false`).
+  // Este bloco prova a ORDEM do pipeline (odds antes da republicação), então
+  // roda com a chave religada, num clone — nunca no arquivo de produção.
+  const ruleset = structuredClone(rulesetDoYaml)
+  ruleset.odds.exibir_no_app = true
 
   let banco: Awaited<ReturnType<typeof bancoDeTeste>>
   let resumo: Awaited<ReturnType<typeof simularAte>>

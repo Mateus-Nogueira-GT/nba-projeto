@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import { eq, inArray } from 'drizzle-orm'
+import { count, eq, inArray } from 'drizzle-orm'
 
 import {
   apitosRetroativos,
@@ -196,11 +196,13 @@ export async function executarDiaRetroativo(
 /**
  * DOIS JOGOS DO MESMO TIME NUMA RODADA (achado de 06/10/2026, 08/11/2025).
  *
- * A rodada é o dia no fuso do ruleset (Brasília). Um jogo às 22h de Nova York
- * começa à meia-noite daqui e cai na rodada SEGUINTE — então o Denver teve
- * DEN×GSW (da noite anterior) e DEN×IND na mesma rodada, e o motor emitiu o
- * mesmo apito do Fire Live duas vezes, idênticos. O ao vivo descarta o
- * repetido pela constraint; aqui ele quebrava o INSERT do dia inteiro.
+ * Com a rodada no fuso de Brasília, um jogo às 22h de Nova York começava à
+ * meia-noite daqui e caía na rodada SEGUINTE — então o Denver teve DEN×GSW
+ * (da noite anterior) e DEN×IND na mesma rodada, e o motor emitiu o mesmo
+ * apito do Fire Live duas vezes, idênticos. O ao vivo descarta o repetido pela
+ * constraint; aqui ele quebrava o INSERT do dia inteiro. Desde 07/10/2026 a
+ * rodada é a data dos EUA e esse caso some, mas a deduplicação fica: é a mesma
+ * regra 5 do ao vivo, e não custa nada.
  */
 export function primeiroDeCada<T>(itens: T[], chave: (item: T) => string): T[] {
   const vistos = new Set<string>()
@@ -284,9 +286,54 @@ async function identidadesDoDia(
   )
 }
 
+export type LinhasRetroativas = { apitos: number; greens: number; feed: number }
+
+/** Quantas linhas a temporada tem nas três tabelas retroativas (o dry-run do `--limpar-temporada`). */
+export async function contarTemporadaRetroativa(db: Db, temporada: string): Promise<LinhasRetroativas> {
+  const [[a], [g], [f]] = await Promise.all([
+    db.select({ n: count() }).from(apitosRetroativos).where(eq(apitosRetroativos.temporada, temporada)),
+    db.select({ n: count() }).from(greensRetroativos).where(eq(greensRetroativos.temporada, temporada)),
+    db.select({ n: count() }).from(feedRetroativo).where(eq(feedRetroativo.temporada, temporada)),
+  ])
+  return { apitos: a?.n ?? 0, greens: g?.n ?? 0, feed: f?.n ?? 0 }
+}
+
+/**
+ * APAGA A TEMPORADA INTEIRA das três tabelas retroativas, numa transação.
+ *
+ * Existe por causa da rodada pela data dos EUA (decisão de 07/10/2026): quando
+ * o fuso do dia muda, um jogo troca de rodada. Regravar dia a dia apaga só o
+ * dia que regrava — o dia que PERDEU o jogo ficaria com o apito velho, e o
+ * apito velho ainda bloquearia a chave `apitos_retroativos_dedup` do mesmo
+ * jogo no dia novo. Limpar a temporada antes é o que torna a troca de fuso
+ * reexecutável.
+ */
+export async function limparTemporadaRetroativa(db: Db, temporada: string): Promise<LinhasRetroativas> {
+  return db.transaction(async (tx) => {
+    // Em sequência: uma transação é uma conexão só.
+    const apitos = await tx
+      .delete(apitosRetroativos)
+      .where(eq(apitosRetroativos.temporada, temporada))
+      .returning({ id: apitosRetroativos.id })
+    const greens = await tx
+      .delete(greensRetroativos)
+      .where(eq(greensRetroativos.temporada, temporada))
+      .returning({ id: greensRetroativos.id })
+    const feed = await tx
+      .delete(feedRetroativo)
+      .where(eq(feedRetroativo.temporada, temporada))
+      .returning({ id: feedRetroativo.id })
+    return { apitos: apitos.length, greens: greens.length, feed: feed.length }
+  })
+}
+
 /**
  * A temporada inteira (ou um trecho), dia a dia, somando os contadores.
  * `aoConcluirDia` existe para o script dar progresso — são ~200 dias.
+ *
+ * `limparTemporada` apaga a temporada do intervalo INTEIRA antes do primeiro
+ * dia (`limparTemporadaRetroativa`) — inclusive dias fora de `de..ate`: é
+ * para rodar sobre a temporada toda.
  */
 export async function executarTemporadaRetroativa(
   db: Db,
@@ -294,11 +341,16 @@ export async function executarTemporadaRetroativa(
   opcoes: PeriodoBacktest & {
     aoConcluirDia?: (data: string, resultado: ResultadoDiaRetroativo) => void | Promise<void>
     agora?: Date
+    limparTemporada?: boolean
+    aoLimpar?: (apagados: LinhasRetroativas) => void | Promise<void>
   },
 ): Promise<ResultadoDiaRetroativo> {
   const agora = opcoes.agora ?? new Date()
   // Antes do primeiro dia: um intervalo inválido não grava metade da temporada.
-  temporadaDoIntervalo(opcoes.de, opcoes.ate, calendarioDoRuleset(ruleset), agora)
+  const temporada = temporadaDoIntervalo(opcoes.de, opcoes.ate, calendarioDoRuleset(ruleset), agora)
+  if (opcoes.limparTemporada) {
+    await opcoes.aoLimpar?.(await limparTemporadaRetroativa(db, temporada))
+  }
   const total = { ...ZERADO }
   for (const data of datasDoPeriodo({ de: opcoes.de, ate: opcoes.ate })) {
     const r = await executarDiaRetroativo(db, ruleset, data, { agora })

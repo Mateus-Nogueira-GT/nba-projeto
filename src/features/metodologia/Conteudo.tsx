@@ -68,12 +68,17 @@ export const SUMARIO: { id: string; rotulo: string }[] = [
   { id: 'exemplo', rotulo: 'Exemplo de linha' },
 ]
 
+/** O sumário do que a página de fato mostra: sem odd na tela, sem a seção delas. */
+export function sumarioDaMetodologia(exibirOdds: boolean) {
+  return SUMARIO.filter((item) => exibirOdds || item.id !== 'odds')
+}
+
 /**
  * A METODOLOGIA NIP, escrita uma vez. Duas telas a mostram: `/como-funciona`
  * (leitura) e `/metodologia` (portão de aceite). Todo número vem do ruleset.
  */
-export function ConteudoDaMetodologia({ ruleset, t, faixasConfianca }: Metodologia) {
-  const oddExemplo = oddDoExemplo(ruleset.odds.exibicao)
+export function ConteudoDaMetodologia({ ruleset, t, faixasConfianca, exibirOdds }: Metodologia) {
+  const oddExemplo = exibirOdds ? oddDoExemplo(ruleset.odds.exibicao) : null
   return (
     <div className={s.conteudo}>
       <Secao id="o-que-faz" titulo="Antes de tudo: o que o app faz">
@@ -277,23 +282,25 @@ export function ConteudoDaMetodologia({ ruleset, t, faixasConfianca }: Metodolog
         )}
       </Secao>
 
-      <Secao id="odds" titulo="As odds">
-        <p>
-          As odds variam entre casas e ao longo do dia. Com cobertura de no mínimo{' '}
-          {t.odds.casasMinimas} {t.odds.casasMinimas === 1 ? 'casa' : 'casas'}, a lista mostra{' '}
-          {ruleset.odds.exibicao === 'media'
-            ? 'a média das odds'
-            : ruleset.odds.exibicao === 'casa_unica'
-              ? 'a odd cotada'
-              : 'a faixa entre a menor e a maior odd'}{' '}
-          da última coleta. O detalhe reúne as cotações por casa disponíveis.
-        </p>
-        <p>
-          Sem coleta suficiente, o detalhe pode mostrar a tabela de referência NIP, identificada como
-          referência. Ela não é uma cotação atual da sua casa. A plataforma é somente leitura: não
-          envia apostas nem vincula contas de casas.
-        </p>
-      </Secao>
+      {exibirOdds && (
+        <Secao id="odds" titulo="As odds">
+          <p>
+            As odds variam entre casas e ao longo do dia. Com cobertura de no mínimo{' '}
+            {t.odds.casasMinimas} {t.odds.casasMinimas === 1 ? 'casa' : 'casas'}, a lista mostra{' '}
+            {ruleset.odds.exibicao === 'media'
+              ? 'a média das odds'
+              : ruleset.odds.exibicao === 'casa_unica'
+                ? 'a odd cotada'
+                : 'a faixa entre a menor e a maior odd'}{' '}
+            da última coleta. O detalhe reúne as cotações por casa disponíveis.
+          </p>
+          <p>
+            Sem coleta suficiente, o detalhe pode mostrar a tabela de referência NIP, identificada como
+            referência. Ela não é uma cotação atual da sua casa. A plataforma é somente leitura: não
+            envia apostas nem vincula contas de casas.
+          </p>
+        </Secao>
+      )}
 
       <Secao id="fire-live" titulo="Fire Live — o ao vivo do 1º quarto">
         <p>

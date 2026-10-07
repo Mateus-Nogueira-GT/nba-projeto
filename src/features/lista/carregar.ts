@@ -18,6 +18,7 @@ import {
   type PosicaoNaHierarquia,
 } from '@/modules/entrega/lista-por-jogo'
 import { ATRIBUTOS, METODOS, POSICOES } from '@/modules/entrega/lista-secreta-rotas'
+import { exibirOdds } from '@/modules/entrega/odds/exibicao'
 import { rulesetAtivo } from '@/modules/entrega/ruleset-ativo'
 import type { ItemFeed } from '@/modules/entrega/tipos-feed'
 import { atende } from '@/modules/plataforma/assinatura/nivel-do-plano'
@@ -123,6 +124,12 @@ export type DadosDaLista = (
       resumoDoDia: string | null
       /** Preenchido só na temporada anterior — e aí não há portão de plano. */
       retroativa: ListaRetroativa | null
+      /**
+       * `odds.exibir_no_app` do ruleset. Desligada (parceiro, 07/10/2026), a
+       * tabela não tem coluna de odd, a lente de odds não é oferecida e a
+       * ordenação por odd cai na do sinal.
+       */
+      exibirOdds: boolean
     }
 ) & { seletor: SeletorDaLista }
 
@@ -167,9 +174,11 @@ function acertos(item: ItemFeed): number {
 export async function carregarLista(estado: EstadoDaTabela): Promise<DadosDaLista> {
   const { sessao, acesso } = await exigirNivel('GRATIS', '/')
   const ruleset = await rulesetAtivo()
-  const { fuso } = ruleset.rodada
+  // O DIA sai de `rodada.fuso` (NY, decisão de 07/10/2026); a tela recebe
+  // `fuso_exibicao` (Brasília) no campo `fuso`.
+  const { fuso: fusoDoDia, fuso_exibicao: fuso } = ruleset.rodada
   const agora = new Date()
-  const hoje = dataDeReferencia(agora, fuso)
+  const hoje = dataDeReferencia(agora, fusoDoDia)
 
   // A TEMPORADA ANTERIOR (spec 25/09, decisão 6): aberta a todo plano, lida
   // só de `feed_retroativo`. Abre quando ESCOLHIDA no seletor, ou por padrão
@@ -185,7 +194,7 @@ export async function carregarLista(estado: EstadoDaTabela): Promise<DadosDaList
 
   const [preferencias, jogosDoDia, experiencia] = await Promise.all([
     preferenciasDoUsuario(getDb(), sessao.usuarioId),
-    jogosDoDiaResumo(getDb(), hoje, fuso),
+    jogosDoDiaResumo(getDb(), hoje, fusoDoDia),
     estadoExperienciaDoUsuario(getDb(), sessao.usuarioId),
   ])
   const seguidos = new Set(experiencia.jogadoresAcompanhados)
@@ -272,9 +281,13 @@ const LENTES_SEM_DADO: Record<Lente, boolean> = { ULT5: false, MEDIA_LINHA: fals
 async function montarTabela({ estado, preferencias, seguidos, jogosDoDia, itensDoDia, ruleset, hierarquia }: EntradaDaTabela) {
   const ordem = estado.ordem ?? preferencias.ordemLista
   const lentePedida = estado.lente ?? preferencias.lente
+  const comOdds = exibirOdds(ruleset)
   // Sem hierarquia (a da temporada anterior não é a de hoje) a lente dela não
-  // existe, e sem odd a de odds também não: cai na dos últimos jogos.
-  const lente = LENTES_SEM_DADO[lentePedida] && !hierarquia ? 'ULT5' : lentePedida
+  // existe, e sem odd a de odds também não: cai na dos últimos jogos. A odd
+  // desligada no ruleset é o mesmo caso, também na lista de hoje — inclusive
+  // para quem guardou a lente de odds como preferência.
+  const lente =
+    (LENTES_SEM_DADO[lentePedida] && !hierarquia) || (lentePedida === 'ODDS' && !comOdds) ? 'ULT5' : lentePedida
   const doDia = itensDoDia
   const jogoPorId = new Map(jogosDoDia.map((j) => [j.id, j] as const))
 
@@ -320,7 +333,8 @@ async function montarTabela({ estado, preferencias, seguidos, jogosDoDia, itensD
     }
   }
 
-  const ordenar = comparador(estado.ordenarPor)
+  // Ordenar por uma coluna que não está na tela seria ordem sem explicação.
+  const ordenar = estado.ordenarPor === 'odd' && !comOdds ? null : comparador(estado.ordenarPor)
   const emOrdem = (linhas: LinhaDaLista[]) => (ordenar ? [...linhas].sort(ordenar) : linhas)
 
   const grupos: GrupoDaLista[] =
@@ -372,6 +386,7 @@ async function montarTabela({ estado, preferencias, seguidos, jogosDoDia, itensD
       ),
     },
     contagemPorAtributo,
+    exibirOdds: comOdds,
   }
 }
 
@@ -398,11 +413,13 @@ async function carregarListaRetroativa({
   anterior: { temporada: string; datas: string[] }
   temporadas: string[]
 }): Promise<DadosDaLista> {
-  const { fuso } = ruleset.rodada
+  // O DIA sai de `rodada.fuso` (NY, decisão de 07/10/2026); a tela recebe
+  // `fuso_exibicao` (Brasília) no campo `fuso`.
+  const { fuso: fusoDoDia, fuso_exibicao: fuso } = ruleset.rodada
   const data = estado.data !== undefined && datas.includes(estado.data) ? estado.data : datas[0]!
   const [preferencias, jogosDoDia, experiencia, feed] = await Promise.all([
     preferenciasDoUsuario(getDb(), usuarioId),
-    jogosDoDiaResumo(getDb(), data, fuso),
+    jogosDoDiaResumo(getDb(), data, fusoDoDia),
     estadoExperienciaDoUsuario(getDb(), usuarioId),
     feedRetroativoCacheado(temporada, data),
   ])

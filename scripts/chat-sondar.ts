@@ -87,6 +87,7 @@ async function principal() {
   const contexto = await montarContexto(db, {
     dataReferencia,
     fuso: ruleset.rodada.fuso,
+    fusoExibicao: ruleset.rodada.fuso_exibicao,
     temporada: temporadaDe(
       intervaloDoDia(dataReferencia, ruleset.rodada.fuso).inicio,
       calendarioDoRuleset(ruleset),

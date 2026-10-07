@@ -108,7 +108,7 @@ function Hierarquia({
 }
 
 export function TelaTime({ dados }: { dados: DadosDoTime }) {
-  const { id, tela, temporada, fuso, atributo, hierarquia, jogoDeHoje, profundidade, seletor } = dados
+  const { id, tela, temporada, fuso, fusoDia, atributo, hierarquia, jogoDeHoje, profundidade, seletor } = dados
   const { escolhida } = seletor
   const { time, campanha } = tela
   const identidade = identidadeDoTime(time.sigla)
@@ -181,7 +181,7 @@ export function TelaTime({ dados }: { dados: DadosDoTime }) {
           {profundidade ? (
             <TabelaDados
               legenda="Pontos por quarto, da partida mais recente para a mais antiga"
-              colunas={colunas(prorrogacao, fuso, escolhida)}
+              colunas={colunas(prorrogacao, fusoDia, escolhida)}
               linhas={tela.jogosDoTime}
               chaveDaLinha={(l) => l.jogoId}
               vazio="Nenhuma partida registrada para este time."

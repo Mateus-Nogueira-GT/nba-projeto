@@ -29,6 +29,8 @@ export type DadosDoTime = {
   tela: TelaTime
   temporada: string
   fuso: string
+  /** O fuso da RODADA (`rodada.fuso`, NY desde 07/10): a DATA de um jogo é a da rodada; só a hora sai em `fuso`. */
+  fusoDia: string
   agora: Date
   atributo: AtributoDaHierarquia
   hierarquia: LinhaHierarquia[]
@@ -60,7 +62,9 @@ export async function carregarTime(id: string, params: Params): Promise<DadosDoT
 
   const agora = new Date()
   const ruleset = await rulesetAtivo()
-  const { fuso } = ruleset.rodada
+  // O DIA sai de `rodada.fuso` (NY, decisão de 07/10/2026); a tela recebe
+  // `fuso_exibicao` (Brasília) no campo `fuso`.
+  const { fuso: fusoDoDia, fuso_exibicao: fuso } = ruleset.rodada
   // A temporada que TEM dado (no hiato, a passada) é o padrão, pelo cache;
   // `?temporada=` troca dentro das disponíveis.
   const seletor = await temporadaDasEstatisticas(params, ruleset, agora)
@@ -77,7 +81,7 @@ export async function carregarTime(id: string, params: Params): Promise<DadosDoT
   const [experiencia, doDia] = await Promise.all([
     estadoExperienciaDoUsuario(db, sessao.usuarioId),
     // Temporada anterior não tem "jogo de hoje": nem a consulta é feita.
-    periodo ? Promise.resolve(null) : telaJogosDoDia(db, dataDeReferencia(agora, fuso), fuso),
+    periodo ? Promise.resolve(null) : telaJogosDoDia(db, dataDeReferencia(agora, fusoDoDia), fusoDoDia),
   ])
   // O desfalque é por JOGO: sem jogo hoje, ninguém é marcado — e a tela diz isso.
   const jogoDeHoje = doDia?.jogos.find((j) => j.casa.id === id || j.visitante.id === id) ?? null
@@ -106,6 +110,7 @@ export async function carregarTime(id: string, params: Params): Promise<DadosDoT
     tela,
     temporada,
     fuso,
+    fusoDia: fusoDoDia,
     agora,
     atributo,
     hierarquia,

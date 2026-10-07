@@ -29,6 +29,7 @@ import {
   recapRetroativo,
 } from '@/modules/entrega/retroativo/leitura'
 import { temporadaDaTela } from '@/modules/entrega/retroativo/temporada'
+import { exibirOdds } from '@/modules/entrega/odds/exibicao'
 import { rulesetAtivo } from '@/modules/entrega/ruleset-ativo'
 import type { Ruleset } from '@/modules/motor/ruleset/schema'
 import type { ItemFeed } from '@/modules/entrega/tipos-feed'
@@ -155,6 +156,12 @@ export type DadosDosResultados = {
    * posteriori, sem odd e sem Placar do NIP, e a tela diz isso.
    */
   retroativo: boolean
+  /**
+   * `odds.exibir_no_app` do ruleset. Desligada (parceiro, 07/10/2026), o card
+   * conferido não tem a coluna da odd — nem o "Sem odd registrada" da
+   * temporada anterior.
+   */
+  exibirOdds: boolean
   /** A Lista do mesmo dia: a de hoje, ou a daquela data na temporada anterior. */
   listaDoDia: string
 }
@@ -239,9 +246,11 @@ export async function carregarResultados(data: string, params: Params): Promise<
   const assinante = atende(acesso.nivel, 'MVP')
 
   const ruleset = await rulesetAtivo()
-  const { fuso } = ruleset.rodada
+  // O DIA sai de `rodada.fuso` (NY, decisão de 07/10/2026); a tela recebe
+  // `fuso_exibicao` (Brasília) no campo `fuso`.
+  const { fuso: fusoDoDia, fuso_exibicao: fuso } = ruleset.rodada
   const agora = new Date()
-  const hoje = dataDeReferencia(agora, fuso)
+  const hoje = dataDeReferencia(agora, fusoDoDia)
   // Rota inventada não vira erro nem tela vazia: volta para a rodada de hoje.
   if (!dataValida(data)) redirect(rotaResultados(hoje, semTemporada(filtrosDaUrl)))
 
@@ -351,6 +360,7 @@ export async function carregarResultados(data: string, params: Params): Promise<
     times: [...times].map(([id, sigla]) => ({ id, sigla })),
     seletor,
     retroativo: false,
+    exibirOdds: exibirOdds(ruleset),
     listaDoDia: '/',
   }
 }
@@ -494,6 +504,7 @@ async function carregarResultadosRetroativos({
     times: [...times].map(([id, sigla]) => ({ id, sigla })),
     seletor,
     retroativo: true,
+    exibirOdds: exibirOdds(ruleset),
     listaDoDia: `/?${new URLSearchParams({ temporada: temporadaEscolhida, data })}`,
   }
 }

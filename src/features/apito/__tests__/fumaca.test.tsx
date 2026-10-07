@@ -26,6 +26,7 @@ import { cotacoesPorCasa } from '@/modules/entrega/odds/leitura'
 import { lerFeed, linhasDoJogador, publicarListaSecreta, recorteDoJogador } from '@/modules/entrega/lista-secreta'
 import { rulesetAtivo } from '@/modules/entrega/ruleset-ativo'
 import { simularAte } from '@/modules/ingestao/demo/temporada'
+import { hora } from '@/ui/formato'
 import { LLMFake } from '@/modules/ingestao/llm'
 import type { NivelDoPlano } from '@/modules/plataforma/assinatura/nivel-do-plano'
 import {
@@ -51,9 +52,10 @@ import {
  * ADR-0004; o sujeito do Fire Live; a seção do 1º quarto só no MESMO atributo).
  */
 
-const FUSO = 'America/Sao_Paulo'
+// O DIA é o de Nova York desde 07/10/2026 (`rodada.fuso`).
+const FUSO_DIA = 'America/New_York'
 const AGORA = new Date('2026-01-15T18:00:00.000Z')
-const HOJE = dataDeReferencia(AGORA, FUSO)
+const HOJE = dataDeReferencia(AGORA, FUSO_DIA)
 const USUARIO = '00000000-0000-4000-8000-000000000001'
 
 let banco: Awaited<ReturnType<typeof bancoDeTeste>>
@@ -72,6 +74,20 @@ vi.mock('next/cache', () => ({
   revalidateTag: () => {},
   revalidatePath: () => {},
 }))
+// A odd está fora da tela desde 07/10/2026 (`odds.exibir_no_app: false` no
+// YAML). Os testes das CASAS continuam provando a tela com a chave religada —
+// religar é trocar uma linha, e a tela tem de voltar inteira —; o teste da
+// chave desligada a desliga só para ele.
+let exibirOddsNoTeste = true
+vi.mock('@/modules/entrega/ruleset-ativo', async (importOriginal) => {
+  const real = await importOriginal<typeof import('@/modules/entrega/ruleset-ativo')>()
+  return {
+    rulesetAtivo: async () => {
+      const r = await real.rulesetAtivo()
+      return { ...r, odds: { ...r.odds, exibir_no_app: exibirOddsNoTeste } }
+    },
+  }
+})
 vi.mock('@/modules/dominio/db/cliente', () => ({
   getDb: () => banco.db,
   fecharDb: async () => {},
@@ -195,6 +211,32 @@ describe('detalhe do apito — temporada simulada', () => {
     expect(html).toContain('Referência de mercado: a odd da sua casa pode ser outra.')
     expect(html).toContain('Nenhuma aposta é feita por aqui.')
   }, 60_000)
+
+  it.each<Porta>(['pagina', 'painel'])(
+    '%s: com a odd desligada (YAML de hoje), nem odd, nem tabela de casas, nem a nota das casas',
+    async (porta) => {
+      const alvo = await umApito()
+      // Há cotação no banco para este apito: o que some é a TELA, não o dado.
+      expect((await cotacoesPorCasa(banco.db, [alvo.jogoId], alvo.jogadorId, alvo.atributo)).length).toBeGreaterThan(0)
+      exibirOddsNoTeste = false
+      try {
+        const html = await renderizar(porta, alvo.jogadorId, { atributo: alvo.atributo })
+        const visivel = texto(html)
+        expect(visivel).toContain(alvo.nome)
+        expect(visivel).toContain(`${alvo.linha}+`)
+        expect(html).not.toContain('Odds por casa')
+        expect(html).not.toMatch(/<table\b/)
+        expect(visivel).not.toMatch(/\bodds?\b/i)
+        expect(visivel).not.toContain('casas na última coleta')
+        expect(visivel).not.toContain('Cotação de uma casa')
+        expect(visivel).not.toContain('tabela de referência')
+        expect(visivel).not.toContain('Referência de mercado')
+      } finally {
+        exibirOddsNoTeste = true
+      }
+    },
+    60_000,
+  )
 
   it('(telas-04-detalhe) sem link marcado não há saída; com link, a saída rastreada e patrocinada — nunca um formulário de aposta', async () => {
     const alvo = await umApito()
@@ -356,6 +398,18 @@ describe('detalhe do apito — temporada simulada', () => {
     // Sem /i: "+15 Pontos 1,40–1,60" é a pílula de mercado seguida da ODD
     // (decimal por natureza) — o que se proíbe é a LINHA com meio ponto.
     expect(visivel).not.toMatch(/(PONTOS|REBOTES|ASSISTÊNCIAS|PTS|REB|AST)\s+\d+,\d/)
+  }, 60_000)
+
+  it('(rodada EUA, 07/10/2026) a hora do jogo sai no relógio de Brasília, não no fuso do dia', async () => {
+    // `rodada.fuso` (NY) decide o DIA; o card mostra `rodada.fuso_exibicao`.
+    const alvo = await umApito()
+    const [jogo] = await banco.db.select().from(jogos).where(eq(jogos.id, alvo.jogoId))
+    const html = texto(await renderizar('pagina', alvo.jogadorId, { atributo: alvo.atributo }))
+    const brasilia = hora(jogo!.dataHoraUtc, 'America/Sao_Paulo')
+    const novaYork = hora(jogo!.dataHoraUtc, FUSO_DIA)
+    expect(brasilia).not.toBe(novaYork)
+    expect(html).toContain(brasilia)
+    expect(html).not.toContain(novaYork)
   }, 60_000)
 
   it('jogador sem apito hoje: estado vazio, sem lançar', async () => {

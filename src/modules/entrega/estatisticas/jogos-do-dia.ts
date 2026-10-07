@@ -30,10 +30,10 @@ export type TelaJogosDoDia = ComAtualizacao & {
 /**
  * JOGOS DO DIA — a porta de entrada da aba.
  *
- * O dia é recortado em UTC, igual ao resto do sistema (`montarFatos` usa o
- * mesmo corte). Rodada da NBA cruza a meia-noite de Brasília com frequência;
- * mudar o fuso aqui e não lá faria a aba e a Lista Secreta discordarem sobre
- * quais jogos são "de hoje".
+ * O dia é recortado no fuso do DIA (`rodada.fuso`), igual ao resto do sistema
+ * (`montarFatos` usa o mesmo corte). Mudar o fuso aqui e não lá faria a aba e
+ * a Lista Secreta discordarem sobre quais jogos são "de hoje". As horas que a
+ * tela mostra saem de `rodada.fuso_exibicao`, não deste argumento.
  */
 export async function telaJogosDoDia(
   db: Db,

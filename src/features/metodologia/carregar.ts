@@ -1,3 +1,4 @@
+import { exibirOdds } from '@/modules/entrega/odds/exibicao'
 import { montarTeoria } from '@/modules/entrega/teoria/conteudo'
 import { rulesetAtivo } from '@/modules/entrega/ruleset-ativo'
 
@@ -11,6 +12,8 @@ export async function lerMetodologia() {
     ruleset,
     t: montarTeoria(ruleset),
     faixasConfianca: [...ruleset.confianca_exibicao.faixas].sort((a, b) => a.de - b.de),
+    /** Odd desligada no ruleset (07/10/2026): sem a seção das odds e sem a odd do exemplo. */
+    exibirOdds: exibirOdds(ruleset),
   }
 }
 

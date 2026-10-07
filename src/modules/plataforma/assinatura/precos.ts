@@ -14,6 +14,12 @@ import { SKUS } from './sku'
  * Quem sabe o fuso é o ruleset, que vive em `entrega/` — camada que
  * `plataforma/` não importa. Então quem lê o ruleset (as rotas e as páginas)
  * passa o fuso para cá.
+ *
+ * É `rodada.fuso` (o do DIA, Nova York desde 07/10/2026), não
+ * `fuso_exibicao`: o direito vai até o fim da RODADA do último dia, e checkout,
+ * webhook e reconciliação precisam todos do MESMO instante. Comparado com
+ * Brasília, o fim cai 1 hora DEPOIS (junho, horário de verão de NY): ninguém
+ * perde o que pagou. A data mostrada ao assinante sai de `fuso_exibicao`.
  */
 export type PrecoDoSku = {
   centavos: number
@@ -25,7 +31,7 @@ export type PrecosDosPlanos = {
   porSku: Record<Sku, PrecoDoSku>
   /**
    * O INSTANTE em que a temporada vendida acaba: a meia-noite SEGUINTE ao dia
-   * de `TEMPORADA_FIM`, no fuso da rodada. `TEMPORADA_FIM=2027-06-30` quer
+   * de `TEMPORADA_FIM`, no fuso da rodada (`rodada.fuso`). `TEMPORADA_FIM=2027-06-30` quer
    * dizer "o dia 30 inteiro está incluído", e um direito que terminasse
    * 00:00 do dia 30 tiraria o último dia de quem pagou por ele.
    */

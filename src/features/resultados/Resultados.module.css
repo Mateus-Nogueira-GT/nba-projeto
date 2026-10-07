@@ -312,6 +312,11 @@ a.seta:hover {
 .linhaFire {
   grid-template-columns: minmax(200px, 2fr) 140px minmax(160px, 1.5fr) 180px;
 }
+/* Odd desligada no ruleset (07/10/2026): a coluna dela sai da grade, e as
+   linhas do apito ficam com a largura flexível. */
+.linha[data-sem-odd] {
+  grid-template-columns: minmax(180px, 2fr) 130px minmax(110px, 1fr) 104px 150px 128px;
+}
 .linha::before {
   content: '';
   position: absolute;
@@ -495,7 +500,8 @@ a.seta:hover {
 
 /* ---------- Estreito ---------- */
 @container (max-width: 1080px) {
-  .linha {
+  .linha,
+  .linha[data-sem-odd] {
     grid-template-columns: minmax(0, 1fr) auto;
     grid-template-areas:
       'jogador veredito'

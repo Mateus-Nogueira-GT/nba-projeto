@@ -225,7 +225,7 @@ function BoxScore({ dados }: { dados: DadosDoJogo }) {
 
 /** h2h vazio é um FATO ("primeiro confronto"), não ausência de seção. */
 function Confrontos({ dados }: { dados: DadosDoJogo }) {
-  const { tela, profundidade, id, fuso } = dados
+  const { tela, profundidade, id, fusoDia } = dados
   if (!profundidade) return <Silhueta forma="tabela" recurso="Os confrontos anteriores" voltar={rotaDoJogo(id)} />
   if (tela.h2h.length === 0) return <EstadoVazio titulo="Primeiro confronto da temporada" />
   return (
@@ -235,7 +235,7 @@ function Confrontos({ dados }: { dados: DadosDoJogo }) {
         return (
           <li key={c.jogoId}>
             <Link href={comTemporada(rotaDoJogo(c.jogoId), dados.escolhida)} className={s.confronto}>
-              <span className={`${s.fraco} num`}>{diaMes(c.data, fuso)}</span>
+              <span className={`${s.fraco} num`}>{diaMes(c.data, fusoDia)}</span>
               <span className={s.confrontoLado} data-venceu={!casaVenceu}>
                 <LogoTime sigla={c.siglaVisitante} tamanho={20} /> {c.siglaVisitante}
                 <strong className="num">{c.placarVisitante}</strong>

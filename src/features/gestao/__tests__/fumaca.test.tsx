@@ -30,9 +30,10 @@ import type { NivelDoPlano } from '@/modules/plataforma/assinatura/nivel-do-plan
  * `escrita-identidade-04.test.ts`: cada caso diz de onde veio.
  */
 
-const FUSO = 'America/Sao_Paulo'
+// O DIA é o de Nova York desde 07/10/2026 (`rodada.fuso`).
+const FUSO_DIA = 'America/New_York'
 const AGORA = new Date('2026-01-15T18:00:00.000Z')
-const HOJE = dataDeReferencia(AGORA, FUSO)
+const HOJE = dataDeReferencia(AGORA, FUSO_DIA)
 const USUARIO = '00000000-0000-4000-8000-000000000001'
 /** Um segundo usuário, só para o "Seu mês" com 30 dias de registro. */
 const VETERANO = '00000000-0000-4000-8000-000000000002'
@@ -70,6 +71,20 @@ vi.mock('@/modules/entrega/gestao', async (importOriginal) => {
     planoDoDia: async (...args: Parameters<typeof real.planoDoDia>) => {
       chamadasDoPlano.push(nivelDoTeste)
       return real.planoDoDia(...args)
+    },
+  }
+})
+// A odd está fora da tela desde 07/10/2026 (`odds.exibir_no_app: false` no
+// YAML). Os testes do formulário com odd rodam com a chave religada — religar
+// é trocar uma linha, e a tela tem de voltar inteira —; os da chave desligada
+// a desligam só para eles.
+let exibirOddsNoTeste = true
+vi.mock('@/modules/entrega/ruleset-ativo', async (importOriginal) => {
+  const real = await importOriginal<typeof import('@/modules/entrega/ruleset-ativo')>()
+  return {
+    rulesetAtivo: async () => {
+      const r = await real.rulesetAtivo()
+      return { ...r, odds: { ...r.odds, exibir_no_app: exibirOddsNoTeste } }
     },
   }
 })
@@ -534,4 +549,67 @@ describe('Gestão do v2 — fonte', () => {
     expect(painel.indexOf("exigirNivel('GRATIS', '/gestao')")).toBeGreaterThan(0)
     expect(painel.indexOf('<LateralDaRodada')).toBeGreaterThan(painel.indexOf("exigirNivel('GRATIS'"))
   })
+})
+
+// ===========================================================================
+// ODD DESLIGADA NO RULESET (parceiro, 07/10/2026)
+// ===========================================================================
+
+describe('Gestão do v2 — odd desligada no ruleset', () => {
+  const SEM_ODD = '00000000-0000-4000-8000-0000000000d7'
+
+  beforeAll(async () => {
+    await banco.db.insert(usuarios).values({ id: SEM_ODD, email: 'sem-odd@teste.com', senhaHash: 'x' }).onConflictDoNothing()
+  })
+
+  async function comOddDesligada<T>(fn: () => Promise<T>): Promise<T> {
+    exibirOddsNoTeste = false
+    nivelDoTeste = 'MVP'
+    sessaoDoTeste = { usuarioId: SEM_ODD, email: 'sem-odd@teste.com' }
+    try {
+      return await fn()
+    } finally {
+      exibirOddsNoTeste = true
+      sessaoDoTeste = { usuarioId: USUARIO, email: 'demo@teste.com' }
+    }
+  }
+
+  it('o formulário "Registrei" vem sem o campo da odd, e a tela não fala de odd', async () => {
+    await comOddDesligada(async () => {
+      const html = await renderizar()
+      expect(html).toContain('name="unidades"')
+      expect(html).not.toContain('name="odd"')
+      expect(texto(html)).not.toMatch(/\bodds?\b/i)
+    })
+  }, 60_000)
+
+  it('a ação registra SEM odd (o campo nem vem no formulário): a coluna é anulável', async () => {
+    await comOddDesligada(async () => {
+      const alvo = cardsDeHoje().find((c) => c.linha !== null)!
+      const { registrarEntrada } = await import('../acoes')
+      const f = formulario(alvo)
+      f.delete('odd')
+      expect(await destinoDoRedirect(registrarEntrada(f))).toBe('/gestao?ver=realizadas')
+      const linhas = await linhasDe(SEM_ODD)
+      expect(linhas).toHaveLength(1)
+      expect(linhas[0]).toMatchObject({ jogadorId: alvo.jogadorId, unidades: '1.50', odd: null })
+    })
+  }, 60_000)
+
+  it('a visão Realizadas não tem a coluna da odd, e o "Seu mês" não mostra o saldo, que depende dela', async () => {
+    await comOddDesligada(async () => {
+      const html = await renderizar({ ver: 'realizadas' })
+      expect(html).toContain('Seu mês')
+      expect(texto(html)).not.toMatch(/\bodds?\b/i)
+      expect(texto(html)).not.toContain('Saldo')
+    })
+  }, 60_000)
+
+  it('o erro da entrada recusada não pede para conferir uma odd que a tela não tem', async () => {
+    await comOddDesligada(async () => {
+      const html = await renderizar({ erro: 'entrada-invalida' })
+      expect(html).toContain('role="alert"')
+      expect(texto(html)).not.toMatch(/\bodds?\b/i)
+    })
+  }, 60_000)
 })

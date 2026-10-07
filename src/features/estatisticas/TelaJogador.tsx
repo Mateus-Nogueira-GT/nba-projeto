@@ -36,13 +36,13 @@ function Veredito({ apito }: { apito: ApitoDoJogador }) {
 }
 
 function Apitos({ dados }: { dados: DadosDoJogador }) {
-  const { apitos, fuso } = dados
+  const { apitos, fusoDia } = dados
   if (apitos.length === 0) return <p className={s.nada}>A Lista Secreta ainda não apitou este jogador.</p>
   return (
     <ul className={s.apitos}>
       {apitos.map((a) => (
         <li key={`${a.jogoId}-${a.atributo}`} className={s.apito}>
-          <span className={`${s.apitoData} num`}>{diaMes(a.data, fuso)}</span>
+          <span className={`${s.apitoData} num`}>{diaMes(a.data, fusoDia)}</span>
           <span className={s.apitoMercado}>
             <strong>
               {ROTULO_ATRIBUTO[a.atributo]} {a.linhaMaisBaixa}+
@@ -150,7 +150,7 @@ function NumerosCompletos({ n }: { n: Numeros }) {
 }
 
 export function TelaJogador({ dados }: { dados: DadosDoJogador }) {
-  const { id, tela, contexto, temporada, fuso, profundidade, seletor } = dados
+  const { id, tela, contexto, temporada, fuso, fusoDia, profundidade, seletor } = dados
   // Só a escolha VALIDADA viaja nos links (o mesmo padrão de `jogo.ts`),
   // nunca um campo que se pareça com a URL crua.
   const { escolhida } = seletor
@@ -280,7 +280,7 @@ export function TelaJogador({ dados }: { dados: DadosDoJogador }) {
             ativo: contexto.atributo === atributo,
           }))}
         />
-        <GraficoDesempenho historico={tela.historico} atributo={contexto.atributo} fuso={fuso} hrefDoJogo={hrefDoJogo} />
+        <GraficoDesempenho historico={tela.historico} atributo={contexto.atributo} fuso={fusoDia} hrefDoJogo={hrefDoJogo} />
       </SecaoStats>
 
       <div className={s.colunas}>
@@ -288,7 +288,7 @@ export function TelaJogador({ dados }: { dados: DadosDoJogador }) {
           {profundidade ? (
             <TabelaDados
               legenda="Uma linha por partida, da mais recente para a mais antiga"
-              colunas={colunasDoHistorico(fuso, hrefDoJogo)}
+              colunas={colunasDoHistorico(fusoDia, hrefDoJogo)}
               linhas={tela.historico}
               chaveDaLinha={(l) => l.jogoId}
               vazio="Nenhuma partida registrada para este jogador."

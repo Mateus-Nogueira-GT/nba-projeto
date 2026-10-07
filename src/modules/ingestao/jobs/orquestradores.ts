@@ -37,7 +37,9 @@ function somar(contagens: ContagensJob, chave: string, valor: number): void {
  * CLAUDE.md e, pior, discordava em silêncio da tela: a ingestão gravava o dia
  * segundo Nova York e o app perguntava pelo dia segundo outro fuso.
  *
- * Agora só existe um fuso, e ele vive no ruleset (`rodada.fuso`).
+ * Agora o fuso do dia vive no ruleset (`rodada.fuso`) — e, desde 07/10/2026,
+ * é de novo `America/New_York`, agora por decisão do parceiro e não do
+ * código. A tela tem o próprio relógio (`rodada.fuso_exibicao`).
  */
 export const dataReferenciaNba = dataDeReferencia
 

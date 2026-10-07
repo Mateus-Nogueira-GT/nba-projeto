@@ -1,7 +1,11 @@
 /**
  * Formatação para a tela. Todo formatador de hora recebe o fuso EXPLICITAMENTE:
  * são componentes de servidor, e sem `timeZone` a hora sai no fuso do servidor
- * (UTC na Vercel). O fuso vem do ruleset (`rodada.fuso`).
+ * (UTC na Vercel). O fuso vem do ruleset: é `rodada.fuso_exibicao` (Brasília),
+ * NUNCA `rodada.fuso`. Desde 07/10/2026 os dois são diferentes — `rodada.fuso`
+ * (Nova York) só decide a que DIA o jogo pertence; o relógio da tela é o de
+ * quem assina. Os carregadores entregam `fuso_exibicao` no campo `fuso` dos
+ * dados da tela, para o nome não mudar em cada componente.
  */
 
 /** 1,72 · 24,3 — sempre com vírgula, casas fixas. */

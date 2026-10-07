@@ -160,6 +160,7 @@ export function BarraDeControles({
   abas,
   seguidosNaRodada,
   semOdd = false,
+  semHierarquia = false,
 }: {
   estado: EstadoDaTabela
   opcoes: Opcoes
@@ -170,10 +171,12 @@ export function BarraDeControles({
   /** As abas de mercado moram na mesma barra, à esquerda. */
   abas: React.ReactNode
   /**
-   * Temporada anterior: sem odd e sem a hierarquia de hoje, as duas lentes
-   * não teriam o que mostrar — e não são oferecidas.
+   * Sem odd (temporada anterior, ou odd desligada no ruleset) a lente de odds
+   * não teria o que mostrar — e não é oferecida.
    */
   semOdd?: boolean
+  /** Temporada anterior: a hierarquia de hoje não vale, e a lente dela sai. */
+  semHierarquia?: boolean
 }) {
   const destino = hrefDaLista(estado)
   const n = quantosRecortes(estado)
@@ -253,7 +256,7 @@ export function BarraDeControles({
           acao={definirLente}
           campo="lente"
           destino={destino}
-          opcoes={(semOdd ? (['ULT5', 'MEDIA_LINHA'] as const) : (['ULT5', 'MEDIA_LINHA', 'ODDS', 'HIERARQUIA'] as const)).map((l) => ({
+          opcoes={(Object.keys(ROTULO_LENTE) as Lente[]).filter((l) => !(semOdd && l === 'ODDS') && !(semHierarquia && l === 'HIERARQUIA')).map((l) => ({
             valor: l,
             rotulo: ROTULO_LENTE[l],
             href: hrefDaLista(estado, { lente: l }),

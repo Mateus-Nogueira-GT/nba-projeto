@@ -1,6 +1,7 @@
 import { getDb } from '@/modules/dominio/db/cliente'
 import { dataDeReferencia } from '@/modules/dominio/rodada'
 import { BANCA_PADRAO, planoDoDia, type PlanoDoDia } from '@/modules/entrega/gestao'
+import { exibirOdds } from '@/modules/entrega/odds/exibicao'
 import { rulesetAtivo } from '@/modules/entrega/ruleset-ativo'
 import { precosDosPlanos, type PrecosDosPlanos } from '@/modules/plataforma/assinatura/precos'
 import { landingCacheada, type NoiteDaVitrine } from '@/app/_cache/landing'
@@ -21,6 +22,8 @@ export type DadosDaLanding = {
    */
   gestao: Pick<PlanoDoDia, 'banca' | 'unidade' | 'limites'>
   precos: PrecosDosPlanos | null
+  /** `odds.exibir_no_app` do ruleset: desligada (07/10/2026), a vitrine não fala de odd. */
+  exibirOdds: boolean
 }
 
 /**
@@ -43,5 +46,6 @@ export async function carregarLanding(): Promise<DadosDaLanding> {
     totalDeApitos: vitrine.totalDeApitosHoje,
     gestao: { banca: plano.banca, unidade: plano.unidade, limites: plano.limites },
     precos: precosDosPlanos(ruleset.rodada.fuso),
+    exibirOdds: exibirOdds(ruleset),
   }
 }

@@ -54,7 +54,8 @@ function Cabecalho({ d }: { d: Dados }) {
           </p>
           <p className={s.mercado}>
             <PilulaMercado linha={p.linha} atributo={p.atributo} />
-            <PilulaOdd odd={oddDaLinha(faixa)} />
+            {/* Odd desligada no ruleset: nem a pílula, nem o "—" dela. */}
+            {d.exibirOdds && <PilulaOdd odd={oddDaLinha(faixa)} />}
           </p>
         </div>
       </div>
@@ -277,21 +278,24 @@ function Linhas({ d }: { d: Dados }) {
               <span className="so-leitor"> jogos acima da linha</span>
             </span>
             <PilulaConfianca valor={l.item.confianca} grau={l.item.grauConfianca} />
+            {/* A célula fica, vazia, com a odd desligada: a grade da linha não anda. */}
             <span className={s.linhaOdd}>
-              <PilulaOdd
-                odd={
-                  l.faixa === null
-                    ? null
-                    : {
-                        rotulo: 'Odd',
-                        valor:
-                          l.faixa[0] === l.faixa[1]
-                            ? odd(l.faixa[0])
-                            : `${odd(l.faixa[0])}–${odd(l.faixa[1])}`,
-                        apoio: l.qtdCasas ? `${l.qtdCasas} ${l.qtdCasas === 1 ? 'casa' : 'casas'}` : null,
-                      }
-                }
-              />
+              {d.exibirOdds && (
+                <PilulaOdd
+                  odd={
+                    l.faixa === null
+                      ? null
+                      : {
+                          rotulo: 'Odd',
+                          valor:
+                            l.faixa[0] === l.faixa[1]
+                              ? odd(l.faixa[0])
+                              : `${odd(l.faixa[0])}–${odd(l.faixa[1])}`,
+                          apoio: l.qtdCasas ? `${l.qtdCasas} ${l.qtdCasas === 1 ? 'casa' : 'casas'}` : null,
+                        }
+                  }
+                />
+              )}
             </span>
             {l.escolhida && <span className={s.escolhida}>Apito</span>}
           </li>
@@ -326,14 +330,17 @@ function Linhas({ d }: { d: Dados }) {
           </table>
         </div>
       )}
-      <p className={s.nota}>
-        {casasNaTela === 1
-          ? 'Cotação de uma casa, na última coleta.'
-          : casasNaTela > 1
-            ? `Faixa entre ${casasNaTela} casas na última coleta.`
-            : 'Faixa da tabela de referência da plataforma.'}{' '}
-        Referência de mercado: a odd da sua casa pode ser outra. Nenhuma aposta é feita por aqui.
-      </p>
+      {/* Sem odd na tela, a nota sobre ela também sai. */}
+      {d.exibirOdds && (
+        <p className={s.nota}>
+          {casasNaTela === 1
+            ? 'Cotação de uma casa, na última coleta.'
+            : casasNaTela > 1
+              ? `Faixa entre ${casasNaTela} casas na última coleta.`
+              : 'Faixa da tabela de referência da plataforma.'}{' '}
+          Referência de mercado: a odd da sua casa pode ser outra. Nenhuma aposta é feita por aqui.
+        </p>
+      )}
     </Secao>
   )
 }

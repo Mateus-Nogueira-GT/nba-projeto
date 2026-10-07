@@ -71,3 +71,15 @@ describe('agregação de odds', () => {
     expect(agregar(duasCasas, 'MVP', 'PONTOS', 25, alterado)?.origem).toBe('TABELA_ESTATICA')
   })
 })
+
+describe('odds.exibir_no_app — a chave que tira a odd da tela (parceiro, 07/10/2026)', () => {
+  it('o YAML desliga: nenhuma odd chega ao assinante', () => {
+    expect(ruleset.odds.exibir_no_app).toBe(false)
+  })
+
+  it('sem a chave no YAML, o padrão é o comportamento anterior: odd na tela', () => {
+    const semChave = yamlBruto.replace(/^\s*exibir_no_app:.*$/m, '')
+    expect(semChave).not.toContain('exibir_no_app')
+    expect(carregarRuleset(semChave).odds.exibir_no_app).toBe(true)
+  })
+})

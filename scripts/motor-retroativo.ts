@@ -5,6 +5,7 @@ import { jogos } from '../src/modules/dominio/db/schema'
 import { calendarioDoRuleset } from '../src/modules/dominio/temporada'
 import { dataCalendarioValida } from '../src/modules/entrega/retroativo/data'
 import {
+  contarTemporadaRetroativa,
   executarTemporadaRetroativa,
   temporadaDoIntervalo,
 } from '../src/modules/entrega/retroativo/executar'
@@ -18,6 +19,15 @@ import { rulesetAtivo } from '../src/modules/entrega/ruleset-ativo'
  *
  *   npx dotenv -e .env.local -- npm run motor:retroativo -- --de=2025-11-01 --ate=2025-11-07
  *   npx dotenv -e .env.local -- npm run motor:retroativo -- --de=2025-11-01 --ate=2025-11-07 --dry-run
+ *
+ * `--limpar-temporada` apaga ANTES a temporada do intervalo inteira das três
+ * tabelas retroativas (numa transação) e depois regrava. É o passo obrigatório
+ * depois de `jogos:recalcular-rodada`: quando o fuso do dia muda, jogo troca
+ * de rodada, e regravar só dia a dia deixaria o apito velho no dia que perdeu
+ * o jogo. Rodar sobre a temporada INTEIRA (o que fica fora de --de..--ate
+ * também é apagado):
+ *
+ *   npx dotenv -e .env.local -- npm run motor:retroativo -- --de=2025-10-21 --ate=2026-04-12 --limpar-temporada
  */
 
 function argumento(nome: string): string | null {
@@ -40,6 +50,7 @@ async function main() {
   const ate = validarData(argumento('ate'), 'ate')
   if (de > ate) throw new Error('--de não pode ser posterior a --ate')
   const dryRun = process.argv.includes('--dry-run')
+  const limparTemporada = process.argv.includes('--limpar-temporada')
 
   const ruleset = await rulesetAtivo()
   const calendario = calendarioDoRuleset(ruleset)
@@ -66,6 +77,13 @@ async function main() {
         `dry-run ${de}..${ate}: ${linha?.datas ?? 0} data(s) com jogo, ` +
           `${linha?.jogosEncerrados ?? 0} jogo(s) ENCERRADO`,
       )
+      if (limparTemporada) {
+        const n = await contarTemporadaRetroativa(db, temporada)
+        console.log(
+          `dry-run --limpar-temporada: apagaria ${n.apitos} apito(s), ${n.greens} green(s) e ` +
+            `${n.feed} feed(s) de ${temporada}`,
+        )
+      }
       return
     }
 
@@ -73,6 +91,12 @@ async function main() {
       de,
       ate,
       agora,
+      limparTemporada,
+      aoLimpar: (n) => {
+        console.log(
+          `temporada ${temporada} limpa: ${n.apitos} apito(s), ${n.greens} green(s), ${n.feed} feed(s) apagados`,
+        )
+      },
       aoConcluirDia: (data, resultado) => {
         console.log(
           `  ${data}: ${resultado.jogos} jogo(s), ${resultado.apitos} apito(s), ` +

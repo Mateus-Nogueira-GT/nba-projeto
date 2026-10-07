@@ -23,6 +23,8 @@ export type DadosDoJogo = {
   id: string
   tela: TelaDoJogo
   fuso: string
+  /** O fuso da RODADA (`rodada.fuso`, NY desde 07/10): a DATA de um jogo é a da rodada; só a hora sai em `fuso`. */
+  fusoDia: string
   agora: Date
   aba: AbaDoJogo
   voltar: { href: string; rotulo: string }
@@ -99,7 +101,8 @@ export async function carregarJogo(id: string, params: Params): Promise<DadosDoJ
   return {
     id,
     tela,
-    fuso: ruleset.rodada.fuso,
+    fuso: ruleset.rodada.fuso_exibicao,
+    fusoDia: ruleset.rodada.fuso,
     agora,
     aba: ABAS_DO_JOGO.find((a) => a === primeiro(params.aba)) ?? 'geral',
     voltar,

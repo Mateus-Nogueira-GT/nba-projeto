@@ -32,6 +32,18 @@ const lerFeed = vi.fn()
 vi.mock('@/modules/entrega/lista-secreta', () => ({ lerFeed: (...a: unknown[]) => lerFeed(...a) }))
 vi.mock('@/modules/dominio/db/cliente', () => ({ getDb: () => ({}) }))
 
+// O ruleset de verdade (odd desligada desde 07/10), com a chave religável por teste.
+let exibirOddsNoTeste: boolean | null = null
+vi.mock('@/modules/entrega/ruleset-ativo', async (importOriginal) => {
+  const real = await importOriginal<typeof import('@/modules/entrega/ruleset-ativo')>()
+  return {
+    rulesetAtivo: async () => {
+      const r = await real.rulesetAtivo()
+      return exibirOddsNoTeste === null ? r : { ...r, odds: { ...r.odds, exibir_no_app: exibirOddsNoTeste } }
+    },
+  }
+})
+
 import { lerFeedCacheado, TAG_FEED, tagDoFeed } from '../feed'
 
 const FEED = {
@@ -49,6 +61,7 @@ beforeEach(() => {
   velhas.clear()
   registros.length = 0
   lerFeed.mockReset()
+  exibirOddsNoTeste = null
 })
 
 describe('lerFeedCacheado', () => {
@@ -96,5 +109,23 @@ describe('lerFeedCacheado', () => {
       tags: [TAG_FEED, tagDoFeed('2026-11-03')],
     })
     expect(tagDoFeed('2026-11-03')).toBe('feed-2026-11-03')
+  })
+
+  describe('a odd sai na LEITURA quando o ruleset a desliga (parceiro, 07/10)', () => {
+    const ODD = { min: 1.85, max: 1.85, qtdCasas: 1, unica: 1.85 }
+    const COM_ODD = { ...FEED, conteudo: { ...FEED.conteudo, itens: [{ chave: 'a', oddFaixa: ODD }] } }
+
+    it('snapshot gravado ANTES da chave, com odd: com o YAML de hoje, sai sem', async () => {
+      lerFeed.mockResolvedValue(COM_ODD)
+      const lido = await lerFeedCacheado('2026-11-03')
+      expect(lido?.conteudo.itens[0]?.oddFaixa).toBeNull()
+    })
+
+    it('com a chave religada, a odd do snapshot chega como antes', async () => {
+      exibirOddsNoTeste = true
+      lerFeed.mockResolvedValue(COM_ODD)
+      const lido = await lerFeedCacheado('2026-11-03')
+      expect(lido?.conteudo.itens[0]?.oddFaixa).toEqual(ODD)
+    })
   })
 })

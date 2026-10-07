@@ -119,7 +119,10 @@ export async function POST(requisicao: Request): Promise<Response> {
       usuarioId: sessao.usuarioId,
       texto,
       dataReferencia,
+      // O DIA (cota, conversa, jogos) é o da rodada; as horas que o texto
+      // cita são as da tela (decisão de 07/10/2026).
       fuso: ruleset.rodada.fuso,
+      fusoExibicao: ruleset.rodada.fuso_exibicao,
       // A temporada é resolvida AQUI porque é aqui que o ruleset existe:
       // `responder` não o recebe, e passá-lo só para isto arrastaria o motor
       // para dentro do chat. É a temporada EXIBIDA: o assistente precisa

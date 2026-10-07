@@ -221,6 +221,35 @@ npx dotenv -e .env.local -- npm run motor:retroativo -- --de=2025-10-21 --ate=20
   calendário: `--de` e `--ate` em temporadas diferentes são recusados, com a
   mensagem dizendo quais são.
 
+### 10.0 · Rodada pela data dos EUA (07/10/2026) — uma vez, depois do deploy
+
+O parceiro decidiu em 07/10/2026 que "o jogo deve contar no dia em que foi
+marcado nos EUA": `rodada.fuso` passou a `America/New_York` e a tela ganhou o
+próprio relógio, `rodada.fuso_exibicao` (Brasília). O que já está no banco tem
+de seguir a regra nova, em dois passos, **nesta ordem e só depois do deploy**
+do código que lê as chaves novas:
+
+```bash
+# 1. Recalcula jogos.data_referencia pelo fuso do dia. Dry-run por padrão:
+#    mostra quantos mudam e confere colisão da chave única antes de tudo.
+npx dotenv -e .env.local -- npm run jogos:recalcular-rodada
+npx dotenv -e .env.local -- npm run jogos:recalcular-rodada -- --confirmar
+
+# 2. Regrava a temporada retroativa APAGANDO antes tudo de 2025-26 nas três
+#    tabelas retroativas (sem isso sobra apito no dia que perdeu o jogo, e o
+#    apito velho ainda bloqueia a chave do mesmo jogo no dia novo).
+npx dotenv -e .env.local -- npm run motor:retroativo -- --de=2025-10-21 --ate=2026-04-12 --limpar-temporada --dry-run
+npx dotenv -e .env.local -- npm run motor:retroativo -- --de=2025-10-21 --ate=2026-04-12 --limpar-temporada
+```
+
+- Se o passo 1 relatar **colisão**, ele não grava nada e lista os jogos: é
+  jogo duplicado a curar, não a sobrescrever. Pare e investigue.
+- O `--limpar-temporada` apaga a temporada INTEIRA, inclusive datas fora de
+  `--de..--ate`: rode-o sobre a temporada toda. Entre a limpeza e o fim do
+  script as telas de 2025-26 mostram só os dias já regravados; se o script
+  cair no meio, rode o mesmo comando de novo.
+- Os dois passos são reexecutáveis.
+
 ### 10.1 · Quando as telas mostram o que o script gravou
 
 As telas leem as **datas** de 2025-26 e a **Lista** de cada dia por um cache

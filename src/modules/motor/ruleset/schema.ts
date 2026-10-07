@@ -102,12 +102,16 @@ export const rulesetSchema = z.object({
   }),
 
   /**
-   * Fuso que decide a que dia um jogo pertence e em que horário ele aparece.
-   * Calendário e apresentação, não estratégia — mas vive aqui pela mesma razão
-   * que `temporada`: nenhum valor de calendário solto no código.
+   * Dois fusos, duas perguntas (decisão do parceiro, 07/10/2026):
+   * - `fuso`: a que DIA um jogo pertence — rodada, "hoje", virada de
+   *   temporada, crons, `data_referencia`;
+   * - `fuso_exibicao`: que horas e datas a TELA mostra.
+   * Calendário e apresentação, não estratégia — mas vivem aqui pela mesma
+   * razão que `temporada`: nenhum valor de calendário solto no código.
    */
   rodada: z.object({
     fuso: z.string().min(1),
+    fuso_exibicao: z.string().min(1),
   }),
 
   arredondamento: z.object({
@@ -232,6 +236,10 @@ export const rulesetSchema = z.object({
     exibicao: z.enum(['faixa', 'media', 'casa_unica']),
     fallback: z.literal('tabela_estatica'),
     tabela_estatica: porNivel(porLinhaFaixa),
+    // Se a odd aparece para o assinante. Desligar NÃO desliga a coleta nem o
+    // admin de mercados: só tira a odd da tela (parceiro, 07/10/2026). O
+    // padrão é o comportamento anterior, odd na tela.
+    exibir_no_app: z.boolean().default(true),
   }),
 
   /**

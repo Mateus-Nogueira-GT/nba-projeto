@@ -37,9 +37,12 @@ import { contar, dataHora, decimal, diaDaRodada } from '@/ui/formato'
  * tela antiga) e o atalho de `telas-demo.test.ts`: cada caso diz de onde veio.
  */
 
+// Desde 07/10/2026 o DIA é o de Nova York (`rodada.fuso`) e FUSO é só o
+// relógio da tela (`rodada.fuso_exibicao`).
+const FUSO_DIA = 'America/New_York'
 const FUSO = 'America/Sao_Paulo'
 const AGORA = new Date('2026-01-15T18:00:00.000Z')
-const HOJE = dataDeReferencia(AGORA, FUSO)
+const HOJE = dataDeReferencia(AGORA, FUSO_DIA)
 const ONTEM = somarDias(HOJE, -1)
 /** Um dia antes da janela semeada: existe no calendário, não tem lista. */
 const SEM_LISTA = somarDias(HOJE, -40)
@@ -65,6 +68,20 @@ vi.mock('next/cache', () => ({
   revalidatePath: () => {},
 }))
 vi.mock('@/modules/dominio/db/cliente', () => ({ getDb: () => banco.db, fecharDb: async () => {} }))
+// A odd está fora da tela desde 07/10/2026 (`odds.exibir_no_app: false` no
+// YAML). A semente e os testes da FORMA da odd rodam com a chave religada —
+// religar é trocar uma linha, e o card tem de voltar inteiro —; os testes da
+// chave desligada a desligam só para eles.
+let exibirOddsNoTeste = true
+vi.mock('@/modules/entrega/ruleset-ativo', async (importOriginal) => {
+  const real = await importOriginal<typeof import('@/modules/entrega/ruleset-ativo')>()
+  return {
+    rulesetAtivo: async () => {
+      const r = await real.rulesetAtivo()
+      return { ...r, odds: { ...r.odds, exibir_no_app: exibirOddsNoTeste } }
+    },
+  }
+})
 vi.mock('next/navigation', async (importOriginal) => {
   const real = await importOriginal<typeof import('next/navigation')>()
   return {
@@ -668,7 +685,7 @@ describe('Resultados do v2 — o card conferido fecha o ciclo', () => {
     const alvo = recap.porJogo.find((g) => g.jogo.status === 'AGENDADO')!
     expect(alvo).toBeDefined()
     const antes = cardsDaLista(await renderizar(HOJE))
-    const { fim } = intervaloDoDia(HOJE, FUSO)
+    const { fim } = intervaloDoDia(HOJE, FUSO_DIA)
     try {
       await banco.db
         .update(jogos)
@@ -738,6 +755,22 @@ describe('Resultados do v2 — o card conferido fecha o ciclo', () => {
     expect(odds.length, 'nenhum card da rodada em curso trouxe odd').toBeGreaterThan(0)
     for (const odd of odds) expect(odd).toMatch(/^\d+,\d{2}(–\d+,\d{2})?$/)
     for (const c of cards) expect(texto(c.html)).not.toContain('%')
+  }, 60_000)
+
+  it('com a odd desligada (YAML de hoje), nenhum card tem odd nem a coluna dela — nem o snapshot gravado com odd', async () => {
+    const comOdd = cardsDaLista(await renderizar(HOJE))
+    expect(comOdd.some((c) => /Odd \d/.test(texto(c.html))), 'a semente gravou odd no snapshot').toBe(true)
+    exibirOddsNoTeste = false
+    try {
+      const cards = cardsDaLista(await renderizar(HOJE))
+      expect(cards.length).toBeGreaterThan(0)
+      for (const c of cards) {
+        expect(texto(c.html)).not.toMatch(/\bodds?\b/i)
+        expect(c.html).toContain('data-sem-odd')
+      }
+    } finally {
+      exibirOddsNoTeste = true
+    }
   }, 60_000)
 
   it('(telas-04) antes do veredito a linha mostra a média ao lado da linha prevista', async () => {
@@ -904,6 +937,19 @@ describe('Resultados do v2 — temporada anterior', () => {
     // O seletor mostra as duas temporadas, e a desta tela está marcada.
     expect(html).toContain(`/resultados?temporada=${TEMPORADA_ANTERIOR}`)
     expect(html).not.toMatch(/probabilidade/i)
+  }, 60_000)
+
+  it('temporada anterior com a odd desligada: nem o "Sem odd registrada"', async () => {
+    const comOdd = await renderizarComo('GRATIS', `/resultados/${DIA_ANTERIOR}`, { temporada: TEMPORADA_ANTERIOR })
+    expect(comOdd).toContain('Sem odd registrada')
+    exibirOddsNoTeste = false
+    try {
+      const html = await renderizarComo('GRATIS', `/resultados/${DIA_ANTERIOR}`, { temporada: TEMPORADA_ANTERIOR })
+      expect(html).toContain(NOME_DO_APITADO)
+      expect(texto(html)).not.toMatch(/\bodds?\b/i)
+    } finally {
+      exibirOddsNoTeste = true
+    }
   }, 60_000)
 
   it('sem ?temporada=, uma data da temporada anterior implica a temporada dela', async () => {

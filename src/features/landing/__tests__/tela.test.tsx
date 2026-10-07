@@ -23,6 +23,7 @@ const BASE: DadosDaLanding = {
   totalDeApitos: 0,
   gestao: { banca: 1000, unidade: 10, limites: { stopWin: 100, stopLoss: 60, tetoPorEntrada: 30 } as never },
   precos: null,
+  exibirOdds: true,
 }
 
 const texto = (html: string) =>
@@ -127,5 +128,17 @@ describe('a faixa do herói e o card do Fire Live, como no v2', () => {
     const html = texto(await renderizar(BASE))
     expect(html).toContain('O 1º quarto ao vivo, jogador por jogador.')
     expect(html).not.toContain('jogador por jogador, correndo')
+  })
+})
+
+describe('TelaLanding com a odd desligada no ruleset (parceiro, 07/10/2026)', () => {
+  it('não promete odd nenhuma: nem no texto, nem nas listas do apito e do comparativo', async () => {
+    const html = await renderizar({ ...BASE, exibirOdds: false })
+    expect(texto(html)).not.toMatch(/\bodds?\b/i)
+  })
+
+  it('com a chave ligada, a vitrine volta a falar da odd', async () => {
+    const html = await renderizar(BASE)
+    expect(texto(html)).toMatch(/\bodds?\b/i)
   })
 })

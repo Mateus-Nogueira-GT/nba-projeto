@@ -2,6 +2,8 @@ import { unstable_cache } from 'next/cache'
 
 import { getDb } from '@/modules/dominio/db/cliente'
 import { lerFeed } from '@/modules/entrega/lista-secreta'
+import { exibirOdds, feedNaTela } from '@/modules/entrega/odds/exibicao'
+import { rulesetAtivo } from '@/modules/entrega/ruleset-ativo'
 import type { ConteudoFeed } from '@/modules/entrega/tipos-feed'
 
 /**
@@ -30,7 +32,18 @@ export const tagDoFeed = (dataReferencia: string) => `feed-${dataReferencia}`
 
 type FeedLido = { conteudo: ConteudoFeed; geradoEm: Date }
 
+/**
+ * A odd sai AQUI, na leitura, quando o ruleset a desliga (`odds.exibir_no_app`,
+ * parceiro, 07/10/2026). A materialização já não a grava, mas o snapshot de
+ * antes da chave ainda tem: toda tela que lê o feed do dia passa por esta
+ * função, e o snapshot velho chega tão limpo quanto o novo.
+ */
 export async function lerFeedCacheado(dataReferencia: string): Promise<FeedLido | null> {
+  const [feed, ruleset] = await Promise.all([lerFeedDoCache(dataReferencia), rulesetAtivo()])
+  return feedNaTela(feed, exibirOdds(ruleset))
+}
+
+async function lerFeedDoCache(dataReferencia: string): Promise<FeedLido | null> {
   // A distinção entre "computou agora" e "veio do cache" é o que faz o null
   // nunca-confiado funcionar sem pagar duas consultas em toda visita: um
   // null CALCULADO agora já é verdade fresca (não tem o que reler); um null

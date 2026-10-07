@@ -20,6 +20,7 @@ import { arredondar } from '../motor/arredondamento'
 import { faixaDaConfianca } from '../motor/confianca'
 import type { Apito, Atributo, Nivel } from '../motor/tipos'
 import type { Ruleset } from '../motor/ruleset/schema'
+import { exibirOdds } from './odds/exibicao'
 import { janelaNoBanco } from '../dominio/janela'
 import { calendarioDoRuleset, temporadaDe } from '../dominio/temporada'
 import { colunaMedia, jogosRecentes, naLinha } from './historico-na-linha'
@@ -385,8 +386,10 @@ async function enriquecer(db: Db, ruleset: Ruleset, apitos: Apito[]): Promise<It
         a.linha ?? a.alvo1Q,
       ),
       mediaTemporada: valorMedia !== null ? Number(valorMedia) : null,
+      // Com `odds.exibir_no_app: false` a odd coletada não entra no item:
+      // o corte é na origem, e a tela nem chega a ver o número.
       oddFaixa:
-        oddRow && oddRow.oddMin !== null && oddRow.oddMax !== null
+        exibirOdds(ruleset) && oddRow && oddRow.oddMin !== null && oddRow.oddMax !== null
           ? {
               min: Number(oddRow.oddMin),
               max: Number(oddRow.oddMax),

@@ -20,6 +20,7 @@ import { lerRankingDoDia } from '../sugestao/leitura'
 const ruleset = carregarRuleset(readFileSync('config/ruleset.v1.yaml', 'utf8'))
 const AGORA = new Date('2026-01-15T18:00:00.000Z')
 const FUSO = ruleset.rodada.fuso
+const FUSO_EXIBICAO = ruleset.rodada.fuso_exibicao
 const HOJE = dataDeReferencia(AGORA, FUSO)
 const TEMPORADA = temporadaDe(intervaloDoDia(HOJE, FUSO).inicio, calendarioDoRuleset(ruleset))
 
@@ -113,6 +114,7 @@ describe('ler o ranking do dia', () => {
     const contexto = await montarContexto(banco.db, {
       dataReferencia: HOJE,
       fuso: FUSO,
+      fusoExibicao: FUSO_EXIBICAO,
       temporada: TEMPORADA,
       cotaDiaria: 20,
       sugestao: { ruleset, ranking, pergunta: 'em quem eu aposto hoje?', textosAnteriores: [] },
@@ -130,6 +132,7 @@ describe('ler o ranking do dia', () => {
     const contexto = await montarContexto(banco.db, {
       dataReferencia: HOJE,
       fuso: FUSO,
+      fusoExibicao: FUSO_EXIBICAO,
       temporada: TEMPORADA,
       cotaDiaria: 20,
     })

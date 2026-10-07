@@ -57,9 +57,12 @@ import { diaMes, LIMITE_DE_APITOS_DO_JOGADOR, num } from '../regras'
  * (banco próprio, só com a temporada passada).
  */
 
+// Desde 07/10/2026 o DIA é o de Nova York (`rodada.fuso`) e FUSO é só o
+// relógio da tela (`rodada.fuso_exibicao`).
+const FUSO_DIA = 'America/New_York'
 const FUSO = 'America/Sao_Paulo'
 const AGORA = new Date('2026-01-15T18:00:00.000Z')
-const HOJE = dataDeReferencia(AGORA, FUSO)
+const HOJE = dataDeReferencia(AGORA, FUSO_DIA)
 const USUARIO = '00000000-0000-4000-8000-000000000001'
 
 /**
@@ -162,7 +165,7 @@ beforeAll(async () => {
     (j) => !apitados.has(j.id),
   )!.id
 
-  const doDia = await telaJogosDoDia(banco.db, HOJE, FUSO)
+  const doDia = await telaJogosDoDia(banco.db, HOJE, FUSO_DIA)
   busca: for (const jogo of doDia.jogos) {
     for (const lado of [jogo.casa, jogo.visitante]) {
       const hierarquia = await hierarquiaDoTime(banco.db, lado.id, 'PONTOS', jogo.id)
@@ -602,7 +605,9 @@ describe('Estatísticas do v2 — jogador', () => {
     const [jogo] = await banco.db.select().from(jogos).where(eq(jogos.id, apito.jogoId))
     const conta = (t: string, d: string) => t.match(new RegExp(`(?<!\\d)${d}(?!\\d)`, 'g'))?.length ?? 0
     try {
-      // 22h30 ET vira 03h30 UTC do dia seguinte: o rótulo de calendário fica um dia atrás.
+      // 22h30 ET vira 03h30 UTC do dia seguinte (00h30 em Brasília). Desde
+      // 07/10/2026 a DATA do jogo é a da rodada nos EUA: "3/12", igual ao
+      // data_referencia — nunca "4/12", que seria o dia em Brasília.
       await banco.db
         .update(jogos)
         .set({ dataReferencia: '2025-12-03', dataHoraUtc: new Date('2025-12-04T03:30:00.000Z') })
@@ -610,10 +615,10 @@ describe('Estatísticas do v2 — jogador', () => {
       const html = await renderizarJogador(alvo, busca)
       for (const titulo of ['Apitos da estratégia', 'Jogo a jogo']) {
         const s = texto(secao(html, titulo))
-        expect(conta(s, '4/12'), titulo).toBeGreaterThanOrEqual(1)
-        expect(conta(s, '3/12'), titulo).toBe(0)
+        expect(conta(s, '3/12'), titulo).toBeGreaterThanOrEqual(1)
+        expect(conta(s, '4/12'), titulo).toBe(0)
       }
-      // Uma hora antes, o fuso de Brasília põe o jogo no dia anterior.
+      // Uma hora antes (21h30 ET) continua sendo 3/12, nas duas seções.
       await banco.db
         .update(jogos)
         .set({ dataHoraUtc: new Date('2025-12-04T02:30:00.000Z') })
@@ -912,7 +917,7 @@ describe('Estatísticas do v2 — time', () => {
 describe('Estatísticas do v2 — índice', () => {
   it('(telas-04) jogos do dia: uma linha por jogo, visitante @ mandante, status e logos', async () => {
     nivelDoTeste = 'GRATIS'
-    const doDia = await telaJogosDoDia(banco.db, HOJE, FUSO)
+    const doDia = await telaJogosDoDia(banco.db, HOJE, FUSO_DIA)
     expect(doDia.jogos.length).toBeGreaterThan(0)
     const s = secao(await renderizarIndice(), 'Jogos do dia')
     const linhas = itens(s)
@@ -933,7 +938,7 @@ describe('Estatísticas do v2 — índice', () => {
 
   it('(telas-04) o jogo em andamento mostra o parcial sem declarar vencedor', async () => {
     nivelDoTeste = 'GRATIS'
-    const doDia = await telaJogosDoDia(banco.db, HOJE, FUSO)
+    const doDia = await telaJogosDoDia(banco.db, HOJE, FUSO_DIA)
     const aoVivo = doDia.jogos.find((j) => j.status === 'AO_VIVO')
     expect(aoVivo, 'a temporada simulada tem jogo em andamento hoje').toBeDefined()
     const linha = itens(secao(await renderizarIndice(), 'Jogos do dia')).find((l) =>
@@ -1142,7 +1147,7 @@ describe('Estatísticas do v2 — partida', () => {
 
   it('(telas-04) o desfalque que está na lista do CJ sai com a posição e o nível, rotulado "Curadoria NIP"', async () => {
     nivelDoTeste = 'MVP'
-    const doDia = await telaJogosDoDia(banco.db, HOJE, FUSO)
+    const doDia = await telaJogosDoDia(banco.db, HOJE, FUSO_DIA)
     let escolhido: { jogoId: string; timeId: string; linha: LinhaHierarquia } | undefined
     procura: for (const jogo of doDia.jogos) {
       if (jogo.status === 'ENCERRADO') continue

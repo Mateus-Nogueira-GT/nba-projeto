@@ -7,7 +7,8 @@ import { inicioDaTemporada, perfilDoAdversario, type PerfilAdversario } from '@/
 import type { ItemFireLive } from '@/modules/entrega/fire-live/feed'
 import { recorteDoJogador } from '@/modules/entrega/lista-secreta'
 import { lerFeedCacheado } from '@/app/_cache/feed'
-import { cotacoesPorCasa, faixasDoJogador, type CotacaoDeCasa } from '@/modules/entrega/odds/leitura'
+import { exibirOdds } from '@/modules/entrega/odds/exibicao'
+import { cotacoesPorCasa, faixasDoJogador, type CotacaoDeCasa, type FaixaDeLinha } from '@/modules/entrega/odds/leitura'
 import { rulesetAtivo } from '@/modules/entrega/ruleset-ativo'
 import { saidaDoApito, type SaidaParaCasa } from '@/modules/entrega/saida-para-casa'
 import type { ItemFeed } from '@/modules/entrega/tipos-feed'
@@ -42,6 +43,12 @@ export type DadosDoApito =
       /** 1..5 — a cor e o brilho do herói saem daqui. */
       grauConfianca: 1 | 2 | 3 | 4 | 5 | null
       percentualModoFire: number
+      /**
+       * `odds.exibir_no_app` do ruleset. Desligada, `faixa`, `casas` e
+       * `casasNaTela` já chegam vazios, e a tela também não desenha a pílula
+       * nem a nota das casas.
+       */
+      exibirOdds: boolean
       /** Matchup: o adversário, em números da temporada. Só dado, sem regra. */
       adversario: PerfilAdversario | null
     }
@@ -61,8 +68,10 @@ export async function carregarApito(jogadorId: string, atributo: Atributo | unde
   // interceptado passam os dois por aqui (fumaca.test.tsx prova as duas portas).
   await exigirNivel('MVP', `/apito/${jogadorId}`)
   const ruleset = await rulesetAtivo()
-  const { fuso } = ruleset.rodada
-  const hoje = dataDeReferencia(new Date(), fuso)
+  // O DIA sai de `rodada.fuso` (NY, decisão de 07/10/2026); a tela recebe
+  // `fuso_exibicao` (Brasília) no campo `fuso`.
+  const { fuso: fusoDoDia, fuso_exibicao: fuso } = ruleset.rodada
+  const hoje = dataDeReferencia(new Date(), fusoDoDia)
 
   // O feed do dia vem do CACHE (o mesmo snapshot que a Lista leu) e o recorte
   // do jogador é puro, sem ida ao banco.
@@ -79,7 +88,7 @@ export async function carregarApito(jogadorId: string, atributo: Atributo | unde
 
   if (!preLive && aoVivo) {
     const jogo = vivo.jogos.find((j) => j.id === aoVivo.jogoId)
-    const rodada = jogo ? dataDeReferencia(jogo.dataHoraUtc, fuso) : hoje
+    const rodada = jogo ? dataDeReferencia(jogo.dataHoraUtc, fusoDoDia) : hoje
     if (rodada !== hoje) {
       // O Fire Live conserva jogos da rodada anterior enquanto estão em
       // andamento: a análise pré-live é a da rodada em que ESSE jogo começou.
@@ -94,9 +103,12 @@ export async function carregarApito(jogadorId: string, atributo: Atributo | unde
   if (!principal) return { tipo: 'sem-apito', jogadorId }
 
   const jogosDaTela = [...new Set([principal.jogoId, ...itens.map((i) => i.jogoId)])]
+  // Odd desligada no ruleset (parceiro, 07/10/2026): nem se lê. Sem cotação e
+  // sem casas, nada de odd chega à tela — nem a da tabela de referência.
+  const comOdds = exibirOdds(ruleset)
   const [cotadas, casas, saida, detalhe] = await Promise.all([
-    faixasDoJogador(getDb(), jogosDaTela, jogadorId, principal.atributo),
-    cotacoesPorCasa(getDb(), jogosDaTela, jogadorId, principal.atributo),
+    comOdds ? faixasDoJogador(getDb(), jogosDaTela, jogadorId, principal.atributo) : new Map<number, FaixaDeLinha>(),
+    comOdds ? cotacoesPorCasa(getDb(), jogosDaTela, jogadorId, principal.atributo) : [],
     saidaDoApito(getDb()),
     detalheDoApito(getDb(), ruleset, principal, { blocos: 10 }),
   ])
@@ -106,12 +118,13 @@ export async function carregarApito(jogadorId: string, atributo: Atributo | unde
   const adversario = await perfilDoAdversario(
     getDb(),
     detalhe.jogo.adversarioSigla,
-    dataDeReferencia(detalhe.jogo.dataHoraUtc, fuso),
+    dataDeReferencia(detalhe.jogo.dataHoraUtc, fusoDoDia),
     inicioDaTemporada(temporadaDe(detalhe.jogo.dataHoraUtc, calendario), calendario.mesInicio),
   )
 
-  const referencia =
-    principal.atributo === 'PONTOS'
+  const referencia = !comOdds
+    ? undefined
+    : principal.atributo === 'PONTOS'
       ? ruleset.odds.tabela_estatica[principal.nivelJogador]
       : ruleset.por_atributo[principal.atributo]?.odds?.[principal.nivelJogador]
 
@@ -148,6 +161,7 @@ export async function carregarApito(jogadorId: string, atributo: Atributo | unde
     rotuloConfianca: faixa?.rotulo_curto ?? faixa?.rotulo ?? null,
     grauConfianca: grau,
     percentualModoFire: ruleset.fire_live.modo_fire.percentual_media,
+    exibirOdds: comOdds,
     adversario,
   }
 }

@@ -40,9 +40,10 @@ import type { NivelDoPlano } from '@/modules/plataforma/assinatura/nivel-do-plan
  * onde veio.
  */
 
-const FUSO = 'America/Sao_Paulo'
+// O DIA é o de Nova York desde 07/10/2026 (`rodada.fuso`).
+const FUSO_DIA = 'America/New_York'
 const AGORA = new Date('2026-01-15T18:00:00.000Z')
-const HOJE = dataDeReferencia(AGORA, FUSO)
+const HOJE = dataDeReferencia(AGORA, FUSO_DIA)
 /** Dentro do hiato: o calendário já virou para 2026-27, a bola ainda não subiu. */
 const HIATO = new Date('2026-10-02T18:00:00.000Z')
 const USUARIO = '00000000-0000-4000-8000-000000000001'
@@ -216,6 +217,8 @@ describe('Ao Vivo do v2 — portão de nível', () => {
       const dados = await carregarAoVivo(lerRecorte({}))
       expect(dados.tipo).toBe('gratis')
       expect(Object.keys(dados).sort()).toEqual(['agora', 'fuso', 'jogos', 'tipo'])
+      // O DIA é o de NY; o campo `fuso` é o relógio da tela (decisão de 07/10/2026).
+      expect(dados.fuso).toBe('America/Sao_Paulo')
       if (dados.tipo !== 'gratis') throw new Error('inalcançável')
       // Cada jogo é o resumo público do calendário (placar e quarto), sem apito.
       const feed = await feedDaTela()

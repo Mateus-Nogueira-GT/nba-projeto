@@ -43,15 +43,29 @@ import type { Ruleset } from '../../modules/motor/ruleset/schema'
 // Instante fixo: 15:00 em Brasília. Um horário fixo é o que permite afirmar
 // alguma coisa sobre fuso — com `new Date()` o teste passaria ou falharia
 // conforme a hora em que a suíte roda.
-const FUSO = 'America/Sao_Paulo'
+// O DIA é o de Nova York desde 07/10/2026 (`rodada.fuso`).
+const FUSO_DIA = 'America/New_York'
 const AGORA = new Date('2026-01-15T18:00:00.000Z')
-const HOJE = dataDeReferencia(AGORA, FUSO)
+const HOJE = dataDeReferencia(AGORA, FUSO_DIA)
 
 let banco: Awaited<ReturnType<typeof bancoDeTeste>>
 /** O ruleset usado para semear e republicar esta suíte — ver comentário no beforeAll. */
 let rulesetDaDemo: Ruleset
 
 const USUARIO_DEMO = '00000000-0000-4000-8000-000000000001'
+// A odd está fora da tela desde 07/10/2026 (`odds.exibir_no_app: false` no
+// YAML). Esta suíte prova a tela COM odd — religar é trocar uma linha, e a
+// tela tem de voltar inteira —, então lê o ruleset de produção com a chave
+// religada. A tela sem odd é provada em `src/features/*/__tests__/fumaca.test.tsx`.
+vi.mock('../../modules/entrega/ruleset-ativo', async (importOriginal) => {
+  const real = await importOriginal<typeof import('../../modules/entrega/ruleset-ativo')>()
+  return {
+    rulesetAtivo: async () => {
+      const r = await real.rulesetAtivo()
+      return { ...r, odds: { ...r.odds, exibir_no_app: true } }
+    },
+  }
+})
 vi.mock('../../modules/plataforma/auth/cookies', () => ({
   tokenDaSessaoAtual: async () => 'token-de-teste',
   sessaoAtual: async () => ({
@@ -229,7 +243,7 @@ describe('a rodada segue o fuso do cliente', () => {
     vi.setSystemTime(vinte_e_uma_e_meia)
 
     try {
-      expect(dataDeReferencia(new Date(), FUSO)).toBe(HOJE)
+      expect(dataDeReferencia(new Date(), FUSO_DIA)).toBe(HOJE)
       expect(new Date().toISOString().slice(0, 10)).not.toBe(HOJE)
 
       const { default: Pagina } = await import('../(app)/page')

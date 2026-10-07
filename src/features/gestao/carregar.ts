@@ -2,6 +2,7 @@ import { getDb } from '@/modules/dominio/db/cliente'
 import { dataDeReferencia, somarDias } from '@/modules/dominio/rodada'
 import { BANCA_PADRAO, planoDoDia, type EntradaDoPlano, type PlanoDoDia } from '@/modules/entrega/gestao'
 import { entradasRealizadasDoDia, type EntradaRealizada } from '@/modules/entrega/gestao-realizadas'
+import { exibirOdds } from '@/modules/entrega/odds/exibicao'
 import { rulesetAtivo } from '@/modules/entrega/ruleset-ativo'
 import { exigirNivel } from '@/modules/plataforma/assinatura/guarda'
 import { atende } from '@/modules/plataforma/assinatura/nivel-do-plano'
@@ -17,6 +18,10 @@ export type Visao = 'sugeridas' | 'realizadas'
  */
 const TEXTO_DO_ERRO: Record<string, string> = {
   'entrada-invalida': 'Confira unidades e odd.',
+}
+/** O mesmo dicionário com a odd desligada no ruleset: não há campo de odd para conferir. */
+const TEXTO_DO_ERRO_SEM_ODD: Record<string, string> = {
+  'entrada-invalida': 'Confira as unidades.',
 }
 
 /**
@@ -55,6 +60,12 @@ export type DadosDaGestao = {
   unidadePercentual: number | null
   gruposPorTime: [string, EntradaDoPlano[]][]
   realizadas: (EntradaRealizada & { nomeExibido: string })[]
+  /**
+   * `odds.exibir_no_app` do ruleset. Desligada (parceiro, 07/10/2026): sem o
+   * campo de odd no registro, sem a coluna dela nas registradas e sem o saldo
+   * do mês, que só existe com odd.
+   */
+  exibirOdds: boolean
 }
 
 const primeiro = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v)
@@ -109,8 +120,10 @@ export async function carregarGestao(
   // Por URL, não por estado de cliente: dá para linkar "o que eu registrei
   // hoje" e continua funcionando sem JavaScript.
   const visao: Visao = primeiro(params.ver) === 'realizadas' ? 'realizadas' : 'sugeridas'
+  const ruleset = await rulesetAtivo()
+  const comOdds = exibirOdds(ruleset)
   const codigo = primeiro(params.erro)
-  const erro = codigo ? (TEXTO_DO_ERRO[codigo] ?? null) : null
+  const erro = codigo ? ((comOdds ? TEXTO_DO_ERRO : TEXTO_DO_ERRO_SEM_ODD)[codigo] ?? null) : null
   const jogadorDoErro = primeiro(params.jogador)
   const atributoDoErro = primeiro(params.atributo)
   const erroEm =
@@ -118,9 +131,10 @@ export async function carregarGestao(
       ? `${jogadorDoErro}|${atributoDoErro}`
       : null
 
-  const ruleset = await rulesetAtivo()
-  const { fuso } = ruleset.rodada
-  const hoje = dataDeReferencia(new Date(), fuso)
+  // O DIA sai de `rodada.fuso` (NY, decisão de 07/10/2026); a tela recebe
+  // `fuso_exibicao` (Brasília) no campo `fuso`.
+  const { fuso: fusoDoDia, fuso_exibicao: fuso } = ruleset.rodada
+  const hoje = dataDeReferencia(new Date(), fusoDoDia)
   // O plano lê o FEED do dia — sinal pago. Só quem registra (MVP+) o recebe:
   // o grátis vê a silhueta e o convite, e o dado nem sai do banco para ele
   // (antes o plano inteiro era montado e só o JSX o escondia).
@@ -175,5 +189,6 @@ export async function carregarGestao(
     unidadePercentual: ruleset.gestao_banca?.unidade_percentual_banca ?? null,
     gruposPorTime: agruparPorTime(plano.entradas),
     realizadas,
+    exibirOdds: comOdds,
   }
 }

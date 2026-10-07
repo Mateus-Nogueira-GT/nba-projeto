@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs'
+import { eq } from 'drizzle-orm'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import { bancoDeTeste } from '../../../dominio/__tests__/ajuda-banco'
@@ -7,7 +8,12 @@ import type { Db } from '../../../dominio/db/tipos'
 import { carregarRuleset } from '../../../motor/ruleset/carregar'
 import type { Apito, Fatos } from '../../../motor/tipos'
 import type { ConteudoFeed } from '../../tipos-feed'
-import { executarDiaRetroativo, executarTemporadaRetroativa, temporadaDoIntervalo } from '../executar'
+import {
+  contarTemporadaRetroativa,
+  executarDiaRetroativo,
+  executarTemporadaRetroativa,
+  temporadaDoIntervalo,
+} from '../executar'
 import { montarItensRetroativos } from '../feed'
 
 const ruleset = carregarRuleset(readFileSync('config/ruleset.v1.yaml', 'utf8'))
@@ -249,6 +255,51 @@ describe('executarDiaRetroativo', () => {
     expect(r.apitos).toBe(await contar('apitos_retroativos'))
     expect(await contar('feed_retroativo')).toBe(2)
   }, 30_000)
+  it('--limpar-temporada: a troca do fuso do dia (07/10/2026) não deixa apito no dia que perdeu o jogo', async () => {
+    // O jogo do DIA passa para 03:30Z de 05/11: 00:30 em Brasília (rodada
+    // 05/11 na regra antiga) e 22:30 de 04/11 em Nova York (rodada nova).
+    await db
+      .update(schema.jogos)
+      .set({ dataHoraUtc: new Date('2025-11-05T03:30:00Z'), dataReferencia: '2025-11-05' })
+      .where(eq(schema.jogos.id, JOGO_DIA))
+    const brasilia = { ...ruleset, rodada: { ...ruleset.rodada, fuso: 'America/Sao_Paulo' } }
+    const novaYork = { ...ruleset, rodada: { ...ruleset.rodada, fuso: 'America/New_York' } }
+    const periodo = { de: '2025-11-03', ate: '2025-11-05', agora: DEPOIS }
+    // Outra temporada não pode ser tocada.
+    await db.insert(schema.feedRetroativo).values({
+      temporada: '2024-25',
+      dataReferencia: '2025-04-01',
+      niveisVersaoId: VERSAO,
+      conteudoJson: {},
+      hash: 'x',
+    })
+    const datasDosApitos = async () =>
+      [...new Set((await db.select().from(schema.apitosRetroativos)).map((l) => l.dataReferencia))].sort()
+
+    await executarTemporadaRetroativa(db, brasilia, periodo)
+    expect(await datasDosApitos()).toContain('2025-11-05')
+
+    // Sem limpar: o dia 05/11 ficou sem jogo e não é apagado, e o mesmo jogo
+    // no dia 04/11 bate na chave de deduplicação do apito velho.
+    await expect(executarTemporadaRetroativa(db, novaYork, periodo)).rejects.toThrow()
+
+    const apagados: unknown[] = []
+    const r = await executarTemporadaRetroativa(db, novaYork, {
+      ...periodo,
+      limparTemporada: true,
+      aoLimpar: (a) => {
+        apagados.push(a)
+      },
+    })
+    expect(apagados).toHaveLength(1)
+    expect(r.apitos).toBeGreaterThan(0)
+    expect(await datasDosApitos()).not.toContain('2025-11-05')
+    expect(await datasDosApitos()).toContain('2025-11-04')
+    const feeds = await db.select().from(schema.feedRetroativo).where(eq(schema.feedRetroativo.temporada, '2025-26'))
+    expect(feeds.map((f) => f.dataReferencia)).not.toContain('2025-11-05')
+    expect((await contarTemporadaRetroativa(db, '2024-25')).feed).toBe(1)
+  }, 60_000)
+
   it('recusa um dia da temporada do CALENDÁRIO, sem gravar nada', async () => {
     // Em 15/01/2026 a temporada do calendário é 2025-26: o dia 04/11/2025 é
     // dela, e ela é publicada ao vivo pelo job diário — nunca pelo retroativo.

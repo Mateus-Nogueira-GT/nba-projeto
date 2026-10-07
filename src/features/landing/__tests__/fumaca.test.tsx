@@ -24,9 +24,10 @@ import { LLMFake } from '@/modules/ingestao/llm'
  * time ou horário — o sujeito é lido do banco.
  */
 
-const FUSO = 'America/Sao_Paulo'
+// O DIA é o de Nova York desde 07/10/2026 (`rodada.fuso`).
+const FUSO_DIA = 'America/New_York'
 const AGORA = new Date('2026-01-15T18:00:00.000Z')
-const HOJE = dataDeReferencia(AGORA, FUSO)
+const HOJE = dataDeReferencia(AGORA, FUSO_DIA)
 const ONTEM = somarDias(HOJE, -1)
 
 let banco: Awaited<ReturnType<typeof bancoDeTeste>>
@@ -158,7 +159,9 @@ describe('Landing do v2 (/conheca) — nada pago de hoje sai por ela', () => {
   it('(estrutural) o objeto da landing não carrega nenhum item de hoje', async () => {
     const { carregarLanding } = await import('../carregar')
     const dados = await carregarLanding()
-    expect(Object.keys(dados).sort()).toEqual(['gestao', 'noite', 'precos', 'totalDeApitos'])
+    // `exibirOdds` é a chave do ruleset (07/10/2026), não dado de hoje.
+    expect(Object.keys(dados).sort()).toEqual(['exibirOdds', 'gestao', 'noite', 'precos', 'totalDeApitos'])
+    expect(typeof dados.exibirOdds).toBe('boolean')
     expect(typeof dados.totalDeApitos).toBe('number')
     expect(Object.keys(dados.gestao).sort()).toEqual(['banca', 'limites', 'unidade'])
     // A noite é a conferida, não a de hoje, e cada acerto é um recorte sem id.

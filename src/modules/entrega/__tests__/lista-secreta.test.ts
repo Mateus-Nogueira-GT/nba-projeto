@@ -43,6 +43,11 @@ function arquivosDe(dir: string): string[] {
 }
 
 const ruleset = carregarRuleset(readFileSync('config/ruleset.v1.yaml', 'utf8'))
+// A odd está fora da tela desde 07/10/2026 (`odds.exibir_no_app: false`). Os
+// testes da FORMA da odd publicam com a chave religada: a forma continua sendo
+// do ruleset, e religar é trocar uma linha.
+const rulesetComOdds = structuredClone(ruleset)
+rulesetComOdds.odds.exibir_no_app = true
 
 const HOJE = '2026-08-19'
 const PRIMEIRO_JOGO = new Date(`${HOJE}T23:00:00.000Z`)
@@ -396,7 +401,7 @@ describe('o card carrega contexto materializado (identidade 03)', () => {
    * (o que a linha escreve para cada forma) mora em `src/ui/__tests__/odd.test.ts`
    * desde a Tarefa 12 do front v2; aqui fica o que a materialização grava.
    */
-  const publicarECarregar = async (chave: string, rulesetUsado = ruleset) => {
+  const publicarECarregar = async (chave: string, rulesetUsado = rulesetComOdds) => {
     await publicarListaSecreta(banco.db, rulesetUsado, {
       dataReferencia: HOJE,
       agora: new Date(`${HOJE}T22:40:00.000Z`),
@@ -450,6 +455,34 @@ describe('o card carrega contexto materializado (identidade 03)', () => {
     expect(comFaixa.oddFaixa).toEqual({ min: 1.47, max: 1.62, qtdCasas: 8 })
   })
 
+  it('com `exibir_no_app: false` (o YAML de hoje), a odd coletada NÃO entra no item', async () => {
+    const feed = await lerFeed(banco.db, HOJE)
+    const item = feed!.conteudo.itens.find((i) => i.linha !== null)!
+
+    await banco.db
+      .insert(oddsAgregada)
+      .values({
+        jogoId: item.jogoId,
+        jogadorId: item.jogadorId,
+        atributo: item.atributo,
+        linha: item.linha!.toFixed(1),
+        oddMin: '1.850',
+        oddMax: '1.850',
+        oddMediana: '1.850',
+        oddMedia: '1.850',
+        qtdCasas: 1,
+        origem: 'CASAS',
+      })
+      .onConflictDoNothing()
+
+    // Há odd no banco para a linha: com a chave ligada ela chega ao item…
+    expect((await publicarECarregar(item.chave, rulesetComOdds)).oddFaixa).not.toBeNull()
+    // …e com o YAML de hoje, não. O corte é na materialização.
+    expect(ruleset.odds.exibir_no_app).toBe(false)
+    const semOdd = await publicarECarregar(item.chave, ruleset)
+    expect(semOdd.oddFaixa).toBeNull()
+  })
+
   it('trocar odds.exibicao no YAML muda a forma sem tocar código (regra 1)', async () => {
     const feed = await lerFeed(banco.db, HOJE)
     const item = feed!.conteudo.itens.find((i) => i.linha !== null)!
@@ -469,7 +502,7 @@ describe('o card carrega contexto materializado (identidade 03)', () => {
 
     // O padrão do ruleset agora é `casa_unica`; para provar que a chave do
     // YAML ainda manda, publica com um clone em 'media'.
-    const comMedia = structuredClone(ruleset)
+    const comMedia = structuredClone(rulesetComOdds)
     comMedia.odds.exibicao = 'media'
     const item06 = await publicarECarregar(item.chave, comMedia)
     expect(item06.oddFaixa).toEqual({ min: 1.47, max: 1.62, qtdCasas: 8, media: 1.55 })
@@ -501,7 +534,7 @@ describe('o card carrega contexto materializado (identidade 03)', () => {
   })
 
   it('exibicao: faixa no ruleset SUPRIME a média do item — a tela não decide', async () => {
-    const rulesetFaixa = structuredClone(ruleset)
+    const rulesetFaixa = structuredClone(rulesetComOdds)
     rulesetFaixa.odds.exibicao = 'faixa'
     const feed0 = await lerFeed(banco.db, HOJE)
     const item = feed0!.conteudo.itens.find((i) => i.linha !== null)!

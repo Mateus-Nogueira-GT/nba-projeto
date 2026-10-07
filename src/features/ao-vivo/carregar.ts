@@ -99,15 +99,17 @@ export type DadosAoVivo =
 export async function carregarAoVivo(recorte: RecorteAoVivo): Promise<DadosAoVivo> {
   const { sessao, acesso } = await exigirNivel('GRATIS', '/fire-live')
   const ruleset = await rulesetAtivo()
-  const { fuso } = ruleset.rodada
+  // O DIA sai de `rodada.fuso` (NY, decisão de 07/10/2026); a tela recebe
+  // `fuso_exibicao` (Brasília) no campo `fuso`.
+  const { fuso: fusoDoDia, fuso_exibicao: fuso } = ruleset.rodada
   const quartoFireLive = ruleset.fire_live.quarto
   const agora = new Date()
-  const hoje = dataDeReferencia(agora, fuso)
+  const hoje = dataDeReferencia(agora, fusoDoDia)
 
   // O GRÁTIS PARA AQUI. O Fire Live é MVP (spec, decisão 6), e o objeto do
   // grátis não tem campo para item do feed — a fumaça trava a forma.
   if (!atende(acesso.nivel, 'MVP')) {
-    return { tipo: 'gratis', fuso, agora, jogos: await jogosDoDiaResumo(getDb(), hoje, fuso) }
+    return { tipo: 'gratis', fuso, agora, jogos: await jogosDoDiaResumo(getDb(), hoje, fusoDoDia) }
   }
 
   const filtro: FiltroFireLive = { time: recorte.time }

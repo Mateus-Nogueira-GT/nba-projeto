@@ -121,6 +121,31 @@ export const COMPARATIVO: readonly LinhaComparativo[] = [
   { icone: 'robo', criterio: 'Tirar dúvida', nip: 'Sixth Man AI', manual: 'Grupo de Telegram' },
 ]
 
+/**
+ * A vitrine SEM odd (parceiro, 07/10/2026: "tirar tudo do front"). Com a odd
+ * desligada no ruleset, a página de vendas não pode prometer o que o app não
+ * mostra: os itens sobre odd saem, e os textos que a citam perdem só a odd.
+ */
+export function conteudoDaVitrine(exibirOdds: boolean) {
+  if (exibirOdds) return { checksDoApito: CHECKS_DO_APITO, ferramentas: FERRAMENTAS, passos: PASSOS, comparativo: COMPARATIVO }
+  return {
+    checksDoApito: CHECKS_DO_APITO.filter((t) => t !== 'Odds por casa'),
+    ferramentas: FERRAMENTAS.map((f, i) =>
+      i === 0
+        ? {
+            ...f,
+            texto:
+              'Os apitos do dia agrupados por jogo ou por nível. Em cada linha: o mercado, a nota de confiança e os últimos 5 jogos contra a linha.',
+          }
+        : f,
+    ),
+    passos: PASSOS.map((p) =>
+      p.icone === 'alvo' ? { ...p, texto: 'Linha, forma, desfalques e tamanho da entrada na mesma tela.' } : p,
+    ),
+    comparativo: COMPARATIVO.filter((l) => l.criterio !== 'Odd entre casas'),
+  }
+}
+
 export type Pergunta = { pergunta: string; resposta: string }
 
 export const PERGUNTAS: readonly Pergunta[] = [

@@ -21,7 +21,8 @@ import { concederCortesia } from '../../modules/plataforma/assinatura/direito'
  * simulação — uma demo pela metade parece funcionar.
  */
 
-const FUSO = 'America/Sao_Paulo'
+// O DIA é o de Nova York desde 07/10/2026 (`rodada.fuso`).
+const FUSO_DIA = 'America/New_York'
 type Banco = Awaited<ReturnType<typeof bancoDeTeste>>
 type Mundo = { banco: Banco; agora: Date; hoje: string; usuarioId: string }
 
@@ -53,7 +54,7 @@ async function mundo(agora: Date, diasDeHistorico: number, semente?: string): Pr
     fim: null,
     nivelDoPlano: 'ALL_STAR',
   })
-  return { banco, agora, hoje: dataDeReferencia(agora, FUSO), usuarioId: u!.id }
+  return { banco, agora, hoje: dataDeReferencia(agora, FUSO_DIA), usuarioId: u!.id }
 }
 
 beforeAll(async () => {

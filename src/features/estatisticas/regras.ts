@@ -67,7 +67,11 @@ export function aproveitamento(v: number | null): string {
   return v === null ? '—' : `${(v * 100).toFixed(1).replace('.', ',')}%`
 }
 
-/** "5/9" — dia e mês sem zero à esquerda, no fuso do ruleset. */
+/**
+ * "5/9" — dia e mês sem zero à esquerda. Para a DATA de um jogo, passe o fuso
+ * da RODADA (`fusoDia`): um jogo às 22h de Nova York é do dia dele lá, mesmo
+ * começando depois da meia-noite em Brasília (decisão de 07/10/2026).
+ */
 export function diaMes(quando: Date, fuso: string): string {
   const [dia, mes] = quando
     .toLocaleDateString('pt-BR', { timeZone: fuso, day: '2-digit', month: '2-digit' })

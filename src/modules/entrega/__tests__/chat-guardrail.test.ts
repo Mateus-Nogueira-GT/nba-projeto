@@ -15,6 +15,7 @@ const ruleset = carregarRuleset(readFileSync('config/ruleset.v1.yaml', 'utf8'))
 const AGORA = new Date('2026-08-24T18:00:00.000Z')
 const HOJE = '2026-08-24'
 const FUSO = ruleset.rodada.fuso
+const FUSO_EXIBICAO = ruleset.rodada.fuso_exibicao
 const TEMPORADA = temporadaDe(intervaloDoDia(HOJE, FUSO).inicio, calendarioDoRuleset(ruleset))
 
 let banco: Awaited<ReturnType<typeof bancoDeTeste>>
@@ -46,6 +47,7 @@ const perguntar = async () => {
     texto: 'como funciona o Fire Live?',
     dataReferencia: HOJE,
     fuso: FUSO,
+    fusoExibicao: FUSO_EXIBICAO,
     temporada: TEMPORADA,
     agora: proximoInstante(),
     cotaDiaria: 20,

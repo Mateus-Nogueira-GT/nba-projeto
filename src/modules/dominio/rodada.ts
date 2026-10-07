@@ -3,7 +3,10 @@
  *
  * Toda a plataforma indexa por `dataReferencia` (YYYY-MM-DD): a Lista Secreta
  * do dia, o feed, os jogos, a conferência de resultados. Quem decide onde o dia
- * começa é o FUSO, e o fuso vem do ruleset — resposta do cliente em 24/08/2026.
+ * começa é o FUSO, e o fuso vem do ruleset (`rodada.fuso`). Era Brasília
+ * (resposta do cliente em 24/08/2026); desde 07/10/2026 é Nova York, por
+ * decisão do parceiro: "o jogo deve contar no dia em que foi marcado nos EUA".
+ * O relógio da TELA é outra chave, `rodada.fuso_exibicao` (Brasília).
  *
  * Antes disto o cálculo era `new Date().toISOString().slice(0, 10)`, ou seja
  * UTC. Num servidor da Vercel isso significa que o dia virava às 21h de

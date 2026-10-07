@@ -47,25 +47,33 @@ temporada:
   minimo_jogos_para_exibir: 1
 
 # -----------------------------------------------------------------------------
-# RODADA — o fuso que decide a que DIA um jogo pertence
+# RODADA — dois fusos: o que decide o DIA e o que decide o RELÓGIO da tela
 #
-# Respondido pelo cliente em 24/08/2026: fuso do horário de Brasília.
+# Histórico: em 24/08/2026 o cliente respondeu "fuso de Brasília", e um fuso só
+# decidia as duas coisas. Consequência: a NBA joga à noite nos EUA e, no
+# inverno americano, um jogo das 22h de Nova York começa à meia-noite de
+# Brasília, JÁ NO DIA SEGUINTE. A mesma noite de NBA se partia em duas rodadas,
+# e um time chegava a ter dois jogos na mesma rodada (DEN×GSW e DEN×IND na
+# rodada de 08/11/2025).
 #
-# Governa duas coisas: qual é a "rodada de hoje" e em que horário os jogos
-# aparecem na tela. Antes disto o servidor da Vercel roda em UTC, e todo horário
-# de jogo saía 3 horas adiantado para o assinante brasileiro.
+# Decisão do parceiro em 07/10/2026: "o jogo deve contar no dia em que foi
+# marcado nos EUA". Por isso a chave se partiu em duas:
 #
-# ⚠️  CONSEQUÊNCIA: a NBA joga à noite nos EUA. No inverno americano — que é
-# quase toda a temporada — o leste dos EUA está 2 horas atrás de Brasília, então
-# um jogo das 22h30 no horário de lá começa 00h30 aqui, JÁ NO DIA SEGUINTE. Uma
-# mesma noite de NBA se parte em duas rodadas, e os jogos da costa oeste caem na
-# lista de "amanhã".
+#   fuso           — a que DIA um jogo pertence: a rodada, o "hoje" do app, a
+#                    virada de temporada, os crons e o `data_referencia` dos
+#                    jogos. America/New_York é a data da agenda oficial da
+#                    liga (fuso de verdade, com horário de verão).
+#   fuso_exibicao  — que horas e datas a TELA mostra: cards, "última
+#                    atualização", admin, conta, chat. O assinante continua
+#                    vendo "19:00" de Brasília.
 #
-# A alternativa é `America/New_York`, que é a convenção da própria liga: a noite
-# inteira fica num dia só. Trocar é editar a linha abaixo — nenhum código muda.
+# Trocar qualquer um é editar a linha abaixo — nenhum código muda. Trocar o
+# `fuso` com temporada no banco pede `npm run jogos:recalcular-rodada` e o
+# `motor:retroativo --limpar-temporada` (docs/runbooks/temporada-retroativa.md).
 # -----------------------------------------------------------------------------
 rodada:
-  fuso: America/Sao_Paulo
+  fuso: America/New_York
+  fuso_exibicao: America/Sao_Paulo
 
 # -----------------------------------------------------------------------------
 # ARREDONDAMENTO
@@ -256,6 +264,13 @@ odds:
   # tocar código.
   exibicao: casa_unica
   fallback: tabela_estatica
+  # Decisão do parceiro (07/10/2026): "a parte de odd pode tirar tudo do front,
+  # porque não terá nada de integração com aposta ainda. Deixe só desligado
+  # agora, mas não tire do código." Desligado, nenhuma odd chega ao assinante:
+  # nem no card, nem na Lista, nem em Resultados, nem no detalhe do apito, nem
+  # na Metodologia, nem na Gestão. A coleta e o admin de mercados continuam.
+  # Religar é trocar esta linha para true.
+  exibir_no_app: false
 
   tabela_estatica: # usada quando não há cobertura das casas
     MVP: { 20: [1.07, 1.25], 25: [1.30, 1.70], 30: [2.00, 2.50], 35: [3.00, 5.00] }

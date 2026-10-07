@@ -29,9 +29,12 @@ import { horaEmTexto } from '@/ui/formato'
  * diz de onde veio.
  */
 
+// Desde 07/10/2026 o DIA é o de Nova York (`rodada.fuso`) e FUSO é só o
+// relógio da tela (`rodada.fuso_exibicao`).
+const FUSO_DIA = 'America/New_York'
 const FUSO = 'America/Sao_Paulo'
 const AGORA = new Date('2026-01-15T18:00:00.000Z')
-const HOJE = dataDeReferencia(AGORA, FUSO)
+const HOJE = dataDeReferencia(AGORA, FUSO_DIA)
 const USUARIO = '00000000-0000-4000-8000-000000000001'
 
 let banco: Awaited<ReturnType<typeof bancoDeTeste>>
@@ -155,6 +158,8 @@ describe('Lista do v2 — portão de nível', () => {
       const dados = await carregarLista(lerEstadoDaTabela({}))
       expect(dados.tipo).toBe('gratis')
       expect(Object.keys(dados).sort()).toEqual(['bloqueados', 'fuso', 'hoje', 'jogos', 'seletor', 'tipo'])
+      // O DIA é o de NY; o campo `fuso` é o relógio da tela (decisão de 07/10/2026).
+      expect(dados.fuso).toBe('America/Sao_Paulo')
       // O seletor de temporada (spec 25/09) carrega só RÓTULOS de temporada.
       expect(Object.keys(dados.seletor).sort()).toEqual(['temporada', 'temporadas'])
       for (const t of [dados.seletor.temporada, ...dados.seletor.temporadas]) expect(t).toMatch(/^\d{4}(-\d{2})?$/)
@@ -175,7 +180,7 @@ describe('Lista do v2 — portão de nível', () => {
     try {
       const html = await renderizar()
       const { jogosDoDiaResumo } = await import('@/modules/entrega/lista-por-jogo')
-      const jogos = await jogosDoDiaResumo(banco.db, HOJE, FUSO)
+      const jogos = await jogosDoDiaResumo(banco.db, HOJE, FUSO_DIA)
       expect(jogos.length, 'a semente precisa de pelo menos quatro jogos').toBeGreaterThan(3)
       // UMA repetição depois do terceiro jogo: no scroll longo a do topo sai da tela.
       const convites = [...html.matchAll(/href="\/assinar\?nivel=MVP/g)]
@@ -262,7 +267,7 @@ describe('Lista do v2 — o que a home antiga garantia', () => {
   it('(telas-04-lista) antes da publicação a tela diz a que horas sai a próxima lista', async () => {
     const { jogosDoDiaResumo } = await import('@/modules/entrega/lista-por-jogo')
     const ruleset = await rulesetAtivo()
-    const primeiro = (await jogosDoDiaResumo(banco.db, HOJE, FUSO))[0]!
+    const primeiro = (await jogosDoDiaResumo(banco.db, HOJE, FUSO_DIA))[0]!
     const saida = new Date(
       primeiro.dataHoraUtc.getTime() - ruleset.publicacao.lista_secreta.antecedencia_minutos * 60_000,
     )
@@ -307,6 +312,18 @@ describe('Lista do v2 — o que a home antiga garantia', () => {
       expect(sem).toContain('Lista do dia')
     } finally {
       await banco.db.update(feedSnapshot).set({ conteudoJson: original }).where(onde)
+    }
+  }, 60_000)
+
+  it('com a odd desligada no ruleset (07/10): nem coluna, nem pílula, nem a lente de odds — a da hierarquia fica', async () => {
+    nivelDoTeste = 'MVP'
+    expect((await rulesetAtivo()).odds.exibir_no_app).toBe(false)
+    for (const busca of [{}, { lente: 'ODDS' }, { ordenar: 'odd' }]) {
+      const html = await renderizar(busca)
+      expect(html).toContain((await itensDeHoje())[0]!.nome)
+      expect(html).not.toContain('Ordenar por odd')
+      expect(html).not.toMatch(/>Odds?</)
+      expect(html).toMatch(/>Hierarquia</)
     }
   }, 60_000)
 
