@@ -1,7 +1,9 @@
 import { getDb } from '@/modules/dominio/db/cliente'
 import { dataDeReferencia } from '@/modules/dominio/rodada'
+import { calendarioDoRuleset, temporadaDe } from '@/modules/dominio/temporada'
 import { detalheDoApito, type DetalheApito } from '@/modules/entrega/detalhe-apito'
 import { lerFeedFireLive } from '@/modules/entrega/fire-live/leitura'
+import { inicioDaTemporada, perfilDoAdversario, type PerfilAdversario } from '@/modules/entrega/matchup'
 import type { ItemFireLive } from '@/modules/entrega/fire-live/feed'
 import { recorteDoJogador } from '@/modules/entrega/lista-secreta'
 import { lerFeedCacheado } from '@/app/_cache/feed'
@@ -40,6 +42,8 @@ export type DadosDoApito =
       /** 1..5 — a cor e o brilho do herói saem daqui. */
       grauConfianca: 1 | 2 | 3 | 4 | 5 | null
       percentualModoFire: number
+      /** Matchup: o adversário, em números da temporada. Só dado, sem regra. */
+      adversario: PerfilAdversario | null
     }
 
 export function atributoDaConsulta(valor: string | string[] | undefined): Atributo | undefined {
@@ -97,6 +101,15 @@ export async function carregarApito(jogadorId: string, atributo: Atributo | unde
     detalheDoApito(getDb(), ruleset, principal, { blocos: 10 }),
   ])
 
+  // Matchup (reunião de 23/09): o adversário até a véspera do jogo do apito.
+  const calendario = calendarioDoRuleset(ruleset)
+  const adversario = await perfilDoAdversario(
+    getDb(),
+    detalhe.jogo.adversarioSigla,
+    dataDeReferencia(detalhe.jogo.dataHoraUtc, fuso),
+    inicioDaTemporada(temporadaDe(detalhe.jogo.dataHoraUtc, calendario), calendario.mesInicio),
+  )
+
   const referencia =
     principal.atributo === 'PONTOS'
       ? ruleset.odds.tabela_estatica[principal.nivelJogador]
@@ -135,5 +148,6 @@ export async function carregarApito(jogadorId: string, atributo: Atributo | unde
     rotuloConfianca: faixa?.rotulo_curto ?? faixa?.rotulo ?? null,
     grauConfianca: grau,
     percentualModoFire: ruleset.fire_live.modo_fire.percentual_media,
+    adversario,
   }
 }

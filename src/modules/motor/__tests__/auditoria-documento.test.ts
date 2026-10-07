@@ -61,7 +61,10 @@ function jogador(id: string, posicao: number, nivel: Nivel): JogadorComHierarqui
     timeId: 'NYK',
     posicaoHierarquia: posicao,
     classificacoes: { REBOTES: nivel },
-    medias: {},
+    // Média realista de pivô/ala (Hart e Drummond pegam ~8). Desde 06/10 a
+    // Lista exige média >= 4 em rebotes (reunião de 23/09); sem média nenhuma,
+    // ninguém apitaria e o teste deixaria de provar a regra de OPD.
+    medias: { REBOTES: 8 },
     historico: [],
   }
 }

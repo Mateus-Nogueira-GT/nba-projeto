@@ -32,12 +32,9 @@ const CONSTRAINTS_ANTERIORES = {
   // CADASTRO/ASSINATURA_NIP; texto copiado de drizzle/0019_demonic_silver_surfer.sql.
   links_afiliados_tipo_destino_valido: `CHECK ("links_afiliados"."tipo_destino" in ('NIP', 'CASA'))`,
   eventos_afiliados_tipo_valido: `CHECK ("eventos_afiliados"."tipo" in ('CLIQUE', 'VISITA_NIP', 'SAIDA_CASA', 'CADASTRO_NIP'))`,
-<<<<<<< Updated upstream
-=======
   // A 0036 tira a chave por data UTC (MIA×CHI em noites seguidas, 06/10/2026);
   // texto copiado de drizzle/0006_fair_screwball.sql.
   jogos_chave_natural: 'UNIQUE("data_jogo","time_casa_id","time_visitante_id")',
->>>>>>> Stashed changes
 }
 
 /** Comandos cuja inversão é conhecida. Qualquer outro derruba o script. */

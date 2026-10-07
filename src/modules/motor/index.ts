@@ -79,6 +79,7 @@ function avaliarListaSecreta(time: TimeFato, jogo: JogoFato, ruleset: Ruleset): 
     for (const atributo of ruleset.niveis.atributos) {
       const nivel = jogador.classificacoes[atributo]
       if (nivel === undefined) continue
+      if (!atingeMediaMinimaDaLista(jogador, atributo, ruleset)) continue
 
       const oscilacao = avaliarOscilacao(jogador, atributo, ruleset)
       const nivelOpd = opdPorAtributo.get(atributo)?.get(jogador.id) ?? null
@@ -114,6 +115,14 @@ function avaliarListaSecreta(time: TimeFato, jogo: JogoFato, ruleset: Ruleset): 
   }
 
   return apitos
+}
+
+/** `por_atributo.<A>.lista_media_minima` — sem a chave, ninguém é barrado. */
+function atingeMediaMinimaDaLista(jogador: JogadorFato, atributo: Atributo, ruleset: Ruleset): boolean {
+  const minimo = ruleset.por_atributo[atributo]?.lista_media_minima
+  if (minimo === undefined) return true
+  const media = jogador.medias[atributo]
+  return media !== undefined && media >= minimo
 }
 
 // ---------------------------------------------------------------------------

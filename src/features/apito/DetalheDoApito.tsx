@@ -205,8 +205,42 @@ function OJogo({ d }: { d: Dados }) {
           <span className={s.rotulo}>Desfalques</span>
           <p>{jogo.desfalques.length === 0 ? 'Sem desfalques' : jogo.desfalques.join(' · ')}</p>
         </div>
+        <Adversario d={d} />
       </div>
     </Secao>
+  )
+}
+
+/**
+ * MATCHUP — só o dado (reunião de 23/09). O CJ não deu limites, então isto
+ * não apita nem muda apito: mostra o que o adversário cede, com a posição na
+ * liga (1º = o que mais cede), contando os jogos antes deste.
+ */
+function Adversario({ d }: { d: Dados }) {
+  const a = d.adversario
+  if (!a) return null
+  const linhas = [
+    { rotulo: 'Pontos cedidos por jogo', marca: a.pontosCedidos },
+    { rotulo: 'Bolas de 3 erradas por jogo', marca: a.tresErradas },
+    { rotulo: 'Rebotes cedidos por jogo', marca: a.rebotesCedidos },
+  ]
+  return (
+    <div className={s.desfalques} data-bloco="adversario">
+      <span className={s.rotulo}>
+        Adversário · {a.sigla} <span className={s.fraco}>({a.jogos} jogos na temporada)</span>
+      </span>
+      <ul className={s.matchup}>
+        {linhas.map((l) => (
+          <li key={l.rotulo}>
+            <span>{l.rotulo}</span>
+            <strong className="num">{decimal(l.marca.valor)}</strong>
+            <span className={`${s.fraco} num`}>
+              {l.marca.posicao}º de {a.totalTimes}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </div>
   )
 }
 

@@ -23,7 +23,7 @@ import { dataDeReferencia } from '@/modules/dominio/rodada'
 import { materializarFeedFireLive, type ConteudoFeedFireLive, type ItemFireLive } from '@/modules/entrega/fire-live/feed'
 import { lerFeedFireLive } from '@/modules/entrega/fire-live/leitura'
 import { cotacoesPorCasa } from '@/modules/entrega/odds/leitura'
-import { lerFeed, linhasDoJogador, publicarListaSecreta } from '@/modules/entrega/lista-secreta'
+import { lerFeed, linhasDoJogador, publicarListaSecreta, recorteDoJogador } from '@/modules/entrega/lista-secreta'
 import { rulesetAtivo } from '@/modules/entrega/ruleset-ativo'
 import { simularAte } from '@/modules/ingestao/demo/temporada'
 import { LLMFake } from '@/modules/ingestao/llm'
@@ -245,8 +245,13 @@ describe('detalhe do apito — temporada simulada', () => {
     try {
       await definirSaidaDoApito(banco.db, ator, link.id, agora)
       const html = await renderizar('pagina', alvo.jogadorId, { atributo: alvo.atributo })
+      // A saída leva o apito PRINCIPAL do painel — a primeira linha do jogador
+      // no atributo —, não o item que o teste sorteou do feed: com rebotes e
+      // assistências ligados (06/10), o jogador tem várias linhas.
+      const feed = await lerFeed(banco.db, HOJE)
+      const principal = recorteDoJogador(feed!, alvo.jogadorId, alvo.atributo).itens[0]!
       // A chave contém `|`: crua, truncaria a query string.
-      expect(html).toContain(`href="/ir/${link.codigo}?apito=${encodeURIComponent(alvo.chave)}"`)
+      expect(html).toContain(`href="/ir/${link.codigo}?apito=${encodeURIComponent(principal.chave)}"`)
       expect(html).toMatch(/rel="[^"]*\bsponsored\b[^"]*"/)
       expect(html.toLowerCase()).toContain('a odd da sua casa pode ser outra')
       expect(html).not.toMatch(/<form[^>]*aposta/i)
@@ -340,6 +345,10 @@ describe('detalhe do apito — temporada simulada', () => {
     const visivel = texto(html)
     for (const secao of ['Por que entrou', 'O jogo', 'Linhas de', 'Forma em'])
       expect(visivel).toContain(secao)
+    // Matchup (reunião de 23/09): o dado do adversário, com a posição na liga.
+    expect(visivel).toContain('Adversário ·')
+    expect(visivel).toContain('Pontos cedidos por jogo')
+    expect(visivel).toMatch(/\d+º de \d+/)
     // O rodapé diz o que o número É — a nota de confiança da análise.
     expect(visivel).toContain('nota de confiança')
     expect(html).toContain(`href="/estatisticas/jogador/${alvo.jogadorId}"`)

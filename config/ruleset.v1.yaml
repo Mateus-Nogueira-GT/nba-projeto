@@ -83,12 +83,12 @@ arredondamento:
 niveis:
   ordem: [MVP, ALL_STAR, SUPORTE, RANDOLA]
   # INTERRUPTOR. Este array é o que motor/index.ts e motor/fire-live/avaliar.ts
-  # iteram. Rebotes e assistências JÁ TÊM dado real no banco (versão do CJ de
-  # 21/09), mas as tabelas de confiança e de odds dos dois continuam
-  # `origem: demonstracao` — números nossos, não dele. Religar aqui põe apito
-  # com número inventado no celular de assinante pagante.
-  # Religar quando o CJ mandar % e odds de rebotes e assistências.
-  atributos: [PONTOS]
+  # iteram. LIGADOS EM 06/10/2026 POR DECISÃO EXPLÍCITA DO PARCEIRO, ciente do
+  # custo: as tabelas de confiança e de odds de rebotes e assistências continuam
+  # `origem: demonstracao` — números nossos, não do CJ — e vão para o celular
+  # do assinante até ele mandar as dele. Trocar as tabelas é diff de YAML.
+  # Ver docs/superpowers/specs/2026-10-06-ajustes-reuniao-23-09-design.md.
+  atributos: [PONTOS, REBOTES, ASSISTENCIAS]
 
 # -----------------------------------------------------------------------------
 # LISTA SECRETA — MÉTODO 1: OSCILAÇÃO
@@ -360,6 +360,10 @@ por_atributo:
   REBOTES:
     origem: demonstracao
 
+    # Reunião de 23/09 (CJ): a Lista Secreta só apita quem tem média >= 4 no
+    # atributo (oscilação e OPD). Não vale para o Fire Live.
+    lista_media_minima: 4
+
     # DOCX recebido em 08/09, p. 14: OPD só N3/N2; oscilação nos três níveis.
     # Deltas, linhas, confiança, odds e greens abaixo continuam demonstrativos.
     opd:
@@ -418,6 +422,10 @@ por_atributo:
 
   ASSISTENCIAS:
     origem: demonstracao
+
+    # Reunião de 23/09 (CJ): a Lista Secreta só apita quem tem média >= 4 no
+    # atributo (oscilação e OPD). Não vale para o Fire Live.
+    lista_media_minima: 4
 
     # Faixas de média que definem o NÍVEL DO JOGADOR em assistências — seção
     # "Assistências" do documento de 21/09. Mesma função e mesmas ressalvas das

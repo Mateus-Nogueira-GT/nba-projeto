@@ -120,11 +120,15 @@ describe('sem bloco, o atributo simplesmente não existe', () => {
 })
 
 describe('o interruptor de atributo', () => {
-  it('mantém rebotes e assistências desligados até o CJ mandar % e odds', () => {
+  it('rebotes e assistências ligados (06/10) — e as tabelas deles seguem marcadas como demonstração', () => {
     // `niveis.atributos` é o array que motor/index.ts e fire-live/avaliar.ts
-    // iteram: ele é o liga-desliga. Com os níveis de rebotes no banco, religar
-    // põe no ar apito com confiança e odd que NÓS inventamos.
-    expect(ruleset.niveis.atributos).toEqual(['PONTOS'])
+    // iteram: ele é o liga-desliga. O parceiro religou REB e AST em 06/10,
+    // ciente de que a confiança e a odd dos dois são NOSSAS, não do CJ. O que
+    // este teste trava agora é a etiqueta: enquanto o CJ não mandar as
+    // tabelas, elas não podem passar por homologadas.
+    expect(ruleset.niveis.atributos).toEqual(['PONTOS', 'REBOTES', 'ASSISTENCIAS'])
+    expect(origemDoAtributo('REBOTES', ruleset)).toBe('demonstracao')
+    expect(origemDoAtributo('ASSISTENCIAS', ruleset)).toBe('demonstracao')
   })
 })
 

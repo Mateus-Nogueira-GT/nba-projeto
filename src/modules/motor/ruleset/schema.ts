@@ -48,6 +48,14 @@ const blocoAtributo = z.object({
     .partialRecord(nivel, z.object({ min: z.number(), max: z.number().optional() }))
     .optional(),
 
+  /**
+   * Média mínima no atributo para apitar na LISTA SECRETA (oscilação e OPD).
+   * Reunião de 23/09, CJ: "só jogador com média de 4 para cima em
+   * assistências e rebotes, fora do Fire Live". Inclusivo. Ausente = sem
+   * mínimo (o comportamento anterior). O Fire Live não lê esta chave.
+   */
+  lista_media_minima: z.number().nonnegative().optional(),
+
   oscilacao: z
     .object({
       delta: porNivel(z.number()),
