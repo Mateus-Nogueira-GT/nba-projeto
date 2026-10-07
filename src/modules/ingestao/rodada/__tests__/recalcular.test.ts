@@ -6,6 +6,8 @@ import { jogos, times } from '../../../dominio/db/schema'
 import { recalcularRodadaDosJogos } from '../recalcular'
 
 const NY = 'America/New_York'
+/** Só jogo encerrado tem a rodada recalculada. */
+const ENCERRADO = { status: 'ENCERRADO' as const }
 
 let banco: Awaited<ReturnType<typeof bancoDeTeste>>
 let den: string
@@ -44,10 +46,10 @@ const datas = async () =>
  */
 async function semearRodadaDeBrasilia() {
   await banco.db.insert(jogos).values([
-    { timeCasaId: gsw, timeVisitanteId: den, dataReferencia: '2025-11-08', dataHoraUtc: new Date('2025-11-08T03:00:00Z') },
-    { timeCasaId: ind, timeVisitanteId: den, dataReferencia: '2025-11-08', dataHoraUtc: new Date('2025-11-09T02:00:00Z') },
+    { ...ENCERRADO, timeCasaId: gsw, timeVisitanteId: den, dataReferencia: '2025-11-08', dataHoraUtc: new Date('2025-11-08T03:00:00Z') },
+    { ...ENCERRADO, timeCasaId: ind, timeVisitanteId: den, dataReferencia: '2025-11-08', dataHoraUtc: new Date('2025-11-09T02:00:00Z') },
     // Um jogo cedo, que é da mesma data nos dois fusos: não muda.
-    { timeCasaId: mia, timeVisitanteId: chi, dataReferencia: '2025-11-08', dataHoraUtc: new Date('2025-11-08T20:00:00Z') },
+    { ...ENCERRADO, timeCasaId: mia, timeVisitanteId: chi, dataReferencia: '2025-11-08', dataHoraUtc: new Date('2025-11-08T20:00:00Z') },
   ])
 }
 
@@ -79,11 +81,12 @@ describe('jogos:recalcular-rodada (decisão de 07/10/2026)', () => {
 
   it('troca de datas que colidiria NO MEIO (mesmo confronto em noites seguidas) passa', async () => {
     // Dois MIA×CHI: o de 23:30 NY de 10/01 (gravado 11/01 em Brasília) e o de
-    // 19:00 NY de 11/01 (gravado, por um erro qualquer, como 10/01). O
+    // 19:30 NY de 11/01 (gravado, por um erro qualquer, como 10/01) — não
+    // 00:00Z cravado, que é o caso do "horário a definir". O
     // conjunto final não colide, mas a ordem ingênua de UPDATE colidiria.
     await banco.db.insert(jogos).values([
-      { timeCasaId: mia, timeVisitanteId: chi, dataReferencia: '2026-01-11', dataHoraUtc: new Date('2026-01-11T04:30:00Z') },
-      { timeCasaId: mia, timeVisitanteId: chi, dataReferencia: '2026-01-10', dataHoraUtc: new Date('2026-01-12T00:00:00Z') },
+      { ...ENCERRADO, timeCasaId: mia, timeVisitanteId: chi, dataReferencia: '2026-01-11', dataHoraUtc: new Date('2026-01-11T04:30:00Z') },
+      { ...ENCERRADO, timeCasaId: mia, timeVisitanteId: chi, dataReferencia: '2026-01-10', dataHoraUtc: new Date('2026-01-12T00:30:00Z') },
     ])
 
     const r = await recalcularRodadaDosJogos(banco.db, { fuso: NY, confirmar: true })
@@ -97,8 +100,8 @@ describe('jogos:recalcular-rodada (decisão de 07/10/2026)', () => {
     // como 11/01 pela regra de Brasília. No fuso novo os dois são a MESMA
     // rodada: é jogo duplicado a curar, não a sobrescrever.
     await banco.db.insert(jogos).values([
-      { timeCasaId: mia, timeVisitanteId: chi, dataReferencia: '2026-01-10', dataHoraUtc: new Date('2026-01-10T23:00:00Z') },
-      { timeCasaId: mia, timeVisitanteId: chi, dataReferencia: '2026-01-11', dataHoraUtc: new Date('2026-01-11T03:30:00Z') },
+      { ...ENCERRADO, timeCasaId: mia, timeVisitanteId: chi, dataReferencia: '2026-01-10', dataHoraUtc: new Date('2026-01-10T23:00:00Z') },
+      { ...ENCERRADO, timeCasaId: mia, timeVisitanteId: chi, dataReferencia: '2026-01-11', dataHoraUtc: new Date('2026-01-11T03:30:00Z') },
     ])
 
     const r = await recalcularRodadaDosJogos(banco.db, { fuso: NY, confirmar: true })
@@ -107,6 +110,56 @@ describe('jogos:recalcular-rodada (decisão de 07/10/2026)', () => {
     expect(r.colisoes).toHaveLength(1)
     expect(r.colisoes[0]).toMatchObject({ dataReferencia: '2026-01-10', timeCasaId: mia, timeVisitanteId: chi })
     expect(r.colisoes[0]!.jogoIds).toHaveLength(2)
+    expect(await datas()).toEqual(['2026-01-10', '2026-01-11'])
+  })
+
+  it('jogo que não está ENCERRADO não é lido nem muda', async () => {
+    // Agendado e ao vivo ainda podem ser remarcados: quem os grava é a
+    // ingestão do dia, já no fuso novo.
+    await banco.db.insert(jogos).values([
+      { status: 'AGENDADO', timeCasaId: gsw, timeVisitanteId: den, dataReferencia: '2025-11-08', dataHoraUtc: new Date('2025-11-08T03:00:00Z') },
+      { status: 'AO_VIVO', timeCasaId: ind, timeVisitanteId: den, dataReferencia: '2025-11-08', dataHoraUtc: new Date('2025-11-08T03:30:00Z') },
+    ])
+
+    const r = await recalcularRodadaDosJogos(banco.db, { fuso: NY, confirmar: true })
+
+    expect(r.total).toBe(0)
+    expect(r.naoEncerrados).toBe(2)
+    expect(r.mudancas).toEqual([])
+    expect(await datas()).toEqual(['2025-11-08', '2025-11-08'])
+  })
+
+  it('horário exatamente 00:00:00 UTC é listado como possivelmente a definir e não muda', async () => {
+    // 00:00Z é 20h de NY da véspera — mas também é o "sem horário" típico de
+    // provedor. Mudar a rodada por um horário que talvez não exista é chute.
+    const [suspeito] = await banco.db
+      .insert(jogos)
+      .values({ ...ENCERRADO, timeCasaId: gsw, timeVisitanteId: den, dataReferencia: '2025-11-08', dataHoraUtc: new Date('2025-11-08T00:00:00Z') })
+      .returning()
+    await banco.db.insert(jogos).values({ ...ENCERRADO, timeCasaId: ind, timeVisitanteId: den, dataReferencia: '2025-11-08', dataHoraUtc: new Date('2025-11-08T03:00:00Z') })
+
+    const r = await recalcularRodadaDosJogos(banco.db, { fuso: NY, confirmar: true })
+
+    expect(r.horarioADefinir).toEqual([
+      { jogoId: suspeito!.id, dataHoraUtc: new Date('2025-11-08T00:00:00Z'), dataReferencia: '2025-11-08' },
+    ])
+    expect(r.mudancas.map((m) => [m.de, m.para])).toEqual([['2025-11-08', '2025-11-07']])
+    expect(r.gravou).toBe(true)
+    expect(await datas()).toEqual(['2025-11-08', '2025-11-07'])
+  })
+
+  it('a conferência de colisão enxerga a linha que não muda', async () => {
+    // O agendado fica em 10/01; o encerrado das 03:30Z de 11/01 vira 10/01 em
+    // NY — a mesma chave. Nada é gravado.
+    await banco.db.insert(jogos).values([
+      { status: 'AGENDADO', timeCasaId: mia, timeVisitanteId: chi, dataReferencia: '2026-01-10', dataHoraUtc: new Date('2026-01-10T23:00:00Z') },
+      { ...ENCERRADO, timeCasaId: mia, timeVisitanteId: chi, dataReferencia: '2026-01-11', dataHoraUtc: new Date('2026-01-11T03:30:00Z') },
+    ])
+
+    const r = await recalcularRodadaDosJogos(banco.db, { fuso: NY, confirmar: true })
+
+    expect(r.gravou).toBe(false)
+    expect(r.colisoes).toHaveLength(1)
     expect(await datas()).toEqual(['2026-01-10', '2026-01-11'])
   })
 })

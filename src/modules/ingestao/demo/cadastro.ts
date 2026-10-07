@@ -181,6 +181,10 @@ async function cadastrar(db: Db, conteudo: string, agora: Date): Promise<Cadastr
   //      `niveis.atributos: [PONTOS]` isso não sai do seed.
   const niveisDerivados: (typeof niveis.$inferInsert)[] = []
   for (const j of analise.jogadores) {
+    // Só a entrada de PONTOS empresta a posição: a lista traz também as seções
+    // de rebotes e assistências, e reaproveitar a posição de uma delas para o
+    // OUTRO atributo inventava empate com quem a lista real já pôs ali.
+    if (j.atributo !== 'PONTOS') continue
     const jogadorId = jaExistentes.get(chaveDeNome(j.nomeNaLista))
     const timeId = j.timeSigla ? timePorSigla.get(j.timeSigla) : undefined
     if (!jogadorId || !timeId) continue

@@ -637,6 +637,29 @@ describe('Estatísticas do v2 — jogador', () => {
     }
   }, 60_000)
 
+  it('cabeçalho do jogo: a DATA é a da rodada (EUA) e a HORA é a de Brasília', async () => {
+    nivelDoTeste = 'MVP'
+    const [jogo] = await banco.db.select().from(jogos).where(eq(jogos.status, 'ENCERRADO')).limit(1)
+    try {
+      // 22h30 ET de 3/12 = 03h30 UTC de 4/12 = 00h30 em Brasília. O dia é o da
+      // rodada (3/12); a hora, a do assinante (00:30). Antes saía "04/12/2025,
+      // 00:30" — o dia de Brasília, que não é a rodada do jogo.
+      await banco.db
+        .update(jogos)
+        .set({ dataReferencia: '2025-12-03', dataHoraUtc: new Date('2025-12-04T03:30:00.000Z') })
+        .where(eq(jogos.id, jogo!.id))
+      const placar = texto(secao(await renderizarJogo(jogo!.id), 'Placar'))
+      expect(placar).toMatch(/(?<!\d)3\/12(?!\d)/)
+      expect(placar).not.toMatch(/(?<!\d)0?4\/12(?!\d)/)
+      expect(placar).toContain('00:30')
+    } finally {
+      await banco.db
+        .update(jogos)
+        .set({ dataReferencia: jogo!.dataReferencia, dataHoraUtc: jogo!.dataHoraUtc })
+        .where(eq(jogos.id, jogo!.id))
+    }
+  }, 60_000)
+
   it('(telas-04) as duas visões de time: "Time atual" (provedor) e "Na curadoria NIP", rotuladas', async () => {
     nivelDoTeste = 'MVP'
     const { tela } = await dadosDoJogador(alvo)

@@ -296,8 +296,10 @@ export type ItemFireLiveNaTela = ItemFireLive & {
  * Lê a média na LEITURA, e não da materialização, pelo mesmo motivo da foto: o
  * snapshot do Fire Live é escrito no instante do apito e o card do 1º quarto
  * não carrega média nenhuma (`mediaTemporada: null` em feed.ts). A janela vem
- * do ruleset — a mesma tradução que a Lista Secreta usa —, e a temporada, do
- * instante do apito, que por construção cai dentro do jogo.
+ * do ruleset — a mesma tradução que a Lista Secreta usa —, e a temporada, da
+ * data do JOGO, como no motor. Não de `apitadoEm`: é o `now()` do banco na
+ * gravação, e uma reprodução (ou um teste) fora da data do jogo caía noutra
+ * temporada e perdia a média. `apitadoEm` só vale se o jogo sumiu.
  */
 export async function comAlvoDoModoFire(
   db: Db,
@@ -319,6 +321,15 @@ export async function comAlvoDoModoFire(
       ),
     )
   const porChave = new Map(linhas.map((m) => [`${m.jogadorId}|${m.temporada}`, m] as const))
+  const idsDeJogo = [...new Set(itens.map((i) => i.jogoId))]
+  const dataDoJogo = new Map(
+    (
+      await db
+        .select({ id: jogos.id, dataHoraUtc: jogos.dataHoraUtc })
+        .from(jogos)
+        .where(inArray(jogos.id, idsDeJogo))
+    ).map((j) => [j.id, j.dataHoraUtc] as const),
+  )
 
   // "75% da média" — o número sai do YAML, e em pt-BR: um percentual quebrado
   // (0,725) sairia "72.5% da média" na interpolação crua.
@@ -328,7 +339,7 @@ export async function comAlvoDoModoFire(
 
   return itens.map((item) => {
     if (!modoFire.aplica_a.includes(item.nivelJogador)) return { ...item, alvoFire: null }
-    const temporada = temporadaDe(new Date(item.apitadoEm), calendario)
+    const temporada = temporadaDe(dataDoJogo.get(item.jogoId) ?? new Date(item.apitadoEm), calendario)
     const linha = porChave.get(`${item.jogadorId}|${temporada}`)
     const media = linha ? colunaMedia(linha, item.atributo) : null
     if (media === null) return { ...item, alvoFire: null }

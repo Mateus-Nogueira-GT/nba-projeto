@@ -5,6 +5,7 @@ import { and, eq } from 'drizzle-orm'
 import { fecharDb, getDb } from '../src/modules/dominio/db/cliente'
 import { identidadesJogador } from '../src/modules/dominio/db/schema'
 import { confirmarMapeamento } from '../src/modules/ingestao/niveis/importar'
+import { lerPlanilha } from '../src/modules/ingestao/niveis/planilha'
 
 /**
  * Aplica a planilha REVISADA por humano (`lista-cj:sugestoes`) — o mesmo
@@ -23,54 +24,25 @@ function argumento(nome: string): string | null {
   return process.argv.find((item) => item.startsWith(prefixo))?.slice(prefixo.length) ?? null
 }
 
-/** CSV simples com aspas — o formato que `lista-cj:sugestoes` escreve. */
-function lerCsv(texto: string): Record<string, string>[] {
-  const linhas: string[][] = []
-  let campo = ''
-  let linha: string[] = []
-  let aspas = false
-  for (let i = 0; i < texto.length; i++) {
-    const c = texto[i]!
-    if (aspas) {
-      if (c === '"' && texto[i + 1] === '"') {
-        campo += '"'
-        i++
-      } else if (c === '"') aspas = false
-      else campo += c
-    } else if (c === '"') aspas = true
-    else if (c === ',' || c === ';') {
-      linha.push(campo)
-      campo = ''
-    } else if (c === '\n' || c === '\r') {
-      if (c === '\r' && texto[i + 1] === '\n') i++
-      linha.push(campo)
-      linhas.push(linha)
-      linha = []
-      campo = ''
-    } else campo += c
-  }
-  if (campo !== '' || linha.length > 0) linhas.push([...linha, campo])
-  const [cabecalho, ...corpo] = linhas.filter((l) => l.some((v) => v.trim() !== ''))
-  if (!cabecalho) return []
-  return corpo.map((l) => Object.fromEntries(cabecalho.map((nome, k) => [nome.trim(), (l[k] ?? '').trim()])))
-}
-
 async function principal() {
   const planilha = argumento('planilha')
   const por = argumento('por')
   if (!planilha || !por) throw new Error('--planilha=<csv> e --por=<quem revisou> são obrigatórios')
 
   const db = getDb()
-  const linhas = lerCsv(readFileSync(planilha, 'utf8'))
+  // Separador decidido pelo cabeçalho (`,` ou `;`); linha torta vira problema.
+  const lida = lerPlanilha(readFileSync(planilha, 'utf8'))
   let ligados = 0
-  const problemas: string[] = []
+  const problemas: string[] = lida.problemas.map(
+    (p) => `linha ${p.linhaNoArquivo}: ${p.motivo} — corrija e rode de novo`,
+  )
 
-  for (const l of linhas) {
+  for (const { linhaNoArquivo, campos: l } of lida.linhas) {
     if (!/^(sim|s|x|ok)$/i.test(l.confirmar ?? '')) continue
     const nomeNaLista = l.nome_na_lista ?? ''
     const idExterno = l.id_escolhido || l.id_sugerido
     if (!nomeNaLista || !idExterno) {
-      problemas.push(`${nomeNaLista || '(sem nome)'}: sem id para ligar`)
+      problemas.push(`linha ${linhaNoArquivo} ${nomeNaLista || '(sem nome)'}: sem id para ligar`)
       continue
     }
     const [identidade] = await db
@@ -79,10 +51,10 @@ async function principal() {
       .where(and(eq(identidadesJogador.provedor, PROVEDOR), eq(identidadesJogador.idExterno, idExterno)))
       .limit(1)
     if (!identidade) {
-      problemas.push(`${nomeNaLista}: id ${idExterno} não existe no banco`)
+      problemas.push(`linha ${linhaNoArquivo} ${nomeNaLista}: id ${idExterno} não existe no banco`)
       continue
     }
-    await confirmarMapeamento(db, {
+    const alterados = await confirmarMapeamento(db, {
       nomeNaLista,
       provedor: PROVEDOR,
       jogadorId: identidade.jogadorId,
@@ -91,10 +63,16 @@ async function principal() {
       confirmadoPor: por,
       agora: new Date(),
     })
+    // Só conta o que o UPDATE realmente alterou: nome fora de mapa_jogadores
+    // (grafia mexida na revisão, outro provedor) não liga nada.
+    if (alterados === 0) {
+      problemas.push(`linha ${linhaNoArquivo} ${nomeNaLista}: não está em mapa_jogadores (${PROVEDOR})`)
+      continue
+    }
     ligados += 1
   }
 
-  console.log(`ligados: ${ligados}`)
+  console.log(`separador: "${lida.separador}" · ligados: ${ligados}`)
   for (const p of problemas) console.log(`  PROBLEMA ${p}`)
   console.log('agora rode lista-cj:restaurar de novo para gerar os níveis')
 }

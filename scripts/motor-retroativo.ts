@@ -5,6 +5,7 @@ import { jogos } from '../src/modules/dominio/db/schema'
 import { calendarioDoRuleset } from '../src/modules/dominio/temporada'
 import { dataCalendarioValida } from '../src/modules/entrega/retroativo/data'
 import {
+  conferirLimpezaDaTemporada,
   contarTemporadaRetroativa,
   executarTemporadaRetroativa,
   temporadaDoIntervalo,
@@ -24,8 +25,11 @@ import { rulesetAtivo } from '../src/modules/entrega/ruleset-ativo'
  * tabelas retroativas (numa transação) e depois regrava. É o passo obrigatório
  * depois de `jogos:recalcular-rodada`: quando o fuso do dia muda, jogo troca
  * de rodada, e regravar só dia a dia deixaria o apito velho no dia que perdeu
- * o jogo. Rodar sobre a temporada INTEIRA (o que fica fora de --de..--ate
- * também é apagado):
+ * o jogo. Só roda sobre a temporada INTEIRA — `--de` até o primeiro jogo
+ * ENCERRADO dela e `--ate` a partir do último — e com a lista do CJ ativa;
+ * fora disso recusa antes de apagar qualquer coisa. Sem a flag, regravar um
+ * trecho também é seguro: cada dia apaga as linhas dos seus jogos pelo
+ * jogo_id, mesmo que estivessem gravadas em outra data.
  *
  *   npx dotenv -e .env.local -- npm run motor:retroativo -- --de=2025-10-21 --ate=2026-04-12 --limpar-temporada
  */
@@ -78,6 +82,7 @@ async function main() {
           `${linha?.jogosEncerrados ?? 0} jogo(s) ENCERRADO`,
       )
       if (limparTemporada) {
+        await conferirLimpezaDaTemporada(db, calendario, temporada, { de, ate })
         const n = await contarTemporadaRetroativa(db, temporada)
         console.log(
           `dry-run --limpar-temporada: apagaria ${n.apitos} apito(s), ${n.greens} green(s) e ` +

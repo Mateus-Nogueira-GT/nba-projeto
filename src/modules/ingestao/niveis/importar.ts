@@ -202,8 +202,10 @@ export async function confirmarMapeamento(
     confirmadoPor: string
     agora: Date
   },
-): Promise<void> {
-  await db
+): Promise<number> {
+  // Devolve quantas linhas o UPDATE alterou: 0 quer dizer que o nome não está
+  // no mapa deste provedor, e quem chamou não pode contar isso como ligado.
+  const alterados = await db
     .update(mapaJogadores)
     .set({
       jogadorId: opcoes.jogadorId,
@@ -218,6 +220,8 @@ export async function confirmarMapeamento(
         eq(mapaJogadores.provedor, opcoes.provedor),
       ),
     )
+    .returning({ id: mapaJogadores.id })
+  return alterados.length
 }
 
 /**

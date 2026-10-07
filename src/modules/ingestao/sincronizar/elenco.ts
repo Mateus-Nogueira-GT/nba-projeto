@@ -92,10 +92,19 @@ export async function sincronizarJogadores(
   // Atualiza quem já existia. Perfil muda: troca de time, número, e sobretudo
   // `ativo` — Schröder foi dispensado durante a elaboração da lista e a tela
   // de mapeamento precisa mostrar esse estado.
+  //
+  // Um jogador pode ter DOIS ids no mesmo provedor (a BallDontLie duplicou o
+  // Micah Potter; a curadoria liga os dois em `identidades_jogador`). Por isso
+  // o perfil é gravado UMA vez por jogador canônico: vale o primeiro id dele na
+  // ordem em que a API devolveu. Determinístico, e evita que o segundo id
+  // sobrescreva o time do primeiro na mesma rodada.
   let gravados = 0
+  const jogadoresPresentes = new Set<string>()
   for (const j of validos) {
     const id = identidades.get(j.idExterno)
     if (id === undefined) continue
+    if (jogadoresPresentes.has(id)) continue
+    jogadoresPresentes.add(id)
 
     await db
       .update(jogadores)
@@ -113,10 +122,14 @@ export async function sincronizarJogadores(
   }
 
   if (modo === 'SNAPSHOT') {
-    const idsPresentes = new Set(validos.map((j) => j.idExterno))
-    const ausentes = [...identidades]
-      .filter(([idExterno]) => !idsPresentes.has(idExterno))
-      .map(([, jogadorId]) => jogadorId)
+    // Ausente é o JOGADOR sem nenhuma identidade presente no snapshot, não o
+    // id. Um id duplicado fora de /players/active não derruba quem o outro id
+    // mantém ativo.
+    const ausentes = [
+      ...new Set(
+        [...identidades.values()].filter((jogadorId) => !jogadoresPresentes.has(jogadorId)),
+      ),
+    ]
     if (ausentes.length > 0) {
       await db.update(jogadores).set({ ativo: false }).where(inArray(jogadores.id, ausentes))
     }

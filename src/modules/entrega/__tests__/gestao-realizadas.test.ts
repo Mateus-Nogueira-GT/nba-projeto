@@ -59,6 +59,43 @@ describe('registrar e listar entradas realizadas', () => {
     expect(lista[0]).toMatchObject({ nome: item.nome, unidades: 2, odd: 1.62, linha: item.linha })
   })
 
+  it('odd ausente (undefined) mantém a odd salva no conflito; null explícito apaga', async () => {
+    const e = {
+      usuarioId: USUARIO,
+      dataReferencia: HOJE,
+      jogadorId: item.jogadorId,
+      atributo: item.atributo,
+      linha: item.linha! + 100,
+      unidades: 1,
+      odd: 1.9 as number | null | undefined,
+      agora: new Date(),
+    }
+    const daLinha = async () =>
+      (await entradasRealizadasDoDia(banco.db, USUARIO, HOJE)).find((l) => l.linha === e.linha)
+
+    await registrarEntradaRealizada(banco.db, e)
+    await registrarEntradaRealizada(banco.db, { ...e, unidades: 4, odd: undefined })
+    expect(await daLinha()).toMatchObject({ unidades: 4, odd: 1.9 })
+
+    await registrarEntradaRealizada(banco.db, { ...e, odd: null })
+    expect((await daLinha())?.odd).toBeNull()
+  })
+
+  it('primeiro registro sem odd grava a odd vazia', async () => {
+    const linha = item.linha! + 200
+    await registrarEntradaRealizada(banco.db, {
+      usuarioId: USUARIO,
+      dataReferencia: HOJE,
+      jogadorId: item.jogadorId,
+      atributo: item.atributo,
+      linha,
+      unidades: 1,
+      agora: new Date(),
+    })
+    const lista = await entradasRealizadasDoDia(banco.db, USUARIO, HOJE)
+    expect(lista.find((l) => l.linha === linha)?.odd).toBeNull()
+  })
+
   it('a lista é por usuário e por dia', async () => {
     expect(
       await entradasRealizadasDoDia(banco.db, '00000000-0000-4000-8000-000000000099', HOJE),

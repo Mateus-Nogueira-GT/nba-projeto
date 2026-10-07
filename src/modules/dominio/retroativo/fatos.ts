@@ -57,6 +57,17 @@ export type ConfigRetroativa = {
 
 type Classe = { nivel: Nivel; posicaoCj: number }
 
+/**
+ * A versão da lista do CJ que o retroativo usa em QUALQUER dia: a ativa. Não
+ * depende da data — a lista de hoje reclassifica a temporada inteira. Exportada
+ * para o `--limpar-temporada` conferir, antes de apagar, que existe com o que
+ * regravar.
+ */
+export async function versaoDaListaRetroativa(db: Db) {
+  const [versao] = await db.select().from(niveisVersao).where(eq(niveisVersao.ativa, true)).limit(1)
+  return versao ?? null
+}
+
 export async function montarFatosRetroativos(
   db: Db,
   dataReferencia: string,
@@ -75,7 +86,7 @@ export async function montarFatosRetroativos(
   ).inicio
 
   // 1 · Versão ATIVA da lista do CJ: é ela que dá o nível do jogador.
-  const [versao] = await db.select().from(niveisVersao).where(eq(niveisVersao.ativa, true)).limit(1)
+  const versao = await versaoDaListaRetroativa(db)
   if (!versao) return vazio
 
   const classificacoes = await db.select().from(niveis).where(eq(niveis.niveisVersaoId, versao.id))

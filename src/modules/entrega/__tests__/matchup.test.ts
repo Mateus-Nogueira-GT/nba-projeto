@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
 import { bancoDeTeste } from '../../dominio/__tests__/ajuda-banco'
 import { estatisticasTimeJogo, jogos, times } from '../../dominio/db/schema'
-import { perfilDoAdversario } from '../matchup'
+import { perfilDoAdversario, perfisDoDia } from '../matchup'
 
 /**
  * MATCHUP — o dado, sem regra (reunião de 23/09; spec 2026-10-06-ajustes, §3).
@@ -81,5 +81,24 @@ describe('perfil do adversário para o matchup', () => {
 
   it('sigla desconhecida não quebra a tela', async () => {
     expect(await perfilDoAdversario(banco.db, 'ZZZ', '2025-11-05', '2025-10-01')).toBeNull()
+  })
+})
+
+describe('perfis do dia — os 30 times numa leitura só (o que o cache guarda)', () => {
+  it('traz o perfil de todo time com jogo no período, igual ao de perfilDoAdversario', async () => {
+    const perfis = await perfisDoDia(banco.db, '2025-11-05', '2025-10-01')
+    expect(Object.keys(perfis).sort()).toEqual(['AAA', 'BBB', 'CCC'])
+    for (const sigla of ['AAA', 'BBB', 'CCC']) {
+      expect(perfis[sigla]).toEqual(await perfilDoAdversario(banco.db, sigla, '2025-11-05', '2025-10-01'))
+    }
+  })
+
+  it('é objeto simples (atravessa o unstable_cache como JSON, sem Map nem Date)', async () => {
+    const perfis = await perfisDoDia(banco.db, '2025-11-05', '2025-10-01')
+    expect(JSON.parse(JSON.stringify(perfis))).toEqual(perfis)
+  })
+
+  it('sem jogo anterior na temporada, vem vazio', async () => {
+    expect(await perfisDoDia(banco.db, '2025-10-20', '2025-10-01')).toEqual({})
   })
 })

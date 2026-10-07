@@ -424,7 +424,7 @@ describe('import da lista — reexecutável e não destrutivo', () => {
       .values({ nomeCompleto: 'Victor Wembanyama' })
       .returning()
 
-    await confirmarMapeamento(banco.db, {
+    const alterados = await confirmarMapeamento(banco.db, {
       nomeNaLista: 'Wembayama',
       provedor: PROVEDOR,
       jogadorId: jogador!.id,
@@ -433,6 +433,7 @@ describe('import da lista — reexecutável e não destrutivo', () => {
       confirmadoPor: 'admin',
       agora: new Date('2026-08-18T20:00:00Z'),
     })
+    expect(alterados).toBe(1)
 
     const versao = (await banco.db.select().from(niveisVersao))[0]!
     const r = await completarVersao(banco.db, versao.id, conteudo, PROVEDOR)
@@ -449,6 +450,25 @@ describe('import da lista — reexecutável e não destrutivo', () => {
     expect(gravados).toHaveLength(2)
     expect(gravados.every((g) => g.nivel === 'MVP' && g.posicaoHierarquia === 1)).toBe(true)
     expect(new Set(gravados.map((g) => g.atributo))).toEqual(new Set(['PONTOS', 'REBOTES']))
+  })
+
+  it('confirmar um nome que não está no mapa não altera nada, e diz isso', async () => {
+    const [jogador] = await banco.db
+      .insert(jogadores)
+      .values({ nomeCompleto: 'Ninguém Na Lista' })
+      .returning()
+
+    const alterados = await confirmarMapeamento(banco.db, {
+      nomeNaLista: 'Nome Que Não Existe',
+      provedor: PROVEDOR,
+      jogadorId: jogador!.id,
+      provedorPlayerId: 'ext-nada',
+      score: 1,
+      confirmadoPor: 'admin',
+      agora: new Date('2026-08-18T20:00:00Z'),
+    })
+
+    expect(alterados).toBe(0)
   })
 
   it('a versão só passa a valer por ativação explícita', async () => {

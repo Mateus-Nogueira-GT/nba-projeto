@@ -1,4 +1,4 @@
-import type { Apito } from '../../motor/tipos'
+import type { Apito, Atributo } from '../../motor/tipos'
 import type { Green } from '../../motor/fire-live/avaliar'
 import type { MensagemPush } from '../fila/porta'
 
@@ -8,6 +8,17 @@ export const VALIDADE_PUSH_MS = {
   GREEN: 30 * 60_000,
   LISTA_SECRETA: 6 * 60 * 60_000,
 } as const
+
+/**
+ * Como o atributo aparece no texto do push. `toLowerCase()` do enum perdia o
+ * acento ("assistencias"), e o título do green sem unidade ficou ambíguo
+ * quando rebotes e assistências passaram a dar green.
+ */
+const UNIDADE: Record<Atributo, string> = {
+  PONTOS: 'pontos',
+  REBOTES: 'rebotes',
+  ASSISTENCIAS: 'assistências',
+}
 
 export type DadosDeExibicao = {
   nome: string
@@ -26,7 +37,7 @@ export function mensagemDeApito(
     chave: apito.chaveDeduplicacao,
     canal: 'FIRE_LIVE_APITO',
     titulo: `${exibicao.nome} apitou no 1Q`,
-    corpo: `${exibicao.timeSigla} · alvo ${apito.alvo1Q} ${apito.atributo.toLowerCase()}`,
+    corpo: `${exibicao.timeSigla} · alvo ${apito.alvo1Q} ${UNIDADE[apito.atributo]}`,
     url: '/fire-live',
     ocorridoEm: ocorridoEm.toISOString(),
     expiraEm: new Date(ocorridoEm.getTime() + VALIDADE_PUSH_MS.FIRE_LIVE_APITO).toISOString(),
@@ -53,8 +64,8 @@ export function mensagemDeGreen(
     versao: 1,
     chave: `green|${green.jogoId}|${green.jogadorId}|${green.atributo}|${green.marco}`,
     canal: 'GREEN',
-    titulo: `${exibicao.nome} bateu ${green.marco}`,
-    corpo: `${exibicao.timeSigla} · ${green.valor} ${green.atributo.toLowerCase()}`,
+    titulo: `${exibicao.nome} bateu ${green.marco} ${UNIDADE[green.atributo]}`,
+    corpo: `${exibicao.timeSigla} · ${green.valor} ${UNIDADE[green.atributo]}`,
     url: '/fire-live',
     ocorridoEm: ocorridoEm.toISOString(),
     expiraEm: new Date(ocorridoEm.getTime() + VALIDADE_PUSH_MS.GREEN).toISOString(),

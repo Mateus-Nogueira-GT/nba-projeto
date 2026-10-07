@@ -395,7 +395,8 @@ async function fatosDoPorque(
           eq(niveis.atributo, item.atributo),
         ),
       )
-      .orderBy(asc(niveis.posicaoHierarquia))
+      // (posição, id do jogador): o mesmo desempate da OPD no motor.
+      .orderBy(asc(niveis.posicaoHierarquia), asc(niveis.jogadorId))
 
     const desfalcados = contexto.foraDaPartida
     const identidades = await identidadesDeApresentacao(

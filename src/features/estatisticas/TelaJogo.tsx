@@ -11,7 +11,7 @@ import { identidadeDoTime } from '@/ui/times'
 import { AtualizarAoVivo } from '@/features/ao-vivo/AtualizarAoVivo'
 import { CabecalhoStats, FormaVD, NotaPartida, SecaoStats, Silhueta, TabelaDados, UltimaAtualizacao, type Coluna } from './Comum'
 import type { AbaDoJogo, DadosDoJogo } from './jogo'
-import { dataHora, diaMes, pct } from './regras'
+import { diaMes, pct } from './regras'
 import s from './Jogo.module.css'
 
 /** A temporada ESCOLHIDA viaja em todo link de saída; sem escolha, nenhum muda. */
@@ -45,7 +45,7 @@ function colunasDoBoxScore(escolhida: string | undefined): Coluna<LinhaDoBoxScor
 
 /** O placar como o StatsHub desenha: visitante · placar/hora · mandante. */
 function Placar({ dados }: { dados: DadosDoJogo }) {
-  const { tela, fuso } = dados
+  const { tela, fuso, fusoDia } = dados
   const aoVivo = tela.status === 'AO_VIVO'
   const encerrado = tela.status === 'ENCERRADO'
   const temPlacar = tela.casa.placar !== null && tela.visitante.placar !== null
@@ -83,7 +83,11 @@ function Placar({ dados }: { dados: DadosDoJogo }) {
           <span className={`${s.hora} num`}>{hora(tela.dataHoraUtc, fuso)}</span>
         )}
         <span className={s.arroba}>@</span>
-        <span className={s.data}>{dataHora(tela.dataHoraUtc, fuso)}</span>
+        {/* O DIA é o da rodada (EUA); a HORA, a de Brasília — um jogo às 22h30 de
+            Nova York é do dia dele lá, mesmo começando 00h30 aqui (07/10/2026). */}
+        <span className={s.data}>
+          {diaMes(tela.dataHoraUtc, fusoDia)} · {hora(tela.dataHoraUtc, fuso)}
+        </span>
       </div>
       {lado(tela.casa, tela.visitante)}
     </section>

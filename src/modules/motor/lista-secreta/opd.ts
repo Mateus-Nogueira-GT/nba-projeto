@@ -22,10 +22,13 @@ export function avaliarOpd(
   const parametros = parametrosOpd(atributo, ruleset)
   const hierarquia = time.jogadores
     .filter((j) => j.classificacoes[atributo] !== undefined)
+    // Empate de posição desempata pelo id: o apito não pode depender da ordem
+    // em que os fatos chegam. O detalhe do apito usa o MESMO critério.
     .sort(
       (a, b) =>
         (a.posicaoHierarquiaPorAtributo?.[atributo] ?? a.posicaoHierarquia) -
-        (b.posicaoHierarquiaPorAtributo?.[atributo] ?? b.posicaoHierarquia),
+          (b.posicaoHierarquiaPorAtributo?.[atributo] ?? b.posicaoHierarquia) ||
+        (a.id < b.id ? -1 : a.id > b.id ? 1 : 0),
     )
   const estaFora = (id: string) => jogo.escalacao[id] === 'FORA'
 

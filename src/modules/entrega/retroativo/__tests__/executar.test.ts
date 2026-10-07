@@ -264,7 +264,9 @@ describe('executarDiaRetroativo', () => {
       .where(eq(schema.jogos.id, JOGO_DIA))
     const brasilia = { ...ruleset, rodada: { ...ruleset.rodada, fuso: 'America/Sao_Paulo' } }
     const novaYork = { ...ruleset, rodada: { ...ruleset.rodada, fuso: 'America/New_York' } }
-    const periodo = { de: '2025-11-03', ate: '2025-11-05', agora: DEPOIS }
+    // A temporada INTEIRA: o primeiro jogo ENCERRADO é de 01/11, o último
+    // (depois de mover) de 05/11 — `--limpar-temporada` recusa trecho parcial.
+    const periodo = { de: '2025-11-01', ate: '2025-11-05', agora: DEPOIS }
     // Outra temporada não pode ser tocada.
     await db.insert(schema.feedRetroativo).values({
       temporada: '2024-25',
@@ -278,10 +280,6 @@ describe('executarDiaRetroativo', () => {
 
     await executarTemporadaRetroativa(db, brasilia, periodo)
     expect(await datasDosApitos()).toContain('2025-11-05')
-
-    // Sem limpar: o dia 05/11 ficou sem jogo e não é apagado, e o mesmo jogo
-    // no dia 04/11 bate na chave de deduplicação do apito velho.
-    await expect(executarTemporadaRetroativa(db, novaYork, periodo)).rejects.toThrow()
 
     const apagados: unknown[] = []
     const r = await executarTemporadaRetroativa(db, novaYork, {
@@ -299,6 +297,95 @@ describe('executarDiaRetroativo', () => {
     expect(feeds.map((f) => f.dataReferencia)).not.toContain('2025-11-05')
     expect((await contarTemporadaRetroativa(db, '2024-25')).feed).toBe(1)
   }, 60_000)
+
+  it('jogo que mudou de dia: regravar SEM --limpar-temporada não deixa linha velha', async () => {
+    // Mesmo cenário do teste acima, sem apagar a temporada: o dia que recebe o
+    // jogo apaga as linhas dele pelo jogo_id, e o dia que ficou sem jogo
+    // apaga as suas pela data.
+    await db
+      .update(schema.jogos)
+      .set({ dataHoraUtc: new Date('2025-11-05T03:30:00Z'), dataReferencia: '2025-11-05' })
+      .where(eq(schema.jogos.id, JOGO_DIA))
+    const brasilia = { ...ruleset, rodada: { ...ruleset.rodada, fuso: 'America/Sao_Paulo' } }
+    const novaYork = { ...ruleset, rodada: { ...ruleset.rodada, fuso: 'America/New_York' } }
+    const periodo = { de: '2025-11-03', ate: '2025-11-05', agora: DEPOIS }
+
+    await executarTemporadaRetroativa(db, brasilia, periodo)
+    const r = await executarTemporadaRetroativa(db, novaYork, periodo)
+
+    expect(r.apitos).toBeGreaterThan(0)
+    const apitos = await db.select().from(schema.apitosRetroativos)
+    expect(apitos.filter((a) => a.jogoId === JOGO_DIA).every((a) => a.dataReferencia === DIA)).toBe(true)
+    expect(apitos.map((a) => a.dataReferencia)).not.toContain('2025-11-05')
+    const feeds = await db.select().from(schema.feedRetroativo)
+    expect(feeds.map((f) => f.dataReferencia)).not.toContain('2025-11-05')
+  }, 60_000)
+
+  it('o jogo_id do dia também limpa green que ficou em outra data', async () => {
+    await db
+      .insert(schema.estatisticasQuarto)
+      .values({ jogoId: JOGO_DIA, jogadorId: GIANNIS, quarto: ruleset.fire_live.quarto, pontos: 26 })
+    // Green velho do mesmo jogo gravado num dia que não é mais o dele.
+    await db.insert(schema.greensRetroativos).values({
+      temporada: '2025-26',
+      dataReferencia: '2025-11-05',
+      jogoId: JOGO_DIA,
+      jogadorId: GIANNIS,
+      atributo: 'PONTOS',
+      nivelJogador: 'MVP',
+      marco: 25,
+      valor: 26,
+    })
+
+    const r = await executarDiaRetroativo(db, ruleset, DIA, { agora: DEPOIS })
+
+    expect(r.greens).toBe(1)
+    const greens = await db.select().from(schema.greensRetroativos)
+    expect(greens.map((g) => g.dataReferencia)).toEqual([DIA])
+  }, 30_000)
+
+  it('--limpar-temporada recusa intervalo que não cobre a temporada inteira, sem apagar nada', async () => {
+    await executarDiaRetroativo(db, ruleset, DIA, { agora: DEPOIS })
+    const antes = await contar('apitos_retroativos')
+
+    // O primeiro jogo ENCERRADO de 2025-26 é de 01/11: começar em 03/11 apagaria
+    // 01 e 02 sem regravar.
+    await expect(
+      executarTemporadaRetroativa(db, ruleset, {
+        de: '2025-11-03',
+        ate: DIA,
+        agora: DEPOIS,
+        limparTemporada: true,
+      }),
+    ).rejects.toThrow(/--de=2025-11-01.*--ate=2025-11-04/)
+    expect(await contar('apitos_retroativos')).toBe(antes)
+
+    await expect(
+      executarTemporadaRetroativa(db, ruleset, {
+        de: '2025-11-01',
+        ate: '2025-11-03',
+        agora: DEPOIS,
+        limparTemporada: true,
+      }),
+    ).rejects.toThrow(/temporada inteira/)
+    expect(await contar('apitos_retroativos')).toBe(antes)
+  }, 30_000)
+
+  it('--limpar-temporada recusa quando não há versão da lista do CJ vigente', async () => {
+    await executarDiaRetroativo(db, ruleset, DIA, { agora: DEPOIS })
+    const antes = await contar('apitos_retroativos')
+    await db.update(schema.niveisVersao).set({ ativa: false })
+
+    await expect(
+      executarTemporadaRetroativa(db, ruleset, {
+        de: '2025-11-01',
+        ate: DIA,
+        agora: DEPOIS,
+        limparTemporada: true,
+      }),
+    ).rejects.toThrow(/versão .*lista/)
+    expect(await contar('apitos_retroativos')).toBe(antes)
+  }, 30_000)
 
   it('recusa um dia da temporada do CALENDÁRIO, sem gravar nada', async () => {
     // Em 15/01/2026 a temporada do calendário é 2025-26: o dia 04/11/2025 é

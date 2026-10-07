@@ -171,4 +171,23 @@ describe('registrarEntrada — a ação por trás do botão "Registrei"', () => 
     expect(linhas).toHaveLength(1)
     expect(linhas[0]?.odd).toBeNull()
   })
+
+  it('registrar de novo SEM o campo odd mantém a odd salva; odd em branco explícita apaga', async () => {
+    const { registrarEntrada } = await import('../../features/gestao/acoes')
+    const destino = { digest: expect.stringContaining('/gestao?ver=realizadas') }
+
+    await expect(registrarEntrada(formularioValido())).rejects.toMatchObject(destino)
+    // Com a odd desligada no ruleset (07/10/2026) o formulário nem traz o
+    // campo: ajustar as unidades não pode apagar a odd registrada antes.
+    const semOdd = formularioValido({ unidades: '3' })
+    semOdd.delete('odd')
+    await expect(registrarEntrada(semOdd)).rejects.toMatchObject(destino)
+    let linhas = await linhasGravadas()
+    expect(linhas).toHaveLength(1)
+    expect(linhas[0]).toMatchObject({ unidades: '3.00', odd: '1.62' })
+
+    await expect(registrarEntrada(formularioValido({ odd: '' }))).rejects.toMatchObject(destino)
+    linhas = await linhasGravadas()
+    expect(linhas[0]?.odd).toBeNull()
+  })
 })

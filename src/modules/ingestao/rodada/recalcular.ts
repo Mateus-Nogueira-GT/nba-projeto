@@ -17,6 +17,13 @@ import { dataDeReferencia } from '../../dominio/rodada'
  * Reexecutável: com o banco já no fuso novo, não há o que mudar e nada é
  * escrito. Sem `confirmar`, só relata.
  *
+ * SÓ JOGO ENCERRADO. Agendado e ao vivo ainda podem ser remarcados, e quem os
+ * grava é a ingestão do dia, já no fuso novo. E jogo com tipoff EXATAMENTE
+ * 00:00:00 UTC também não muda: é o "sem horário" típico de provedor (a data
+ * sem hora vira meia-noite UTC), e em Nova York cairia na véspera. Mudar a
+ * rodada por um horário que talvez não exista seria chute — ele é listado
+ * como "horário possivelmente a definir" para o operador conferir.
+ *
  * A CHAVE ÚNICA `jogos_chave_referencia (data_referencia, casa, visitante)`
  * continua valendo. Antes de gravar, o conjunto FINAL inteiro é conferido;
  * havendo duas linhas na mesma chave, nada é escrito e a lista volta para o
@@ -37,9 +44,19 @@ export type ColisaoDeRodada = {
   jogoIds: string[]
 }
 
+export type JogoSemHorario = {
+  jogoId: string
+  dataHoraUtc: Date
+  dataReferencia: string
+}
+
 export type ResultadoRecalculo = {
-  /** Jogos lidos. */
+  /** Jogos ENCERRADOS lidos. */
   total: number
+  /** Agendados e ao vivo: lidos só para a conferência de colisão. */
+  naoEncerrados: number
+  /** Encerrados às 00:00:00 UTC — horário possivelmente a definir. Não mudam. */
+  horarioADefinir: JogoSemHorario[]
   mudancas: MudancaDeRodada[]
   colisoes: ColisaoDeRodada[]
   /** true só quando `confirmar` e não houve colisão. */
@@ -62,16 +79,33 @@ export async function recalcularRodadaDosJogos(
         dataReferencia: jogos.dataReferencia,
         timeCasaId: jogos.timeCasaId,
         timeVisitanteId: jogos.timeVisitanteId,
+        status: jogos.status,
       })
       .from(jogos)
       .orderBy(asc(jogos.dataHoraUtc), asc(jogos.id))
 
     const mudancas: MudancaDeRodada[] = []
+    const horarioADefinir: JogoSemHorario[] = []
+    let total = 0
     const porChave = new Map<string, ColisaoDeRodada>()
+    // Toda linha entra na conferência de colisão — a que não muda continua
+    // ocupando a chave dela —, mas só o encerrado com horário real muda.
     for (const l of linhas) {
-      const para = dataDeReferencia(l.dataHoraUtc, opcoes.fuso)
-      if (para !== l.dataReferencia) {
-        mudancas.push({ jogoId: l.id, dataHoraUtc: l.dataHoraUtc, de: l.dataReferencia, para })
+      let para = l.dataReferencia
+      if (l.status === 'ENCERRADO') {
+        total += 1
+        if (meiaNoiteUtcExata(l.dataHoraUtc)) {
+          horarioADefinir.push({
+            jogoId: l.id,
+            dataHoraUtc: l.dataHoraUtc,
+            dataReferencia: l.dataReferencia,
+          })
+        } else {
+          para = dataDeReferencia(l.dataHoraUtc, opcoes.fuso)
+          if (para !== l.dataReferencia) {
+            mudancas.push({ jogoId: l.id, dataHoraUtc: l.dataHoraUtc, de: l.dataReferencia, para })
+          }
+        }
       }
       const chave = `${para}|${l.timeCasaId}|${l.timeVisitanteId}`
       const grupo = porChave.get(chave)
@@ -86,7 +120,13 @@ export async function recalcularRodadaDosJogos(
     }
     const colisoes = [...porChave.values()].filter((g) => g.jogoIds.length > 1)
 
-    const resultado = { total: linhas.length, mudancas, colisoes }
+    const resultado = {
+      total,
+      naoEncerrados: linhas.length - total,
+      horarioADefinir,
+      mudancas,
+      colisoes,
+    }
     if (!opcoes.confirmar || colisoes.length > 0 || mudancas.length === 0) {
       return { ...resultado, gravou: false }
     }
@@ -107,4 +147,8 @@ export async function recalcularRodadaDosJogos(
     }
     return { ...resultado, gravou: true }
   })
+}
+
+function meiaNoiteUtcExata(instante: Date): boolean {
+  return instante.getTime() % 86_400_000 === 0
 }

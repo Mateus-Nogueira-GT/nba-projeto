@@ -27,6 +27,10 @@ export type EntradaRealizada = {
  * Grava o que o usuário registrou. `onConflictDoUpdate` pela chave natural
  * (usuário, dia, jogador, atributo, linha) faz o segundo toque em "Registrei"
  * ATUALIZAR unidades/odd em vez de duplicar a linha.
+ *
+ * `odd` AUSENTE (`undefined`) mantém a odd já salva: com a odd desligada no
+ * ruleset (07/10/2026) o formulário nem traz o campo, e ajustar as unidades
+ * não pode apagar o que a pessoa registrou antes. `null` explícito apaga.
  */
 export async function registrarEntradaRealizada(
   db: Db,
@@ -37,14 +41,16 @@ export async function registrarEntradaRealizada(
     atributo: Atributo
     linha: number
     unidades: number
-    odd: number | null
+    odd?: number | null
     agora: Date
   },
 ): Promise<void> {
+  const odd = e.odd === undefined || e.odd === null ? null : e.odd.toFixed(2)
   const valores = {
     unidades: e.unidades.toFixed(2),
-    odd: e.odd === null ? null : e.odd.toFixed(2),
     registradaEm: e.agora,
+    // Sem o campo, o conflito não toca a odd salva.
+    ...(e.odd === undefined ? {} : { odd }),
   }
   await db
     .insert(entradasRealizadas)
@@ -55,6 +61,7 @@ export async function registrarEntradaRealizada(
       atributo: e.atributo,
       linha: e.linha,
       ...valores,
+      odd,
     })
     .onConflictDoUpdate({
       target: [

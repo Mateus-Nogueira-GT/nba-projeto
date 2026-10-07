@@ -28,7 +28,7 @@ Spec: [2026-10-07-odds-ocultas-e-rodada-eua-design.md](../specs/2026-10-07-odds-
 
 ## C · Produção (o parceiro roda)
 
-- [ ] C1. Commit e push (deploy), porque o código novo lê as chaves novas.
-- [ ] C2. `jogos:recalcular-rodada --dry-run`, depois `--confirmar`.
-- [ ] C3. `motor:retroativo --de=2025-10-21 --ate=2026-04-12 --limpar-temporada`.
-- [ ] C4. Conferir: a rodada de 08/11/2025 sem o DEN duas vezes; os horários na tela em Brasília.
+- [x] C1. Commit e push (deploy), porque o código novo lê as chaves novas.
+- [x] C2. `jogos:recalcular-rodada --dry-run`, depois `--confirmar`.
+- [x] C3. `motor:retroativo --de=2025-10-21 --ate=2026-04-12 --limpar-temporada`.
+- [x] C4. Conferido em 07/10: 9491124 no ar; recalcular-rodada → 0 de 1.231 jogos mudam (a BallDontLie já gravava a data dos EUA); DEN×GSW em 07/11 e DEN×IND em 08/11; 2025-26 regravada com 22.244 apitos, 99 greens, 158 feeds.

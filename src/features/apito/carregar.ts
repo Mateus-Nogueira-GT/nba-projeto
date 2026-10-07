@@ -3,10 +3,11 @@ import { dataDeReferencia } from '@/modules/dominio/rodada'
 import { calendarioDoRuleset, temporadaDe } from '@/modules/dominio/temporada'
 import { detalheDoApito, type DetalheApito } from '@/modules/entrega/detalhe-apito'
 import { lerFeedFireLive } from '@/modules/entrega/fire-live/leitura'
-import { inicioDaTemporada, perfilDoAdversario, type PerfilAdversario } from '@/modules/entrega/matchup'
+import { dataHoraDoJogo, inicioDaTemporada, type PerfilAdversario } from '@/modules/entrega/matchup'
 import type { ItemFireLive } from '@/modules/entrega/fire-live/feed'
 import { recorteDoJogador } from '@/modules/entrega/lista-secreta'
 import { lerFeedCacheado } from '@/app/_cache/feed'
+import { perfisDoDiaCacheado } from '@/app/_cache/matchup'
 import { exibirOdds } from '@/modules/entrega/odds/exibicao'
 import { cotacoesPorCasa, faixasDoJogador, type CotacaoDeCasa, type FaixaDeLinha } from '@/modules/entrega/odds/leitura'
 import { rulesetAtivo } from '@/modules/entrega/ruleset-ativo'
@@ -106,21 +107,27 @@ export async function carregarApito(jogadorId: string, atributo: Atributo | unde
   // Odd desligada no ruleset (parceiro, 07/10/2026): nem se lê. Sem cotação e
   // sem casas, nada de odd chega à tela — nem a da tabela de referência.
   const comOdds = exibirOdds(ruleset)
-  const [cotadas, casas, saida, detalhe] = await Promise.all([
+  // Matchup (reunião de 23/09): os perfis dos times até a véspera do jogo do
+  // apito, do CACHE (uma conta por data e temporada). Só precisa da data do
+  // jogo, e não do detalhe: corre junto; a sigla do adversário escolhe depois.
+  const calendario = calendarioDoRuleset(ruleset)
+  const perfisDoJogo = dataHoraDoJogo(getDb(), principal.jogoId).then(
+    (dataHora): Promise<Record<string, PerfilAdversario>> | Record<string, PerfilAdversario> =>
+      dataHora === null
+        ? {}
+        : perfisDoDiaCacheado(
+            dataDeReferencia(dataHora, fusoDoDia),
+            inicioDaTemporada(temporadaDe(dataHora, calendario), calendario.mesInicio),
+          ),
+  )
+  const [cotadas, casas, saida, detalhe, perfis] = await Promise.all([
     comOdds ? faixasDoJogador(getDb(), jogosDaTela, jogadorId, principal.atributo) : new Map<number, FaixaDeLinha>(),
     comOdds ? cotacoesPorCasa(getDb(), jogosDaTela, jogadorId, principal.atributo) : [],
     saidaDoApito(getDb()),
     detalheDoApito(getDb(), ruleset, principal, { blocos: 10 }),
+    perfisDoJogo,
   ])
-
-  // Matchup (reunião de 23/09): o adversário até a véspera do jogo do apito.
-  const calendario = calendarioDoRuleset(ruleset)
-  const adversario = await perfilDoAdversario(
-    getDb(),
-    detalhe.jogo.adversarioSigla,
-    dataDeReferencia(detalhe.jogo.dataHoraUtc, fusoDoDia),
-    inicioDaTemporada(temporadaDe(detalhe.jogo.dataHoraUtc, calendario), calendario.mesInicio),
-  )
+  const adversario: PerfilAdversario | null = perfis[detalhe.jogo.adversarioSigla] ?? null
 
   const referencia = !comOdds
     ? undefined

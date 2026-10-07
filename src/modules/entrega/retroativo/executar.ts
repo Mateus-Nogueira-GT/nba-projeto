@@ -1,17 +1,20 @@
 import { createHash } from 'node:crypto'
-import { count, eq, inArray } from 'drizzle-orm'
+import { and, count, eq, gte, inArray, lt, or, sql } from 'drizzle-orm'
 
 import {
   apitosRetroativos,
   feedRetroativo,
   greensRetroativos,
   jogadores,
+  jogos,
+  niveis,
   niveisVersao,
   times,
 } from '../../dominio/db/schema'
 import type { Db } from '../../dominio/db/tipos'
 import { identidadesDeApresentacao } from '../../dominio/identidade-apresentacao'
-import { montarFatosRetroativos } from '../../dominio/retroativo/fatos'
+import { montarFatosRetroativos, versaoDaListaRetroativa } from '../../dominio/retroativo/fatos'
+import { dataDeReferencia, intervaloDoDia } from '../../dominio/rodada'
 import { calendarioDoRuleset, temporadaDe, type ConfigTemporada } from '../../dominio/temporada'
 import { avaliar, avaliarFireLive, type Green } from '../../motor'
 import type { Ruleset } from '../../motor/ruleset/schema'
@@ -108,7 +111,19 @@ export async function executarDiaRetroativo(
     // é regra do yaml.
     quartoFireLive: ruleset.fire_live.quarto,
   })
-  if (niveisVersaoId === null || fatos.jogos.length === 0) return ZERADO
+  if (niveisVersaoId === null) return ZERADO
+  if (fatos.jogos.length === 0) {
+    // O dia ficou sem jogo — ou nunca teve, ou o jogo dele mudou de rodada.
+    // O que estava gravado para esta data é velho: apaga, não regrava. Só com
+    // lista classificada: versão vazia também devolve zero jogos, e aí apagar
+    // seria perder o dia por causa de um import incompleto.
+    const [classificadas] = await db
+      .select({ n: count() })
+      .from(niveis)
+      .where(eq(niveis.niveisVersaoId, niveisVersaoId))
+    if (classificadas?.n) await db.transaction(async (tx) => apagarDia(tx, dataReferencia, []))
+    return ZERADO
+  }
 
   // Lista Secreta e Fire Live — o mesmo `avaliar` do backtest. A deduplicação
   // é a mesma do ao vivo (`gravarApitos`, ON CONFLICT DO NOTHING na chave da
@@ -154,9 +169,11 @@ export async function executarDiaRetroativo(
   }
 
   await db.transaction(async (tx) => {
-    await tx.delete(apitosRetroativos).where(eq(apitosRetroativos.dataReferencia, dataReferencia))
-    await tx.delete(greensRetroativos).where(eq(greensRetroativos.dataReferencia, dataReferencia))
-    await tx.delete(feedRetroativo).where(eq(feedRetroativo.dataReferencia, dataReferencia))
+    await apagarDia(
+      tx,
+      dataReferencia,
+      fatos.jogos.map((j) => j.id),
+    )
 
     if (apitos.length > 0) {
       await tx
@@ -191,6 +208,32 @@ export async function executarDiaRetroativo(
   })
 
   return { apitos: apitos.length, greens: greensUnicos.length, jogos: fatos.jogos.length }
+}
+
+/**
+ * Apaga o que o dia vai regravar: pela DATA e, nos apitos e greens, também
+ * pelo JOGO. Um jogo que trocou de rodada (fuso do dia mudou, remarcação)
+ * deixava a linha velha na data antiga — e ela bloqueava a chave de
+ * deduplicação do mesmo jogo na data nova. O feed é por data e só sai pela data.
+ */
+async function apagarDia(db: Db, dataReferencia: string, idsJogo: string[]): Promise<void> {
+  const doApito =
+    idsJogo.length > 0
+      ? or(
+          eq(apitosRetroativos.dataReferencia, dataReferencia),
+          inArray(apitosRetroativos.jogoId, idsJogo),
+        )
+      : eq(apitosRetroativos.dataReferencia, dataReferencia)
+  const doGreen =
+    idsJogo.length > 0
+      ? or(
+          eq(greensRetroativos.dataReferencia, dataReferencia),
+          inArray(greensRetroativos.jogoId, idsJogo),
+        )
+      : eq(greensRetroativos.dataReferencia, dataReferencia)
+  await db.delete(apitosRetroativos).where(doApito)
+  await db.delete(greensRetroativos).where(doGreen)
+  await db.delete(feedRetroativo).where(eq(feedRetroativo.dataReferencia, dataReferencia))
 }
 
 /**
@@ -328,12 +371,64 @@ export async function limparTemporadaRetroativa(db: Db, temporada: string): Prom
 }
 
 /**
+ * A trava do `--limpar-temporada`: só apaga a temporada quem vai regravá-la
+ * INTEIRA, e com uma lista do CJ para regravar.
+ *
+ * - `de..ate` cobre do primeiro ao último jogo ENCERRADO da temporada (a data
+ *   do jogo é a da rodada, no fuso do ruleset — a mesma que o executor usa).
+ *   Um trecho parcial apagaria os dias de fora sem regravá-los.
+ * - a versão que `montarFatosRetroativos` usa (a ativa) existe e tem
+ *   classificação. Sem ela todo dia sai vazio, e a limpeza vira só apagar.
+ */
+export async function conferirLimpezaDaTemporada(
+  db: Db,
+  calendario: ConfigTemporada,
+  temporada: string,
+  periodo: { de: string; ate: string },
+): Promise<void> {
+  const anoInicial = Number(temporada.slice(0, 4))
+  const mes = String(calendario.mesInicio).padStart(2, '0')
+  const inicio = intervaloDoDia(`${String(anoInicial).padStart(4, '0')}-${mes}-01`, calendario.fuso).inicio
+  const fim = intervaloDoDia(`${String(anoInicial + 1).padStart(4, '0')}-${mes}-01`, calendario.fuso).inicio
+
+  const [extremos] = await db
+    .select({
+      primeiro: sql<string | null>`min(${jogos.dataHoraUtc})`,
+      ultimo: sql<string | null>`max(${jogos.dataHoraUtc})`,
+    })
+    .from(jogos)
+    .where(and(eq(jogos.status, 'ENCERRADO'), gte(jogos.dataHoraUtc, inicio), lt(jogos.dataHoraUtc, fim)))
+  if (!extremos?.primeiro || !extremos.ultimo) {
+    throw new Error(`--limpar-temporada: ${temporada} não tem jogo ENCERRADO no banco — nada a regravar`)
+  }
+  const primeiraData = dataDeReferencia(new Date(extremos.primeiro), calendario.fuso)
+  const ultimaData = dataDeReferencia(new Date(extremos.ultimo), calendario.fuso)
+  if (periodo.de > primeiraData || periodo.ate < ultimaData) {
+    throw new Error(
+      `--limpar-temporada apaga a temporada inteira e só roda sobre ela: use --de=${primeiraData} ` +
+        `(ou antes) e --ate=${ultimaData} (ou depois) — recebido ${periodo.de}..${periodo.ate}`,
+    )
+  }
+
+  const versao = await versaoDaListaRetroativa(db)
+  const [classificadas] = versao
+    ? await db.select({ n: count() }).from(niveis).where(eq(niveis.niveisVersaoId, versao.id))
+    : [undefined]
+  if (!versao || !classificadas?.n) {
+    throw new Error(
+      '--limpar-temporada: não há versão da lista do CJ vigente (ativa e com classificação) — ' +
+        'importe e ative a lista antes, senão a temporada é apagada e nada é regravado',
+    )
+  }
+}
+
+/**
  * A temporada inteira (ou um trecho), dia a dia, somando os contadores.
  * `aoConcluirDia` existe para o script dar progresso — são ~200 dias.
  *
  * `limparTemporada` apaga a temporada do intervalo INTEIRA antes do primeiro
- * dia (`limparTemporadaRetroativa`) — inclusive dias fora de `de..ate`: é
- * para rodar sobre a temporada toda.
+ * dia (`limparTemporadaRetroativa`) — e por isso só roda se `de..ate` cobrir a
+ * temporada toda e houver lista vigente (`conferirLimpezaDaTemporada`).
  */
 export async function executarTemporadaRetroativa(
   db: Db,
@@ -349,6 +444,7 @@ export async function executarTemporadaRetroativa(
   // Antes do primeiro dia: um intervalo inválido não grava metade da temporada.
   const temporada = temporadaDoIntervalo(opcoes.de, opcoes.ate, calendarioDoRuleset(ruleset), agora)
   if (opcoes.limparTemporada) {
+    await conferirLimpezaDaTemporada(db, calendarioDoRuleset(ruleset), temporada, opcoes)
     await opcoes.aoLimpar?.(await limparTemporadaRetroativa(db, temporada))
   }
   const total = { ...ZERADO }

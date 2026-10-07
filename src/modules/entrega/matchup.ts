@@ -30,12 +30,19 @@ export type PerfilAdversario = {
 
 type Soma = { jogos: number; pontosCedidos: number; tresErradas: number; rebotesCedidos: number }
 
-export async function perfilDoAdversario(
+/**
+ * O perfil de TODOS os times com jogo no período, numa varredura só. É isto
+ * que o painel do apito guarda em cache (`app/_cache/matchup.ts`): a posição
+ * de um time depende das médias de todos, então a conta é a mesma para os 30
+ * — calcular uma vez por (data, temporada) e escolher a sigla depois.
+ *
+ * Objeto simples, e não `Map`: atravessa o `unstable_cache` como JSON.
+ */
+export async function perfisDoDia(
   db: Db,
-  adversarioSigla: string,
   dataReferencia: string,
   inicioTemporada: string,
-): Promise<PerfilAdversario | null> {
+): Promise<Record<string, PerfilAdversario>> {
   const linhas = await db
     .select({
       jogoId: estatisticasTimeJogo.jogoId,
@@ -76,29 +83,46 @@ export async function perfilDoAdversario(
     }
   }
 
-  const proprio = somas.get(adversarioSigla)
-  if (!proprio) return null
-
   const medias = [...somas.entries()].map(([sigla, s]) => ({
     sigla,
     pontosCedidos: s.pontosCedidos / s.jogos,
     tresErradas: s.tresErradas / s.jogos,
     rebotesCedidos: s.rebotesCedidos / s.jogos,
   }))
-  const marca = (campo: 'pontosCedidos' | 'tresErradas' | 'rebotesCedidos'): Marca => {
-    const valor = proprio[campo] / proprio.jogos
-    // Posição 1 = quem MAIS cede/erra; empate divide a mesma posição.
-    return { valor, posicao: 1 + medias.filter((m) => m[campo] > valor).length }
-  }
 
-  return {
-    sigla: adversarioSigla,
-    jogos: proprio.jogos,
-    totalTimes: somas.size,
-    pontosCedidos: marca('pontosCedidos'),
-    tresErradas: marca('tresErradas'),
-    rebotesCedidos: marca('rebotesCedidos'),
+  const perfis: Record<string, PerfilAdversario> = {}
+  for (const proprio of medias) {
+    const marca = (campo: 'pontosCedidos' | 'tresErradas' | 'rebotesCedidos'): Marca => {
+      const valor = proprio[campo]
+      // Posição 1 = quem MAIS cede/erra; empate divide a mesma posição.
+      return { valor, posicao: 1 + medias.filter((m) => m[campo] > valor).length }
+    }
+    perfis[proprio.sigla] = {
+      sigla: proprio.sigla,
+      jogos: somas.get(proprio.sigla)!.jogos,
+      totalTimes: somas.size,
+      pontosCedidos: marca('pontosCedidos'),
+      tresErradas: marca('tresErradas'),
+      rebotesCedidos: marca('rebotesCedidos'),
+    }
   }
+  return perfis
+}
+
+/** O perfil de UM adversário — o recorte de `perfisDoDia`. */
+export async function perfilDoAdversario(
+  db: Db,
+  adversarioSigla: string,
+  dataReferencia: string,
+  inicioTemporada: string,
+): Promise<PerfilAdversario | null> {
+  return (await perfisDoDia(db, dataReferencia, inicioTemporada))[adversarioSigla] ?? null
+}
+
+/** A data e hora do jogo — o matchup só precisa disto, e não do detalhe inteiro. */
+export async function dataHoraDoJogo(db: Db, jogoId: string): Promise<Date | null> {
+  const [linha] = await db.select({ dataHoraUtc: jogos.dataHoraUtc }).from(jogos).where(eq(jogos.id, jogoId))
+  return linha?.dataHoraUtc ?? null
 }
 
 /** Primeiro dia da temporada pelo rótulo ("2025-26" → "2025-10-01"). */

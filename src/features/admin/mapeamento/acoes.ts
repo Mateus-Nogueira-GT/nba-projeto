@@ -24,7 +24,7 @@ export async function confirmarVinculo(_e: EstadoAcao, formulario: FormData): Pr
   if (!sessao) return falha('Acesso restrito.')
 
   try {
-    await confirmarMapeamento(getDb(), {
+    const alterados = await confirmarMapeamento(getDb(), {
       nomeNaLista,
       provedor,
       jogadorId,
@@ -34,6 +34,10 @@ export async function confirmarVinculo(_e: EstadoAcao, formulario: FormData): Pr
       confirmadoPor: sessao.email,
       agora: new Date(),
     })
+    // Nada alterado = o nome saiu do mapa (lista reimportada noutra aba).
+    if (alterados === 0) {
+      return falha(`"${nomeNaLista}" não está mais no mapa deste provedor — recarregue a página.`)
+    }
   } catch (erro) {
     return falha(mensagemDeErro(erro))
   }

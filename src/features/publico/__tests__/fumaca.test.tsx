@@ -396,7 +396,9 @@ describe('/redefinir e /redefinir/[token] — a ação real sobre o token real',
     expect(await entrarCom(email, SENHA)).toEqual({ redirect: '/abrir' })
     armario.clear()
 
-    const { token } = await emitirRedefinicao(banco.db, { usuarioId: id, criadaPorId: null, agora: AGORA })
+    // Relógio REAL: `concluirNovaSenha` valida o token com `new Date()`, e um
+    // token emitido no AGORA fixo expira assim que o calendário passa dele.
+    const { token } = await emitirRedefinicao(banco.db, { usuarioId: id, criadaPorId: null, agora: new Date() })
 
     expect(await concluirCom(token, 'fraca')).toEqual({
       redirect: `/redefinir/${encodeURIComponent(token)}?erro=senha`,

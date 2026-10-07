@@ -21,7 +21,9 @@ const schema = z.object({
   odd: z
     .union([z.literal(''), z.coerce.number().min(1.01).max(100)])
     .optional()
-    .transform((v) => (v === '' || v === undefined ? null : v)),
+    // `''` digitado = apagar (null); campo AUSENTE = manter a odd já salva
+    // (undefined) — `registrarEntradaRealizada` não toca a coluna.
+    .transform((v) => (v === '' ? null : v)),
   // Sem `nome`: a fachada do v2 gravava o nome digitado junto do registro; no
   // nosso back o nome vem de `jogadores` na leitura (`entradasRealizadasDoDia`),
   // e um nome longo recusaria um registro válido.

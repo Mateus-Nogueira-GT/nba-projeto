@@ -28,7 +28,20 @@ async function main() {
   const db = getDb()
   try {
     const r = await recalcularRodadaDosJogos(db, { fuso, confirmar })
-    console.log(`${r.total} jogo(s) lido(s), ${r.mudancas.length} mudam de rodada`)
+    console.log(
+      `${r.total} jogo(s) ENCERRADO lido(s), ${r.mudancas.length} mudam de rodada ` +
+        `(${r.naoEncerrados} agendado(s)/ao vivo ficam como estão)`,
+    )
+    if (r.horarioADefinir.length > 0) {
+      console.log(
+        `${r.horarioADefinir.length} jogo(s) às 00:00:00 UTC — horário possivelmente a definir, ` +
+          'NÃO mudam (confira no provedor):',
+      )
+      for (const j of r.horarioADefinir.slice(0, MOSTRAR)) {
+        console.log(`  ${j.jogoId} ${j.dataHoraUtc.toISOString()}: fica em ${j.dataReferencia}`)
+      }
+      if (r.horarioADefinir.length > MOSTRAR) console.log(`  … e mais ${r.horarioADefinir.length - MOSTRAR}`)
+    }
     for (const m of r.mudancas.slice(0, MOSTRAR)) {
       console.log(`  ${m.jogoId} ${m.dataHoraUtc.toISOString()}: ${m.de} → ${m.para}`)
     }
