@@ -32,6 +32,7 @@ import { dataDeReferencia } from '@/modules/dominio/rodada'
 
 import { decidirAtribuicao } from './atribuicao'
 import { calcularParcelaDoParceiro } from './financeiro'
+import { tokenVisitanteValido } from './http'
 import { mascararIdentificador, prepararImportacaoCsv } from './importacao-csv'
 import { acrescentarParametrosComerciais, validarDestinoComercial } from './links'
 import { atribuicaoIndicadaNoCadastro } from './predicado-indicacao'
@@ -456,8 +457,80 @@ export async function criarCampanhaComLink(
 }
 
 export function hashVisitante(token: string): string {
-  if (!/^[A-Za-z0-9_-]{16,160}$/.test(token)) throw new Error('Identificador de visitante inválido')
+  if (!tokenVisitanteValido(token)) throw new Error('Identificador de visitante inválido')
   return createHash('sha256').update(token).digest('hex')
+}
+
+type Atribuicao = typeof atribuicoesAfiliados.$inferSelect
+
+/**
+ * INDICAÇÃO CONSUMADA NÃO SE PERDE (pente fino 09/10, achado 1).
+ *
+ * Atribuição com `usuario_id` E com `CADASTRO_NIP` está FECHADA: a conta
+ * nasceu por ela. Rebaixá-la para CONFLITO porque outra conta usou o mesmo
+ * navegador — um terceiro que fez login, um segundo amigo que se cadastrou no
+ * celular do indicador — apagava a indicação em silêncio (some da lista do
+ * admin, e a assinatura do indicado deixa de ser registrada).
+ */
+async function atribuicaoFechada(db: Db, atribuicao: Atribuicao): Promise<boolean> {
+  if (!atribuicao.usuarioId) return false
+  const [cadastro] = await db
+    .select({ id: eventosAfiliados.id })
+    .from(eventosAfiliados)
+    .where(
+      and(
+        eq(eventosAfiliados.atribuicaoId, atribuicao.id),
+        eq(eventosAfiliados.tipo, 'CADASTRO_NIP'),
+      ),
+    )
+    .limit(1)
+  return Boolean(cadastro)
+}
+
+/**
+ * O outro lado da regra acima: a conta nova NÃO se liga à atribuição fechada
+ * (fica sem indicador, como quem já tem conta e entra com cookie alheio), e o
+ * ocorrido vira uma linha NOVA em CONFLITO, no mesmo link e parceiro, para o
+ * admin enxergar o aparelho compartilhado sem tocar no dado original. A mesma
+ * conta voltando pelo mesmo navegador não empilha linha.
+ */
+async function registrarConflitoSemRebaixar(
+  db: Db,
+  fechada: Atribuicao,
+  usuarioId: string,
+  agora: Date,
+): Promise<void> {
+  const [jaRegistrado] = await db
+    .select({ id: atribuicoesAfiliados.id })
+    .from(atribuicoesAfiliados)
+    .where(
+      and(
+        eq(atribuicoesAfiliados.visitanteHash, fechada.visitanteHash),
+        eq(atribuicoesAfiliados.usuarioId, usuarioId),
+        eq(atribuicoesAfiliados.linkOrigemId, fechada.linkOrigemId),
+        eq(atribuicoesAfiliados.estado, 'CONFLITO'),
+      ),
+    )
+    .limit(1)
+  if (jaRegistrado) return
+  const [conflito] = await db
+    .insert(atribuicoesAfiliados)
+    .values({
+      visitanteHash: fechada.visitanteHash,
+      usuarioId,
+      parceiroId: fechada.parceiroId,
+      linkOrigemId: fechada.linkOrigemId,
+      // O intervalo é o da original (o CHECK exige expira_em > inicio; e é
+      // a janela dela que a conta nova tentou usar).
+      inicio: fechada.inicio,
+      expiraEm: fechada.expiraEm,
+      estado: 'CONFLITO',
+      criadoEm: agora,
+    })
+    .returning({ id: atribuicoesAfiliados.id })
+  await auditar(db, usuarioId, 'ATRIBUICAO_CONFLITO', 'ATRIBUICAO', conflito!.id, agora, {
+    atribuicaoFechadaId: fechada.id,
+  })
 }
 
 export async function associarVisitanteAoUsuario(
@@ -503,6 +576,10 @@ export async function associarVisitanteAoUsuario(
       return { associada: false, conflito: false }
     }
     if (atribuicao.usuarioId && atribuicao.usuarioId !== usuarioId) {
+      if (await atribuicaoFechada(tx, atribuicao)) {
+        await registrarConflitoSemRebaixar(tx, atribuicao, usuarioId, agora)
+        return { associada: false, conflito: true }
+      }
       await tx
         .update(atribuicoesAfiliados)
         .set({ estado: 'CONFLITO' })
@@ -739,7 +816,12 @@ export async function registrarClique(
         .orderBy(asc(atribuicoesAfiliados.inicio))
         .limit(1)
       if (canonicaDoUsuario) {
-        if (atual && atual.id !== canonicaDoUsuario.id) {
+        if (atual && atual.id !== canonicaDoUsuario.id && (await atribuicaoFechada(tx, atual))) {
+          // Indicação consumada de outra conta: fica intacta (achado 1).
+          if (atual.usuarioId !== entrada.usuarioId) {
+            await registrarConflitoSemRebaixar(tx, atual, entrada.usuarioId, entrada.agora)
+          }
+        } else if (atual && atual.id !== canonicaDoUsuario.id) {
           await tx
             .update(atribuicoesAfiliados)
             .set({ estado: 'CONFLITO' })
@@ -755,6 +837,15 @@ export async function registrarClique(
           )
         }
         atual = canonicaDoUsuario
+      } else if (
+        atual?.usuarioId &&
+        atual.usuarioId !== entrada.usuarioId &&
+        (await atribuicaoFechada(tx, atual))
+      ) {
+        // Indicação consumada de outra conta: fica intacta (achado 1); este
+        // clique segue como se o navegador não tivesse atribuição.
+        await registrarConflitoSemRebaixar(tx, atual, entrada.usuarioId, entrada.agora)
+        atual = undefined
       } else if (atual?.usuarioId && atual.usuarioId !== entrada.usuarioId) {
         await tx
           .update(atribuicoesAfiliados)

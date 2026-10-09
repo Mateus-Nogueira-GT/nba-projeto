@@ -1,4 +1,4 @@
-import type { Atributo, Metodo, Nivel, NivelApito } from '../motor/tipos'
+import type { Atributo, MetricaMatchup, Metodo, Nivel, NivelApito } from '../motor/tipos'
 
 /**
  * Tipos do feed materializado — separados de `lista-secreta.ts` para que
@@ -84,11 +84,62 @@ export type ItemFeed = {
     unica?: number
   } | null
   /**
+   * MATCHUP EM ESTRELAS (CJ, 09/10): uma ★ por critério que o adversário do
+   * jogo atende (`motivos`) e o aviso de matchup negativo (`aviso`). Não mexe
+   * no nível nem no %. Calculado UMA vez, na materialização, pela regra pura
+   * do motor. `null` = nenhuma estrela nem aviso; ausente em snapshot anterior
+   * a 09/10 — a tela trata os dois como "sem matchup".
+   */
+  matchup?: MatchupDoItem | null
+  /**
    * Frase de análise gerada por LLM a partir DOS FATOS acima. Anexada depois
    * do hash do snapshot (ver `narrativa.ts`) e ausente quando a geração falha
    * ou o validador reprova — o card simplesmente não a mostra.
    */
   narrativa?: string | null
+}
+
+/**
+ * O critério atendido e a POSIÇÃO que o fez valer, gravados juntos (pente
+ * fino de 09/10, achado 9): a frase do painel sai do mesmo fato da estrela.
+ */
+export type MotivoDoItem = { metrica: MetricaMatchup; posicao: number }
+
+export type MatchupDoItem = {
+  estrelas: number
+  motivos: MotivoDoItem[]
+  aviso: MotivoDoItem[]
+}
+
+/**
+ * Como o matchup pode estar num snapshot JÁ gravado: até o pente fino de
+ * 09/10, `motivos` e `aviso` eram só a métrica, sem a posição.
+ */
+export type MatchupGravado = {
+  estrelas: number
+  motivos: (MotivoDoItem | MetricaMatchup)[]
+  aviso: (MotivoDoItem | MetricaMatchup)[]
+}
+
+/** O motivo lido de qualquer snapshot: `posicao: null` quando não foi gravada. */
+export type MotivoLido = { metrica: MetricaMatchup; posicao: number | null }
+export type MatchupLido = { estrelas: number; motivos: MotivoLido[]; aviso: MotivoLido[] }
+
+/**
+ * Lê o matchup de um item nos DOIS formatos de snapshot. Snapshot antigo não
+ * ganha posição inventada — a tela simplesmente não imprime o parêntese.
+ */
+export function lerMatchupDoItem(
+  matchup: MatchupDoItem | MatchupGravado | null | undefined,
+): MatchupLido | null {
+  if (!matchup) return null
+  const lido = (m: MotivoDoItem | MetricaMatchup): MotivoLido =>
+    typeof m === 'string' ? { metrica: m, posicao: null } : { metrica: m.metrica, posicao: m.posicao }
+  return {
+    estrelas: matchup.estrelas,
+    motivos: (matchup.motivos ?? []).map(lido),
+    aviso: (matchup.aviso ?? []).map(lido),
+  }
 }
 
 export type ConteudoFeed = {

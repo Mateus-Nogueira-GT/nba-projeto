@@ -216,7 +216,9 @@ Nesta ordem, sem pular:
 
    O `--` antes de `--confirmar` é do npm, não do script: sem ele o argumento
    não chega e nada é apagado. Sem `--confirmar`, o script explica o que faria
-   e sai com código 1 — é a rede de proteção, não um erro.
+   e sai com código 1 — é a rede de proteção, não um erro. Se a ingestão real
+   já escreveu (checkpoint) ou está ligada, ele recusa; aí só com
+   `--confirmar --apagar-dado-real`, depois de ler as contagens que ele imprime.
 
 3. Só então ligue a ingestão real.
 

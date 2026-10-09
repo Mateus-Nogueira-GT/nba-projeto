@@ -263,6 +263,18 @@ a.titulo:hover {
 }
 .apitoNoJogador {
   display: none;
+  align-items: center;
+  gap: 4px;
+}
+/*
+ * A coluna do apito é estreita (76px): com OPD e estrelas de matchup juntos,
+ * as estrelas descem para a linha de baixo em vez de vazar para a coluna ao lado.
+ */
+.cApito {
+  flex-wrap: wrap;
+  align-items: center;
+  align-content: center;
+  gap: 2px 4px;
 }
 /* A hierarquia do CJ, quando a lente pede: não tem coluna própria. */
 .hierarquia {

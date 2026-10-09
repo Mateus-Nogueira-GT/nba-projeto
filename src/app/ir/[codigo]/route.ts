@@ -5,8 +5,8 @@ import { getDb } from '@/modules/dominio/db/cliente'
 import { sessaoAtual } from '@/modules/plataforma/auth/cookies'
 import {
   COOKIE_VISITANTE_AFILIADO,
-  novoTokenVisitante,
   requisicaoAutomatizada,
+  tokenDoVisitante,
 } from '@/modules/plataforma/afiliados/http'
 import {
   type ConfiguracaoDoLink,
@@ -36,8 +36,11 @@ async function resolver(request: Request, codigo: string, registrar: boolean): P
   // comissão se perdia junto com o clique (auditoria 23/09). O erro vai para
   // o log e o assinante segue para a casa.
   const armario = await cookies()
-  const tokenExistente = armario.get(COOKIE_VISITANTE_AFILIADO)?.value
-  const token = tokenExistente ?? novoTokenVisitante()
+  const lido = armario.get(COOKIE_VISITANTE_AFILIADO)?.value
+  // Cookie fora da forma de `hashVisitante` vira token novo (achado 7) — e,
+  // por ser novo, é gravado abaixo no lugar do adulterado.
+  const token = tokenDoVisitante(lido)
+  const tokenExistente = token === lido ? lido : undefined
   try {
     const sessao = await sessaoAtual()
     destino = await registrarSaidaParaCasa(getDb(), {

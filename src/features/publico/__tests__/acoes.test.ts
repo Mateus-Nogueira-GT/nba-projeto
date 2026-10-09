@@ -246,6 +246,29 @@ describe('cadastrar — Front v2 (Tarefa 8)', () => {
       'CADASTRO',
     )
   })
+
+  it('falha ao associar o afiliado loga só o evento e o NOME do erro (pente fino 09/10, achado 13)', async () => {
+    // Um erro do driver pode carregar o SQL com `visitante_hash` e `usuario_id`.
+    // O log fica como o de `/r` e `/ir`: evento + `erro.name`, nunca o objeto.
+    const vazado = new Error(
+      `insert into atribuicoes_afiliados values ('visitante-de-teste-0123456789', '${LOGIN_OK.usuarioId}')`,
+    )
+    mocks.associarVisitanteAoUsuario.mockRejectedValue(vazado)
+    const erroNoConsole = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    mocks.cookieVisitante = 'visitante-de-teste-0123456789'
+
+    await expect(cadastrar(null, formularioDeCadastro())).rejects.toThrow('REDIRECT:/assinar')
+
+    expect(erroNoConsole).toHaveBeenCalledTimes(1)
+    const registrado = erroNoConsole.mock.calls[0]!
+    expect(registrado).toHaveLength(1)
+    expect(JSON.parse(String(registrado[0]))).toEqual({
+      evento: 'afiliado_associacao_falhou',
+      origem: 'CADASTRO',
+      erro: 'Error',
+    })
+    erroNoConsole.mockRestore()
+  })
 })
 
 describe('concluirNovaSenha — Front v2 (Tarefa 8)', () => {

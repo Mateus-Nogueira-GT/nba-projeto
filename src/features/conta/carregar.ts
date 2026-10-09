@@ -11,7 +11,15 @@ import { exigirNivel } from '@/modules/plataforma/assinatura/guarda'
 import { estadoExperienciaDoUsuario } from '@/modules/plataforma/experiencia/servico'
 import { identidadeDoTime } from '@/ui/times'
 
-export type AssinaturaDaConta = { plano: string | null; status: string; proximaCobranca: Date | null; mercadopagoId: string | null }
+// `id` viaja no formulário de cancelamento: a action cancela o contrato que a
+// tela mostrou, não um que ela escolha de novo (pente fino 09/10, achado 2).
+export type AssinaturaDaConta = {
+  id: string
+  plano: string | null
+  status: string
+  proximaCobranca: Date | null
+  mercadopagoId: string | null
+}
 
 export type IdentidadeDoUsuario = { nome: string | null; email: string; fotoUrl: string | null }
 

@@ -40,7 +40,16 @@ async function associarAfiliado(usuarioId: string, agora: Date, origem: 'LOGIN' 
   try {
     await associarVisitanteAoUsuario(getDb(), visitante, usuarioId, agora, origem)
   } catch (erro) {
-    console.error(`Falha ao associar atribuição de afiliado após ${origem.toLowerCase()}`, erro)
+    // Só o evento e o NOME do erro, como `/r` e `/ir` (pente fino de 09/10,
+    // achado 13): um erro do driver pode carregar o SQL com o hash do
+    // visitante e o id da conta.
+    console.error(
+      JSON.stringify({
+        evento: 'afiliado_associacao_falhou',
+        origem,
+        erro: erro instanceof Error ? erro.name : typeof erro,
+      }),
+    )
   }
 }
 

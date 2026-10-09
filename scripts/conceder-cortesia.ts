@@ -2,7 +2,9 @@ import { eq } from 'drizzle-orm'
 
 import { fecharDb, getDb } from '../src/modules/dominio/db/cliente'
 import { usuarios } from '../src/modules/dominio/db/schema'
+import { rulesetAtivo } from '../src/modules/entrega/ruleset-ativo'
 import { avaliarAcesso, concederCortesia } from '../src/modules/plataforma/assinatura/direito'
+import { fimDaCortesia } from '../src/modules/plataforma/assinatura/precos'
 
 /**
  * Concede direito de CORTESIA a uma conta existente — a ferramenta do
@@ -10,7 +12,8 @@ import { avaliarAcesso, concederCortesia } from '../src/modules/plataforma/assin
  *
  *   CORTESIA_EMAIL=alguem@x.com [CORTESIA_ATE=2026-12-31] npm run cortesia
  *
- * Sem CORTESIA_ATE a cortesia não expira. A referência é o próprio e-mail:
+ * Sem CORTESIA_ATE a cortesia não expira; com ela, vale até o fim daquele dia
+ * no fuso da rodada (a mesma conta de TEMPORADA_FIM). A referência é o próprio e-mail:
  * reexecutar ATUALIZA a mesma cortesia (e desfaz revogação), não duplica.
  * Nunca mexe em usuarios.status — bloqueio administrativo é outra coisa e
  * sempre prevalece (Spec 04, princípio 4).
@@ -20,8 +23,8 @@ async function principal() {
   const ate = process.env.CORTESIA_ATE ?? ''
   if (!email) throw new Error('Defina CORTESIA_EMAIL')
 
-  const fim = ate ? new Date(`${ate}T23:59:59.999Z`) : null
-  if (fim && Number.isNaN(fim.getTime())) throw new Error('CORTESIA_ATE inválida (AAAA-MM-DD)')
+  // O dia vale inteiro no fuso da rodada, como `TEMPORADA_FIM`.
+  const fim = fimDaCortesia(ate, (await rulesetAtivo()).rodada.fuso)
 
   const db = getDb()
   const [usuario] = await db

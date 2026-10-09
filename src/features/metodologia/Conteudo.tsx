@@ -79,6 +79,11 @@ export function sumarioDaMetodologia(exibirOdds: boolean) {
  */
 export function ConteudoDaMetodologia({ ruleset, t, faixasConfianca, exibirOdds }: Metodologia) {
   const oddExemplo = exibirOdds ? oddDoExemplo(ruleset.odds.exibicao) : null
+  // Atributos ligados que apitam sem nota (REB e AST desde 09/10). Sai do
+  // ruleset: se o CJ mandar uma tabela, a frase some sozinha.
+  const semNota = t.atributos
+    .filter((a) => !a.temNota && ruleset.niveis.atributos.includes(a.atributo))
+    .map((a) => a.atributo)
   return (
     <div className={s.conteudo}>
       <Secao id="o-que-faz" titulo="Antes de tudo: o que o app faz">
@@ -195,7 +200,8 @@ export function ConteudoDaMetodologia({ ruleset, t, faixasConfianca, exibirOdds 
 
       <Secao id="confianca" titulo="A nota de confiança e as linhas">
         <p>
-          Cada jogador apitado tem várias <strong>linhas</strong>, e cada linha tem sua própria nota.
+          Cada jogador apitado tem várias <strong>linhas</strong>, e cada linha tem sua própria nota
+          quando o atributo tem nota.
           Toque na linha da lista para ver todas; o nome abre as estatísticas do jogador.
         </p>
         <Caixa destaque>
@@ -227,6 +233,13 @@ export function ConteudoDaMetodologia({ ruleset, t, faixasConfianca, exibirOdds 
           {ROTULO_NIVEL.ALL_STAR}, {n(t.confianca.bonus.ALL_STAR?.['3'] ?? 0)} pontos no nível 3.
           Randola nunca ganha bônus: usa sempre a tabela base.
         </p>
+        {semNota.length > 0 && (
+          <p>
+            {semNota.map((a, i) => (i === 0 ? ROTULO_ATRIBUTO[a] : ROTULO_ATRIBUTO[a].toLowerCase())).join(' e ')}{' '}
+            {semNota.length === 1 ? 'não tem' : 'não têm'} nota de confiança: neles vale só a cor do
+            apito — amarelo, laranja e verde, do sinal mais fraco ao mais forte.
+          </p>
+        )}
       </Secao>
 
       <Secao id="atributos" titulo="Pontos, rebotes e assistências">
@@ -317,7 +330,10 @@ export function ConteudoDaMetodologia({ ruleset, t, faixasConfianca, exibirOdds 
             Pontos, {ROTULO_NIVEL.RANDOLA}: × {n(t.fireLive.multiplicadores.pontosRandola)}
           </li>
           <li>Pontos, fora da lista: × {n(t.fireLive.multiplicadores.pontosNaoClassificado)}</li>
-          <li>Rebotes: × {n(t.fireLive.multiplicadores.rebotes)}</li>
+          <li>
+            Rebotes: × {n(t.fireLive.multiplicadores.rebotes)} (só para quem tem média ≥{' '}
+            {t.fireLive.rebotes.mediaMinima})
+          </li>
           <li>
             Assistências: média por quarto + {t.fireLive.assistencias.valor} (só para quem tem média ≥{' '}
             {t.fireLive.assistencias.mediaMinima})

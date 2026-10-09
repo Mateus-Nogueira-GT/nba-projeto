@@ -72,6 +72,14 @@
   --confianca-5: #79f2e1;
 
   /*
+   * Matchup: só a estrela ao lado do apito e o aviso do negativo (CJ, 09/10).
+   * Lilás porque amarelo, laranja e verde já são o nível do apito, e o azul é
+   * o turbo: a estrela não pode ser lida como força do apito.
+   */
+  --matchup-estrela: #c9a7ff;
+  --matchup-aviso: var(--falhou-texto);
+
+  /*
    * O que vem abaixo até "Tipografia" é FIXO: igual nos três temas. São as
    * cores que o v2 escrevia à mão nas telas (Tarefa 11b) e que não devem
    * acompanhar o tema — ilustração, placa de metal, moldura, medição.
@@ -273,6 +281,8 @@
   --confianca-3: #13877a;
   --confianca-4: #0a8476;
   --confianca-5: #007f70;
+
+  --matchup-estrela: #6b3fc4;
 }
 
 /* -------------------------------------------------------------------------

@@ -21,6 +21,8 @@ export const TAG_MATCHUP = 'matchup'
 export const perfisDoDiaCacheado = unstable_cache(
   async (dataReferencia: string, inicioTemporada: string): Promise<Record<string, PerfilAdversario>> =>
     perfisDoDia(getDb(), dataReferencia, inicioTemporada),
-  ['matchup-perfis-do-dia'],
+  // `v2`: o perfil ganhou pontos marcados e bolas perdidas (CJ, 09/10). A
+  // chave nova impede que uma entrada da forma antiga chegue à tela sem eles.
+  ['matchup-perfis-do-dia-v2'],
   { tags: [TAG_MATCHUP], revalidate: 3600 },
 )

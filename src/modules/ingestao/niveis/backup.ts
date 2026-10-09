@@ -1,9 +1,18 @@
-import { asc, count, eq, isNull } from 'drizzle-orm'
+import { and, asc, count, eq, inArray, isNull } from 'drizzle-orm'
 
-import { jogadores, mapaJogadores, niveis, niveisVersao, times } from '../../dominio/db/schema'
+import {
+  jogadores,
+  mapaJogadores,
+  mediasJogador,
+  niveis,
+  niveisVersao,
+  times,
+} from '../../dominio/db/schema'
 import type { Db } from '../../dominio/db/tipos'
 import { ativarVersaoNiveis } from '../../dominio/repositorios/niveis'
 import { normalizarTexto } from '../../dominio/texto'
+import { faixaDeClassificacao } from '../../motor/atributos'
+import type { Ruleset } from '../../motor/ruleset/schema'
 import type { Atributo, Nivel } from '../../motor/tipos'
 
 /**
@@ -108,11 +117,55 @@ export async function exportarListaDoCj(db: Db): Promise<BackupListaCj> {
  * reconfirmar um nome para outro jogador e rodar de novo TROCA o vínculo, em
  * vez de deixar a linha velha para trás.
  */
+/** Um grupo de grafias que a faixa de média do próprio CJ resolveu (spec 09/10, §3). */
+export type ResolvidoPorMedia = {
+  versao: string
+  /** A grafia que entrou. */
+  nome: string
+  /** As grafias que ficaram de fora. */
+  descartados: string[]
+  atributo: Atributo
+  escolhido: Nivel
+  media: number
+}
+
+/** Um grupo de grafias que continua sem jogador — nada é escolhido por nós. */
+export type AindaDuplicado = {
+  versao: string
+  nomes: string[]
+  atributo: Atributo
+  niveis: Nivel[]
+  media: number | null
+  motivo: string
+}
+
+export type ResultadoRestauracao = {
+  versoes: number
+  ligados: number
+  pendentes: string[]
+  sugeridos: string[]
+  resolvidosPorMedia: ResolvidoPorMedia[]
+  aindaDuplicados: AindaDuplicado[]
+}
+
 export async function restaurarListaDoCj(
   db: Db,
   backup: BackupListaCj,
-  opcoes: { provedor: string },
-): Promise<{ versoes: number; ligados: number; pendentes: string[]; sugeridos: string[] }> {
+  opcoes: {
+    provedor: string
+    /**
+     * De onde saem as faixas de média por nível (`por_atributo.<A>.classificacao`)
+     * que resolvem as grafias repetidas. Ausente, nenhum grupo é resolvido por
+     * média — o comportamento anterior a 09/10.
+     */
+    ruleset?: Ruleset
+    /**
+     * Fixa a temporada da média ("2025-26"), em vez da mais recente com dado
+     * (`--temporada=` do `lista-cj:restaurar`). Pente fino de 09/10, achado 8.
+     */
+    temporada?: string
+  },
+): Promise<ResultadoRestauracao> {
   const timesPorSigla = new Map(
     (await db.select().from(times)).map((t) => [t.sigla, t.id] as const),
   )
@@ -161,14 +214,24 @@ export async function restaurarListaDoCj(
   // 2 · Cada versão numa transação: recria (ou reaproveita) e regrava os níveis.
   let ligados = 0
   let versaoAtivaId: string | null = null
+  const resolvidosPorMedia: ResolvidoPorMedia[] = []
+  const aindaDuplicados: AindaDuplicado[] = []
+  const medias = opcoes.ruleset
+    ? await mediasMaisRecentes(
+        db,
+        [...new Set([...jogadorPorChave.values()].filter((id): id is string => id !== null))],
+        {
+          jogosMinimos: opcoes.ruleset.niveis.resolucao_por_media.jogos_minimos,
+          temporada: opcoes.temporada,
+        },
+      )
+    : new Map<string, Partial<Record<Atributo, number>>>()
 
   for (const v of backup.versoes) {
     // A chave única é (versão, jogador, atributo). Dois nomes do backup que
-    // caem no MESMO jogador real são dúvida de identidade: nenhum entra.
-    const porChave = new Map<
-      string,
-      { nomeExibido: string; linha: Omit<typeof niveis.$inferInsert, 'niveisVersaoId'> }[]
-    >()
+    // caem no MESMO jogador real são dúvida de identidade — salvo quando a
+    // faixa de média do CJ diz qual deles é (ver `resolverGrupo`).
+    const porChave = new Map<string, EntradaDoGrupo[]>()
     for (const n of v.niveis) {
       const nomeExibido = n.nomeNaLista ?? n.nome
       const jogadorId = jogadorPorChave.get(nomeExibido) ?? null
@@ -194,8 +257,39 @@ export async function restaurarListaDoCj(
     }
     const linhas: Omit<typeof niveis.$inferInsert, 'niveisVersaoId'>[] = []
     for (const grupo of porChave.values()) {
-      if (grupo.length === 1) linhas.push(grupo[0]!.linha)
-      else for (const g of grupo) pendentes.add(g.nomeExibido)
+      if (grupo.length === 1) {
+        linhas.push(grupo[0]!.linha)
+        continue
+      }
+      const { jogadorId, atributo } = grupo[0]!.linha
+      const media = medias.get(jogadorId)?.[atributo] ?? null
+      const r = resolverGrupo(grupo, media, opcoes.ruleset)
+      if (r.tipo === 'escolhido') {
+        linhas.push(r.entrada.linha)
+        const descartados = [
+          ...new Set(grupo.map((g) => g.nomeExibido).filter((n) => n !== r.entrada.nomeExibido)),
+        ].sort()
+        if (r.porMedia && media !== null) {
+          resolvidosPorMedia.push({
+            versao: v.versao,
+            nome: r.entrada.nomeExibido,
+            descartados,
+            atributo,
+            escolhido: r.entrada.linha.nivel,
+            media,
+          })
+        }
+        continue
+      }
+      for (const g of grupo) pendentes.add(g.nomeExibido)
+      aindaDuplicados.push({
+        versao: v.versao,
+        nomes: [...new Set(grupo.map((g) => g.nomeExibido))].sort(),
+        atributo,
+        niveis: [...new Set(grupo.map((g) => g.linha.nivel))],
+        media,
+        motivo: r.motivo,
+      })
     }
 
     const { versaoId, presentes } = await db.transaction(async (tx) => {
@@ -236,5 +330,111 @@ export async function restaurarListaDoCj(
     ligados,
     pendentes: [...pendentes].sort(),
     sugeridos: [...sugeridos].filter((nome) => pendentes.has(nome)).sort(),
+    resolvidosPorMedia,
+    aindaDuplicados,
   }
+}
+
+type EntradaDoGrupo = {
+  nomeExibido: string
+  linha: Omit<typeof niveis.$inferInsert, 'niveisVersaoId'> & {
+    jogadorId: string
+    atributo: Atributo
+    nivel: Nivel
+    posicaoHierarquia: number
+  }
+}
+
+/** Ordem determinística: o topo da hierarquia, depois a grafia. */
+const ordemDaEntrada = (a: EntradaDoGrupo, b: EntradaDoGrupo) =>
+  a.linha.posicaoHierarquia - b.linha.posicaoHierarquia || a.nomeExibido.localeCompare(b.nomeExibido)
+
+/** Entradas iguais (mesmo time e mesmo nível) dizem a mesma coisa: fica uma. */
+function semRepeticao(grupo: EntradaDoGrupo[]): EntradaDoGrupo[] {
+  const porTimeENivel = new Map<string, EntradaDoGrupo>()
+  for (const g of [...grupo].sort(ordemDaEntrada)) {
+    const chave = `${g.linha.timeId}|${g.linha.nivel}`
+    if (!porTimeENivel.has(chave)) porTimeENivel.set(chave, g)
+  }
+  return [...porTimeENivel.values()]
+}
+
+/**
+ * GRAFIAS REPETIDAS — o mesmo jogador real duas ou mais vezes no mesmo
+ * atributo da mesma versão.
+ *
+ * Resposta 5 do CJ (09/10/2026): o nível de um atributo segue a média do
+ * jogador NAQUELE atributo, nas faixas dele (`classificacao` do ruleset). Então
+ * fica a entrada cujo nível bate com a faixa da média real. Se nenhuma ou mais
+ * de uma bater, ou se não houver média, o grupo continua pendente: sem média,
+ * sem escolha (spec 2026-10-09, §3).
+ */
+function resolverGrupo(
+  grupo: EntradaDoGrupo[],
+  media: number | null,
+  ruleset: Ruleset | undefined,
+):
+  | { tipo: 'escolhido'; entrada: EntradaDoGrupo; porMedia: boolean }
+  | { tipo: 'pendente'; motivo: string } {
+  const distintas = semRepeticao(grupo)
+  if (distintas.length === 1) return { tipo: 'escolhido', entrada: distintas[0]!, porMedia: false }
+
+  const niveisDistintos = new Set(distintas.map((g) => g.linha.nivel))
+  if (niveisDistintos.size === 1) return { tipo: 'pendente', motivo: 'mesmo nível em times diferentes' }
+  if (!ruleset) return { tipo: 'pendente', motivo: 'sem faixas de média' }
+  if (media === null) return { tipo: 'pendente', motivo: 'sem média do jogador no atributo' }
+
+  const atributo = distintas[0]!.linha.atributo
+  const batem = distintas.filter((g) => {
+    const faixa = faixaDeClassificacao(g.linha.nivel, atributo, ruleset)
+    return faixa !== undefined && media >= faixa.min && (faixa.max === undefined || media <= faixa.max)
+  })
+  if (batem.length === 1) return { tipo: 'escolhido', entrada: batem[0]!, porMedia: true }
+  return {
+    tipo: 'pendente',
+    motivo: batem.length === 0 ? 'nenhuma faixa bate com a média' : 'mais de uma entrada bate com a média',
+  }
+}
+
+const COLUNA_DA_MEDIA = { PONTOS: 'ppg', REBOTES: 'rpg', ASSISTENCIAS: 'apg' } as const
+
+/**
+ * Média de temporada de cada jogador por atributo, na temporada MAIS RECENTE
+ * em que ele tem o número daquele atributo — e ao menos `jogosMinimos` jogos
+ * (`niveis.resolucao_por_media.jogos_minimos`): a temporada que acabou de
+ * começar não decide pela média de uma noite. Com `temporada`, só ela vale.
+ */
+async function mediasMaisRecentes(
+  db: Db,
+  jogadorIds: string[],
+  criterio: { jogosMinimos: number; temporada?: string },
+): Promise<Map<string, Partial<Record<Atributo, number>>>> {
+  const resultado = new Map<string, Partial<Record<Atributo, number>>>()
+  if (jogadorIds.length === 0) return resultado
+  const linhas = await db
+    .select()
+    .from(mediasJogador)
+    .where(
+      and(
+        inArray(mediasJogador.jogadorId, jogadorIds),
+        eq(mediasJogador.janela, 'TEMPORADA'),
+        criterio.temporada !== undefined ? eq(mediasJogador.temporada, criterio.temporada) : undefined,
+      ),
+    )
+  const temporadaUsada = new Map<string, string>()
+  for (const l of linhas) {
+    if (l.jogos < criterio.jogosMinimos) continue
+    for (const [atributo, coluna] of Object.entries(COLUNA_DA_MEDIA) as [Atributo, keyof typeof l][]) {
+      const valor = l[coluna]
+      if (valor === null || valor === undefined) continue
+      const chave = `${l.jogadorId}|${atributo}`
+      const atual = temporadaUsada.get(chave)
+      if (atual !== undefined && atual >= l.temporada) continue
+      temporadaUsada.set(chave, l.temporada)
+      const porAtributo = resultado.get(l.jogadorId) ?? {}
+      porAtributo[atributo] = Number(valor)
+      resultado.set(l.jogadorId, porAtributo)
+    }
+  }
+  return resultado
 }

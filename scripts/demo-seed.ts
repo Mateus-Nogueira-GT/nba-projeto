@@ -7,6 +7,8 @@
  * (`semearDemo`) continua no repositório, mas só como fixture dos exemplos
  * numéricos do documento do CJ nas suítes de teste; nada em produção o chama.
  *
- * Importar executa: `demo-temporada.ts` roda no carregamento do módulo.
+ * Importar executa: `demo-temporada.ts` roda no carregamento do módulo — e
+ * com ele a guarda de dado real (`podeRodarScriptDaDemo`, a mesma do cron):
+ * o apelido recusa exatamente onde o nome original recusa.
  */
 import './demo-temporada'

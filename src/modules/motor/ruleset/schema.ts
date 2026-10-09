@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { NIVEIS, ATRIBUTOS } from '../tipos'
+import { NIVEIS, ATRIBUTOS, METRICAS_MATCHUP } from '../tipos'
 
 /**
  * Schema do config/ruleset.v1.yaml.
@@ -68,6 +68,19 @@ const blocoAtributo = z.object({
       mapa_nivel: z.record(z.string(), z.number().int().min(1).max(3)),
     })
     .optional(),
+  /**
+   * Linhas do atributo por nível do jogador, em ordem crescente. Antes de
+   * 09/10 as linhas saíam das chaves de `confianca.base`; o CJ disse que
+   * rebotes e assistências NÃO TÊM nota (vale a cor do apito), e a tabela
+   * saiu — as linhas não podiam sair junto. Ausente, vale a chave de
+   * `confianca.base` (o formato anterior).
+   */
+  linhas: porNivel(z.array(z.number())).optional(),
+  /**
+   * Nota de confiança. OPCIONAL: sem ela, a confiança do apito é `null` e a
+   * tela mostra só a cor do nível do apito (CJ, 09/10/2026: "assistências e
+   * rebotes não têm porcentagem").
+   */
   confianca: z
     .object({
       base: porNivel(porLinha),
@@ -122,6 +135,14 @@ export const rulesetSchema = z.object({
   niveis: z.object({
     ordem: z.array(nivel),
     atributos: z.array(atributo),
+    /**
+     * Resolução das grafias repetidas da lista do CJ pela faixa de média
+     * (`ingestao/niveis/backup.ts`): temporada com menos jogos que isto não
+     * decide. Pente fino de 09/10, achado 8 — número a confirmar pelo parceiro.
+     */
+    resolucao_por_media: z.object({
+      jogos_minimos: z.number().int().min(1),
+    }),
   }),
 
   oscilacao: z.object({
@@ -161,6 +182,14 @@ export const rulesetSchema = z.object({
       pontos_randola: z.number(),
       pontos_nao_classificado: z.number(),
       rebotes: z.number(),
+    }),
+    /**
+     * Rebotes só entram para quem tem média >= este valor. CJ, 09/10/2026:
+     * "média mínima 4 em rebotes e assistências — no Fire Live é basicamente
+     * isso também". O multiplicador continua em `multiplicadores.rebotes`.
+     */
+    rebotes: z.object({
+      media_minima: z.number(),
     }),
     assistencias: z.object({
       operacao: z.literal('soma'),
@@ -309,9 +338,24 @@ export const rulesetSchema = z.object({
     })
     .optional(),
 
+  /**
+   * Matchup em ESTRELAS (CJ, 09/10). Não cria apito nem mexe no nível ou no %:
+   * um apito existente ganha uma ★ por critério de `estrelas` que o adversário
+   * atende (posição na liga ≤ `corte_top`), e um `aviso` por critério negativo.
+   */
   matchup: z.object({
     habilitado: z.boolean(),
     liberar_apos_dias_de_competicao: z.number().int().nonnegative(),
+    corte_top: z.number().int().positive(),
+    criterios: z
+      .partialRecord(
+        atributo,
+        z.object({
+          estrelas: z.array(z.enum(METRICAS_MATCHUP)).default([]),
+          aviso: z.array(z.enum(METRICAS_MATCHUP)).default([]),
+        }),
+      )
+      .default({}),
   }),
 })
 

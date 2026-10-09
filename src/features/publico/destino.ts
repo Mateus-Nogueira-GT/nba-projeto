@@ -11,6 +11,10 @@ import { destinoInternoSeguro } from '@/modules/plataforma/auth/requisicao'
 export function destinoSeguro(bruto: string | null | undefined, padrao = '/'): string {
   if (!bruto) return padrao
   if (bruto.includes('\\')) return padrao
+  // `..` é recusado ANTES de resolver: a URL o normaliza, e `/fire-live/../admin`
+  // viraria `/admin` — que está na allowlist, mas não é o destino pedido
+  // (pente fino de 09/10, achado 6). Nenhum destino legítimo tem `..`.
+  if (bruto.includes('..')) return padrao
   try {
     const base = 'https://interno.invalid'
     const url = new URL(bruto, base)

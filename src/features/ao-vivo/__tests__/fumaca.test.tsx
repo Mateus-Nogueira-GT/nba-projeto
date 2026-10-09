@@ -602,6 +602,38 @@ describe('Ao Vivo do v2 — vazios e ocultos (telas-04-firelive, telas-demo)', (
     }
   }, 60_000)
 
+  it('(CJ, 09/10) a ★ do matchup vai ao lado do nível do apito — e sem matchup, nada', async () => {
+    nivelDoTeste = 'MVP'
+    const alvo = (await feedDaTela()).itens[0]!
+    const onde = and(eq(feedSnapshot.dataReferencia, HOJE), eq(feedSnapshot.estrategia, 'FIRE_LIVE'))
+    const snapshots = await banco.db.select().from(feedSnapshot).where(onde)
+    const regravar = async (matchup: unknown) => {
+      for (const linha of snapshots) {
+        const conteudo = linha.conteudoJson as { itens: object[] }
+        await banco.db
+          .update(feedSnapshot)
+          .set({ conteudoJson: { ...conteudo, itens: conteudo.itens.map((i) => ({ ...i, matchup })) } })
+          .where(eq(feedSnapshot.id, linha.id))
+      }
+    }
+    try {
+      await regravar({ estrelas: 1, motivos: ['PONTOS_CEDIDOS'], aviso: [] })
+      const com = semScript(await renderizar({ jogo: alvo.jogoId }))
+      expect(com).toContain('aria-label="1 estrela de matchup"')
+
+      await regravar(null)
+      const sem = semScript(await renderizar({ jogo: alvo.jogoId }))
+      expect(sem).not.toContain('de matchup"')
+    } finally {
+      for (const linha of snapshots) {
+        await banco.db
+          .update(feedSnapshot)
+          .set({ conteudoJson: linha.conteudoJson })
+          .where(eq(feedSnapshot.id, linha.id))
+      }
+    }
+  }, 60_000)
+
   it('jogador oculto sai da linha e entra na lista de reativar', async () => {
     const alvo = (await feedDaTela()).itens[0]!
     const antes = await renderizar({ jogo: alvo.jogoId })

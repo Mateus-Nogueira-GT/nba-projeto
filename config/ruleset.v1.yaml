@@ -92,11 +92,18 @@ niveis:
   ordem: [MVP, ALL_STAR, SUPORTE, RANDOLA]
   # INTERRUPTOR. Este array é o que motor/index.ts e motor/fire-live/avaliar.ts
   # iteram. LIGADOS EM 06/10/2026 POR DECISÃO EXPLÍCITA DO PARCEIRO, ciente do
-  # custo: as tabelas de confiança e de odds de rebotes e assistências continuam
-  # `origem: demonstracao` — números nossos, não do CJ — e vão para o celular
-  # do assinante até ele mandar as dele. Trocar as tabelas é diff de YAML.
+  # custo: as tabelas de odds de rebotes e assistências continuam
+  # `origem: demonstracao` — números nossos, não do CJ. A de confiança saiu em
+  # 09/10: o CJ disse que REB e AST não têm nota, vale a cor do apito.
   # Ver docs/superpowers/specs/2026-10-06-ajustes-reuniao-23-09-design.md.
   atributos: [PONTOS, REBOTES, ASSISTENCIAS]
+  # GRAFIAS REPETIDAS NA LISTA DO CJ (`lista-cj:restaurar`): o nível sai da
+  # faixa de média do jogador no atributo, na temporada mais recente com dado.
+  # Pente fino de 09/10 (achado 8): uma temporada só conta com `jogos_minimos`
+  # jogos — senão, na 1ª rodada de 2026-27, a média de UMA noite decidiria o
+  # nível. 5 é PROPOSTA nossa, a confirmar pelo parceiro; o código só lê a chave.
+  resolucao_por_media:
+    jogos_minimos: 5
 
 # -----------------------------------------------------------------------------
 # LISTA SECRETA — MÉTODO 1: OSCILAÇÃO
@@ -160,6 +167,11 @@ fire_live:
     pontos_randola: 2.5
     pontos_nao_classificado: 3.0
     rebotes: 2.0
+
+  # CJ, 09/10/2026: "média mínima 4 em rebotes e assistências — no Fire Live
+  # é basicamente isso também". Assistências já tinham; rebotes passam a ter.
+  rebotes:
+    media_minima: 4 # só entra jogador com rpg >= 4
 
   assistencias:
     operacao: soma
@@ -361,7 +373,8 @@ avisos:
 # ⚠️  DEMONSTRAÇÃO. NÃO HOMOLOGADO.
 #
 # O Mestre da NBA classificou apenas PONTOS. Rebotes e assistências não têm
-# lista de níveis nem tabela de confiança definidas por ele. Os números abaixo
+# tabela de odds definida por ele, e NÃO TÊM nota de confiança (CJ, 09/10/2026:
+# vale só a cor do apito). Os números abaixo que não citam o documento
 # foram INVENTADOS para a apresentação ao cliente — existem para provar que o
 # motor é genérico por atributo, não para sugerir entrada de verdade.
 #
@@ -376,11 +389,12 @@ por_atributo:
     origem: demonstracao
 
     # Reunião de 23/09 (CJ): a Lista Secreta só apita quem tem média >= 4 no
-    # atributo (oscilação e OPD). Não vale para o Fire Live.
+    # atributo (oscilação e OPD). O Fire Live tem chave própria, com o mesmo 4
+    # (fire_live.rebotes.media_minima, CJ 09/10).
     lista_media_minima: 4
 
     # DOCX recebido em 08/09, p. 14: OPD só N3/N2; oscilação nos três níveis.
-    # Deltas, linhas, confiança, odds e greens abaixo continuam demonstrativos.
+    # Linhas, odds e greens abaixo continuam demonstrativos.
     opd:
       janela: 2
       mapa_nivel: { 1: 3, 2: 2 }
@@ -405,23 +419,22 @@ por_atributo:
 
     # Delta do DOCUMENTO (versão de 21/09): "a oscilação é considerada em
     # rebotes quando o jogador faz <=4 abaixo da média". Não é mais estimativa
-    # nossa. O `origem: demonstracao` do bloco continua valendo por causa de
-    # `confianca` e `odds`, que o documento não dá para rebotes.
+    # nossa. O `origem: demonstracao` do bloco continua valendo por causa das
+    # linhas e de `odds`, que o documento não dá para rebotes.
     oscilacao:
       delta: { MVP: 4, ALL_STAR: 4, SUPORTE: 4, RANDOLA: 4 }
       nivel_minimo_apito: { MVP: 1, ALL_STAR: 1, SUPORTE: 1, RANDOLA: 1 }
 
-    confianca:
-      base:
-        MVP: { 8: 90, 10: 85, 12: 80 }
-        ALL_STAR: { 6: 90, 8: 85, 10: 80 }
-        SUPORTE: { 4: 90, 6: 85, 8: 80 }
-        RANDOLA: { 3: 85, 5: 80 }
-      bonus_por_nivel_apito:
-        MVP: { 2: 2.0, 3: 4.0 }
-        ALL_STAR: { 2: 1.0, 3: 2.0 }
-        SUPORTE: { 2: 0.5, 3: 1.0 }
-        RANDOLA: { 2: 0.0, 3: 0.0 }
+    # SEM NOTA DE CONFIANÇA. CJ, 09/10/2026: "rebotes e assistências não têm
+    # porcentagem — vale a cor do apito (amarelo < laranja < verde)". A tabela
+    # de demonstração saiu; sem `confianca`, a confiança do apito é nula e a
+    # tela mostra só o nível do apito. As linhas, que antes eram as chaves da
+    # tabela, continuam as mesmas e passam a ser declaradas aqui.
+    linhas:
+      MVP: [8, 10, 12]
+      ALL_STAR: [6, 8, 10]
+      SUPORTE: [4, 6, 8]
+      RANDOLA: [3, 5]
 
     odds:
       MVP: { 8: [1.30, 1.60], 10: [1.90, 2.40], 12: [2.80, 3.60] }
@@ -439,7 +452,8 @@ por_atributo:
     origem: demonstracao
 
     # Reunião de 23/09 (CJ): a Lista Secreta só apita quem tem média >= 4 no
-    # atributo (oscilação e OPD). Não vale para o Fire Live.
+    # atributo (oscilação e OPD). O Fire Live tem chave própria
+    # (fire_live.assistencias.media_minima).
     lista_media_minima: 4
 
     # Faixas de média que definem o NÍVEL DO JOGADOR em assistências — seção
@@ -467,17 +481,12 @@ por_atributo:
     oscilacao:
       delta: { MVP: 4, ALL_STAR: 3, SUPORTE: 3, RANDOLA: 1 }
 
-    confianca:
-      base:
-        MVP: { 5: 90, 7: 85, 9: 80 }
-        ALL_STAR: { 4: 90, 6: 85, 8: 80 }
-        SUPORTE: { 3: 90, 5: 85 }
-        RANDOLA: { 2: 85, 4: 80 }
-      bonus_por_nivel_apito:
-        MVP: { 2: 2.0, 3: 4.0 }
-        ALL_STAR: { 2: 1.0, 3: 2.0 }
-        SUPORTE: { 2: 0.5, 3: 1.0 }
-        RANDOLA: { 2: 0.0, 3: 0.0 }
+    # SEM NOTA DE CONFIANÇA (CJ, 09/10/2026) — ver o comentário de rebotes.
+    linhas:
+      MVP: [5, 7, 9]
+      ALL_STAR: [4, 6, 8]
+      SUPORTE: [3, 5]
+      RANDOLA: [2, 4]
 
     odds:
       MVP: { 5: [1.30, 1.60], 7: [1.95, 2.45], 9: [3.00, 4.00] }
@@ -527,8 +536,36 @@ gestao_banca:
   stop_loss_percentual: 6.0
 
 # -----------------------------------------------------------------------------
-# MATCHUP — programado, desligado. Liberar 20 dias após início da competição.
+# MATCHUP EM ESTRELAS — respostas do CJ de 09/10/2026
+# (docs/superpowers/specs/2026-10-09-respostas-cj-matchup-design.md, §2).
+#
+# "Uma estrela por matchup, corte top 5 da liga, liga após 20 dias; matchup
+# negativo é só um aviso." NÃO cria apito e NÃO muda o nível nem o %: um apito
+# existente ganha uma ★ por critério de `estrelas` que o adversário do jogo
+# atende. Critério de `aviso` vira o alerta de matchup negativo.
+#
+# "Top N" = posição de 1 a N na liga (empate divide a posição), com a média por
+# jogo dos jogos ENCERRADOS da temporada ANTERIORES à data do apito. Posição 1
+# é sempre a do maior valor (quem mais cede, mais erra, mais marca, mais perde).
+#
+# Dias de competição = datas com jogo encerrado na temporada antes do dia.
+#
+# Métricas: PONTOS_CEDIDOS · TRES_ERRADAS (bolas de 3 que o adversário erra) ·
+# PONTOS_MARCADOS · BOLAS_PERDIDAS (turnovers do adversário).
+# Contra-ataque cedido (pedido para assistências) fica na fase 2: a fonte só
+# tem a média da temporada inteira, que olha o futuro.
 # -----------------------------------------------------------------------------
 matchup:
-  habilitado: false
+  habilitado: true
   liberar_apos_dias_de_competicao: 20
+  corte_top: 5
+  criterios:
+    PONTOS:
+      estrelas: [PONTOS_CEDIDOS]
+    REBOTES:
+      estrelas: [TRES_ERRADAS]
+      # "Melhores ataques": quem marca muito erra pouco — sobra menos rebote.
+      aviso: [PONTOS_MARCADOS]
+    ASSISTENCIAS:
+      # "Perdem muita bola" = turnovers do PRÓPRIO adversário.
+      estrelas: [PONTOS_CEDIDOS, BOLAS_PERDIDAS]

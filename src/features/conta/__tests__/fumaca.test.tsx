@@ -663,7 +663,7 @@ describe('a conta diz o plano na linguagem da NIP (spec de planos, §5)', () => 
     }
     const { assinaturas } = await import('@/modules/dominio/db/schema')
     await banco.db.delete(assinaturas)
-    await banco.db.insert(assinaturas).values([
+    const [, vigente] = await banco.db.insert(assinaturas).values([
       {
         // O contrato SUBSTITUÍDO. Ele tem o `atualizadoEm` MAIS RECENTE dos
         // dois porque a varredura de cancelamento o tocou depois do webhook —
@@ -691,7 +691,7 @@ describe('a conta diz o plano na linguagem da NIP (spec de planos, §5)', () => 
         proximaCobranca: new Date('2026-11-05T12:00:00.000Z'),
         atualizadoEm: new Date('2026-10-05T12:00:00.000Z'),
       },
-    ])
+    ]).returning()
 
     try {
       const { default: Pagina } = await import('@/app/(app)/conta/page')
@@ -703,6 +703,9 @@ describe('a conta diz o plano na linguagem da NIP (spec de planos, §5)', () => 
       // O pior dos dois lados do defeito: uma assinatura recorrente ATIVA que
       // o assinante não consegue parar pelo app.
       expect(bloco).toContain('Cancelar assinatura')
+      // E o botão cancela ESTE contrato: o id viaja no formulário (pente fino
+      // 09/10, achado 2), a action não escolhe de novo.
+      expect(bloco).toContain(`name="assinaturaId" value="${vigente!.id}"`)
     } finally {
       await banco.db.delete(assinaturas)
     }

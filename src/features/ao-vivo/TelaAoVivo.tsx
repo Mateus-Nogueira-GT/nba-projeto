@@ -10,6 +10,7 @@ import { rotaDoJogador } from '@/modules/entrega/estatisticas/rotas'
 import {
   ATRIBUTO_CURTO,
   corDoApito,
+  EstrelasMatchup,
   IndicadorApito,
   ROTULO_ATRIBUTO,
   SeloAoVivo,
@@ -324,6 +325,7 @@ function LinhaAoVivo({
             turbo={item.turbo}
             opdOrigemNivel={item.opdOrigemNivel}
           />
+          <EstrelasMatchup matchup={item.matchup} />
           {item.turbo && <SeloTurbo />}
           {item.modoFire && (
             <span className={s.fire}>

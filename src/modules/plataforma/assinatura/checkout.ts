@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { and, desc, eq, inArray, sql } from 'drizzle-orm'
+import { and, desc, eq, inArray, isNull, sql } from 'drizzle-orm'
 
 import {
   assinaturas,
@@ -28,6 +28,13 @@ export class CheckoutIndisponivelError extends Error {
   constructor(message = 'checkout indisponível') {
     super(message)
     this.name = 'CheckoutIndisponivelError'
+  }
+}
+
+export class NenhumaAssinaturaAtivaError extends Error {
+  constructor() {
+    super('nenhuma assinatura ativa para cancelar')
+    this.name = 'NenhumaAssinaturaAtivaError'
   }
 }
 
@@ -369,7 +376,9 @@ export async function cancelarAssinaturaDoUsuario(
   db: Db,
   porta: PortaCobranca,
   sessao: Sessao,
-  entrada: { ip: string | null; agora: Date },
+  // `assinaturaId` é o contrato que a tela mostrou com o botão "Cancelar"; sem
+  // ele, vale o mesmo critério da tela (ver abaixo).
+  entrada: { ip: string | null; agora: Date; assinaturaId?: string | null },
 ): Promise<void> {
   if (entrada.agora.getTime() - sessao.criadaEm.getTime() > JANELA_SESSAO_RECENTE_MS) {
     throw new SessaoRecenteObrigatoriaError()
@@ -394,13 +403,25 @@ export async function cancelarAssinaturaDoUsuario(
     agora: entrada.agora,
   })
 
+  // O CONTRATO VIGENTE, não o escrito por último (pente fino 09/10, achado
+  // 2): depois de um upgrade, o cron cancela o contrato antigo e o escreve
+  // DEPOIS do novo — ordenar só por `atualizado_em` cancelava de novo o morto
+  // e deixava o novo cobrando. O id do formulário é a fonte, sempre escopado
+  // à conta da sessão; sem ele, o critério da tela (`carregarConta`): não
+  // cancelado, o mais recente. Sem contrato vigente, erro ANTES do provedor.
   const [assinatura] = await db
     .select()
     .from(assinaturas)
-    .where(eq(assinaturas.usuarioId, sessao.usuarioId))
+    .where(
+      and(
+        eq(assinaturas.usuarioId, sessao.usuarioId),
+        isNull(assinaturas.canceladaEm),
+        entrada.assinaturaId ? eq(assinaturas.id, entrada.assinaturaId) : undefined,
+      ),
+    )
     .orderBy(desc(assinaturas.atualizadoEm))
     .limit(1)
-  if (!assinatura?.mercadopagoId) throw new Error('assinatura cancelável não encontrada')
+  if (!assinatura?.mercadopagoId) throw new NenhumaAssinaturaAtivaError()
 
   const externa = await porta.cancelarAssinatura(assinatura.mercadopagoId, randomUUID())
   if (externa.id !== assinatura.mercadopagoId) throw new Error('provedor retornou outra assinatura')

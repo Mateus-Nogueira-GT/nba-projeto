@@ -226,8 +226,9 @@ export function BlocoAssinatura({
             <Link href="/assinar" className={s.botaoSecundario}>
               Ver planos
             </Link>
-            {podeCancelar && (
+            {podeCancelar && assinatura && (
               <form action={cancelarAssinatura}>
+                <input type="hidden" name="assinaturaId" value={assinatura.id} />
                 <button type="submit" className={s.botaoPerigo}>
                   Cancelar assinatura
                 </button>

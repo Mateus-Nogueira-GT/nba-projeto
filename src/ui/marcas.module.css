@@ -132,6 +132,14 @@
   font-weight: 700;
   font-size: var(--t-13);
 }
+.estrelas {
+  display: inline-flex;
+  color: var(--matchup-estrela);
+  font-size: var(--t-13);
+  line-height: 1;
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+}
 .barras {
   display: inline-flex;
   align-items: flex-end;

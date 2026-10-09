@@ -234,6 +234,39 @@ describe('executarDiaRetroativo', () => {
     expect(f!.hash).toMatch(/^[0-9a-f]+$/)
   }, 30_000)
 
+  it('matchup em estrelas (CJ, 09/10): o adversário é o do time que ele JOGOU no dia', async () => {
+    // Os três jogos anteriores são MIL × BOS e o MIL marca mais: o BOS é quem
+    // mais cede pontos (posição 1), o MIL é o 2º. Com corte 1 e liberação em
+    // 3 dias, só o adversário certo (BOS) dá estrela — o MIA, time da lista do
+    // CJ, nem tem jogo, e o próprio MIL não está no corte.
+    for (const jogoId of [JOGO_01, JOGO_02, JOGO_03]) {
+      await db.insert(schema.estatisticasTimeJogo).values([
+        { jogoId, timeId: MIL, pontos: 120 },
+        { jogoId, timeId: BOS, pontos: 100 },
+      ])
+    }
+    const comMatchup = structuredClone(ruleset)
+    comMatchup.matchup.corte_top = 1
+    comMatchup.matchup.liberar_apos_dias_de_competicao = 3
+    await executarDiaRetroativo(db, comMatchup, DIA, { agora: DEPOIS })
+    const [f] = await db.select().from(schema.feedRetroativo)
+    const itens = (f!.conteudoJson as ConteudoFeed).itens
+    expect(itens.length).toBeGreaterThan(0)
+    for (const i of itens) {
+      expect(i.matchup).toEqual({
+        estrelas: 1,
+        motivos: [{ metrica: 'PONTOS_CEDIDOS', posicao: 1 }],
+        aviso: [],
+      })
+    }
+
+    // Antes dos dias de liberação, o item vai sem matchup.
+    comMatchup.matchup.liberar_apos_dias_de_competicao = 4
+    await executarDiaRetroativo(db, comMatchup, DIA, { agora: DEPOIS })
+    const [g] = await db.select().from(schema.feedRetroativo)
+    expect((g!.conteudoJson as ConteudoFeed).itens.every((i) => i.matchup === null)).toBe(true)
+  }, 30_000)
+
   it('dia sem jogo não escreve nada', async () => {
     const r = await executarDiaRetroativo(db, ruleset, '2025-11-10', { agora: DEPOIS })
     expect(r).toEqual({ apitos: 0, greens: 0, jogos: 0 })

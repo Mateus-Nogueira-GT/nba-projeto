@@ -25,6 +25,13 @@ export { emBlowout } from './avisos/blowout'
 export { agregar as agregarOdds } from './odds/agregar'
 export { origemDoAtributo, linhasDoNivel, faixaEstatica, faixaDeClassificacao } from './atributos'
 export { calcularConfianca, faixaDaConfianca } from './confianca'
+export { estrelasDoMatchup } from './matchup/estrelas'
+export type {
+  EstrelasMatchup,
+  FatoMatchup,
+  MotivoMatchup,
+  PosicoesMatchup,
+} from './matchup/estrelas'
 export type { FaixaConfianca } from './confianca'
 export type { FaixaOdds, OrigemOdds } from './odds/agregar'
 export { carregarRuleset } from './ruleset/carregar'

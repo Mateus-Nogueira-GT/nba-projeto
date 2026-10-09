@@ -3,7 +3,7 @@ import { getDb } from '@/modules/dominio/db/cliente'
 import { dataDeReferencia, somarDias } from '@/modules/dominio/rodada'
 import { calendarioDoRuleset } from '@/modules/dominio/temporada'
 import { jogosDoDiaResumo, ordenarPorSinal } from '@/modules/entrega/lista-por-jogo'
-import { agruparPorJogador } from '@/modules/entrega/lista-secreta'
+import { agruparPorJogador, atributoSemNota } from '@/modules/entrega/lista-secreta'
 import { diasDaTemporada } from '@/modules/entrega/resultados'
 import { resumoDaNoiteCacheado } from '@/app/_cache/rodada'
 import { lerFeedCacheado } from '@/app/_cache/feed'
@@ -160,7 +160,11 @@ export async function ResumoDaRodada() {
                       {ATRIBUTO_CURTO[i.atributo]} · {i.timeSigla}
                     </span>
                   </span>
-                  <PilulaConfianca valor={i.confianca} grau={i.grauConfianca} />
+                  <PilulaConfianca
+                    valor={i.confianca}
+                    grau={i.grauConfianca}
+                    apito={atributoSemNota(i.atributo, ruleset) ? { nivel: i.nivelApito, turbo: i.turbo } : null}
+                  />
                 </Link>
               </li>
             ))}

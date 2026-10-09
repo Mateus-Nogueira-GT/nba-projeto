@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { eq } from 'drizzle-orm'
+import yamlBruto from '../../../../../config/ruleset.v1.yaml?raw'
 
 import { bancoDeTeste } from '../../../dominio/__tests__/ajuda-banco'
 import * as schema from '../../../dominio/db/schema'
@@ -7,6 +8,8 @@ import type { Db } from '../../../dominio/db/tipos'
 import { versaoAtiva } from '../../../dominio/repositorios/niveis'
 import { exportarListaDoCj, restaurarListaDoCj, type BackupListaCj } from '../backup'
 import { confirmarMapeamento } from '../importar'
+import { carregarRuleset } from '../../../motor/ruleset/carregar'
+import type { Ruleset } from '../../../motor/ruleset/schema'
 
 type Banco = Awaited<ReturnType<typeof bancoDeTeste>>
 
@@ -305,5 +308,266 @@ describe('backup e restauração da lista do CJ', () => {
       .where(eq(schema.mapaJogadores.nomeNaLista, 'Giannis'))
     expect(giannis!.jogadorId).toBe(outro.id)
     expect(giannis!.confirmadoPor).toBe('parceiro')
+  })
+})
+
+/**
+ * GRAFIAS REPETIDAS EM REB E AST — respostas do CJ de 09/10, spec §3.
+ *
+ * "Simmons" e "Simons" na lista de rebotes, os dois confirmados para o mesmo
+ * Anfernee Simons, com níveis diferentes. Antes, nenhum entrava. Agora fica o
+ * nível cuja faixa (`por_atributo.REBOTES.classificacao`) contém a média real
+ * dele em rebotes, na temporada mais recente com dado.
+ */
+describe('grafias repetidas no mesmo atributo: a faixa de média do CJ decide', () => {
+  let banco: Banco
+  let db: Db
+  let ruleset: Ruleset
+  let simons: string
+
+  beforeEach(async () => {
+    banco = await bancoDeTeste()
+    db = banco.db as unknown as Db
+    ruleset = carregarRuleset(yamlBruto)
+    const [phi, bkn] = await db
+      .insert(schema.times)
+      .values([
+        { sigla: 'PHI', nome: 'Philadelphia' },
+        { sigla: 'BKN', nome: 'Brooklyn' },
+      ])
+      .returning()
+    void bkn
+    const [j] = await db
+      .insert(schema.jogadores)
+      .values({ nomeCompleto: 'Anfernee Simons', timeId: phi!.id })
+      .returning()
+    simons = j!.id
+    for (const nome of ['Simmons', 'Simons']) {
+      await db.insert(schema.mapaJogadores).values({
+        nomeNaLista: nome,
+        provedor: 'balldontlie',
+        jogadorId: simons,
+        confirmadoPor: 'parceiro',
+        confirmadoEm: new Date('2026-10-09T12:00:00Z'),
+      })
+    }
+  })
+  afterEach(async () => {
+    await banco.fechar()
+  })
+
+  type Entrada = BackupListaCj['versoes'][number]['niveis'][number]
+  const entrada = (nome: string, nivel: Entrada['nivel'], extra: Partial<Entrada> = {}): Entrada => ({
+    nome: 'Anfernee Simons',
+    nomeNaLista: nome,
+    timeSigla: 'PHI',
+    atributo: 'REBOTES',
+    nivel,
+    posicaoHierarquia: nivel === 'ALL_STAR' ? 2 : 3,
+    ...extra,
+  })
+  const backupCom = (niveis: Entrada[]): BackupListaCj => ({
+    geradoEm: '2026-10-09T12:00:00Z',
+    versoes: [
+      {
+        versao: 'lista-09-10',
+        origemArquivo: null,
+        importadoPor: 'cj',
+        importadoEm: '2026-10-09T12:00:00Z',
+        ativa: true,
+        niveis,
+      },
+    ],
+  })
+  async function mediaEmRebotes(temporada: string, rpg: string | null, jogos = 60) {
+    await db.insert(schema.mediasJogador).values({
+      jogadorId: simons,
+      temporada,
+      janela: 'TEMPORADA',
+      jogos,
+      ppg: '14.00',
+      rpg,
+      apg: '4.00',
+    })
+  }
+  async function niveisGravados() {
+    return db.select().from(schema.niveis)
+  }
+
+  it('a média da temporada mais recente escolhe o nível — e a entrada entra com a própria posição', async () => {
+    await mediaEmRebotes('2024-25', '8.00') // seria All Star; é a temporada velha
+    await mediaEmRebotes('2025-26', '5.20') // Suporte: 4–6,9
+
+    const r = await restaurarListaDoCj(
+      db,
+      backupCom([entrada('Simons', 'ALL_STAR'), entrada('Simmons', 'SUPORTE')]),
+      { provedor: 'balldontlie', ruleset },
+    )
+
+    expect(r.resolvidosPorMedia).toEqual([
+      {
+        versao: 'lista-09-10',
+        nome: 'Simmons',
+        descartados: ['Simons'],
+        atributo: 'REBOTES',
+        escolhido: 'SUPORTE',
+        media: 5.2,
+      },
+    ])
+    expect(r.aindaDuplicados).toEqual([])
+    expect(r.pendentes).toEqual([])
+    const gravados = await niveisGravados()
+    expect(gravados).toHaveLength(1)
+    expect(gravados[0]).toMatchObject({
+      jogadorId: simons,
+      atributo: 'REBOTES',
+      nivel: 'SUPORTE',
+      posicaoHierarquia: 3,
+    })
+  })
+
+  it('média no vão entre as faixas (9,9): nenhuma bate, o grupo continua pendente e é relatado', async () => {
+    await mediaEmRebotes('2025-26', '9.90')
+
+    const r = await restaurarListaDoCj(
+      db,
+      backupCom([entrada('Simons', 'ALL_STAR'), entrada('Simmons', 'MVP')]),
+      { provedor: 'balldontlie', ruleset },
+    )
+
+    expect(r.resolvidosPorMedia).toEqual([])
+    expect(r.pendentes).toEqual(['Simmons', 'Simons'])
+    expect(r.aindaDuplicados).toEqual([
+      {
+        versao: 'lista-09-10',
+        nomes: ['Simmons', 'Simons'],
+        atributo: 'REBOTES',
+        niveis: ['ALL_STAR', 'MVP'],
+        media: 9.9,
+        motivo: 'nenhuma faixa bate com a média',
+      },
+    ])
+    expect(await niveisGravados()).toEqual([])
+  })
+
+  it('mesmo nível em times diferentes: a média não desempata, fica pendente', async () => {
+    await mediaEmRebotes('2025-26', '5.20')
+
+    const r = await restaurarListaDoCj(
+      db,
+      backupCom([entrada('Simons', 'SUPORTE'), entrada('Simmons', 'SUPORTE', { timeSigla: 'BKN' })]),
+      { provedor: 'balldontlie', ruleset },
+    )
+
+    expect(r.aindaDuplicados.map((g) => g.motivo)).toEqual(['mesmo nível em times diferentes'])
+    expect(await niveisGravados()).toEqual([])
+  })
+
+  it('sem média do jogador no atributo: sem escolha', async () => {
+    await mediaEmRebotes('2025-26', null)
+
+    const r = await restaurarListaDoCj(
+      db,
+      backupCom([entrada('Simons', 'ALL_STAR'), entrada('Simmons', 'SUPORTE')]),
+      { provedor: 'balldontlie', ruleset },
+    )
+
+    expect(r.pendentes).toEqual(['Simmons', 'Simons'])
+    expect(r.aindaDuplicados.map((g) => [g.media, g.motivo])).toEqual([
+      [null, 'sem média do jogador no atributo'],
+    ])
+    expect(await niveisGravados()).toEqual([])
+  })
+
+  it('sem ruleset, nada se resolve por média — o comportamento anterior', async () => {
+    await mediaEmRebotes('2025-26', '5.20')
+
+    const r = await restaurarListaDoCj(
+      db,
+      backupCom([entrada('Simons', 'ALL_STAR'), entrada('Simmons', 'SUPORTE')]),
+      { provedor: 'balldontlie' },
+    )
+
+    expect(r.pendentes).toEqual(['Simmons', 'Simons'])
+    expect(await niveisGravados()).toEqual([])
+  })
+
+  it('duas grafias idênticas em time e nível: entra uma, a do topo da hierarquia', async () => {
+    const r = await restaurarListaDoCj(
+      db,
+      backupCom([
+        entrada('Simons', 'SUPORTE', { posicaoHierarquia: 4 }),
+        entrada('Simmons', 'SUPORTE', { posicaoHierarquia: 3 }),
+      ]),
+      { provedor: 'balldontlie', ruleset },
+    )
+
+    expect(r.pendentes).toEqual([])
+    expect(r.resolvidosPorMedia).toEqual([])
+    const gravados = await niveisGravados()
+    expect(gravados).toHaveLength(1)
+    expect(gravados[0]).toMatchObject({ nivel: 'SUPORTE', posicaoHierarquia: 3 })
+  })
+
+  /**
+   * PENTE FINO DE 09/10, achado 8: quando 2026-27 começar, `medias_jogador`
+   * ganha a temporada nova com UM jogo — e ela não pode decidir o nível pela
+   * média de uma noite. Só conta temporada com `jogos >= jogos_minimos`.
+   */
+  it('o mínimo de jogos vem do ruleset (proposta 5, a confirmar pelo parceiro)', () => {
+    expect(ruleset.niveis.resolucao_por_media.jogos_minimos).toBe(5)
+  })
+
+  it('temporada nova com 1 jogo não decide: vale a anterior', async () => {
+    await mediaEmRebotes('2025-26', '5.20') // Suporte
+    await mediaEmRebotes('2026-27', '8.00', 1) // seria All Star — uma noite só
+
+    const r = await restaurarListaDoCj(
+      db,
+      backupCom([entrada('Simons', 'ALL_STAR'), entrada('Simmons', 'SUPORTE')]),
+      { provedor: 'balldontlie', ruleset },
+    )
+
+    expect(r.resolvidosPorMedia.map((g) => [g.escolhido, g.media])).toEqual([['SUPORTE', 5.2]])
+  })
+
+  it('com o mínimo atingido, a temporada nova decide — e o número é o do ruleset', async () => {
+    await mediaEmRebotes('2025-26', '5.20')
+    await mediaEmRebotes('2026-27', '8.00', 1)
+    const umJogoBasta = structuredClone(ruleset)
+    umJogoBasta.niveis.resolucao_por_media.jogos_minimos = 1
+
+    const r = await restaurarListaDoCj(
+      db,
+      backupCom([entrada('Simons', 'ALL_STAR'), entrada('Simmons', 'SUPORTE')]),
+      { provedor: 'balldontlie', ruleset: umJogoBasta },
+    )
+
+    expect(r.resolvidosPorMedia.map((g) => [g.escolhido, g.media])).toEqual([['ALL_STAR', 8]])
+  })
+
+  it('`temporada` fixa a temporada da média, mesmo havendo uma mais recente', async () => {
+    await mediaEmRebotes('2024-25', '8.00') // All Star
+    await mediaEmRebotes('2025-26', '5.20') // Suporte
+
+    const r = await restaurarListaDoCj(
+      db,
+      backupCom([entrada('Simons', 'ALL_STAR'), entrada('Simmons', 'SUPORTE')]),
+      { provedor: 'balldontlie', ruleset, temporada: '2024-25' },
+    )
+
+    expect(r.resolvidosPorMedia.map((g) => [g.escolhido, g.media])).toEqual([['ALL_STAR', 8]])
+  })
+
+  it('`temporada` fixada sem dado do jogador: sem média, sem escolha', async () => {
+    await mediaEmRebotes('2025-26', '5.20')
+
+    const r = await restaurarListaDoCj(
+      db,
+      backupCom([entrada('Simons', 'ALL_STAR'), entrada('Simmons', 'SUPORTE')]),
+      { provedor: 'balldontlie', ruleset, temporada: '2023-24' },
+    )
+
+    expect(r.aindaDuplicados.map((g) => g.motivo)).toEqual(['sem média do jogador no atributo'])
   })
 })

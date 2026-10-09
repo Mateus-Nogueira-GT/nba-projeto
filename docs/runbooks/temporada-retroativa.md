@@ -128,6 +128,12 @@ npm run ingestao:backfill -- --from=2026-01-05 --to=2026-01-07
 npm run demo:limpar -- --confirmar
 ```
 
+Com dado real no banco (checkpoint de ingestão) ou `NBA_INGESTAO_HABILITADA=true`,
+o script **recusa** com a mesma linha do cron (`demo_recusada`) — apagar a temporada
+real exige a flag adicional `--apagar-dado-real`. As contagens do que vai sumir
+saem antes, em qualquer caso. `demo:temporada` e `demo:seed` recusam no mesmo
+cenário, sem flag que os libere.
+
 Apaga **somente o domínio** — jogos, jogadores, estatísticas, apitos. Contas,
 sessões, assinaturas e inscrições de push **permanecem**: ninguém perde acesso
 e ninguém precisa entrar de novo. Saem também as entradas que usuários

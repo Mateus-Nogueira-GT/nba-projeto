@@ -76,6 +76,19 @@ function diaLido(bruto: string | undefined, fuso: string): Date | null {
   return intervaloDoDia(dia, fuso).fim
 }
 
+/**
+ * O fim de uma cortesia com `CORTESIA_ATE` (script `conceder-cortesia`): a
+ * MESMA conta de `TEMPORADA_FIM` — a meia-noite local do dia seguinte. Antes
+ * era `T23:59:59.999Z`, que em Brasília acabava 3 h antes do dia informado
+ * (pente fino de 09/10, achado 11). Vazio = não expira.
+ */
+export function fimDaCortesia(ate: string | undefined, fuso: string): Date | null {
+  if (!ate) return null
+  const fim = diaLido(ate, fuso)
+  if (!fim) throw new Error('CORTESIA_ATE inválida (AAAA-MM-DD)')
+  return fim
+}
+
 export function precosDosPlanos(
   fuso: string,
   ambiente: Readonly<Record<string, string | undefined>> = process.env,

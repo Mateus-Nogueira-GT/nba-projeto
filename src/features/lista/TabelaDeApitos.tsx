@@ -6,6 +6,7 @@ import { oddDaLinha } from '@/ui/odd'
 import { IconeOrdenar } from '@/ui/icones'
 import {
   corDoApito,
+  EstrelasMatchup,
   IndicadorApito,
   PilulaConfianca,
   PilulaMercado,
@@ -186,6 +187,7 @@ function Linha({
                   opd={item.metodo === 'OPD'}
                   opdOrigemNivel={item.opdOrigemNivel}
                 />
+                <EstrelasMatchup matchup={item.matchup} />
               </span>
               {item.modoFire && <SeloModoFire />}
               {/* A hierarquia não tem coluna própria: quando a lente pede, ela
@@ -206,6 +208,7 @@ function Linha({
         <span className={s.cMercadoCurto}>
           <PilulaMercado linha={item.linha} atributo={item.atributo} alvo1Q={item.alvo1Q} curto texto />
           <IndicadorApito nivel={item.nivelApito} turbo={item.turbo} opdOrigemNivel={item.opdOrigemNivel} />
+          <EstrelasMatchup matchup={item.matchup} />
         </span>
         <span className={s.cApito}>
           <IndicadorApito
@@ -214,9 +217,14 @@ function Linha({
             opd={item.metodo === 'OPD'}
             opdOrigemNivel={item.opdOrigemNivel}
           />
+          <EstrelasMatchup matchup={item.matchup} />
         </span>
         <span className={s.cConfianca}>
-          <PilulaConfianca valor={item.confianca} grau={item.grauConfianca} />
+          <PilulaConfianca
+            valor={item.confianca}
+            grau={item.grauConfianca}
+            apito={linha.semNota ? { nivel: item.nivelApito, turbo: item.turbo } : null}
+          />
         </span>
         {/* Sem odd (temporada anterior) a coluna não existe — nem célula, nem título. */}
         {!semOdd && (

@@ -68,12 +68,24 @@ const nomeSchema = z.preprocess(
   z.string().trim().min(2, 'Nome muito curto.').max(60, 'Nome muito longo.'),
 )
 
-export async function cancelarAssinatura(): Promise<void> {
+// O contrato que a tela mostrou. Ausente, vale o critério da tela dentro de
+// `cancelarAssinaturaDoUsuario`; malformado, recusa antes do banco. Que ele
+// pertença à conta da sessão, quem garante é a consulta lá dentro.
+const assinaturaIdSchema = z.string().uuid()
+
+export async function cancelarAssinatura(formulario?: FormData): Promise<void> {
   const sessao = await sessaoAtual()
   if (!sessao) redirect('/entrar?destino=/conta')
 
   let destino = '/conta?cancelamento=confirmado'
   try {
+    const bruto = formulario?.get('assinaturaId')
+    let assinaturaId: string | null = null
+    if (typeof bruto === 'string' && bruto !== '') {
+      const lido = assinaturaIdSchema.safeParse(bruto)
+      if (!lido.success) throw new Error('AssinaturaInvalida')
+      assinaturaId = lido.data
+    }
     if (!origemPermitida((await headers()).get('origin'), configuracaoProdutoPago())) {
       throw new Error('OrigemInvalida')
     }
@@ -82,6 +94,7 @@ export async function cancelarAssinatura(): Promise<void> {
     await cancelarAssinaturaDoUsuario(getDb(), new PagamentoMercadoPago(config), sessao, {
       ip: await ipDaRequisicao(),
       agora: new Date(),
+      assinaturaId,
     })
   } catch (erro) {
     destino =

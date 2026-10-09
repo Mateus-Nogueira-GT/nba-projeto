@@ -14,7 +14,24 @@ const DESTINOS_POS_LOGIN = new Set(['/', '/abrir', '/assinar', '/conta', '/admin
 // o convite. O caminho do convite é casado por FORMA, não por prefixo: o
 // token é exatamente o que `criarConvite` gera — 32 bytes em base64url, 43
 // caracteres de [A-Za-z0-9_-] —, então `..`, `/`, `?` e `#` nunca cabem nele.
-const DESTINOS_POS_LOGIN_POR_FORMA = [/^\/afiliados$/, /^\/afiliados\/convite\/[A-Za-z0-9_-]{43}$/]
+//
+// As telas para onde o portão (`exigirNivel`) manda quem não está logado
+// (pente fino de 09/10, achado 6): sem elas aqui, o login e o aceite da
+// metodologia reduziam `?destino=/fire-live` a `/abrir`, e o link que o
+// próprio produto gera ficava inerte. Também por FORMA: cada segmento é
+// [A-Za-z0-9_-], não vazio, e a data dos resultados é AAAA-MM-DD — `..`, `?`,
+// `#`, `//`, `\` e controle nunca cabem. A query dos filtros de resultados
+// fica de fora de propósito: volta a data, sem os filtros.
+const SEGMENTO = '[A-Za-z0-9_-]{1,100}'
+const DESTINOS_POS_LOGIN_POR_FORMA = [
+  /^\/afiliados$/,
+  /^\/afiliados\/convite\/[A-Za-z0-9_-]{43}$/,
+  /^\/fire-live$/,
+  /^\/gestao$/,
+  new RegExp(`^/estatisticas(/${SEGMENTO}){0,4}$`),
+  /^\/resultados\/\d{4}-\d{2}-\d{2}$/,
+  new RegExp(`^/apito/${SEGMENTO}$`),
+]
 
 type Cabecalhos = Pick<Headers, 'get'>
 

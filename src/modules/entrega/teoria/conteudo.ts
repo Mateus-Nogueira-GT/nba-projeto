@@ -1,4 +1,4 @@
-import { linhasDoNivel, origemDoAtributo } from '../../motor/atributos'
+import { linhasDoNivel, origemDoAtributo, temNotaDeConfianca } from '../../motor/atributos'
 import type { Ruleset } from '../../motor/ruleset/schema'
 import { ATRIBUTOS, NIVEIS } from '../../motor/tipos'
 import type { Atributo, Nivel, NivelApito } from '../../motor/tipos'
@@ -22,6 +22,8 @@ export type AtributoNaTeoria = {
   origem: 'homologado' | 'demonstracao' | null
   /** Linhas oferecidas por nível. Vazio = o atributo não gera apito. */
   linhas: Partial<Record<Nivel, number[]>>
+  /** Falso = o apito sai sem nota de confiança; vale a cor do apito (CJ, 09/10). */
+  temNota: boolean
 }
 
 export type Teoria = {
@@ -61,6 +63,7 @@ export type Teoria = {
       pontosNaoClassificado: number
       rebotes: number
     }
+    rebotes: { mediaMinima: number }
     assistencias: { valor: number; mediaMinima: number }
     travas: { pontosAlvoMinimo: number; rebotesAlvoMinimo: number }
     modoFire: { aplicaA: Nivel[]; percentual: number }
@@ -82,6 +85,7 @@ export function montarTeoria(ruleset: Ruleset): Teoria {
           ([, linhas]) => (linhas as number[]).length > 0,
         ),
       ),
+      temNota: temNotaDeConfianca(atributo, ruleset),
     })),
     niveis: {
       ordem: ruleset.niveis.ordem,
@@ -123,6 +127,7 @@ export function montarTeoria(ruleset: Ruleset): Teoria {
         pontosNaoClassificado: fl.multiplicadores.pontos_nao_classificado,
         rebotes: fl.multiplicadores.rebotes,
       },
+      rebotes: { mediaMinima: fl.rebotes.media_minima },
       assistencias: {
         valor: fl.assistencias.valor,
         mediaMinima: fl.assistencias.media_minima,

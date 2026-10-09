@@ -42,6 +42,7 @@ export function alvoFireLive(p: ParametrosAlvo, ruleset: Ruleset): number | null
     return arredondar(porQuarto + fl.assistencias.valor, ruleset)
   }
 
+  if (p.mediaPorJogo < fl.rebotes.media_minima) return null
   const alvo = arredondar(porQuarto * fl.multiplicadores.rebotes, ruleset)
   return alvo > fl.travas.rebotes_alvo_minimo ? alvo : null
 }

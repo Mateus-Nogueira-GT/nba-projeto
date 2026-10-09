@@ -24,6 +24,7 @@ import { materializarFeedFireLive, type ConteudoFeedFireLive, type ItemFireLive 
 import { lerFeedFireLive } from '@/modules/entrega/fire-live/leitura'
 import { cotacoesPorCasa } from '@/modules/entrega/odds/leitura'
 import { lerFeed, linhasDoJogador, publicarListaSecreta, recorteDoJogador } from '@/modules/entrega/lista-secreta'
+import type { ConteudoFeed, ItemFeed } from '@/modules/entrega/tipos-feed'
 import { rulesetAtivo } from '@/modules/entrega/ruleset-ativo'
 import { simularAte } from '@/modules/ingestao/demo/temporada'
 import { hora } from '@/ui/formato'
@@ -185,6 +186,24 @@ describe('detalhe do apito — temporada simulada', () => {
       'probabilidade',
     )
   }, 60_000)
+
+  it.each<Porta>(['pagina', 'painel'])(
+    '%s: rebote ou assistência sem nota (CJ, 09/10) mostra o nível do apito no lugar do %%',
+    async (porta) => {
+      const feed = await lerFeed(banco.db, HOJE)
+      const alvo = feed!.conteudo.itens.find((i) => i.atributo !== 'PONTOS' && i.linha !== null)
+      expect(alvo, 'lista de hoje sem apito de rebote ou assistência').toBeDefined()
+      expect(alvo!.confianca).toBeNull()
+      expect(alvo!.grauConfianca).toBeNull()
+
+      const html = await renderizar(porta, alvo!.jogadorId, { atributo: alvo!.atributo })
+      const visivel = texto(html)
+      expect(visivel).toContain(`Apito N${alvo!.nivelApito}`)
+      expect(visivel).not.toMatch(/Confiança \d+%/)
+      expect(visivel).not.toContain('menor a confiança')
+    },
+    60_000,
+  )
 
   it.each<Porta>(['pagina', 'painel'])('%s: `?atributo=` inválido não lança', async (porta) => {
     const alvo = await umApito()
@@ -398,6 +417,80 @@ describe('detalhe do apito — temporada simulada', () => {
     // Sem /i: "+15 Pontos 1,40–1,60" é a pílula de mercado seguida da ODD
     // (decimal por natureza) — o que se proíbe é a LINHA com meio ponto.
     expect(visivel).not.toMatch(/(PONTOS|REBOTES|ASSISTÊNCIAS|PTS|REB|AST)\s+\d+,\d/)
+  }, 60_000)
+
+  it('(CJ, 09/10) as estrelas do matchup no herói, o motivo de cada uma e o aviso do negativo', async () => {
+    const alvo = await umApito()
+    const onde = and(eq(feedSnapshot.dataReferencia, HOJE), eq(feedSnapshot.estrategia, 'LISTA_SECRETA'))
+    const [linha] = await banco.db.select().from(feedSnapshot).where(onde).limit(1)
+    const original = linha!.conteudoJson as ConteudoFeed
+    const doAlvo = (i: ItemFeed) => i.jogadorId === alvo.jogadorId && i.atributo === alvo.atributo
+    const com = (matchup: ItemFeed['matchup'] | 'ausente'): ConteudoFeed => ({
+      ...original,
+      itens: original.itens.map((i) => {
+        if (!doAlvo(i)) return i
+        const { matchup: _, ...semCampo } = i
+        return matchup === 'ausente' ? semCampo : { ...i, matchup }
+      }),
+    })
+    const corte = (await rulesetAtivo()).matchup.corte_top
+    try {
+      await banco.db
+        .update(feedSnapshot)
+        .set({
+          conteudoJson: com({
+            estrelas: 2,
+            motivos: [
+              { metrica: 'PONTOS_CEDIDOS', posicao: 2 },
+              { metrica: 'BOLAS_PERDIDAS', posicao: 4 },
+            ],
+            aviso: [{ metrica: 'PONTOS_MARCADOS', posicao: 1 }],
+          }),
+        })
+        .where(onde)
+      const html = await renderizar('pagina', alvo.jogadorId, { atributo: alvo.atributo })
+      const visivel = texto(html)
+      expect(html).toContain('aria-label="2 estrelas de matchup"')
+      // A posição entre parênteses é a que veio COM a estrela no item (pente
+      // fino de 09/10, achado 9) — não a do cache de perfis do painel.
+      expect(visivel).toContain(`Top ${corte} que mais cedem pontos (2º)`)
+      expect(visivel).toContain(`Top ${corte} que mais perdem a bola (4º)`)
+      expect(visivel).toContain(
+        `Matchup negativo: adversário entre os ${corte} melhores ataques (1º)`,
+      )
+      // O bloco de números segue, com as duas linhas novas.
+      expect(visivel).toContain('Pontos marcados por jogo')
+      expect(visivel).toContain('Bolas perdidas por jogo')
+
+      // Snapshot gravado antes do pente fino (motivos como texto): abre, com
+      // as mesmas frases e sem parêntese — a posição não veio com a estrela.
+      await banco.db
+        .update(feedSnapshot)
+        .set({
+          conteudoJson: com({
+            estrelas: 1,
+            motivos: ['PONTOS_CEDIDOS'],
+            aviso: ['PONTOS_MARCADOS'],
+          } as unknown as ItemFeed['matchup']),
+        })
+        .where(onde)
+      const textoAntigo = texto(
+        await renderizar('pagina', alvo.jogadorId, { atributo: alvo.atributo }),
+      )
+      expect(textoAntigo).toContain(`Top ${corte} que mais cedem pontos`)
+      expect(textoAntigo).not.toContain('que mais cedem pontos (')
+      expect(textoAntigo).toContain(`Matchup negativo: adversário entre os ${corte} melhores ataques`)
+      expect(textoAntigo).not.toContain('melhores ataques (')
+
+      // Snapshot anterior a 09/10, sem o campo: abre igual, sem estrela.
+      await banco.db.update(feedSnapshot).set({ conteudoJson: com('ausente') }).where(onde)
+      const antigo = await renderizar('pagina', alvo.jogadorId, { atributo: alvo.atributo })
+      expect(antigo).not.toContain('de matchup"')
+      expect(texto(antigo)).not.toContain('Matchup negativo')
+      expect(texto(antigo)).toContain('Adversário ·')
+    } finally {
+      await banco.db.update(feedSnapshot).set({ conteudoJson: original }).where(onde)
+    }
   }, 60_000)
 
   it('(rodada EUA, 07/10/2026) a hora do jogo sai no relógio de Brasília, não no fuso do dia', async () => {

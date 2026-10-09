@@ -20,7 +20,8 @@ import { avaliar, avaliarFireLive, type Green } from '../../motor'
 import type { Ruleset } from '../../motor/ruleset/schema'
 import type { Apito, NivelApito } from '../../motor/tipos'
 import { datasDoPeriodo, type PeriodoBacktest } from '../backtest/executar'
-import type { ConteudoFeed } from '../tipos-feed'
+import { calculadoraDeMatchup } from '../matchup'
+import type { ConteudoFeed, ItemFeed } from '../tipos-feed'
 import { montarItensRetroativos, type IdentidadeItem } from './feed'
 import { ehTemporadaAnterior } from './temporada'
 
@@ -165,7 +166,12 @@ export async function executarDiaRetroativo(
     dataReferencia,
     geradoEm: new Date().toISOString(),
     rulesetVersao: versao ? `${rulesetVersao}+${versao.versao}` : rulesetVersao,
-    itens: montarItensRetroativos(daLista, fatos, nomes, ruleset),
+    itens: await comMatchup(
+      db,
+      ruleset,
+      montarItensRetroativos(daLista, fatos, nomes, ruleset),
+      fatos,
+    ),
   }
 
   await db.transaction(async (tx) => {
@@ -208,6 +214,67 @@ export async function executarDiaRetroativo(
   })
 
   return { apitos: apitos.length, greens: greensUnicos.length, jogos: fatos.jogos.length }
+}
+
+/**
+ * MATCHUP EM ESTRELAS (CJ, 09/10) no item retroativo. O adversário é o outro
+ * lado do jogo pelo time que o apitado JOGOU no dia — o mesmo `TimeFato` que
+ * dá `timeSigla` ao item (`identidadesDoDia`). Os perfis são da temporada do
+ * dia, só com jogos ANTERIORES a ele: sem olhar o futuro.
+ */
+async function comMatchup(
+  db: Db,
+  ruleset: Ruleset,
+  itens: ItemFeed[],
+  fatos: {
+    times: { id: string; jogadores: { id: string }[] }[]
+    jogos: { id: string; timeCasaId: string; timeVisitanteId: string }[]
+  },
+): Promise<ItemFeed[]> {
+  if (itens.length === 0 || !ruleset.matchup.habilitado)
+    return itens.map((i) => ({ ...i, matchup: null }))
+  const timeDoJogador = new Map<string, string>()
+  for (const t of fatos.times) for (const j of t.jogadores) timeDoJogador.set(j.id, t.id)
+  const jogoPorId = new Map(fatos.jogos.map((j) => [j.id, j] as const))
+  // A sigla sai de `times`, não dos `TimeFato`: o adversário pode não ter
+  // ninguém da lista do CJ e, então, não vira `TimeFato`.
+  const idsJogo = [...new Set(itens.map((i) => i.jogoId))]
+  const idsTime = [
+    ...new Set(
+      idsJogo.flatMap((id) => {
+        const j = jogoPorId.get(id)
+        return j ? [j.timeCasaId, j.timeVisitanteId] : []
+      }),
+    ),
+  ]
+  const [datasDosJogos, siglas] = await Promise.all([
+    db
+      .select({ id: jogos.id, dataReferencia: jogos.dataReferencia, dataHoraUtc: jogos.dataHoraUtc })
+      .from(jogos)
+      .where(inArray(jogos.id, idsJogo)),
+    idsTime.length > 0
+      ? db.select({ id: times.id, sigla: times.sigla }).from(times).where(inArray(times.id, idsTime))
+      : Promise.resolve([]),
+  ])
+  const quandoPorJogo = new Map(datasDosJogos.map((j) => [j.id, j] as const))
+  const siglaDoTime = new Map(siglas.map((t) => [t.id, t.sigla] as const))
+
+  const calcular = calculadoraDeMatchup(db, ruleset)
+  return Promise.all(
+    itens.map(async (item) => {
+      const jogo = jogoPorId.get(item.jogoId)
+      const quando = quandoPorJogo.get(item.jogoId)
+      const timeId = timeDoJogador.get(item.jogadorId)
+      if (!jogo || !quando || !timeId) return { ...item, matchup: null }
+      const adversario = siglaDoTime.get(
+        timeId === jogo.timeCasaId ? jogo.timeVisitanteId : jogo.timeCasaId,
+      )
+      return {
+        ...item,
+        matchup: adversario ? await calcular(quando, adversario, item.atributo) : null,
+      }
+    }),
+  )
 }
 
 /**

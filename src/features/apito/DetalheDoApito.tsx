@@ -1,4 +1,6 @@
 import Link from 'next/link'
+import type { CSSProperties } from 'react'
+import type { MetricaMatchup, NivelApito } from '@/modules/motor/tipos'
 import { rotaDoJogador } from '@/modules/entrega/estatisticas/rotas'
 import { BotaoSecundario, EstadoVazio, NumeroGrande, Secao } from '@/ui/blocos'
 import { dataHora, decimal, hora, linha as fmtLinha } from '@/ui/formato'
@@ -7,6 +9,7 @@ import { IconeExterno, IconeFogo } from '@/ui/icones'
 import {
   ATRIBUTO_CURTO,
   corDoApito,
+  EstrelasMatchup,
   IndicadorApito,
   PilulaConfianca,
   PilulaMercado,
@@ -25,6 +28,9 @@ import s from './Apito.module.css'
 type Dados = Extract<DadosDoApito, { tipo: 'apito' }>
 
 const odd = (v: number) => decimal(v, 2)
+
+/** O nome da cor do nível do apito — a cor nunca é o único canal. */
+const COR_DO_NIVEL: Record<NivelApito, string> = { 1: 'Amarelo', 2: 'Laranja', 3: 'Verde' }
 
 function Cabecalho({ d }: { d: Dados }) {
   const { principal: p, detalhe } = d
@@ -50,6 +56,7 @@ function Cabecalho({ d }: { d: Dados }) {
               {p.posicao ? ` · ${p.posicao}` : ''}
             </span>
             <IndicadorApito nivel={p.nivelApito} turbo={p.turbo} opd={p.metodo === 'OPD'} />
+            <EstrelasMatchup matchup={p.matchup} />
             {p.turbo && <SeloTurbo grande />}
           </p>
           <p className={s.mercado}>
@@ -85,15 +92,31 @@ function Numeros({ d }: { d: Dados }) {
         : { rotulo: 'Linha', valor: '—' }
   return (
     <dl className={s.numeros}>
-      {/* A nota veste a COR DO GRAU — é o canal de leitura da escala de
-          confiança, e o grau 5 ainda ganha brilho, como no front anterior. */}
-      <div className={s.confianca} data-grau={d.grauConfianca ?? undefined}>
-        <NumeroGrande
-          rotulo="Confiança"
-          valor={p.confianca === null ? '—' : `${Math.round(p.confianca)}%`}
-          apoio={d.rotuloConfianca ? d.rotuloConfianca.charAt(0) + d.rotuloConfianca.slice(1).toLowerCase() : undefined}
-        />
-      </div>
+      {p.confianca === null ? (
+        // Sem nota (rebotes e assistências desde 09/10, e o Fire Live desde
+        // sempre): a caixa mostra o NÍVEL DO APITO na cor dele — é o que o CJ
+        // disse que vale. Um "—" sob "Confiança" sugeria número faltando.
+        <div
+          className={s.confianca}
+          style={{ '--cor-grau': corDoApito(p.nivelApito, p.turbo) } as CSSProperties}
+        >
+          <NumeroGrande
+            rotulo="Apito"
+            valor={`N${p.nivelApito}`}
+            apoio={p.turbo ? 'Turbo' : COR_DO_NIVEL[p.nivelApito]}
+          />
+        </div>
+      ) : (
+        /* A nota veste a COR DO GRAU — é o canal de leitura da escala de
+           confiança, e o grau 5 ainda ganha brilho, como no front anterior. */
+        <div className={s.confianca} data-grau={d.grauConfianca ?? undefined}>
+          <NumeroGrande
+            rotulo="Confiança"
+            valor={`${Math.round(p.confianca)}%`}
+            apoio={d.rotuloConfianca ? d.rotuloConfianca.charAt(0) + d.rotuloConfianca.slice(1).toLowerCase() : undefined}
+          />
+        </div>
+      )}
       <NumeroGrande
         rotulo="Bateu"
         valor={total === 0 ? '—' : `${acertos}/${total}`}
@@ -212,35 +235,82 @@ function OJogo({ d }: { d: Dados }) {
   )
 }
 
+/** O que cada métrica do matchup diz do adversário, para o motivo da estrela. */
+const MOTIVO_MATCHUP: Record<MetricaMatchup, string> = {
+  PONTOS_CEDIDOS: 'que mais cedem pontos',
+  TRES_ERRADAS: 'que mais erram bolas de 3',
+  BOLAS_PERDIDAS: 'que mais perdem a bola',
+  PONTOS_MARCADOS: 'que mais marcam pontos',
+}
+const AVISO_MATCHUP: Record<MetricaMatchup, string> = {
+  PONTOS_MARCADOS: 'melhores ataques',
+  PONTOS_CEDIDOS: 'que mais cedem pontos',
+  TRES_ERRADAS: 'que mais erram bolas de 3',
+  BOLAS_PERDIDAS: 'que mais perdem a bola',
+}
+
 /**
- * MATCHUP — só o dado (reunião de 23/09). O CJ não deu limites, então isto
- * não apita nem muda apito: mostra o que o adversário cede, com a posição na
- * liga (1º = o que mais cede), contando os jogos antes deste.
+ * MATCHUP — o dado do adversário (reunião de 23/09) e, desde as respostas do
+ * CJ de 09/10, o PORQUÊ de cada estrela e o aviso do matchup negativo. A
+ * estrela vem pronta no item (materialização); a tela só a explica. O corte
+ * ("top 5") é do ruleset e chega em `corteMatchup`.
  */
 function Adversario({ d }: { d: Dados }) {
   const a = d.adversario
-  if (!a) return null
-  const linhas = [
-    { rotulo: 'Pontos cedidos por jogo', marca: a.pontosCedidos },
-    { rotulo: 'Bolas de 3 erradas por jogo', marca: a.tresErradas },
-    { rotulo: 'Rebotes cedidos por jogo', marca: a.rebotesCedidos },
-  ]
+  const m = d.matchup
+  const temMatchup = m !== null && (m.estrelas > 0 || m.aviso.length > 0)
+  if (!a && !temMatchup) return null
+  // A posição entre parênteses é a que veio COM a estrela no item (pente fino
+  // de 09/10, achado 9) — o cache de perfis, lido em outro instante, podia
+  // imprimir "Top 5 (6º)". Snapshot antigo não tem posição: sem parêntese.
+  const comPosicao = (posicao: number | null) => (posicao === null ? '' : ` (${posicao}º)`)
+  const linhas = a
+    ? [
+        { rotulo: 'Pontos cedidos por jogo', marca: a.pontosCedidos },
+        { rotulo: 'Pontos marcados por jogo', marca: a.pontosMarcados },
+        { rotulo: 'Bolas de 3 erradas por jogo', marca: a.tresErradas },
+        { rotulo: 'Rebotes cedidos por jogo', marca: a.rebotesCedidos },
+        { rotulo: 'Bolas perdidas por jogo', marca: a.bolasPerdidas },
+      ].filter((l) => l.marca !== undefined)
+    : []
   return (
     <div className={s.desfalques} data-bloco="adversario">
       <span className={s.rotulo}>
-        Adversário · {a.sigla} <span className={s.fraco}>({a.jogos} jogos na temporada)</span>
+        Adversário{a ? ` · ${a.sigla}` : ''}{' '}
+        {a && <span className={s.fraco}>({a.jogos} jogos na temporada)</span>}
       </span>
-      <ul className={s.matchup}>
-        {linhas.map((l) => (
-          <li key={l.rotulo}>
-            <span>{l.rotulo}</span>
-            <strong className="num">{decimal(l.marca.valor)}</strong>
-            <span className={`${s.fraco} num`}>
-              {l.marca.posicao}º de {a.totalTimes}
-            </span>
-          </li>
-        ))}
-      </ul>
+      {temMatchup && (
+        <ul className={s.motivosMatchup} data-bloco="matchup">
+          {m.motivos.map(({ metrica, posicao }) => (
+            <li key={metrica}>
+              <span className={s.estrelaMotivo} aria-hidden>
+                ★
+              </span>
+              Top {d.corteMatchup} {MOTIVO_MATCHUP[metrica]}
+              {comPosicao(posicao)}
+            </li>
+          ))}
+          {m.aviso.map(({ metrica, posicao }) => (
+            <li key={`aviso-${metrica}`} className={s.avisoMatchup}>
+              Matchup negativo: adversário entre os {d.corteMatchup} {AVISO_MATCHUP[metrica]}
+              {comPosicao(posicao)}
+            </li>
+          ))}
+        </ul>
+      )}
+      {linhas.length > 0 && (
+        <ul className={s.matchup}>
+          {linhas.map((l) => (
+            <li key={l.rotulo}>
+              <span>{l.rotulo}</span>
+              <strong className="num">{decimal(l.marca.valor)}</strong>
+              <span className={`${s.fraco} num`}>
+                {l.marca.posicao}º de {a!.totalTimes}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   )
 }
@@ -261,7 +331,10 @@ function Linhas({ d }: { d: Dados }) {
   const historico = d.detalhe.blocos
   const passou = (linha: number) => historico.filter((b) => b.valor >= linha).length
   return (
-    <Secao titulo={`Linhas de ${ROTULO_ATRIBUTO[p.atributo].toLowerCase()}`} apoio="Quanto mais alta a linha, menor a confiança.">
+    <Secao titulo={`Linhas de ${ROTULO_ATRIBUTO[p.atributo].toLowerCase()}`} apoio={
+        // Sem nota no atributo (REB e AST), a frase falaria de um número que a tela não mostra.
+        linhas.some((l) => l.item.confianca !== null) ? 'Quanto mais alta a linha, menor a confiança.' : undefined
+      }>
       <ul className={s.linhas}>
         {linhas.map((l) => (
           <li key={l.item.chave} className={s.linhaItem} aria-current={l.escolhida ? 'true' : undefined}>

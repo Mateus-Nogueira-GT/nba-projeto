@@ -10,17 +10,22 @@ export type Sessao = NonNullable<Awaited<ReturnType<typeof sessaoAtual>>>
 /**
  * A GUARDA DE NÍVEL — a única, para toda tela.
  *
- * Três saídas, três destinos: sem sessão vai entrar; bloqueado vai para a
- * CONTA, que mostra o status — antes ele caía em /assinar junto com quem não
- * tinha direito, e oferecer plano a quem não pode comprar era erro dos dois
- * lados; nível insuficiente vai para /assinar sabendo QUAL nível e de ONDE
- * veio, para a página destacar o plano certo e o botão voltar funcionar.
+ * Sem sessão vai para /entrar, levando o `destino`; nível insuficiente vai
+ * para /assinar sabendo QUAL nível e de ONDE veio, para a página destacar o
+ * plano certo e o botão voltar funcionar.
+ *
+ * Conta BLOQUEADA também cai em /entrar, não em /conta: `validarSessao`
+ * recusa a sessão de quem está bloqueado (`motivo: 'bloqueado'`), então
+ * `sessaoAtual()` já volta `null` e a primeira saída é a que vale. O ramo
+ * `bloqueio-administrativo` abaixo só seria alcançado se o bloqueio caísse
+ * entre a leitura da sessão e a do acesso — é defesa, não o caminho normal.
  *
  * O `destino` mandado para /entrar só é honrado se estiver na allowlist de
- * `destinoInternoSeguro` — hoje `/`, `/assinar`, `/conta` e `/admin/usuarios`.
- * Fora dela (fire-live, gestão, apito, resultados) o login termina na raiz, e
- * não de volta na tela pedida. É assim desde antes desta guarda; ampliar a
- * allowlist é decisão de outra spec, não daqui.
+ * `destinoInternoSeguro`: `/`, `/abrir`, `/assinar`, `/conta`, `/admin`, a
+ * área de afiliados e, desde o pente fino de 09/10, as telas que este portão
+ * guarda — `/fire-live`, `/gestao`, `/estatisticas/…`, `/resultados/<data>` e
+ * `/apito/<id>`, casadas por forma. Fora dela (ex.: resultados com filtros na
+ * query) o login termina na abertura.
  *
  * `minimo: 'GRATIS'` é "só precisa estar logado": a tela renderiza para
  * qualquer nível e decide sozinha o que mostrar.
@@ -33,6 +38,7 @@ export async function exigirNivel(
   if (!sessao) redirect(`/entrar?destino=${encodeURIComponent(destino)}`)
   const acesso = await avaliarAcesso(getDb(), sessao.usuarioId)
   if (acesso.nivel === null) {
+    // Inalcançável no fluxo normal (ver acima): o bloqueado já não tem sessão.
     if (acesso.motivo === 'bloqueio-administrativo') redirect('/conta')
     redirect(`/entrar?destino=${encodeURIComponent(destino)}`)
   }

@@ -1,15 +1,21 @@
-import { and, eq, gte, lt } from 'drizzle-orm'
+import { and, countDistinct, eq, gte, lt } from 'drizzle-orm'
 
 import { estatisticasTimeJogo, jogos, times } from '../dominio/db/schema'
 import type { Db } from '../dominio/db/tipos'
+import { calendarioDoRuleset, temporadaDe } from '../dominio/temporada'
+import {
+  estrelasDoMatchup,
+  type EstrelasMatchup,
+  type PosicoesMatchup,
+} from '../motor/matchup/estrelas'
+import type { Ruleset } from '../motor/ruleset/schema'
+import type { Atributo } from '../motor/tipos'
 
 /**
- * MATCHUP — o DADO, sem regra (reunião de 23/09; spec 2026-10-06-ajustes, §3).
- *
- * O CJ descreveu matchup como "enfrentar um time que cede muitos pontos ou
- * erra muitas bolas de 3 — sobra rebote e ponto". Ele não deu limites, então
- * nada aqui apita, nem mexe em apito (`matchup.habilitado` segue `false`):
- * são três números do adversário com a posição na liga, para o usuário ler.
+ * MATCHUP — o DADO (reunião de 23/09) e, desde as respostas do CJ de 09/10,
+ * o FATO das estrelas: as posições do adversário que o motor lê em
+ * `estrelasDoMatchup`. A regra (corte, critérios, 20 dias) mora no ruleset e
+ * no motor; aqui só se mede — nada aqui apita nem mexe em apito.
  *
  * Dado canônico (`estatisticas_time_jogo`, o time REAL do provedor), como a
  * aba de estatísticas. Só jogos ENCERRADOS da temporada e ANTERIORES à data
@@ -26,9 +32,21 @@ export type PerfilAdversario = {
   /** As bolas de 3 que o PRÓPRIO adversário erra: viram rebote. */
   tresErradas: Marca
   rebotesCedidos: Marca
+  /** Pontos que o PRÓPRIO adversário marca — "os melhores ataques" (CJ, 09/10). */
+  pontosMarcados: Marca
+  /** Bolas que o PRÓPRIO adversário perde (turnovers) — "perdem muita bola". */
+  bolasPerdidas: Marca
 }
 
-type Soma = { jogos: number; pontosCedidos: number; tresErradas: number; rebotesCedidos: number }
+type Campo = 'pontosCedidos' | 'tresErradas' | 'rebotesCedidos' | 'pontosMarcados' | 'bolasPerdidas'
+type Soma = { jogos: number } & Record<Campo, number>
+const CAMPOS: Campo[] = [
+  'pontosCedidos',
+  'tresErradas',
+  'rebotesCedidos',
+  'pontosMarcados',
+  'bolasPerdidas',
+]
 
 /**
  * O perfil de TODOS os times com jogo no período, numa varredura só. É isto
@@ -51,6 +69,7 @@ export async function perfisDoDia(
       rebotes: estatisticasTimeJogo.rebotesTotal,
       tresC: estatisticasTimeJogo.tresC,
       tresT: estatisticasTimeJogo.tresT,
+      turnovers: estatisticasTimeJogo.turnovers,
     })
     .from(estatisticasTimeJogo)
     .innerJoin(jogos, eq(jogos.id, estatisticasTimeJogo.jogoId))
@@ -74,27 +93,34 @@ export async function perfisDoDia(
       [a, b],
       [b, a],
     ] as const) {
-      const s = somas.get(time.sigla) ?? { jogos: 0, pontosCedidos: 0, tresErradas: 0, rebotesCedidos: 0 }
+      const s = somas.get(time.sigla) ?? {
+        jogos: 0,
+        pontosCedidos: 0,
+        tresErradas: 0,
+        rebotesCedidos: 0,
+        pontosMarcados: 0,
+        bolasPerdidas: 0,
+      }
       s.jogos += 1
       s.pontosCedidos += outro.pontos
       s.tresErradas += time.tresT - time.tresC
       s.rebotesCedidos += outro.rebotes
+      s.pontosMarcados += time.pontos
+      s.bolasPerdidas += time.turnovers
       somas.set(time.sigla, s)
     }
   }
 
   const medias = [...somas.entries()].map(([sigla, s]) => ({
     sigla,
-    pontosCedidos: s.pontosCedidos / s.jogos,
-    tresErradas: s.tresErradas / s.jogos,
-    rebotesCedidos: s.rebotesCedidos / s.jogos,
+    ...(Object.fromEntries(CAMPOS.map((c) => [c, s[c] / s.jogos])) as Record<Campo, number>),
   }))
 
   const perfis: Record<string, PerfilAdversario> = {}
   for (const proprio of medias) {
-    const marca = (campo: 'pontosCedidos' | 'tresErradas' | 'rebotesCedidos'): Marca => {
+    const marca = (campo: Campo): Marca => {
       const valor = proprio[campo]
-      // Posição 1 = quem MAIS cede/erra; empate divide a mesma posição.
+      // Posição 1 = quem MAIS cede/erra/marca/perde; empate divide a mesma posição.
       return { valor, posicao: 1 + medias.filter((m) => m[campo] > valor).length }
     }
     perfis[proprio.sigla] = {
@@ -104,9 +130,116 @@ export async function perfisDoDia(
       pontosCedidos: marca('pontosCedidos'),
       tresErradas: marca('tresErradas'),
       rebotesCedidos: marca('rebotesCedidos'),
+      pontosMarcados: marca('pontosMarcados'),
+      bolasPerdidas: marca('bolasPerdidas'),
     }
   }
   return perfis
+}
+
+/**
+ * DIAS DE COMPETIÇÃO (CJ, 09/10: "liga após 20 dias"): datas com ao menos um
+ * jogo ENCERRADO na temporada, antes do dia. O motor compara com
+ * `matchup.liberar_apos_dias_de_competicao`.
+ */
+export async function diasDeCompeticao(
+  db: Db,
+  dataReferencia: string,
+  inicioTemporada: string,
+): Promise<number> {
+  const [linha] = await db
+    .select({ n: countDistinct(jogos.dataReferencia) })
+    .from(jogos)
+    .where(
+      and(
+        eq(jogos.status, 'ENCERRADO'),
+        gte(jogos.dataReferencia, inicioTemporada),
+        lt(jogos.dataReferencia, dataReferencia),
+      ),
+    )
+  return Number(linha?.n ?? 0)
+}
+
+export type MatchupDoDia = {
+  perfis: Record<string, PerfilAdversario>
+  diasDeCompeticao: number
+}
+
+/** Perfis e dias de competição de uma data — o fato inteiro das estrelas. */
+export async function matchupDoDia(
+  db: Db,
+  dataReferencia: string,
+  inicioTemporada: string,
+): Promise<MatchupDoDia> {
+  const [perfis, dias] = await Promise.all([
+    perfisDoDia(db, dataReferencia, inicioTemporada),
+    diasDeCompeticao(db, dataReferencia, inicioTemporada),
+  ])
+  return { perfis, diasDeCompeticao: dias }
+}
+
+/** O perfil na língua do motor: a posição de cada métrica do matchup. */
+export function posicoesDoPerfil(
+  perfil: PerfilAdversario | null | undefined,
+): PosicoesMatchup | null {
+  if (!perfil) return null
+  return {
+    PONTOS_CEDIDOS: perfil.pontosCedidos.posicao,
+    TRES_ERRADAS: perfil.tresErradas.posicao,
+    PONTOS_MARCADOS: perfil.pontosMarcados.posicao,
+    BOLAS_PERDIDAS: perfil.bolasPerdidas.posicao,
+  }
+}
+
+export type CalcularMatchup = (
+  jogo: { dataReferencia: string; dataHoraUtc: Date },
+  adversarioSigla: string,
+  atributo: Atributo,
+) => Promise<EstrelasMatchup | null>
+
+/**
+ * As estrelas de cada item, na MATERIALIZAÇÃO (Lista, Fire Live, retroativo).
+ *
+ * Os perfis saem de uma varredura da temporada: a calculadora guarda UMA
+ * leitura por (data, temporada) e todos os itens do dia a reaproveitam — sem
+ * N+1. Sem estrela nem aviso, o item leva `null`, e com o matchup desligado
+ * no ruleset o banco nem é lido.
+ */
+export function calculadoraDeMatchup(
+  db: Db,
+  ruleset: Ruleset,
+  memo: Map<string, Promise<MatchupDoDia>> = new Map(),
+): CalcularMatchup {
+  const calendario = calendarioDoRuleset(ruleset)
+  return async (jogo, adversarioSigla, atributo) => {
+    if (!ruleset.matchup.habilitado) return null
+    const inicio = inicioDaTemporada(
+      temporadaDe(jogo.dataHoraUtc, calendario),
+      calendario.mesInicio,
+    )
+    const chave = `${jogo.dataReferencia}|${inicio}`
+    let dia = memo.get(chave)
+    if (!dia) {
+      // A falha NÃO fica no memo (pente fino de 09/10, achado 3): sem isto,
+      // um soluço do banco na 1ª leitura rejeitaria todo ciclo seguinte que
+      // usa o mesmo memo, até ele expirar.
+      const leitura: Promise<MatchupDoDia> = matchupDoDia(db, jogo.dataReferencia, inicio).catch(
+        (erro: unknown) => {
+          if (memo.get(chave) === leitura) memo.delete(chave)
+          throw erro
+        },
+      )
+      memo.set(chave, leitura)
+      dia = leitura
+    }
+    const { perfis, diasDeCompeticao: dias } = await dia
+    const r = estrelasDoMatchup(
+      { posicoes: posicoesDoPerfil(perfis[adversarioSigla]), diasDeCompeticao: dias },
+      atributo,
+      ruleset,
+    )
+    return r.estrelas === 0 && r.aviso.length === 0 ? null : r
+  }
 }
 
 /** O perfil de UM adversário — o recorte de `perfisDoDia`. */

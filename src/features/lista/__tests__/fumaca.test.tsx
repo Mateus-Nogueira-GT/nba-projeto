@@ -225,6 +225,46 @@ describe('Lista do v2 — o que a home antiga garantia', () => {
     expect(html.toLowerCase()).not.toContain('probabilidade')
   }, 60_000)
 
+  it('(pente fino 09/10) REB e AST sem nota mostram o nível do apito em Confiança, não "—"', async () => {
+    nivelDoTeste = 'MVP'
+    const html = await renderizar({ atributo: 'REBOTES' })
+    const deRebote = (await itensDeHoje()).filter((i) => i.atributo === 'REBOTES')
+    expect(deRebote.length).toBeGreaterThan(0)
+    expect(deRebote.every((i) => i.confianca === null)).toBe(true)
+    // Cada linha da tabela leva "N{x}" na célula de Confiança, na cor do apito.
+    const marcas = [...html.matchAll(/data-confianca="sem-nota"[^>]*>N([123])</g)].map((m) => Number(m[1]))
+    expect(marcas.length).toBeGreaterThan(0)
+    const niveis = new Set(deRebote.map((i) => i.nivelApito))
+    for (const n of marcas) expect(niveis.has(n as 1 | 2 | 3)).toBe(true)
+    // O cabeçalho continua "Confiança".
+    expect(html).toContain('Ordenar por confiança')
+
+    // PONTOS tem nota: a célula segue com o %, sem a marca do apito.
+    const dePontos = await renderizar({ atributo: 'PONTOS' })
+    expect(dePontos).not.toContain('data-confianca="sem-nota"')
+  }, 60_000)
+
+  it('(pente fino 09/10) o resumo da rodada: turbo de REB/AST sem nota mostra o nível do apito', async () => {
+    nivelDoTeste = 'MVP'
+    const onde = and(eq(feedSnapshot.dataReferencia, HOJE), eq(feedSnapshot.estrategia, 'LISTA_SECRETA'))
+    const [linha] = await banco.db.select().from(feedSnapshot).where(onde).limit(1)
+    const original = linha!.conteudoJson as ConteudoFeed
+    const alvo = original.itens.find((i) => i.atributo !== 'PONTOS' && i.confianca === null)
+    expect(alvo, 'lista de hoje sem apito de rebote ou assistência').toBeDefined()
+    try {
+      await banco.db
+        .update(feedSnapshot)
+        .set({ conteudoJson: { ...original, itens: [{ ...alvo!, turbo: true }] } })
+        .where(onde)
+      const { ResumoDaRodada } = await import('@/features/lista/ResumoDaRodada')
+      const html = renderToStaticMarkup(await ResumoDaRodada())
+      expect(html).toContain('Turbos de hoje')
+      expect(html).toMatch(new RegExp(`data-confianca="sem-nota"[^>]*>N${alvo!.nivelApito}<`))
+    } finally {
+      await banco.db.update(feedSnapshot).set({ conteudoJson: original }).where(onde)
+    }
+  }, 60_000)
+
   it('(telas-demo) o recorte por atributo devolve só aquele atributo', async () => {
     const itens = await itensDeHoje()
     const deRebote = new Set(itens.filter((i) => i.atributo === 'REBOTES').map((i) => i.chave))
@@ -310,6 +350,42 @@ describe('Lista do v2 — o que a home antiga garantia', () => {
       const sem = await renderizar()
       expect(sem).not.toContain(original.resumoDoDia!)
       expect(sem).toContain('Lista do dia')
+    } finally {
+      await banco.db.update(feedSnapshot).set({ conteudoJson: original }).where(onde)
+    }
+  }, 60_000)
+
+  it('(CJ, 09/10) a ★ do matchup vai ao lado do nível do apito — e sem matchup, nada', async () => {
+    nivelDoTeste = 'MVP'
+    const onde = and(eq(feedSnapshot.dataReferencia, HOJE), eq(feedSnapshot.estrategia, 'LISTA_SECRETA'))
+    const [linha] = await banco.db.select().from(feedSnapshot).where(onde).limit(1)
+    const original = linha!.conteudoJson as ConteudoFeed
+    const todos = (matchup: ItemFeed['matchup']): ConteudoFeed => ({
+      ...original,
+      itens: original.itens.map((i) => ({ ...i, matchup })),
+    })
+    try {
+      await banco.db
+        .update(feedSnapshot)
+        .set({
+          conteudoJson: todos({
+            estrelas: 2,
+            motivos: [
+              { metrica: 'PONTOS_CEDIDOS', posicao: 1 },
+              { metrica: 'BOLAS_PERDIDAS', posicao: 3 },
+            ],
+            aviso: [],
+          }),
+        })
+        .where(onde)
+      const com = await renderizar()
+      expect(com).toContain('aria-label="2 estrelas de matchup"')
+      expect(com).toContain('★★')
+
+      await banco.db.update(feedSnapshot).set({ conteudoJson: todos(null) }).where(onde)
+      const sem = await renderizar()
+      expect(sem).not.toContain('de matchup"')
+      expect(sem).not.toContain('★')
     } finally {
       await banco.db.update(feedSnapshot).set({ conteudoJson: original }).where(onde)
     }

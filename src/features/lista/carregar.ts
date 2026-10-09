@@ -6,7 +6,7 @@ import { temporadasDaTelaCacheadas } from '@/app/_cache/temporada'
 import { feedRetroativoCacheado, temporadaAnteriorComDados } from '@/app/_cache/retroativo'
 import { temporadaDaTela } from '@/modules/entrega/retroativo/temporada'
 import type { Ruleset } from '@/modules/motor/ruleset/schema'
-import { agruparPorJogador, filtrarItens } from '@/modules/entrega/lista-secreta'
+import { agruparPorJogador, atributoSemNota, filtrarItens } from '@/modules/entrega/lista-secreta'
 import {
   agruparPorJogo,
   chaveDaHierarquia,
@@ -37,6 +37,11 @@ export type LinhaDaLista = {
   hierarquia: PosicaoNaHierarquia | null
   /** A pessoa segue este jogador — a estrela da linha nasce acesa. */
   seguido: boolean
+  /**
+   * O atributo não tem nota de confiança no ruleset (`temNotaDeConfianca`):
+   * a célula de Confiança mostra o nível do apito, não "—" (pente fino 09/10).
+   */
+  semNota?: boolean
 }
 
 export type GrupoDaLista = {
@@ -330,6 +335,7 @@ async function montarTabela({ estado, preferencias, seguidos, jogosDoDia, itensD
       emCasa: confronto?.emCasa ?? null,
       hierarquia: hierarquias.get(chaveDaHierarquia(item.jogadorId, item.atributo)) ?? null,
       seguido: seguidos.has(item.jogadorId),
+      semNota: atributoSemNota(item.atributo, ruleset),
     }
   }
 

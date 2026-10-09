@@ -20,6 +20,19 @@ export type Atributo = (typeof ATRIBUTOS)[number]
 export const NIVEIS_APITO = [1, 2, 3] as const
 export type NivelApito = (typeof NIVEIS_APITO)[number]
 
+/**
+ * As métricas do adversário que o matchup sabe ler (CJ, 09/10). Enumeração
+ * de domínio — QUAIS contam para cada atributo, e com que corte, é o ruleset
+ * que diz (`matchup.criterios`). Em todas, a posição 1 é a do MAIOR valor.
+ */
+export const METRICAS_MATCHUP = [
+  'PONTOS_CEDIDOS',
+  'TRES_ERRADAS',
+  'PONTOS_MARCADOS',
+  'BOLAS_PERDIDAS',
+] as const
+export type MetricaMatchup = (typeof METRICAS_MATCHUP)[number]
+
 export type Estrategia = 'LISTA_SECRETA' | 'FIRE_LIVE'
 export type Metodo = 'OSCILACAO' | 'OPD'
 

@@ -1,6 +1,7 @@
 import { readFile } from 'node:fs/promises'
 
 import { fecharDb, getDb } from '../src/modules/dominio/db/cliente'
+import { linhaDeRecusa, podeRodarScriptDaDemo } from '../src/modules/ingestao/demo/guarda-scripts'
 import { simularAte } from '../src/modules/ingestao/demo/temporada'
 import { portaLLMDoAmbiente } from '../src/modules/ingestao/llm'
 import { carregarRuleset } from '../src/modules/motor/ruleset/carregar'
@@ -32,6 +33,16 @@ import { carregarRuleset } from '../src/modules/motor/ruleset/carregar'
 const rotulo = (texto: string, largura = 30) => `    ${texto} `.padEnd(largura, '.')
 
 async function principal() {
+  // A mesma guarda do cron (pente fino de 09/10): com `.env.local` apontando
+  // para produção, isto semearia ficção por cima da temporada real.
+  const decisao = await podeRodarScriptDaDemo(getDb(), process.env, { script: 'temporada' })
+  if (!decisao.pode) {
+    console.error(linhaDeRecusa(decisao.motivo))
+    console.error('Recusado: este banco tem dado real (ou a ingestão real está ligada).')
+    process.exitCode = 1
+    return
+  }
+
   const ruleset = carregarRuleset(await readFile('config/ruleset.v1.yaml', 'utf8'))
   const comecou = Date.now()
 

@@ -63,6 +63,15 @@ export function faixaDeClassificacao(
   return bloco(atributo, ruleset)?.classificacao?.[nivel]
 }
 
+/**
+ * Se o atributo tem nota de confiança. PONTOS sempre tem (tabela homologada);
+ * rebotes e assistências não têm desde 09/10 — o CJ disse que neles vale só a
+ * cor do apito. Sem nota, a confiança do apito é `null`.
+ */
+export function temNotaDeConfianca(atributo: Atributo, ruleset: Ruleset): boolean {
+  return atributo === 'PONTOS' || bloco(atributo, ruleset)?.confianca !== undefined
+}
+
 /** Delta de oscilação. A exceção nominal do documento só vale para pontos. */
 export function deltaOscilacao(
   nivel: Nivel,
@@ -84,6 +93,11 @@ export function deltaOscilacao(
 
 /** Linhas disponíveis para (nível, atributo), em ordem crescente. */
 export function linhasDoNivel(nivel: Nivel, atributo: Atributo, ruleset: Ruleset): number[] {
+  // Rebotes e assistências declaram as linhas à parte desde 09/10, quando a
+  // tabela de confiança deles saiu do ruleset (o CJ disse que não há nota).
+  const explicitas = atributo === 'PONTOS' ? undefined : bloco(atributo, ruleset)?.linhas?.[nivel]
+  if (explicitas !== undefined) return [...explicitas].sort((a, b) => a - b)
+
   const base =
     atributo === 'PONTOS'
       ? ruleset.confianca.base[nivel]

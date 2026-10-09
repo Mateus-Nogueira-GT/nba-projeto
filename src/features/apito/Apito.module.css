@@ -322,6 +322,21 @@
 .matchup li > :last-child {
   text-align: right;
 }
+.motivosMatchup {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-weight: 600;
+}
+.estrelaMotivo {
+  margin-right: 6px;
+  color: var(--matchup-estrela);
+}
+.avisoMatchup {
+  color: var(--matchup-aviso);
+}
 .desfalques {
   display: flex;
   flex-direction: column;

@@ -73,9 +73,19 @@ describe('rebotes e assistências têm escala própria', () => {
     expect(limiarOscilacao(12.9, 'MVP', 'REBOTES', 'jokic', ruleset)).toBeCloseTo(8.9, 10)
   })
 
-  it('a confiança de assistências vem da tabela de assistências', () => {
-    expect(calcularConfianca('MVP', 'ASSISTENCIAS', 7, 1, ruleset)).toBe(85)
-    expect(calcularConfianca('MVP', 'ASSISTENCIAS', 7, 3, ruleset)).toBe(89)
+  it('assistências não têm nota de confiança (CJ, 09/10): vale a cor do apito', () => {
+    expect(calcularConfianca('MVP', 'ASSISTENCIAS', 7, 1, ruleset)).toBeNull()
+    expect(calcularConfianca('MVP', 'ASSISTENCIAS', 7, 3, ruleset)).toBeNull()
+  })
+
+  it('se um dia o atributo ganhar tabela, a confiança sai da tabela dele', () => {
+    const comTabela = structuredClone(ruleset)
+    comTabela.por_atributo.ASSISTENCIAS!.confianca = {
+      base: { MVP: { 7: 85 }, ALL_STAR: {}, SUPORTE: {}, RANDOLA: {} },
+      bonus_por_nivel_apito: { MVP: { 3: 4 }, ALL_STAR: {}, SUPORTE: {}, RANDOLA: {} },
+    }
+    expect(calcularConfianca('MVP', 'ASSISTENCIAS', 7, 1, comTabela)).toBe(85)
+    expect(calcularConfianca('MVP', 'ASSISTENCIAS', 7, 3, comTabela)).toBe(89)
   })
 
   it('green de rebotes usa os marcos de rebotes', () => {

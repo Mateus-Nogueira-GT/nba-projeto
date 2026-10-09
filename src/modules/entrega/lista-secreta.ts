@@ -17,6 +17,7 @@ import type { Db } from '../dominio/db/tipos'
 import { gravarApitos } from '../dominio/repositorios/apitos'
 import { avaliar } from '../motor'
 import { arredondar } from '../motor/arredondamento'
+import { temNotaDeConfianca } from '../motor/atributos'
 import { faixaDaConfianca } from '../motor/confianca'
 import type { Apito, Atributo, Nivel } from '../motor/tipos'
 import type { Ruleset } from '../motor/ruleset/schema'
@@ -26,6 +27,7 @@ import { calendarioDoRuleset, temporadaDe } from '../dominio/temporada'
 import { colunaMedia, jogosRecentes, naLinha } from './historico-na-linha'
 import type { PortaLLM } from '../ingestao/llm'
 import { enriquecerComNarrativas } from './narrativa'
+import { calculadoraDeMatchup } from './matchup'
 import type { ConteudoFeed, ItemFeed } from './tipos-feed'
 
 // `ItemFeed`/`ConteudoFeed` moram em `tipos-feed.ts` — ver o comentário lá
@@ -346,6 +348,27 @@ async function enriquecer(db: Db, ruleset: Ruleset, apitos: Apito[]): Promise<It
     ),
   )
 
+  // MATCHUP EM ESTRELAS (CJ, 09/10). O adversário é o outro lado do jogo pelo
+  // time do apitado NA LISTA DO CJ — a mesma regra de `detalheDoApito`
+  // ("adversário pelo time do apitado na lista do CJ"). Os perfis da liga são
+  // lidos uma vez por data (a calculadora guarda), não uma vez por item.
+  const calcularMatchup = calculadoraDeMatchup(db, ruleset)
+  const matchupPorApito = new Map(
+    await Promise.all(
+      apitos.map(async (a) => {
+        const jogo = jogoPorId.get(a.jogoId)
+        const timeId = timeDoJogador.get(`${a.jogadorId}|${a.atributo}`)
+        if (!jogo) return [a.chaveDeduplicacao, null] as const
+        const adversarioId = timeId === jogo.timeCasaId ? jogo.timeVisitanteId : jogo.timeCasaId
+        const adversario = timePorId.get(adversarioId)?.sigla
+        return [
+          a.chaveDeduplicacao,
+          adversario ? await calcularMatchup(jogo, adversario, a.atributo) : null,
+        ] as const
+      }),
+    ),
+  )
+
   return apitos.map((a) => {
     const jogoDoApito = jogoPorId.get(a.jogoId)
     const temporadaDoApito = jogoDoApito ? temporadaDe(jogoDoApito.dataHoraUtc, calendario) : null
@@ -386,6 +409,7 @@ async function enriquecer(db: Db, ruleset: Ruleset, apitos: Apito[]): Promise<It
         a.linha ?? a.alvo1Q,
       ),
       mediaTemporada: valorMedia !== null ? Number(valorMedia) : null,
+      matchup: matchupPorApito.get(a.chaveDeduplicacao) ?? null,
       // Com `odds.exibir_no_app: false` a odd coletada não entra no item:
       // o corte é na origem, e a tela nem chega a ver o número.
       oddFaixa:
@@ -520,6 +544,16 @@ export function agruparPorJogador(itens: ItemFeed[]): ItemFeed[] {
     }
   }
   return [...melhor.values()]
+}
+
+/**
+ * Se o atributo deste item ficou SEM nota de confiança por regra (rebote e
+ * assistência desde 09/10: vale a cor do apito). A tela não pode importar o
+ * motor (`tela-v2-nao-chama-o-motor`): pergunta aqui, e mostra "N{x}" no lugar
+ * do "—" — pente fino de 09/10, achado 10.
+ */
+export function atributoSemNota(atributo: Atributo, ruleset: Ruleset): boolean {
+  return !temNotaDeConfianca(atributo, ruleset)
 }
 
 /** Lê o feed materializado. É por aqui que a tela entra — nunca pelo motor. */

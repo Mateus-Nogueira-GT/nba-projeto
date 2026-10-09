@@ -79,8 +79,56 @@ export function IndicadorApito({
   )
 }
 
-/** Confiança da análise do CJ. NUNCA chamar de probabilidade. */
-export function PilulaConfianca({ valor, grau }: { valor: number | null; grau: 1 | 2 | 3 | 4 | 5 | null }) {
+/**
+ * MATCHUP EM ESTRELAS (CJ, 09/10): uma ★ por critério que o adversário atende,
+ * ao lado do nível do apito. Não é nível nem nota — por isso cor própria, e o
+ * rótulo acessível diz o que é. Sem estrela (ou snapshot anterior ao campo),
+ * não desenha nada.
+ */
+export function EstrelasMatchup({
+  matchup,
+}: {
+  matchup?: { estrelas: number; motivos?: readonly unknown[]; aviso?: readonly unknown[] } | null
+}) {
+  const n = matchup?.estrelas ?? 0
+  if (n <= 0) return null
+  const rotulo = `${n} ${n === 1 ? 'estrela' : 'estrelas'} de matchup`
+  return (
+    <span className={s.estrelas} role="img" aria-label={rotulo} title={rotulo}>
+      {'★'.repeat(n)}
+    </span>
+  )
+}
+
+/**
+ * Confiança da análise do CJ. NUNCA chamar de probabilidade.
+ *
+ * `apito` é para quem sabe que a ausência é REGRA, não dado faltando: rebote e
+ * assistência não têm nota desde 09/10 (o CJ disse que neles vale a cor do
+ * apito). Com ele, a célula mostra "N{x}" na cor do apito, como o painel —
+ * pente fino de 09/10, achado 10. Sem ele (Fire Live), segue "—".
+ */
+export function PilulaConfianca({
+  valor,
+  grau,
+  apito = null,
+}: {
+  valor: number | null
+  grau: 1 | 2 | 3 | 4 | 5 | null
+  apito?: { nivel: NivelApito; turbo: boolean } | null
+}) {
+  if (valor === null && apito !== null) {
+    return (
+      <span
+        className={`${s.confianca} num`}
+        style={{ color: corDoApito(apito.nivel, apito.turbo) }}
+        data-confianca="sem-nota"
+        title={`Sem nota: vale o apito nível ${apito.nivel}`}
+      >
+        N{apito.nivel}
+      </span>
+    )
+  }
   if (valor === null) return <span className={s.vazio}>—</span>
   const cor = grau === null ? 'var(--texto-2)' : `var(--confianca-${grau})`
   return (

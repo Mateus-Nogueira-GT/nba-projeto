@@ -208,7 +208,9 @@ describe('/entrar — a ação real sobre a conta real', () => {
     }
     // Interno e na allowlist: respeitado. Interno fora dela: cai no padrão, não em `/`.
     expect(await entrarCom(email, SENHA, '/conta')).toEqual({ redirect: '/conta' })
-    expect(destinoSeguro('/gestao', '/abrir')).toBe('/')
+    expect(destinoSeguro('/rota-que-nao-existe', '/abrir')).toBe('/')
+    // As telas que o portão manda voltam (pente fino de 09/10, achado 6).
+    expect(await entrarCom(email, SENHA, '/gestao')).toEqual({ redirect: '/gestao' })
   }, 120_000)
 
   it('a página sanitiza o ?destino= antes de pô-lo no campo oculto — o HTML nunca carrega o host hostil', async () => {

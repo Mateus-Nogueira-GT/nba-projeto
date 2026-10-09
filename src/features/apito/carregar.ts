@@ -12,7 +12,7 @@ import { exibirOdds } from '@/modules/entrega/odds/exibicao'
 import { cotacoesPorCasa, faixasDoJogador, type CotacaoDeCasa, type FaixaDeLinha } from '@/modules/entrega/odds/leitura'
 import { rulesetAtivo } from '@/modules/entrega/ruleset-ativo'
 import { saidaDoApito, type SaidaParaCasa } from '@/modules/entrega/saida-para-casa'
-import type { ItemFeed } from '@/modules/entrega/tipos-feed'
+import { lerMatchupDoItem, type ItemFeed, type MatchupLido } from '@/modules/entrega/tipos-feed'
 import { exigirNivel } from '@/modules/plataforma/assinatura/guarda'
 import { ATRIBUTOS, type Atributo } from '@/modules/motor/tipos'
 
@@ -50,8 +50,15 @@ export type DadosDoApito =
        * nem a nota das casas.
        */
       exibirOdds: boolean
-      /** Matchup: o adversário, em números da temporada. Só dado, sem regra. */
+      /** Matchup: o adversário, em números da temporada (o dado por trás das estrelas). */
       adversario: PerfilAdversario | null
+      /** `matchup.corte_top` do ruleset — o "top N" do motivo de cada estrela. */
+      corteMatchup: number
+      /**
+       * As estrelas do item principal, com a posição que veio COM cada uma
+       * (pente fino de 09/10, achado 9) — lidas nos dois formatos de snapshot.
+       */
+      matchup: MatchupLido | null
     }
 
 export function atributoDaConsulta(valor: string | string[] | undefined): Atributo | undefined {
@@ -170,5 +177,7 @@ export async function carregarApito(jogadorId: string, atributo: Atributo | unde
     percentualModoFire: ruleset.fire_live.modo_fire.percentual_media,
     exibirOdds: comOdds,
     adversario,
+    corteMatchup: ruleset.matchup.corte_top,
+    matchup: lerMatchupDoItem(principal.matchup),
   }
 }
