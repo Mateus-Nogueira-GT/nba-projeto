@@ -57,3 +57,16 @@ Cada item começa por um teste que falha. Os lotes têm arquivos disjuntos e pod
   achado.
 - [ ] D3. Produção, pelo parceiro (sem `FILA_PUSH_SECRET`: C2 bloqueado): commit e push únicos com as respostas
   do CJ; `lista-cj:restaurar`; `motor:retroativo` de 2025-26.
+
+## Achado pós-deploy (09/10)
+
+- [x] E1. **Matchup sem dado em produção:** `estatisticas_time_jogo` tem 0 linhas (a BallDontLie não
+  tem box de time; a tabela só seria preenchida pela API-Sports, que não usamos). Por isso nenhuma
+  estrela e nenhum bloco "Adversário" em produção — os testes montavam a tabela à mão. Correção:
+  `perfisDoDia` soma `estatisticas_jogo` por (jogo, `time_id`) — pontos, rebotes, bolas de 3 e
+  bolas perdidas. Teste com a tabela de time VAZIA e só box de jogador. Depois, o parceiro roda
+  `motor:retroativo` de novo.
+  **Feito em 09/10:** `perfisDoDia` soma o box de jogador por (jogo, time); a demo passou a gravar
+  `time_id` nas linhas de jogador (temporada, semeadura e ao vivo). Com dado real de produção: 30
+  times; piores defesas até 15/01/2026 = UTA, WAS, NOP, CHI, SAC. Suíte em lotes: 2.718 passando;
+  as 2 falhas da rodada (fire-live "trava dura", lateral) eram de carga e passam sozinhas.

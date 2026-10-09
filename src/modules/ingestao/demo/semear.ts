@@ -313,7 +313,9 @@ export async function semearDemo(
 
       await db
         .insert(estatisticasJogo)
-        .values({ jogoId, jogadorId, ...valoresBox })
+        // O time do jogo vai na linha (coluna da 0033): o matchup soma o box
+        // do time a partir dela.
+        .values({ jogoId, jogadorId, timeId: idDoTime(j.timeSigla!) ?? null, ...valoresBox })
         // DoUpdate, não DoNothing: o MESMO jogoId reaparece em runs futuros
         // quando a rodada de hoje de um dia vira "i dias atrás" do dia
         // seguinte (a chave natural do jogo é `dataReferencia` — ver
@@ -323,7 +325,7 @@ export async function semearDemo(
         // que `semearJogoAoVivo`, abaixo, passou a gravar).
         .onConflictDoUpdate({
           target: [estatisticasJogo.jogoId, estatisticasJogo.jogadorId],
-          set: valoresBox,
+          set: { ...valoresBox, timeId: idDoTime(j.timeSigla!) ?? null },
         })
     }
   }

@@ -5,7 +5,7 @@ import { and, eq } from 'drizzle-orm'
 import { bancoDeTeste } from '../../dominio/__tests__/ajuda-banco'
 import {
   apitos,
-  estatisticasTimeJogo,
+  estatisticasJogo,
   feedSnapshot,
   jogadores,
   jogos,
@@ -93,9 +93,18 @@ beforeAll(async () => {
         status: 'ENCERRADO',
       })
       .returning()
-    await db.insert(estatisticasTimeJogo).values([
-      { jogoId: passado!.id, timeId: lal!.id, pontos: 130 },
-      { jogoId: passado!.id, timeId: adv!.id, pontos: 90 },
+    // Box de JOGADOR, como em produção (a BallDontLie não tem box de time e
+    // `estatisticas_time_jogo` fica vazia): o matchup soma por time.
+    const [doLal, doAdv] = await db
+      .insert(jogadores)
+      .values([
+        { nomeCompleto: `Box LAL ${passado!.id.slice(0, 8)}`, timeId: lal!.id },
+        { nomeCompleto: `Box ADV ${passado!.id.slice(0, 8)}`, timeId: adv!.id },
+      ])
+      .returning()
+    await db.insert(estatisticasJogo).values([
+      { jogoId: passado!.id, jogadorId: doLal!.id, timeId: lal!.id, pontos: 130 },
+      { jogoId: passado!.id, jogadorId: doAdv!.id, timeId: adv!.id, pontos: 90 },
     ])
   }
 

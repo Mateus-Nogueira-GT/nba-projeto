@@ -239,10 +239,19 @@ describe('executarDiaRetroativo', () => {
     // mais cede pontos (posição 1), o MIL é o 2º. Com corte 1 e liberação em
     // 3 dias, só o adversário certo (BOS) dá estrela — o MIA, time da lista do
     // CJ, nem tem jogo, e o próprio MIL não está no corte.
+    // Box de JOGADOR por time, como em produção (sem box de time): o
+    // matchup soma por (jogo, time em que atuou).
+    const [doMil, doBos] = await db
+      .insert(schema.jogadores)
+      .values([
+        { nomeCompleto: 'Box MIL', timeId: MIL },
+        { nomeCompleto: 'Box BOS', timeId: BOS },
+      ])
+      .returning()
     for (const jogoId of [JOGO_01, JOGO_02, JOGO_03]) {
-      await db.insert(schema.estatisticasTimeJogo).values([
-        { jogoId, timeId: MIL, pontos: 120 },
-        { jogoId, timeId: BOS, pontos: 100 },
+      await db.insert(schema.estatisticasJogo).values([
+        { jogoId, jogadorId: doMil!.id, timeId: MIL, pontos: 120 },
+        { jogoId, jogadorId: doBos!.id, timeId: BOS, pontos: 100 },
       ])
     }
     const comMatchup = structuredClone(ruleset)

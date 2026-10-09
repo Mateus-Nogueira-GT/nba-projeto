@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
 import { bancoDeTeste } from '../../dominio/__tests__/ajuda-banco'
-import { estatisticasTimeJogo, jogos, times } from '../../dominio/db/schema'
+import { estatisticasJogo, estatisticasTimeJogo, jogadores, jogos, times } from '../../dominio/db/schema'
 import yamlBruto from '../../../../config/ruleset.v1.yaml?raw'
 import { carregarRuleset } from '../../motor/ruleset/carregar'
 import {
@@ -52,15 +52,37 @@ beforeAll(async () => {
       })
       .returning()
     if (status) continue
-    for (const [sigla, [pontos, rebotesTotal, tresC, tresT, turnovers]] of [
+    for (const [sigla, [pontos = 0, rebotesTotal = 0, tresC = 0, tresT = 0, turnovers = 0]] of [
       [casa, c],
       [fora, f],
     ] as const) {
-      await banco.db
-        .insert(estatisticasTimeJogo)
-        .values({ jogoId: jogo!.id, timeId: id[sigla]!, pontos, rebotesTotal, tresC, tresT, turnovers })
+      // Produção só tem o box de JOGADOR (a BallDontLie não dá box de time:
+      // `estatisticas_time_jogo` ficou com 0 linhas em 09/10). O total do time
+      // é repartido entre dois jogadores — o perfil tem de vir da soma deles.
+      const metade = (v: number) => Math.floor(v / 2)
+      for (const [k, parte] of [
+        [1, metade],
+        [2, (v: number) => v - metade(v)],
+      ] as const) {
+        const [jogador] = await banco.db
+          .insert(jogadores)
+          .values({ nomeCompleto: `${sigla}-${jogo!.id.slice(0, 8)}-${k}`, timeId: id[sigla]! })
+          .returning()
+        await banco.db.insert(estatisticasJogo).values({
+          jogoId: jogo!.id,
+          jogadorId: jogador!.id,
+          timeId: id[sigla]!,
+          pontos: parte(pontos),
+          rebotesTotal: parte(rebotesTotal),
+          tresC: parte(tresC),
+          tresT: parte(tresT),
+          turnovers: parte(turnovers),
+        })
+      }
     }
   }
+  // A tabela de time fica VAZIA, como em produção.
+  expect(await banco.db.select().from(estatisticasTimeJogo)).toHaveLength(0)
 })
 afterAll(async () => banco.fechar())
 

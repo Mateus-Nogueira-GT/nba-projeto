@@ -1,6 +1,6 @@
-import { and, countDistinct, eq, gte, lt } from 'drizzle-orm'
+import { and, countDistinct, eq, gte, lt, sql } from 'drizzle-orm'
 
-import { estatisticasTimeJogo, jogos, times } from '../dominio/db/schema'
+import { estatisticasJogo, jogos, times } from '../dominio/db/schema'
 import type { Db } from '../dominio/db/tipos'
 import { calendarioDoRuleset, temporadaDe } from '../dominio/temporada'
 import {
@@ -61,19 +61,24 @@ export async function perfisDoDia(
   dataReferencia: string,
   inicioTemporada: string,
 ): Promise<Record<string, PerfilAdversario>> {
+  // O total do time é a SOMA do box dos jogadores, por (jogo, time em que
+  // atuaram). `estatisticas_time_jogo` não serve de fonte: a BallDontLie não
+  // tem box de time, e em produção a tabela ficou com 0 linhas (09/10) — sem
+  // isto nenhuma estrela nem bloco "Adversário" aparecia. Linha sem `time_id`
+  // (anterior à 0033) não entra: não se sabe de que lado o jogador estava.
   const linhas = await db
     .select({
-      jogoId: estatisticasTimeJogo.jogoId,
+      jogoId: estatisticasJogo.jogoId,
       sigla: times.sigla,
-      pontos: estatisticasTimeJogo.pontos,
-      rebotes: estatisticasTimeJogo.rebotesTotal,
-      tresC: estatisticasTimeJogo.tresC,
-      tresT: estatisticasTimeJogo.tresT,
-      turnovers: estatisticasTimeJogo.turnovers,
+      pontos: sql<number>`coalesce(sum(${estatisticasJogo.pontos}), 0)::int`,
+      rebotes: sql<number>`coalesce(sum(${estatisticasJogo.rebotesTotal}), 0)::int`,
+      tresC: sql<number>`coalesce(sum(${estatisticasJogo.tresC}), 0)::int`,
+      tresT: sql<number>`coalesce(sum(${estatisticasJogo.tresT}), 0)::int`,
+      turnovers: sql<number>`coalesce(sum(${estatisticasJogo.turnovers}), 0)::int`,
     })
-    .from(estatisticasTimeJogo)
-    .innerJoin(jogos, eq(jogos.id, estatisticasTimeJogo.jogoId))
-    .innerJoin(times, eq(times.id, estatisticasTimeJogo.timeId))
+    .from(estatisticasJogo)
+    .innerJoin(jogos, eq(jogos.id, estatisticasJogo.jogoId))
+    .innerJoin(times, eq(times.id, estatisticasJogo.timeId))
     .where(
       and(
         eq(jogos.status, 'ENCERRADO'),
@@ -81,6 +86,7 @@ export async function perfisDoDia(
         lt(jogos.dataReferencia, dataReferencia),
       ),
     )
+    .groupBy(estatisticasJogo.jogoId, times.sigla)
 
   const porJogo = new Map<string, typeof linhas>()
   for (const l of linhas) porJogo.set(l.jogoId, [...(porJogo.get(l.jogoId) ?? []), l])

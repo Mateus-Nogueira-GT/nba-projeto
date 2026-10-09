@@ -128,10 +128,10 @@ export async function semearJogoAoVivo(
     }
     await db
       .insert(estatisticasJogo)
-      .values({ jogoId: opcoes.jogoId, jogadorId: j.jogadorId, ...valoresBox })
+      .values({ jogoId: opcoes.jogoId, jogadorId: j.jogadorId, timeId: j.timeId, ...valoresBox })
       .onConflictDoUpdate({
         target: [estatisticasJogo.jogoId, estatisticasJogo.jogadorId],
-        set: valoresBox,
+        set: { ...valoresBox, timeId: j.timeId },
       })
 
     if (j.timeId === opcoes.timeCasaId) pontosCasa += valores.pontos

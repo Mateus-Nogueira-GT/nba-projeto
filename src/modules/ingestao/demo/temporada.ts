@@ -643,12 +643,15 @@ async function produzirDiaPassado(
     )
     // O desdobramento em 2C/3C/LL sai do valor FINAL de pontos: é o que mantém
     // `2·doisC + 3·tresC + lanceC = pontos` na linha que recebeu a cesta.
+    // O time em que ATUOU vai na linha (coluna da 0033): é dele que o matchup
+    // soma o box do time, e a aba de estatísticas mostra o time do jogo.
     const linhas: (typeof estatisticasJogo.$inferInsert)[] = [
-      ...decidido.casa,
-      ...decidido.visitante,
+      ...decidido.casa.map((l) => ({ ...l, timeId: a.timeCasaId })),
+      ...decidido.visitante.map((l) => ({ ...l, timeId: a.timeVisitanteId })),
     ].map((l) => ({
       jogoId: a.jogoId,
       jogadorId: l.jogadorId,
+      timeId: l.timeId,
       minutos: l.minutos.toFixed(2),
       pontos: l.pontos,
       rebotesTotal: l.rebotes,
@@ -666,6 +669,7 @@ async function produzirDiaPassado(
         .onConflictDoUpdate({
           target: [estatisticasJogo.jogoId, estatisticasJogo.jogadorId],
           set: {
+            timeId: excluded('time_id'),
             minutos: excluded('minutos'),
             pontos: excluded('pontos'),
             rebotesTotal: excluded('rebotes_total'),
