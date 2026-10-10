@@ -19,6 +19,7 @@ import { somarDias } from '../dominio/rodada'
 import { colunasDeParticipacao, entrouEmQuadra, entrouEmQuadraSql } from '../dominio/participacao'
 import type { Db } from '../dominio/db/tipos'
 import { maisAntiga, type Atualizacao } from './estatisticas/atualizacao'
+import { boxDoTimePorJogo, chaveDoBox } from './estatisticas/box-do-time'
 import type { StatusJogo } from './lista-por-jogo'
 import type { Atributo, Nivel } from '../motor/tipos'
 
@@ -476,7 +477,7 @@ export async function recapDosCards(
   if (cards.length === 0) return vazio
 
   const idsJogo = [...new Set(cards.map((c) => c.jogoId))]
-  const [partidas, listaTimes, boxes, comBox] = await Promise.all([
+  const [partidas, listaTimes, boxes, comBox, boxDosJogadores] = await Promise.all([
     // A ORDEM DAS SEÇÕES É A DO CALENDÁRIO. Sem `orderBy`, a ordem é a que o
     // Postgres devolver, e ela muda quando qualquer linha de `jogos` é
     // atualizada — placar e quarto mudam a noite inteira. O id desempata dois
@@ -492,12 +493,20 @@ export async function recapDosCards(
       .selectDistinct({ jogoId: estatisticasJogo.jogoId })
       .from(estatisticasJogo)
       .where(inArray(estatisticasJogo.jogoId, idsJogo)),
+    boxDoTimePorJogo(db, idsJogo),
   ])
   const siglaPorId = new Map(listaTimes.map((t) => [t.id, t.sigla] as const))
   const jogosComBox = new Set(comBox.map((b) => b.jogoId))
-  const quartos = (jogoId: string, timeId: string): number[] => {
-    const b = boxes.find((x) => x.jogoId === jogoId && x.timeId === timeId)
-    return b ? [b.pontosQ1, b.pontosQ2, b.pontosQ3, b.pontosQ4] : []
+  // A linha de time (pontos por quarto do endpoint de jogos) primeiro; sem
+  // ela, a soma dos quartos dos jogadores; sem nenhuma, nada.
+  // Em jogo ao vivo, só os quartos JÁ FECHADOS: as colunas da linha de time
+  // nascem 0 e o quarto em curso é parcial — "31 30 0 0" seria número falso.
+  const quartos = (j: (typeof partidas)[number], timeId: string): number[] => {
+    const fechados = j.status === 'AO_VIVO' ? Math.max(0, (j.quartoAtual ?? 1) - 1) : 4
+    const b = boxes.find((x) => x.jogoId === j.id && x.timeId === timeId)
+    if (b) return [b.pontosQ1, b.pontosQ2, b.pontosQ3, b.pontosQ4].slice(0, fechados)
+    const q = boxDosJogadores.get(chaveDoBox(j.id, timeId))?.porQuarto
+    return q ? [q.q1, q.q2, q.q3, q.q4].slice(0, fechados) : []
   }
 
   const porJogo = partidas
@@ -513,8 +522,8 @@ export async function recapDosCards(
         dataHoraUtc: j.dataHoraUtc,
         placarCasa: j.placarCasa,
         placarVisitante: j.placarVisitante,
-        quartosCasa: quartos(j.id, j.timeCasaId),
-        quartosVisitante: quartos(j.id, j.timeVisitanteId),
+        quartosCasa: quartos(j, j.timeCasaId),
+        quartosVisitante: quartos(j, j.timeVisitanteId),
         temBoxOficial: jogosComBox.has(j.id),
         atualizadoEm: j.atualizadoEm,
       },

@@ -14,6 +14,7 @@ import { janelaNoBanco } from '../../dominio/janela'
 import { somarDias } from '../../dominio/rodada'
 import { calendarioDoRuleset, temporadaDe } from '../../dominio/temporada'
 import type { Ruleset } from '../../motor/ruleset/schema'
+import { boxDoTimePorJogo, chaveDoBox } from '../estatisticas/box-do-time'
 import { colunaMedia } from '../historico-na-linha'
 import { agruparPorJogo } from '../lista-por-jogo'
 import type { GrupoDeJogo, JogoResumo, StatusJogo } from '../lista-por-jogo'
@@ -114,7 +115,26 @@ export async function lerFeedFireLive(
   }
 
   const siglaPorId = new Map(listaTimes.map((t) => [t.id, t.sigla] as const))
-  const q1PorTime = new Map(placaresQ1.map((p) => [`${p.jogoId}|${p.timeId}`, p.pontos] as const))
+  // A AUSÊNCIA DE LINHA é a ausência de dado: um 0 na linha é número gravado.
+  const q1PorTime = new Map(placaresQ1.map((p) => [chaveDoBox(p.jogoId, p.timeId), p.pontos] as const))
+  const emQ1 = (j: (typeof partidas)[number]) =>
+    j.status === 'AO_VIVO' && j.quartoAtual === quartoFireLive
+  // Sem a linha do time (a BallDontLie só a grava pelo endpoint de jogos), o
+  // Q1 somado dos jogadores — que existe com o jogo encerrado.
+  const semLinha = partidas.filter(
+    (j) =>
+      !emQ1(j) &&
+      (!q1PorTime.has(chaveDoBox(j.id, j.timeCasaId)) ||
+        !q1PorTime.has(chaveDoBox(j.id, j.timeVisitanteId))),
+  )
+  const boxDosJogadores = await boxDoTimePorJogo(
+    db,
+    semLinha.map((j) => j.id),
+  )
+  const q1Oficial = (jogoId: string, timeId: string): number | null => {
+    const chave = chaveDoBox(jogoId, timeId)
+    return q1PorTime.get(chave) ?? boxDosJogadores.get(chave)?.porQuarto?.q1 ?? null
+  }
   const jogosDaRodada: JogoResumo[] = partidas.map((j) => ({
     id: j.id,
     casaSigla: siglaPorId.get(j.timeCasaId) ?? '—',
@@ -124,14 +144,8 @@ export async function lerFeedFireLive(
     quartoAtual: j.quartoAtual,
     // No Q1, o total vivo é o parcial desse quarto. Depois dele, só a quebra
     // oficial responde: usar o total mostraria pontos do Q2 sob "FIM 1º Q".
-    placarCasa:
-      j.status === 'AO_VIVO' && j.quartoAtual === quartoFireLive
-        ? j.placarCasa
-        : (q1PorTime.get(`${j.id}|${j.timeCasaId}`) ?? null),
-    placarVisitante:
-      j.status === 'AO_VIVO' && j.quartoAtual === quartoFireLive
-        ? j.placarVisitante
-        : (q1PorTime.get(`${j.id}|${j.timeVisitanteId}`) ?? null),
+    placarCasa: emQ1(j) ? j.placarCasa : q1Oficial(j.id, j.timeCasaId),
+    placarVisitante: emQ1(j) ? j.placarVisitante : q1Oficial(j.id, j.timeVisitanteId),
   }))
   const statusPorJogo = new Map(partidas.map((p) => [p.id, p.status] as const))
   const vivos = snapshots.filter(

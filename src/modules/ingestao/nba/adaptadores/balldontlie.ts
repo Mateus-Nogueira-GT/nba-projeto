@@ -9,6 +9,7 @@ import {
   type LinhaBoxScore,
   type LinhaBoxScoreTimeExterna,
   type LinhaClassificacaoExterna,
+  type QuartosDoTime,
   type TimeExterno,
 } from '../porta'
 
@@ -71,6 +72,8 @@ const estadoJogoSchema = z.enum([
   'unknown',
 ])
 
+const quartoSchema = inteiroNaoNegativoSchema.nullable().optional()
+
 const jogoSchema = z
   .object({
     id: z.number().int().positive(),
@@ -86,6 +89,22 @@ const jogoSchema = z
     datetime: z.string().datetime({ offset: true }),
     home_team: timeSchema,
     visitor_team: timeSchema,
+    // Placar oficial por quarto. Não se sabe se vem preenchido com o jogo ao
+    // vivo: ausente e null são o mesmo "não veio".
+    home_q1: quartoSchema,
+    home_q2: quartoSchema,
+    home_q3: quartoSchema,
+    home_q4: quartoSchema,
+    home_ot1: quartoSchema,
+    home_ot2: quartoSchema,
+    home_ot3: quartoSchema,
+    visitor_q1: quartoSchema,
+    visitor_q2: quartoSchema,
+    visitor_q3: quartoSchema,
+    visitor_q4: quartoSchema,
+    visitor_ot1: quartoSchema,
+    visitor_ot2: quartoSchema,
+    visitor_ot3: quartoSchema,
   })
   .passthrough()
 
@@ -384,6 +403,33 @@ export function mapearJogoBalldontlie(bruto: unknown): JogoExterno {
     intervalo: jogo.status.trim().toLowerCase() === 'halftime',
     placarCasa: jogo.home_team_score,
     placarVisitante: jogo.visitor_team_score,
+    quartos: {
+      casa: quartosDoLado(
+        [jogo.home_q1, jogo.home_q2, jogo.home_q3, jogo.home_q4],
+        [jogo.home_ot1, jogo.home_ot2, jogo.home_ot3],
+      ),
+      visitante: quartosDoLado(
+        [jogo.visitor_q1, jogo.visitor_q2, jogo.visitor_q3, jogo.visitor_q4],
+        [jogo.visitor_ot1, jogo.visitor_ot2, jogo.visitor_ot3],
+      ),
+    },
+  }
+}
+
+type QuartoBruto = number | null | undefined
+
+/** Ausente e null são "não veio": viram null, nunca 0. */
+function quartosDoLado(
+  [q1, q2, q3, q4]: [QuartoBruto, QuartoBruto, QuartoBruto, QuartoBruto],
+  prorrogacoes: QuartoBruto[],
+): QuartosDoTime {
+  const vieram = prorrogacoes.filter((v): v is number => typeof v === 'number')
+  return {
+    q1: q1 ?? null,
+    q2: q2 ?? null,
+    q3: q3 ?? null,
+    q4: q4 ?? null,
+    prorrogacao: vieram.length === 0 ? null : vieram.reduce((a, b) => a + b, 0),
   }
 }
 

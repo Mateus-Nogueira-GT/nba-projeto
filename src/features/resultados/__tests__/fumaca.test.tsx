@@ -337,6 +337,30 @@ describe('Resultados do v2 — o recap da noite', () => {
   }, 60_000)
 
   it('(telas-04) sem o box do time o bloco diz que acabou, sem inventar quartos', async () => {
+    // Sem a linha do time E sem os quartos dos jogadores (o fallback) — aí
+    // não há quebra de onde tirar.
+    const { estatisticasTimeJogo, estatisticasQuarto } = await import('@/modules/dominio/db/schema')
+    const recap = await recapDaNoite(banco.db, ONTEM)
+    const grupo = recap.porJogo[0]!
+    const onde = eq(estatisticasTimeJogo.jogoId, grupo.jogo.jogoId)
+    const ondeQuarto = eq(estatisticasQuarto.jogoId, grupo.jogo.jogoId)
+    const linhas = await banco.db.select().from(estatisticasTimeJogo).where(onde)
+    const quartos = await banco.db.select().from(estatisticasQuarto).where(ondeQuarto)
+    try {
+      await banco.db.delete(estatisticasTimeJogo).where(onde)
+      await banco.db.delete(estatisticasQuarto).where(ondeQuarto)
+      const html = await renderizar(ONTEM)
+      expect(html.match(/>Pontos por quarto</g) ?? []).toHaveLength(recap.porJogo.length - 1)
+      const bloco = blocoDoJogo(html, grupo.jogo)
+      expect(bloco).not.toContain('Pontos por quarto')
+      expect(texto(bloco)).toContain('Final')
+    } finally {
+      if (linhas.length > 0) await banco.db.insert(estatisticasTimeJogo).values(linhas)
+      if (quartos.length > 0) await banco.db.insert(estatisticasQuarto).values(quartos)
+    }
+  }, 60_000)
+
+  it('(telas-04) sem a linha do time, os quartos vêm da soma dos jogadores', async () => {
     const { estatisticasTimeJogo } = await import('@/modules/dominio/db/schema')
     const recap = await recapDaNoite(banco.db, ONTEM)
     const grupo = recap.porJogo[0]!
@@ -345,12 +369,9 @@ describe('Resultados do v2 — o recap da noite', () => {
     try {
       await banco.db.delete(estatisticasTimeJogo).where(onde)
       const html = await renderizar(ONTEM)
-      expect(html.match(/>Pontos por quarto</g) ?? []).toHaveLength(recap.porJogo.length - 1)
-      const bloco = blocoDoJogo(html, grupo.jogo)
-      expect(bloco).not.toContain('Pontos por quarto')
-      expect(texto(bloco)).toContain('Final')
+      expect(blocoDoJogo(html, grupo.jogo)).toContain('Pontos por quarto')
     } finally {
-      await banco.db.insert(estatisticasTimeJogo).values(linhas)
+      if (linhas.length > 0) await banco.db.insert(estatisticasTimeJogo).values(linhas)
     }
   }, 60_000)
 

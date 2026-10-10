@@ -19,6 +19,7 @@ import {
   times,
 } from '../../dominio/db/schema'
 import { FonteFake, type Fixture } from '../nba/adaptadores/fake'
+import type { QuartosDoTime } from '../nba/porta'
 import { consultarComOrigem, FonteComFailover } from '../nba/failover'
 import { sincronizarJogadores, sincronizarJogos, sincronizarTimes } from '../sincronizar/elenco'
 import {
@@ -694,5 +695,139 @@ describe('dado incompleto não vira dado inventado', () => {
     ).rejects.toThrow(/snapshot rejeitado.*sem identidade/)
 
     expect(await banco.db.select().from(estatisticasJogo)).toHaveLength(0)
+  })
+})
+
+// ===========================================================================
+
+/**
+ * PLACAR OFICIAL POR QUARTO vindo do endpoint de JOGOS (BallDontLie).
+ *
+ * A BallDontLie não tem box de time; o que ela tem é `home_q1..visitor_ot3`
+ * no próprio jogo. Isso alimenta SÓ os pontos por quarto de
+ * `estatisticas_time_jogo` — o placar do card do Fire Live depois do 1Q.
+ */
+describe('pontos por quarto vindos do jogo', () => {
+  const SEM: QuartosDoTime = { q1: null, q2: null, q3: null, q4: null, prorrogacao: null }
+
+  function jogoComQuartos(
+    status: 'AGENDADO' | 'AO_VIVO' | 'ENCERRADO',
+    casa: QuartosDoTime,
+    visitante: QuartosDoTime = SEM,
+  ) {
+    return new FonteFake(PROVEDOR, {
+      jogos: [
+        {
+          ...FIXTURE.jogos![0]!,
+          status,
+          quartoAtual: status === 'AO_VIVO' ? 3 : null,
+          placarCasa: 61,
+          placarVisitante: 55,
+          quartos: { casa, visitante },
+        },
+      ],
+    })
+  }
+
+  async function linhaDoTime(sigla: string) {
+    const [t] = await banco.db.select().from(times).where(eq(times.sigla, sigla))
+    const [linha] = await banco.db
+      .select()
+      .from(estatisticasTimeJogo)
+      .where(eq(estatisticasTimeJogo.timeId, t!.id))
+    return linha
+  }
+
+  it('jogo AO_VIVO no Q3 grava q1/q2 e o placar do time no insert', async () => {
+    await sincronizarTimes(banco.db, fonte())
+    await sincronizarJogos(
+      banco.db,
+      jogoComQuartos(
+        'AO_VIVO',
+        { q1: 31, q2: 30, q3: null, q4: null, prorrogacao: null },
+        { q1: 27, q2: 28, q3: null, q4: null, prorrogacao: null },
+      ),
+      DATA,
+      AGORA,
+    )
+
+    const casa = await linhaDoTime('LAL')
+    expect(casa).toMatchObject({ pontos: 61, pontosQ1: 31, pontosQ2: 30 })
+    expect(await linhaDoTime('BOS')).toMatchObject({ pontos: 55, pontosQ1: 27, pontosQ2: 28 })
+  })
+
+  it('quarto que volta null NÃO apaga o que já estava gravado', async () => {
+    await sincronizarTimes(banco.db, fonte())
+    await sincronizarJogos(
+      banco.db,
+      jogoComQuartos('AO_VIVO', { q1: 31, q2: 30, q3: null, q4: null, prorrogacao: null }),
+      DATA,
+      AGORA,
+    )
+    await sincronizarJogos(
+      banco.db,
+      jogoComQuartos('AO_VIVO', { q1: 31, q2: null, q3: 25, q4: null, prorrogacao: null }),
+      DATA,
+      AGORA,
+    )
+
+    expect(await linhaDoTime('LAL')).toMatchObject({ pontosQ1: 31, pontosQ2: 30, pontosQ3: 25 })
+  })
+
+  it('sem o Q1 não grava linha: a coluna nasce 0 e o Fire Live leria "0" como placar', async () => {
+    await sincronizarTimes(banco.db, fonte())
+    await sincronizarJogos(
+      banco.db,
+      jogoComQuartos('AO_VIVO', { q1: null, q2: 30, q3: null, q4: null, prorrogacao: null }),
+      DATA,
+      AGORA,
+    )
+
+    expect(await banco.db.select().from(estatisticasTimeJogo)).toHaveLength(0)
+  })
+
+  it('o conflito não zera as colunas que já existiam (ex.: rebotes de uma linha prévia)', async () => {
+    await sincronizarTimes(banco.db, fonte())
+    await sincronizarJogos(banco.db, fonte(), DATA, AGORA)
+    const [jogo] = await banco.db.select().from(jogos)
+    const [lal] = await banco.db.select().from(times).where(eq(times.sigla, 'LAL'))
+    await banco.db
+      .insert(estatisticasTimeJogo)
+      .values({ jogoId: jogo!.id, timeId: lal!.id, pontos: 112, rebotesTotal: 44, pontosQ4: 28 })
+
+    await sincronizarJogos(
+      banco.db,
+      jogoComQuartos('ENCERRADO', { q1: 28, q2: 30, q3: 26, q4: null, prorrogacao: null }),
+      DATA,
+      AGORA,
+    )
+
+    expect(await linhaDoTime('LAL')).toMatchObject({
+      pontos: 112,
+      rebotesTotal: 44,
+      pontosQ1: 28,
+      pontosQ2: 30,
+      pontosQ3: 26,
+      pontosQ4: 28,
+    })
+  })
+
+  it('jogo AGENDADO não grava linha de time', async () => {
+    await sincronizarTimes(banco.db, fonte())
+    await sincronizarJogos(
+      banco.db,
+      jogoComQuartos('AGENDADO', { q1: 0, q2: 0, q3: 0, q4: 0, prorrogacao: null }),
+      DATA,
+      AGORA,
+    )
+
+    expect(await banco.db.select().from(estatisticasTimeJogo)).toHaveLength(0)
+  })
+
+  it('jogo sem quartos (provedor que não os traz) não grava linha de time', async () => {
+    await sincronizarTimes(banco.db, fonte())
+    await sincronizarJogos(banco.db, fonte(), DATA, AGORA)
+
+    expect(await banco.db.select().from(estatisticasTimeJogo)).toHaveLength(0)
   })
 })

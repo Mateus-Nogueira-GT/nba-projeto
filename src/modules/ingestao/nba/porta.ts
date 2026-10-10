@@ -52,6 +52,21 @@ export type JogoExterno = {
   intervalo: boolean
   placarCasa: number | null
   placarVisitante: number | null
+  /**
+   * Placar OFICIAL por quarto, quando o provedor o traz junto do jogo
+   * (BallDontLie: `home_q1..home_ot3`). Opcional: quem não traz não preenche.
+   * Cada quarto é null quando não veio — nunca 0 inventado.
+   */
+  quartos?: { casa: QuartosDoTime; visitante: QuartosDoTime }
+}
+
+/** Pontos de um time por quarto; `prorrogacao` soma as prorrogações que vieram. */
+export type QuartosDoTime = {
+  q1: number | null
+  q2: number | null
+  q3: number | null
+  q4: number | null
+  prorrogacao: number | null
 }
 
 export class CapacidadeNaoSuportadaError extends Error {

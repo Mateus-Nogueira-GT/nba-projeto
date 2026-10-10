@@ -2,16 +2,74 @@ import { and, eq, inArray, sql } from 'drizzle-orm'
 
 import {
   conflitosIdentidadeJogo,
+  estatisticasTimeJogo,
   identidadesJogo,
   jogadores,
   jogos,
   times,
 } from '../../dominio/db/schema'
 import type { Db } from '../../dominio/db/tipos'
-import type { FonteNBA } from '../nba/porta'
+import type { FonteNBA, JogoExterno, QuartosDoTime } from '../nba/porta'
 import { consultarComOrigem } from '../nba/failover'
 import { garantirJogadores, mapaDeTimes, type Resumo } from './identidade'
 import { excluded } from './upsert'
+
+type Tx = Parameters<Parameters<Db['transaction']>[0]>[0]
+
+/**
+ * PONTOS POR QUARTO vindos do JOGO (BallDontLie: `home_q1..visitor_ot3`).
+ *
+ * A BallDontLie não tem box de time; o placar oficial por quarto vem no
+ * próprio endpoint de jogos. Grava em `estatisticas_time_jogo` SÓ os pontos
+ * por quarto — no conflito, nenhuma outra coluna é tocada.
+ *
+ * Quarto que não veio (null) não entra no UPDATE: um snapshot sem o Q1 não
+ * apaga o Q1 que já estava gravado. Lado sem o Q1 não grava nada.
+ * Só jogo começado: agendado não tem quarto.
+ */
+async function gravarPontosPorQuarto(
+  tx: Tx,
+  jogoId: string,
+  g: JogoExterno,
+  casa: string,
+  visitante: string,
+  agora: Date,
+  capturadoEm: Date,
+  dadoAtualizadoEm: Date | null,
+): Promise<void> {
+  if (!g.quartos || (g.status !== 'AO_VIVO' && g.status !== 'ENCERRADO')) return
+  const lados: [string, QuartosDoTime, number | null][] = [
+    [casa, g.quartos.casa, g.placarCasa],
+    [visitante, g.quartos.visitante, g.placarVisitante],
+  ]
+  for (const [timeId, q, placar] of lados) {
+    const vieram = {
+      ...(q.q1 !== null && { pontosQ1: q.q1 }),
+      ...(q.q2 !== null && { pontosQ2: q.q2 }),
+      ...(q.q3 !== null && { pontosQ3: q.q3 }),
+      ...(q.q4 !== null && { pontosQ4: q.q4 }),
+      ...(q.prorrogacao !== null && { pontosProrrogacao: q.prorrogacao }),
+    }
+    // Sem o Q1, nada: as colunas nascem 0, e um Q1 "0" seria lido como placar
+    // real pelo Fire Live. Os quartos chegam em ordem; sem o primeiro, espera.
+    if (q.q1 === null) continue
+    await tx
+      .insert(estatisticasTimeJogo)
+      .values({
+        jogoId,
+        timeId,
+        pontos: placar ?? 0,
+        ...vieram,
+        capturadoEm,
+        origemAtualizadaEm: dadoAtualizadoEm,
+        atualizadoEm: agora,
+      })
+      .onConflictDoUpdate({
+        target: [estatisticasTimeJogo.jogoId, estatisticasTimeJogo.timeId],
+        set: { ...vieram, atualizadoEm: agora },
+      })
+  }
+}
 
 /**
  * TIMES.
@@ -177,6 +235,9 @@ export async function sincronizarJogos(
         ignorados += 1
         continue
       }
+      // Os quartos acompanham o snapshot do jogo: só quem atualiza o canônico grava.
+      const gravarQuartos = (id: string) =>
+        gravarPontosPorQuarto(tx, id, g, casa, visitante, agora, capturadoEm, dadoAtualizadoEm)
 
       const [identidadeExistente] = await tx
         .select({
@@ -311,6 +372,7 @@ export async function sincronizarJogos(
             )
             .limit(1)
           if (vencedora?.jogoId === jogoId) {
+            if (atualizarCanonico) await gravarQuartos(jogoId)
             gravados += 1
             continue
           }
@@ -338,6 +400,7 @@ export async function sincronizarJogos(
           continue
         }
       }
+      if (atualizarCanonico) await gravarQuartos(jogoId)
       gravados += 1
     }
   })

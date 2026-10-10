@@ -146,8 +146,55 @@ describe('FonteBalldontlie — contrato oficial GOAT', () => {
         intervalo: false,
         placarCasa: 115,
         placarVisitante: 105,
+        quartos: {
+          casa: { q1: 29, q2: 34, q3: 28, q4: 24, prorrogacao: null },
+          visitante: { q1: 23, q2: 25, q3: 30, q4: 27, prorrogacao: null },
+        },
       },
     ])
+  })
+
+  describe('placar oficial por quarto (home_q1..visitor_ot3)', () => {
+    it('a fixture real traz a quebra dos dois lados, sem prorrogação', () => {
+      expect(mapearJogoBalldontlie(jogos.data[0]).quartos).toEqual({
+        casa: { q1: 29, q2: 34, q3: 28, q4: 24, prorrogacao: null },
+        visitante: { q1: 23, q2: 25, q3: 30, q4: 27, prorrogacao: null },
+      })
+    })
+
+    it('a prorrogação é a soma dos ot1..ot3 que vieram', () => {
+      const bruto = {
+        ...structuredClone(jogos.data[0]),
+        home_ot1: 10,
+        home_ot2: 7,
+        visitor_ot1: 10,
+        visitor_ot2: 5,
+      }
+      const quartos = mapearJogoBalldontlie(bruto).quartos
+      expect(quartos?.casa.prorrogacao).toBe(17)
+      expect(quartos?.visitante.prorrogacao).toBe(15)
+    })
+
+    it('sem os campos (ou com null) os quartos ficam todos null — nunca 0 inventado', () => {
+      const vazio = { q1: null, q2: null, q3: null, q4: null, prorrogacao: null }
+      // A fixture ao vivo não tem nenhum dos 14 campos.
+      expect(mapearJogoBalldontlie(structuredClone(jogoAoVivo.data)).quartos).toEqual({
+        casa: vazio,
+        visitante: vazio,
+      })
+      const comNulos = {
+        ...structuredClone(jogos.data[0]),
+        home_q1: null,
+        home_q2: null,
+        home_q3: null,
+        home_q4: null,
+        visitor_q1: null,
+        visitor_q2: null,
+        visitor_q3: null,
+        visitor_q4: null,
+      }
+      expect(mapearJogoBalldontlie(comNulos).quartos).toEqual({ casa: vazio, visitante: vazio })
+    })
   })
 
   it('marca intervalo sem inferir um estado diferente de AO_VIVO', () => {

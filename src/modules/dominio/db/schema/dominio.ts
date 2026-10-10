@@ -260,7 +260,13 @@ export const estatisticasQuarto = pgTable(
   ],
 )
 
-/** Box score do TIME — necessário para a aba de estatísticas estilo Sofascore. */
+/**
+ * Box score do TIME — necessário para a aba de estatísticas estilo Sofascore.
+ *
+ * Com a BallDontLie, só os PONTOS POR QUARTO vêm preenchidos (do endpoint de
+ * jogos, `sincronizarJogos`); as demais colunas ficam 0. Por isso ninguém lê
+ * box de time daqui — as estatísticas somam os jogadores (`box-do-time.ts`).
+ */
 export const estatisticasTimeJogo = pgTable(
   'estatisticas_time_jogo',
   {
