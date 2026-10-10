@@ -97,3 +97,12 @@ export function confronto(l: { emCasa: boolean | null; adversarioSigla: string |
   if (l.emCasa === null || l.adversarioSigla === null) return '—'
   return `${l.emCasa ? 'vs' : '@'} ${l.adversarioSigla}`
 }
+
+export type Vencedor = 'a' | 'b' | null
+
+/** Quem ganha a linha da comparação. Nulo de um lado ou empate: ninguém. */
+export function melhorDaLinha(a: number | null, b: number | null, menorEhMelhor = false): Vencedor {
+  if (a === null || b === null || a === b) return null
+  const aVence = menorEhMelhor ? a < b : a > b
+  return aVence ? 'a' : 'b'
+}

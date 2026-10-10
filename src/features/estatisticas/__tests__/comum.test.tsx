@@ -2,7 +2,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 
 import { CabecalhoStats, NotaPartida, UltimaAtualizacao } from '../Comum'
-import { aproveitamento } from '../regras'
+import { aproveitamento, melhorDaLinha } from '../regras'
 
 /**
  * AS PEÇAS COMUNS DA ABA DE ESTATÍSTICAS — o que os testes do design-system
@@ -95,5 +95,15 @@ describe('aproveitamento', () => {
 
   it('null é travessão: temporada sem jogo não é zero por cento', () => {
     expect(aproveitamento(null)).toBe('—')
+  })
+})
+
+describe('melhorDaLinha', () => {
+  it('o maior vence; em erros e faltas o menor vence; empate e nulo não destacam', () => {
+    expect(melhorDaLinha(25.1, 24.9)).toBe('a')
+    expect(melhorDaLinha(3, 4)).toBe('b')
+    expect(melhorDaLinha(3, 4, true)).toBe('a')
+    expect(melhorDaLinha(5, 5)).toBeNull()
+    expect(melhorDaLinha(null, 5)).toBeNull()
   })
 })

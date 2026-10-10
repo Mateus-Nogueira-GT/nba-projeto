@@ -131,6 +131,61 @@ export async function semearPlacares(db: Db, jogoIds?: readonly string[]): Promi
   return contarLinhas(resultado)
 }
 
+// Proporções fixas dos três primeiros quartos; o 4º recebe o RESTO, o que
+// garante q1+q2+q3+q4 == pontos do jogador para qualquer número.
+const Q1 = sql`floor(ej.pontos * 0.26)`
+const Q2 = sql`floor(ej.pontos * 0.24)`
+const Q3 = sql`floor(ej.pontos * 0.25)`
+
+/**
+ * PONTOS POR QUARTO DE CADA JOGADOR nos jogos ENCERRADOS — derivados do box
+ * do jogador, nunca digitados.
+ *
+ * Espelha a BallDontLie, que dá o quarto POR JOGADOR (não por time): a aba de
+ * estatísticas soma essas linhas para montar os quartos do time. Sem elas, todo
+ * jogo encerrado da demo aparecia sem quebra por quarto.
+ *
+ * É distribuição de apresentação, não estatística: os três primeiros quartos
+ * saem de proporções fixas e o 4º recebe o resto, então a soma dos quartos de
+ * cada jogador é EXATAMENTE os pontos dele e a dos jogadores de um lado é o
+ * placar. Rebotes e assistências seguem a mesma regra. Determinístico e
+ * reexecutável (upsert); sobrescreve o 1º quarto parcial que o jogo gravou
+ * quando ainda estava ao vivo.
+ */
+export async function semearQuartosDosJogadores(
+  db: Db,
+  agora: Date,
+  jogoIds?: readonly string[],
+): Promise<number> {
+  const parte = (coluna: string) => {
+    const c = sql.raw(`ej.${coluna}`)
+    return sql`case q.n
+      when 1 then floor(${c} * 0.26)
+      when 2 then floor(${c} * 0.24)
+      when 3 then floor(${c} * 0.25)
+      else ${c} - floor(${c} * 0.26) - floor(${c} * 0.24) - floor(${c} * 0.25)
+    end::int`
+  }
+  const resultado = await db.execute(sql`
+    insert into estatisticas_quarto (
+      jogo_id, jogador_id, quarto, pontos, rebotes, assistencias, capturado_em, atualizado_em
+    )
+    select ej.jogo_id, ej.jogador_id, q.n,
+           ${parte('pontos')}, ${parte('rebotes_total')}, ${parte('assistencias')},
+           ${agora}, ${agora}
+      from estatisticas_jogo ej
+      join jogos j on j.id = ej.jogo_id and j.status = 'ENCERRADO' ${filtroDeJogos(jogoIds)}
+     cross join generate_series(1, 4) as q(n)
+    on conflict on constraint estatisticas_quarto_unica do update set
+      pontos = excluded.pontos,
+      rebotes = excluded.rebotes,
+      assistencias = excluded.assistencias,
+      atualizado_em = excluded.atualizado_em
+    returning id
+  `)
+  return contarLinhas(resultado)
+}
+
 /**
  * BOX SCORE DO TIME — derivado do box score dos JOGADORES, nunca digitado.
  *
@@ -143,10 +198,10 @@ export async function semearPlacares(db: Db, jogoIds?: readonly string[]): Promi
  * `jogadores.time_id`) produziu no jogo. Só jogos ENCERRADOS: partida ao vivo
  * ou agendada segue sem box score, e a tela mostra a ausência como ausência.
  *
- * A QUEBRA POR QUARTO é distribuição de apresentação, não estatística: a demo
- * não tem parciais por quarto de jogo inteiro (só do 1º, do Fire Live).
- * Os três primeiros quartos saem de proporções fixas e o QUARTO recebe o
- * RESTO — é isso que garante `q1+q2+q3+q4 == total` para qualquer número.
+ * A QUEBRA POR QUARTO do time é a SOMA das linhas de quarto dos jogadores
+ * (`semearQuartosDosJogadores`, chamada aqui primeiro): as duas tabelas
+ * contam a mesma história, e a aba de estatísticas — que soma o box dos
+ * jogadores — mostra os mesmos quartos que esta tabela guardaria.
  * Box score que não fecha é pior que box score ausente: parece dado.
  */
 export async function semearBoxScoreDoTime(
@@ -154,6 +209,7 @@ export async function semearBoxScoreDoTime(
   agora: Date,
   jogoIds?: readonly string[],
 ): Promise<number> {
+  await semearQuartosDosJogadores(db, agora, jogoIds)
   const resultado = await db.execute(sql`
     with por_time as (
       select ej.jogo_id,
@@ -172,19 +228,17 @@ export async function semearBoxScoreDoTime(
              sum(ej.roubos)::int        as roubos,
              sum(ej.bloqueios)::int     as bloqueios,
              sum(ej.turnovers)::int     as turnovers,
-             sum(ej.faltas)::int        as faltas
+             sum(ej.faltas)::int        as faltas,
+             -- A mesma conta de semearQuartosDosJogadores, linha a linha:
+             -- a soma dos quartos dos jogadores É o quarto do time.
+             sum(${Q1})::int            as q1,
+             sum(${Q2})::int            as q2,
+             sum(${Q3})::int            as q3
         from estatisticas_jogo ej
         join jogos j on j.id = ej.jogo_id and j.status = 'ENCERRADO' ${filtroDeJogos(jogoIds)}
         join niveis n on n.jogador_id = ej.jogador_id and n.atributo = 'PONTOS'
         join niveis_versao nv on nv.id = n.niveis_versao_id and nv.ativa = true
        group by 1, 2
-    ),
-    com_quartos as (
-      select *,
-             floor(pontos * 0.26)::int as q1,
-             floor(pontos * 0.24)::int as q2,
-             floor(pontos * 0.25)::int as q3
-        from por_time
     )
     insert into estatisticas_time_jogo (
       jogo_id, time_id, pontos, pontos_q1, pontos_q2, pontos_q3, pontos_q4,
@@ -197,7 +251,7 @@ export async function semearBoxScoreDoTime(
            0, rebotes_total, rebotes_of, rebotes_def, assistencias,
            cestas_c, cestas_t, tres_c, tres_t, lance_c, lance_t,
            roubos, bloqueios, turnovers, faltas, ${agora}, ${agora}
-      from com_quartos
+      from por_time
     on conflict on constraint estatisticas_time_jogo_unica do update set
       pontos = excluded.pontos,
       pontos_q1 = excluded.pontos_q1,

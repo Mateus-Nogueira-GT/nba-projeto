@@ -10,6 +10,7 @@ import { LogoTime } from '@/ui/midia'
 import { AVISO_TEMPORADA_ANTERIOR, SeletorTemporada } from '@/ui/SeletorTemporada'
 import { identidadeDoTime } from '@/ui/times'
 import { BotaoAcompanhar } from './BotaoAcompanhar'
+import { BotaoComparar } from './BotaoComparar'
 import { CabecalhoStats, SecaoStats, Silhueta, TabelaDados, UltimaAtualizacao, type Coluna } from './Comum'
 import { aproveitamento, diaMes, pct, trilhoDa } from './regras'
 import { ATRIBUTOS_DA_HIERARQUIA, type DadosDoTime } from './time'
@@ -123,7 +124,7 @@ export function TelaTime({ dados }: { dados: DadosDoTime }) {
         icone={<LogoTime sigla={identidade.sigla} tamanho={64} />}
         titulo={identidade.nome}
         apoio={[identidade.sigla, time.conferencia ? `Conferência ${time.conferencia}` : null, `temporada ${temporada}`].filter(Boolean).join(' · ')}
-        acoes={<BotaoAcompanhar tipo="TIME" id={id} inicial={dados.acompanhado} />}
+        acoes={<><BotaoAcompanhar tipo="TIME" id={id} inicial={dados.acompanhado} /><BotaoComparar tipo="time" id={id} temporada={escolhida} /></>}
       />
       <SeletorTemporada
         temporadas={seletor.disponiveis}

@@ -3,7 +3,6 @@ import { and, desc, eq, inArray, lt, or } from 'drizzle-orm'
 
 import {
   estatisticasJogo,
-  estatisticasTimeJogo,
   jogadores,
   jogos,
   lesoesEscalacao,
@@ -14,6 +13,7 @@ import {
 import type { Db } from '../../dominio/db/tipos'
 import { daColuna, maisAntiga } from './atualizacao'
 import type { ComAtualizacao } from './atualizacao'
+import { boxDoTimePorJogo, chaveDoBox } from './box-do-time'
 import { notaDaPartida } from './nota'
 import { numero, percentual } from './numeros'
 
@@ -174,7 +174,8 @@ export async function telaDoJogo(
     hierarquiaPontos,
   ] = await Promise.all([
     db.select().from(times).where(inArray(times.id, idsTimes)),
-    db.select().from(estatisticasTimeJogo).where(eq(estatisticasTimeJogo.jogoId, jogoId)),
+    // Soma do box dos jogadores: a BallDontLie não tem box de time.
+    boxDoTimePorJogo(db, [jogoId]),
     db.select().from(estatisticasJogo).where(eq(estatisticasJogo.jogoId, jogoId)),
     // Os dois elencos de HOJE (desfalques) e quem tem linha NESTE box, esteja
     // onde estiver hoje: um trocado depois do jogo ainda precisa de nome e rosto.
@@ -252,7 +253,7 @@ export async function telaDoJogo(
 
   const montarLado = (timeId: string): LadoDaPartida => {
     const time = timePorId.get(timeId)
-    const box = boxTimes.find((b) => b.timeId === timeId)
+    const box = boxTimes.get(chaveDoBox(jogoId, timeId))
 
     // O elenco da tela é quem TEM LINHA no box score — não o elenco cadastrado.
     // Jogador sem linha não entrou em quadra, e listá-lo com tudo zerado diria
@@ -334,13 +335,14 @@ export async function telaDoJogo(
       sigla: time?.sigla ?? '—',
       nome: time?.nome ?? '—',
       placar: timeId === jogo.timeCasaId ? jogo.placarCasa : jogo.placarVisitante,
-      quartos: box
+      // Sem nenhuma linha de quarto, a quebra é ausência (null), não zeros.
+      quartos: box?.porQuarto
         ? {
-            q1: box.pontosQ1,
-            q2: box.pontosQ2,
-            q3: box.pontosQ3,
-            q4: box.pontosQ4,
-            prorrogacao: box.pontosProrrogacao,
+            q1: box.porQuarto.q1,
+            q2: box.porQuarto.q2,
+            q3: box.porQuarto.q3,
+            q4: box.porQuarto.q4,
+            prorrogacao: box.porQuarto.prorrogacao,
           }
         : null,
       boxScore: linhas,
@@ -401,7 +403,6 @@ export async function telaDoJogo(
     h2h,
     atualizacao: maisAntiga([
       daColuna(boxJogadores, 'box score'),
-      daColuna(boxTimes, 'box score do time'),
       daColuna([jogo], 'partida'),
     ]),
   }

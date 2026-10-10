@@ -19,7 +19,7 @@ import { calendarioDoRuleset, temporadaDe } from '@/modules/dominio/temporada'
 import { apitosDoJogador } from '@/modules/entrega/estatisticas/jogador'
 import { telaDoJogo } from '@/modules/entrega/estatisticas/jogo'
 import { telaJogosDoDia } from '@/modules/entrega/estatisticas/jogos-do-dia'
-import { rotaDoTime } from '@/modules/entrega/estatisticas/rotas'
+import { rotaDoTime, rotaDaComparacao } from '@/modules/entrega/estatisticas/rotas'
 import {
   hierarquiaDoTime,
   telaDaClassificacao,
@@ -814,6 +814,13 @@ describe('Estatísticas do v2 — jogador', () => {
     regrasDeEscrita(html, 'jogador')
     expect(texto(secao(html, 'Apitos da estratégia'))).toMatch(/(Pontos|Rebotes|Assistências) \d+\+/)
   }, 60_000)
+
+  it('(comparar) o botão "Comparar" leva à escolha do segundo, com a temporada escolhida', async () => {
+    const html = await renderizarJogador(alvo, { temporada })
+    const href = rotaDaComparacao('jogador', alvo, undefined, { temporada }).replace(/&/g, '&amp;')
+    expect(html).toContain(`href="${href}"`)
+    expect(texto(html)).toContain('Comparar')
+  }, 60_000)
 })
 
 // ===========================================================================
@@ -930,6 +937,12 @@ describe('Estatísticas do v2 — time', () => {
   it('(telas-04) regras de escrita do time', async () => {
     nivelDoTeste = 'MVP'
     regrasDeEscrita(await renderizarTime(sujeito.timeId), 'time')
+  }, 60_000)
+
+  it('(comparar) o botão "Comparar" na página do time', async () => {
+    const html = await renderizarTime(sujeito.timeId, {})
+    const href = rotaDaComparacao('time', sujeito.timeId).replace(/&/g, '&amp;')
+    expect(html).toContain(`href="${href}"`)
   }, 60_000)
 })
 

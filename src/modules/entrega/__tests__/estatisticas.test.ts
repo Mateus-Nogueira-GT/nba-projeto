@@ -123,6 +123,7 @@ async function semear() {
   await db.insert(estatisticasJogo).values({
     jogoId: ontem!.id,
     jogadorId: idPorNome.get('Luka Dončić')!,
+    timeId: lal!.id,
     minutos: '36.50',
     pontos: 34,
     rebotesTotal: 9,
@@ -142,32 +143,39 @@ async function semear() {
     saldoQuadra: 14,
   })
 
-  await db.insert(estatisticasTimeJogo).values([
+  // O box do time é a SOMA do box dos jogadores (a BallDontLie não tem box de
+  // time). Luka fecha 34 dos 112 do LAL; dois reservas SEM time em `jogadores`
+  // (para não mexer no elenco) completam os totais de cada lado, com o
+  // `time_id` gravado só na linha de box.
+  const [reservaLal, reservaBos] = await db
+    .insert(jogadores)
+    .values([{ nomeCompleto: 'Reserva LAL' }, { nomeCompleto: 'Reserva BOS' }])
+    .returning()
+  await db.insert(estatisticasJogo).values([
     {
       jogoId: ontem!.id,
+      jogadorId: reservaLal!.id,
       timeId: lal!.id,
-      pontos: 112,
-      pontosQ1: 28,
-      pontosQ2: 30,
-      pontosQ3: 26,
-      pontosQ4: 28,
-      rebotesTotal: 44,
-      assistencias: 27,
-      cestasC: 42,
-      cestasT: 88,
-      tresC: 14,
-      tresT: 36,
-      turnovers: 11,
+      pontos: 78,
+      rebotesTotal: 35,
+      assistencias: 16,
+      cestasC: 30,
+      cestasT: 66,
+      tresC: 10,
+      tresT: 27,
+      turnovers: 7,
     },
-    {
-      jogoId: ontem!.id,
-      timeId: bos!.id,
-      pontos: 105,
-      pontosQ1: 25,
-      pontosQ2: 27,
-      pontosQ3: 29,
-      pontosQ4: 24,
-    },
+    { jogoId: ontem!.id, jogadorId: reservaBos!.id, timeId: bos!.id, pontos: 105 },
+  ])
+  await db.insert(estatisticasQuarto).values([
+    { jogoId: ontem!.id, jogadorId: reservaLal!.id, quarto: 1, pontos: 28, rebotes: 0, assistencias: 0 },
+    { jogoId: ontem!.id, jogadorId: reservaLal!.id, quarto: 2, pontos: 30, rebotes: 0, assistencias: 0 },
+    { jogoId: ontem!.id, jogadorId: reservaLal!.id, quarto: 3, pontos: 26, rebotes: 0, assistencias: 0 },
+    { jogoId: ontem!.id, jogadorId: reservaLal!.id, quarto: 4, pontos: 28, rebotes: 0, assistencias: 0 },
+    { jogoId: ontem!.id, jogadorId: reservaBos!.id, quarto: 1, pontos: 25, rebotes: 0, assistencias: 0 },
+    { jogoId: ontem!.id, jogadorId: reservaBos!.id, quarto: 2, pontos: 27, rebotes: 0, assistencias: 0 },
+    { jogoId: ontem!.id, jogadorId: reservaBos!.id, quarto: 3, pontos: 29, rebotes: 0, assistencias: 0 },
+    { jogoId: ontem!.id, jogadorId: reservaBos!.id, quarto: 4, pontos: 24, rebotes: 0, assistencias: 0 },
   ])
 
   // Jogo de HOJE, ao vivo — alimenta o bloco ao vivo e os jogos do dia.
@@ -440,7 +448,9 @@ describe('tela do time', () => {
 
     expect(jogo.nosso).not.toBeNull()
     const q = jogo.nosso!
-    const soma = q.q1 + q.q2 + q.q3 + q.q4 + q.prorrogacao
+    // Quarto null é ausência; aqui o jogo encerrado TEM a quebra.
+    for (const v of [q.q1, q.q2, q.q3, q.q4, q.prorrogacao]) expect(v).not.toBeNull()
+    const soma = q.q1! + q.q2! + q.q3! + q.q4! + q.prorrogacao!
     expect(soma).toBe(q.total)
   })
 

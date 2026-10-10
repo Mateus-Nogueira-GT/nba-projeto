@@ -47,6 +47,7 @@ abertura da conta Mercado Pago (do cliente) · produção de conteúdo e tráfeg
 classificação e vitórias por time, médias, **quebra por quarto** e histórico. Chega por
 dois caminhos — pelo menu (por jogador e por time, com busca e filtro) e pelo nome do
 jogador dentro de qualquer card.
+Comparar: dois jogadores ou dois times lado a lado (`/estatisticas/comparar`), MVP na temporada atual e aberto na anterior; o box do time é a soma do box dos jogadores (a BallDontLie não dá box de time). Os rebotes de equipe (team rebounds) não são de jogador nenhum e por isso não entram na soma: o total de rebotes do time fica um pouco abaixo do oficial.
 
 Não passa pelo motor de estratégias: é exibição de dado.
 

@@ -306,7 +306,9 @@ describe('Estatísticas — identidade 03 (conferência em lote)', () => {
       // Os quartos FECHAM com o total: um box score que não soma é pior que
       // um ausente, porque parece dado.
       const q = jogo.nosso!
-      expect(q.q1 + q.q2 + q.q3 + q.q4 + q.prorrogacao).toBe(q.total)
+      // Quarto null é ausência; aqui o jogo encerrado TEM a quebra.
+      for (const v of [q.q1, q.q2, q.q3, q.q4, q.prorrogacao]) expect(v).not.toBeNull()
+      expect(q.q1! + q.q2! + q.q3! + q.q4! + q.prorrogacao!).toBe(q.total)
       expect(q.total).toBeGreaterThan(0)
       expect(jogo.rebotesTotal).not.toBeNull()
       expect(jogo.assistencias).not.toBeNull()

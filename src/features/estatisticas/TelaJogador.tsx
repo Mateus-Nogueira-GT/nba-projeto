@@ -14,6 +14,7 @@ import { ROTULO_ATRIBUTO, SeloAoVivo, SeloNivel } from '@/ui/marcas'
 import { FotoJogador } from '@/ui/midia'
 import { AVISO_TEMPORADA_ANTERIOR, SeletorTemporada } from '@/ui/SeletorTemporada'
 import { BotaoAcompanhar } from './BotaoAcompanhar'
+import { BotaoComparar } from './BotaoComparar'
 import { CabecalhoStats, NotaPartida, SecaoStats, Silhueta, TabelaDados, UltimaAtualizacao, type Coluna } from './Comum'
 import { GraficoDesempenho } from './GraficoDesempenho'
 import type { DadosDoJogador } from './jogador'
@@ -205,7 +206,7 @@ export function TelaJogador({ dados }: { dados: DadosDoJogador }) {
             </p>
           </div>
         }
-        acoes={<BotaoAcompanhar tipo="JOGADOR" id={id} inicial={dados.acompanhado} />}
+        acoes={<><BotaoAcompanhar tipo="JOGADOR" id={id} inicial={dados.acompanhado} /><BotaoComparar tipo="jogador" id={id} temporada={escolhida} /></>}
       />
 
       <SeletorTemporada

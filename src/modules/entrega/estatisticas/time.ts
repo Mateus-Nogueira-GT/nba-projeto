@@ -4,7 +4,6 @@ import { and, asc, desc, eq, gte, inArray, isNotNull, lte, or, sql } from 'drizz
 import {
   classificacao,
   estatisticasJogo,
-  estatisticasTimeJogo,
   jogadores,
   jogos,
   lesoesEscalacao,
@@ -23,15 +22,21 @@ type Atributo = (typeof niveis.$inferSelect)['atributo']
 type Nivel = (typeof niveis.$inferSelect)['nivel']
 import { daColuna, maisAntiga } from './atualizacao'
 import type { ComAtualizacao } from './atualizacao'
+import { boxDoTimePorJogo, chaveDoBox, type BoxDoTime } from './box-do-time'
 import { LIMITE_FORMA } from './jogo'
 import { numero, percentual } from './numeros'
 
+/**
+ * Os quartos são NULL quando o time não tem nenhuma linha em
+ * `estatisticas_quarto` neste jogo (jogo ao vivo sem quebra, ingestão
+ * parcial); o `total` continua. A tela mostra "—", nunca "0".
+ */
 export type QuebraPorQuarto = {
-  q1: number
-  q2: number
-  q3: number
-  q4: number
-  prorrogacao: number
+  q1: number | null
+  q2: number | null
+  q3: number | null
+  q4: number | null
+  prorrogacao: number | null
   total: number
 }
 
@@ -45,7 +50,8 @@ export type BoxScoreDoJogo = {
   /**
    * Quebra por quarto do time consultado.
    *
-   * NULL quando o box score do time ainda não chegou. Antes isto era um objeto
+   * NULL quando nenhum jogador do time tem linha com `time_id` neste jogo
+   * (o box do time é a soma do box dos jogadores). Antes isto era um objeto
    * com quartos zerados e o total real do placar — a tela mostrava
    * "0 0 0 0 | 112", números que não fecham e que o usuário lê como dado, não
    * como ausência. Ingestão parcial é rotina; anunciá-la é obrigação.
@@ -55,6 +61,9 @@ export type BoxScoreDoJogo = {
   deles: QuebraPorQuarto | null
   fgPercentual: number | null
   tresPercentual: number | null
+  /** Bolas de 3 do time no jogo (soma do box dos jogadores); a comparação tira a média. */
+  tresTentadas: number | null
+  tresConvertidas: number | null
   rebotesTotal: number | null
   assistencias: number | null
   turnovers: number | null
@@ -81,21 +90,15 @@ export type TelaTime = ComAtualizacao & {
   jogosDoTime: BoxScoreDoJogo[]
 }
 
-function quebra(l: {
-  pontos: number
-  pontosQ1: number
-  pontosQ2: number
-  pontosQ3: number
-  pontosQ4: number
-  pontosProrrogacao: number
-}): QuebraPorQuarto {
+function quebraDoBox(b: BoxDoTime): QuebraPorQuarto {
+  const q = b.porQuarto
   return {
-    q1: l.pontosQ1,
-    q2: l.pontosQ2,
-    q3: l.pontosQ3,
-    q4: l.pontosQ4,
-    prorrogacao: l.pontosProrrogacao,
-    total: l.pontos,
+    q1: q?.q1 ?? null,
+    q2: q?.q2 ?? null,
+    q3: q?.q3 ?? null,
+    q4: q?.q4 ?? null,
+    prorrogacao: q?.prorrogacao ?? null,
+    total: b.pontos,
   }
 }
 
@@ -143,9 +146,7 @@ export async function telaDoTime(
   const idsJogo = partidas.map((p) => p.id)
 
   const [boxes, listaTimes] = await Promise.all([
-    idsJogo.length > 0
-      ? db.select().from(estatisticasTimeJogo).where(inArray(estatisticasTimeJogo.jogoId, idsJogo))
-      : Promise.resolve([]),
+    boxDoTimePorJogo(db, idsJogo),
     db.select().from(times),
   ])
 
@@ -155,8 +156,8 @@ export async function telaDoTime(
     const emCasa = jogo.timeCasaId === timeId
     const adversarioId = emCasa ? jogo.timeVisitanteId : jogo.timeCasaId
 
-    const nosso = boxes.find((b) => b.jogoId === jogo.id && b.timeId === timeId)
-    const deles = boxes.find((b) => b.jogoId === jogo.id && b.timeId === adversarioId)
+    const nosso = boxes.get(chaveDoBox(jogo.id, timeId))
+    const deles = boxes.get(chaveDoBox(jogo.id, adversarioId))
 
     const temPlacar = jogo.placarCasa !== null && jogo.placarVisitante !== null
     const meus = emCasa ? jogo.placarCasa : jogo.placarVisitante
@@ -174,10 +175,12 @@ export async function telaDoTime(
       emCasa,
       resultado: encerrado && temPlacar ? (meus! > outros! ? 'V' : 'D') : null,
       placar: temPlacar ? `${jogo.placarCasa}–${jogo.placarVisitante}` : null,
-      nosso: nosso ? quebra(nosso) : null,
-      deles: deles ? quebra(deles) : null,
+      nosso: nosso ? quebraDoBox(nosso) : null,
+      deles: deles ? quebraDoBox(deles) : null,
       fgPercentual: nosso ? percentual(nosso.cestasC, nosso.cestasT) : null,
       tresPercentual: nosso ? percentual(nosso.tresC, nosso.tresT) : null,
+      tresTentadas: nosso?.tresT ?? null,
+      tresConvertidas: nosso?.tresC ?? null,
       rebotesTotal: nosso?.rebotesTotal ?? null,
       assistencias: nosso?.assistencias ?? null,
       turnovers: nosso?.turnovers ?? null,
@@ -219,7 +222,6 @@ export async function telaDoTime(
     jogosDoTime,
     atualizacao: maisAntiga([
       campanha ? { em: campanha.atualizadoEm, fonte: 'classificação' } : null,
-      daColuna(boxes, 'box score do time'),
       daColuna(partidas, 'partidas'),
     ]),
   }

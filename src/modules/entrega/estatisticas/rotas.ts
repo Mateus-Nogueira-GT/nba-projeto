@@ -69,3 +69,23 @@ export function comTemporada(href: string, temporada: string | undefined): strin
   if (temporada === undefined) return href
   return `${href}${href.includes('?') ? '&' : '?'}temporada=${encodeURIComponent(temporada)}`
 }
+
+export type TipoDaComparacao = 'jogador' | 'time'
+
+/**
+ * A comparação lado a lado. Sem `b`, é a tela de ESCOLHA do segundo — é
+ * para lá que o botão "Comparar com…" das páginas aponta. `periodo` e
+ * `temporada` viajam só quando escolhidos, como nas outras rotas da aba.
+ */
+export function rotaDaComparacao(
+  tipo: TipoDaComparacao,
+  a: string,
+  b?: string,
+  contexto?: Partial<Pick<ContextoEstatisticas, 'periodo' | 'temporada'>>,
+): string {
+  const params = new URLSearchParams({ tipo, a })
+  if (b !== undefined) params.set('b', b)
+  if (contexto?.periodo !== undefined) params.set('periodo', contexto.periodo)
+  if (contexto?.temporada !== undefined) params.set('temporada', contexto.temporada)
+  return `${BASE_ESTATISTICAS}/comparar?${params.toString().replace(/\+/g, '%20')}`
+}
